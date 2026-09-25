@@ -57,15 +57,22 @@ endif()
 # Codigo comun a las dos plataformas.
 set(SOURCES
     src/main.cpp
-    src/actions/ActionRunner.cpp
+    src/app/AppController.cpp
+    src/app/ExternalDispatch.cpp
+    src/app/GeneralPage.cpp
+    src/app/HotkeyHub.cpp
+    src/app/MainWindow.cpp
+    src/app/ModuleContextImpl.cpp
+    src/app/ModuleHost.cpp
     src/app/ModuleRegistry.cpp
+    src/app/SettingsStore.cpp
+    src/app/SingleInstance.cpp
+    src/app/TrayMenu.cpp
+    src/app/WindowParts.cpp
     src/core/AppPaths.cpp
     src/core/AppSettings.cpp
-    src/core/AppState.cpp
     src/core/BuildTree.cpp
     src/core/DebugFlags.cpp
-    src/core/DiskMonitor.cpp
-    src/core/DiskSpace.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
     src/modules/linkredirector/BrowserDetectionCommon.cpp
@@ -75,16 +82,11 @@ set(SOURCES
     src/modules/linkredirector/LinkRedirectorRouting.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
-    src/platform/LocalDrivesCommon.cpp
     src/platform/NukeWatcherCommon.cpp
+    src/qa/Measure.cpp
+    src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
-    src/tray/TrayController.cpp
-    src/tray/TrayMenu.cpp
-    src/ui/CalibrationDialog.cpp
-    src/ui/CalibrationSession.cpp
-    src/ui/DiskCard.cpp
     src/ui/HelpDialog.cpp
-    src/ui/MainWindow.cpp
     src/ui/ShortcutRow.cpp
     src/ui/Theme.cpp
     src/ui/TitleBar.cpp
@@ -93,17 +95,25 @@ set(SOURCES
 )
 
 set(HEADERS
-    src/actions/ActionRunner.h
+    src/app/AppController.h
+    src/app/ExternalDispatch.h
+    src/app/GeneralPage.h
+    src/app/HostServices.h
+    src/app/HotkeyHub.h
+    src/app/MainWindow.h
     src/app/Module.h
     src/app/ModuleContext.h
+    src/app/ModuleContextImpl.h
+    src/app/ModuleHost.h
     src/app/ModuleRegistry.h
+    src/app/SettingsStore.h
+    src/app/SingleInstance.h
+    src/app/TrayMenu.h
+    src/app/WindowParts.h
     src/core/AppPaths.h
     src/core/AppSettings.h
-    src/core/AppState.h
     src/core/BuildTree.h
     src/core/DebugFlags.h
-    src/core/DiskMonitor.h
-    src/core/DiskSpace.h
     src/core/LgaRegistry.h
     src/core/Shortcut.h
     src/modules/linkredirector/BrowserDetection.h
@@ -114,19 +124,18 @@ set(HEADERS
     src/modules/linkredirector/LinkRedirectorRouting.h
     src/modules/linkredirector/LinkRedirectorTypes.h
     src/platform/AutoStart.h
+    src/platform/ComApartment.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
-    src/platform/LocalDrives.h
     src/platform/NukeWatcher.h
+    src/platform/ProcessStats.h
     src/platform/SystemInput.h
+    src/platform/WindowFrame.h
+    src/qa/Measure.h
+    src/qa/SelfTest.h
     src/qa/UiShot.h
-    src/tray/TrayController.h
-    src/tray/TrayMenu.h
-    src/ui/CalibrationDialog.h
-    src/ui/CalibrationSession.h
-    src/ui/DiskCard.h
     src/ui/HelpDialog.h
-    src/ui/MainWindow.h
+    src/ui/HelpSection.h
     src/ui/ShortcutRow.h
     src/ui/Theme.h
     src/ui/TitleBar.h
@@ -140,12 +149,14 @@ if(WIN32)
         src/modules/linkredirector/win/BrowserDetectionWin.cpp
         src/modules/linkredirector/win/BrowserRegistrationWin.cpp
         src/platform/win/AutoStartWin.cpp
+        src/platform/win/ComApartmentWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
-        src/platform/win/LocalDrivesWin.cpp
         src/platform/win/NukeWatcherWin.cpp
+        src/platform/win/ProcessStatsWin.cpp
         src/platform/win/RegistryHelper.cpp
         src/platform/win/SystemInputWin.cpp
+        src/platform/win/WindowFrameWin.cpp
         # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
         src/updates/UpdateService.cpp
         src/updates/VersionCompare.cpp
@@ -160,11 +171,13 @@ elseif(APPLE)
         src/modules/linkredirector/mac/BrowserDetectionMac.cpp
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AutoStartMac.mm
+        src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
-        src/platform/mac/LocalDrivesMac.cpp
         src/platform/mac/NukeWatcherMac.mm
+        src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp
+        src/platform/mac/WindowFrameMac.cpp
     )
 endif()
 
@@ -182,7 +195,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE user32 dwmapi advapi32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE user32 dwmapi advapi32 psapi ole32)
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework AppKit"

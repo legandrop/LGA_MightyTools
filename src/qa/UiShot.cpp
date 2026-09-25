@@ -1,18 +1,17 @@
 #include "qa/UiShot.h"
 
-#include "core/AppState.h"
-#include "tray/TrayMenu.h"
-#include "ui/DiskCard.h"
-#include "ui/CalibrationDialog.h"
-#include "ui/CalibrationSession.h"
+#include "app/MainWindow.h"
+#include "app/ModuleHost.h"
+#include "app/ModuleRegistry.h"
+#include "app/SettingsStore.h"
+#include "app/TrayMenu.h"
 #include "ui/HelpDialog.h"
-#include "ui/MainWindow.h"
-#include "ui/ShortcutRow.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
 #include "updates/UpdateDialog.h"
 
 #include <QAbstractButton>
+#include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -24,12 +23,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QKeyEvent>
 #include <QLabel>
-#include <QLineEdit>
-#include <QMouseEvent>
-#include <QPushButton>
-#include <QSpinBox>
 #include <QMenu>
 #include <QPixmap>
 #include <QSaveFile>
@@ -42,77 +36,73 @@
 // show() sobre una ventana de nivel superior (WA_DontShowOnScreen + render), asi que no aparece nada
 // ni se toma el foco.
 //
-// Lo que NO se construye aca, a proposito: QSystemTrayIcon, TrayController, HotkeyService,
-// NukeWatcher, InputInjector, CalibrationSession y UpdateService. Uno solo de esos pondria un icono
-// en la bandeja real, registraria un atajo global, moveria el mouse o saldria a la red.
+// Lo que NO se construye aca, a proposito: QSystemTrayIcon, AppController, UpdateService, el
+// servicio de atajos del sistema ni ningun modulo prendido de verdad. El host corre en modo captura:
+// los modulos se construyen SIN start() y solo muestran el estado de prueba que les fija el arnes.
+// Todo el estado sale de settings en memoria: nunca se lee ni se escribe settings.ini.
 
 namespace {
 
-const QStringList kStates = {
-    QStringLiteral("on"),
-    QStringLiteral("outside-nuke"),
-    QStringLiteral("paused"),
-    QStringLiteral("taken"),
-    QStringLiteral("permission"),
-    QStringLiteral("not-calibrated"),
-    QStringLiteral("recording"),
-    QStringLiteral("rejected"),
-    QStringLiteral("help"),
-    // Hover sin mouse: se marca el widget como "debajo del mouse" y se dibuja. Prueba la pintura
-    // del hover, no que el evento llegue.
+// Estados del host. Los de cada herramienta son "<id>:<estado>" con los de su captureStates().
+const QStringList kHostStates = {
+    QStringLiteral("window"),            // forma A con la primera herramienta elegida (datos del canvas)
+    QStringLiteral("general"),           // General con herramientas prendidas
+    QStringLiteral("general-checking"),  // "Check now" en curso (D-13)
+    QStringLiteral("general-latest"),    // "vX is the latest version"
+    QStringLiteral("general-available"), // "vX is available" con "Update"
+    QStringLiteral("first-run"),         // primer arranque: todo apagado, bienvenida
+    QStringLiteral("help"),              // ayuda unica sobre el velo
     QStringLiteral("hover-help"),
     QStringLiteral("hover-close"),
-    QStringLiteral("tray-menu"),
-    QStringLiteral("calibrate-dialog"),
-    QStringLiteral("calibrate-bubble"),
-    QStringLiteral("calibrate-bubble-outside"),
+    QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
+    QStringLiteral("tray-menu-empty"),   // menu con todo apagado
     QStringLiteral("update-dialog"),
-    // Chequeo de espacio en disco (discos de prueba, nunca los de la maquina).
-    QStringLiteral("disks"),
-    QStringLiteral("disks-low"),
-    QStringLiteral("disks-missing"),
-    QStringLiteral("disks-empty"),
-    QStringLiteral("disks-add-menu"),
-    QStringLiteral("tray-menu-disk-low"),
 };
 
-// Discos de prueba en GiB: los mismos numeros que el diseno aprobado.
-DriveInfo fixtureDrive(const char *root, const char *label, const char *name, double totalGb, double freeGb)
+// Estado de cada herramienta en la ventana del canvas (seccion 1 A): Nuke Shortcuts prendida, un
+// disco bajo, Link Redirector apagado. Las demas, con su primer estado de captura.
+QString canvasState(const QString &id)
 {
-    constexpr double kGiB = 1024.0 * 1024.0 * 1024.0;
-    DriveInfo drive;
-    drive.root = QString::fromLatin1(root);
-    drive.label = QString::fromLatin1(label);
-    drive.name = QString::fromLatin1(name);
-    drive.totalBytes = qint64(totalGb * kGiB);
-    drive.freeBytes = qint64(freeGb * kGiB);
-    return drive;
+    if (id == QLatin1String("nukeShortcuts")) {
+        return QStringLiteral("on");
+    }
+    if (id == QLatin1String("diskSpace")) {
+        return QStringLiteral("low");
+    }
+    return QString();
 }
 
-// Carga los discos del estado pedido en AppState. No lee ningun disco real.
-void applyDiskFixture(AppState &state, const QString &name)
+bool canvasOff(const QString &id)
 {
-    QList<DriveInfo> drives = {
-        fixtureDrive("C:/", "C:", "Windows", 931, 182),
-        fixtureDrive("D:/", "D:", "Cache", 1863, name == QLatin1String("disks-low") || name == QLatin1String("tray-menu-disk-low") ? 42 : 640),
-        fixtureDrive("E:/", "E:", "Renders", 3726, 1210),
-        fixtureDrive("F:/", "F:", "Backup", 7452, 3100),
-    };
-    if (name == QLatin1String("disks-missing")) {
-        drives.removeAt(2); // E: desenchufado
+    return id == QLatin1String("linkRedirector");
+}
+
+// Prende para captura una herramienta con su estado (vacio = el primero que declara).
+bool enable(ModuleHost &host, const QString &id, const QString &state)
+{
+    if (!host.enableForCapture(id, QString())) {
+        return false;
     }
-    if (name == QLatin1String("disks-empty")) {
-        return;
+    Module *module = host.module(id);
+    if (!state.isEmpty()) {
+        return module->applyCaptureState(state);
     }
-    state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
-    state.setDiskThreshold(QStringLiteral("C:/"), 50, DiskWatch::Unit::GB);
-    state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
-    state.setDiskThreshold(QStringLiteral("D:/"), 100, DiskWatch::Unit::GB);
-    if (name != QLatin1String("disks") && name != QLatin1String("disks-add-menu")) {
-        state.addDiskWatch(QStringLiteral("E:/"), QStringLiteral("Renders"));
-        state.setDiskThreshold(QStringLiteral("E:/"), 15, DiskWatch::Unit::Percent);
+    const QStringList states = module->captureStates();
+    return states.isEmpty() || module->applyCaptureState(states.first());
+}
+
+bool canvasFixture(ModuleHost &host, const QString &exceptId)
+{
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        if (d.id == exceptId || canvasOff(d.id)) {
+            continue;
+        }
+        if (!enable(host, d.id, canvasState(d.id))) {
+            fprintf(stderr, "ui-shot: %s rejected its canvas state\n", qPrintable(d.id));
+            return false;
+        }
     }
-    state.setDriveReadings(drives, QStringList(), true, QDateTime(QDate(2026, 9, 24), QTime(12, 41)));
+    return true;
 }
 
 QJsonObject geometryOf(const QWidget *widget, const QWidget *root)
@@ -144,7 +134,7 @@ void settle(QWidget &root)
     QCoreApplication::sendPostedEvents();
 }
 
-// Un lienzo oscuro para lo que en la app es una ventana propia (el menu, la burbuja).
+// Un lienzo oscuro para lo que en la app es una ventana propia (el menu, la burbuja, un dialogo).
 QWidget *makeCanvas()
 {
     auto *canvas = new QWidget;
@@ -152,6 +142,37 @@ QWidget *makeCanvas()
     canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
     canvas->setStyleSheet(QStringLiteral("QWidget#central { background-color: #101010; }"));
     return canvas;
+}
+
+QStringList allStates(const ModuleHost &host)
+{
+    QStringList states = kHostStates;
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        states << QStringLiteral("off:%1").arg(d.id);
+        if (d.offNotice) {
+            states << QStringLiteral("off:%1:<notice>").arg(d.id);
+        }
+        if (Module *module = host.module(d.id)) {
+            for (const QString &state : module->captureStates()) {
+                states << QStringLiteral("%1:%2").arg(d.id, state);
+            }
+        }
+    }
+    return states;
+}
+
+QList<HelpSection> helpSections(const ModuleHost &host)
+{
+    const auto providers = ModuleRegistry::helpProviders();
+    QList<HelpSection> sections;
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        if (providers.contains(d.id)) {
+            sections.append(providers.value(d.id)(host.reader(d.id)));
+        } else {
+            sections.append(HelpSection{d.title, {}, d.description});
+        }
+    }
+    return sections;
 }
 
 } // namespace
@@ -166,11 +187,27 @@ int runUiShot(const QStringList &args)
         return 2;
     }
     const int index = args.indexOf(QStringLiteral("--ui-shot"));
+    const QString state = args.value(index + 1);
+
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+
+    if (state == QLatin1String("list")) {
+        // Para listar los estados de cada herramienta hay que construirlas (en captura, sin start).
+        for (const ModuleDescriptor &d : host.descriptors()) {
+            host.enableForCapture(d.id, QString());
+        }
+        for (const QString &s : allStates(host)) {
+            fprintf(stdout, "%s\n", qPrintable(s));
+        }
+        return 0;
+    }
     if (index < 0 || index + 2 >= args.size()) {
-        fprintf(stderr, "usage: --ui-shot <%s> <out.png> [--dpr <1..3>]\n", qPrintable(kStates.join('|')));
+        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>]\n");
         return 2;
     }
-    const QString state = args.at(index + 1);
     const QString outPath = QFileInfo(args.at(index + 2)).absoluteFilePath();
     qreal dpr = 1.0;
     const int dprIndex = args.indexOf(QStringLiteral("--dpr"));
@@ -182,71 +219,93 @@ int runUiShot(const QStringList &args)
             return 2;
         }
     }
-    if (!kStates.contains(state)) {
-        fprintf(stderr, "ui-shot: unknown state '%s'\n", qPrintable(state));
-        return 2;
-    }
     if (!outPath.endsWith(QLatin1String(".png"), Qt::CaseInsensitive) || QFileInfo::exists(outPath)
         || !QFileInfo(outPath).dir().exists()) {
         fprintf(stderr, "ui-shot: output must be a new .png in an existing folder (%s)\n", qPrintable(outPath));
         return 2;
     }
 
-    // AppState sin persistencia: nunca lee ni escribe settings.ini. Todo el estado es del fixture.
-    AppState appState(AppState::Persistence::None);
-    appState.setNukeInFront(true);
-    appState.setDopeSheetSpot(QPointF(0.89, 0.72));
-    appState.setRegistration(ShortcutAction::AddKeyframe, AppState::Registration::Registered);
-    appState.setRegistration(ShortcutAction::FrameDopeSheet, AppState::Registration::Registered);
-    if (state == QLatin1String("outside-nuke")) {
-        // Lo que se ve siempre con la ventana abierta: Nuke no esta al frente y los atajos estan
-        // sueltos. Tiene que decir "activos" igual (no "esperando a Nuke").
-        appState.setNukeInFront(false);
-        appState.setRegistration(ShortcutAction::AddKeyframe, AppState::Registration::Idle);
-        appState.setRegistration(ShortcutAction::FrameDopeSheet, AppState::Registration::Idle);
-    } else if (state == QLatin1String("paused")) {
-        appState.setEnabled(false);
-    } else if (state == QLatin1String("taken")) {
-        appState.setRegistration(ShortcutAction::FrameDopeSheet, AppState::Registration::Failed);
-    } else if (state == QLatin1String("permission")) {
-        appState.setAccessibilityGranted(false);
-    }
-    if (state.startsWith(QLatin1String("disks")) || state == QLatin1String("tray-menu-disk-low")) {
-        applyDiskFixture(appState, state);
+    // "<id>:<estado>" de una herramienta, u "off:<id>[:<aviso>]".
+    QString moduleId;
+    QString moduleState;
+    QString offId;
+    QString offNotice;
+    if (state.startsWith(QLatin1String("off:"))) {
+        const QStringList parts = state.split(QLatin1Char(':'));
+        offId = parts.value(1);
+        offNotice = parts.value(2);
+        if (!host.descriptor(offId)) {
+            fprintf(stderr, "ui-shot: unknown tool '%s'\n", qPrintable(offId));
+            return 2;
+        }
+    } else if (state.contains(QLatin1Char(':'))) {
+        moduleId = state.section(QLatin1Char(':'), 0, 0);
+        moduleState = state.section(QLatin1Char(':'), 1);
+        if (!host.descriptor(moduleId)) {
+            fprintf(stderr, "ui-shot: unknown tool '%s'\n", qPrintable(moduleId));
+            return 2;
+        }
+    } else if (!kHostStates.contains(state)) {
+        fprintf(stderr, "ui-shot: unknown state '%s' (--ui-shot list)\n", qPrintable(state));
+        return 2;
     }
 
-    MainWindow mainWindow(&appState, MainWindow::Mode::Capture);
+    const bool firstRun = state == QLatin1String("first-run") || state == QLatin1String("tray-menu-empty");
+    if (!firstRun && !canvasFixture(host, offId.isEmpty() ? moduleId : offId)) {
+        return 1;
+    }
+    if (!moduleId.isEmpty() && !enable(host, moduleId, moduleState)) {
+        // Un estado que no existe es un error: nunca se reemplaza por otro.
+        fprintf(stderr, "ui-shot: %s does not know the state '%s'\n", qPrintable(moduleId), qPrintable(moduleState));
+        return 2;
+    }
+
+    MainWindow mainWindow(&host, MainWindow::Mode::Capture, nullptr);
     mainWindow.setAttribute(Qt::WA_DontShowOnScreen, true);
-    mainWindow.applyAutoStartFixture(true, true);
-    mainWindow.refresh();
+    mainWindow.generalPage()->setAutoStart(!firstRun, true);
+    mainWindow.generalPage()->setCheckUpdatesAtStartup(true);
+    // El canvas muestra "v1.00 · up to date" (chequeo hecho); el primer arranque, todavia sin chequear.
+    if (!firstRun) {
+        mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Latest, QStringLiteral(MIGHTYTOOLS_VERSION)});
+    }
+    mainWindow.setFirstRun(firstRun);
+    if (state == QLatin1String("general-checking")) {
+        mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
+    } else if (state == QLatin1String("general-available")) {
+        mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Available, QStringLiteral("1.01")});
+    }
+
+    QString page = MainWindow::kGeneral;
+    if (state == QLatin1String("window") && !host.descriptors().isEmpty()) {
+        page = host.descriptor(QStringLiteral("nukeShortcuts")) ? QStringLiteral("nukeShortcuts") : host.descriptors().first().id;
+    } else if (!offId.isEmpty()) {
+        page = offId;
+        mainWindow.setOffNoticeCaptureState(offId, offNotice.isEmpty() ? QStringLiteral("none") : offNotice);
+    } else if (!moduleId.isEmpty()) {
+        page = moduleId;
+    }
+    mainWindow.selectPage(page);
     settle(mainWindow);
 
     QWidget *root = &mainWindow;
     QScopedPointer<QWidget> canvas;
-    QScopedPointer<AppState> altState;
-    QScopedPointer<MainWindow> altWindow;
 
-    if (state == QLatin1String("not-calibrated")) {
-        // El fixture comun ya guarda un punto y AppState no lo borra: otro estado, sin punto.
-        altState.reset(new AppState(AppState::Persistence::None));
-        altState->setNukeInFront(true);
-        altState->setRegistration(ShortcutAction::AddKeyframe, AppState::Registration::Registered);
-        altState->setRegistration(ShortcutAction::FrameDopeSheet, AppState::Registration::Registered);
-        altWindow.reset(new MainWindow(altState.data(), MainWindow::Mode::Capture));
-        altWindow->setAttribute(Qt::WA_DontShowOnScreen, true);
-        altWindow->applyAutoStartFixture(true, true);
-        altWindow->refresh();
-        settle(*altWindow);
-        root = altWindow.data();
-    } else if (state == QLatin1String("recording")) {
-        mainWindow.shortcutRow(ShortcutAction::AddKeyframe)->showRecordingFixture(QStringLiteral("Ctrl + Shift + ..."));
-        mainWindow.refresh();
-        settle(mainWindow);
-    } else if (state == QLatin1String("rejected")) {
-        mainWindow.shortcutRow(ShortcutAction::AddKeyframe)
-            ->setError(QStringLiteral("Ctrl+Alt+K is taken by another app. Kept Ctrl+Shift+D."));
-        mainWindow.refresh();
-        settle(mainWindow);
+    if (!moduleId.isEmpty()) {
+        // Lo que no es el panel (dialogo, burbuja, menu) lo arma el modulo sin exec() ni show().
+        canvas.reset(makeCanvas());
+        QWidget *widget = host.module(moduleId)->createCaptureWidget(moduleState, canvas.data());
+        if (widget) {
+            auto *layout = new QVBoxLayout(canvas.data());
+            layout->setContentsMargins(20, 20, 20, 20);
+            widget->setWindowFlags(Qt::Widget);
+            layout->addWidget(widget);
+            root = canvas.data();
+            settle(*root);
+            root->adjustSize();
+            settle(*root);
+        } else {
+            canvas.reset();
+        }
     } else if (state == QLatin1String("hover-help") || state == QLatin1String("hover-close")) {
         const QString name = state == QLatin1String("hover-help") ? QStringLiteral("Help") : QStringLiteral("Close");
         for (QAbstractButton *button : mainWindow.titleBar()->findChildren<QAbstractButton *>()) {
@@ -261,85 +320,44 @@ int runUiShot(const QStringList &args)
         // mismo render y no hay nada que mostrar.
         auto *scrim = new Scrim(mainWindow.centralWidget());
         scrim->setVisible(true);
-        auto *help = new HelpDialog(appState.shortcut(ShortcutAction::AddKeyframe),
-                                    appState.shortcut(ShortcutAction::FrameDopeSheet), mainWindow.centralWidget());
+        auto *help = new HelpDialog(helpSections(host), mainWindow.centralWidget());
         help->setWindowFlags(Qt::Widget);
         help->fitHeight();
-        help->move((mainWindow.width() - help->width()) / 2, (mainWindow.height() - help->height()) / 2);
+        help->move((mainWindow.width() - help->width()) / 2, qMax(0, (mainWindow.height() - help->height()) / 2));
         help->setVisible(true);
         settle(mainWindow);
-    } else if (state == QLatin1String("disks-add-menu")) {
-        // El menu de "Add drive..." como widget, armado por la misma tarjeta que lo abre en la app.
-        canvas.reset(makeCanvas());
-        auto *layout = new QVBoxLayout(canvas.data());
-        layout->setContentsMargins(20, 20, 20, 20);
-        auto *menu = new QMenu(canvas.data());
-        menu->setWindowFlags(Qt::Widget);
-        mainWindow.diskCard()->fillAddMenu(menu);
-        if (menu->actions().size() > 1) {
-            menu->setActiveAction(menu->actions().at(1));
-        }
-        layout->addWidget(menu);
-        root = canvas.data();
-        settle(*root);
-        root->adjustSize();
-        settle(*root);
-    } else if (state == QLatin1String("tray-menu") || state == QLatin1String("tray-menu-disk-low")) {
+    } else if (state.startsWith(QLatin1String("tray-menu"))) {
         canvas.reset(makeCanvas());
         auto *layout = new QVBoxLayout(canvas.data());
         layout->setContentsMargins(20, 16, 20, 20);
         layout->setSpacing(14);
-        // Iconos de la bandeja activo y en pausa, como los pinta TrayController (sin QSystemTrayIcon).
+        // Iconos de la bandeja activo y atenuado, como los pinta AppController (sin QSystemTrayIcon).
         auto *icons = new QHBoxLayout();
         icons->setSpacing(18);
-        for (const bool paused : {false, true}) {
+        for (const bool dimmed : {false, true}) {
             auto *icon = new QLabel(canvas.data());
-            icon->setObjectName(paused ? QStringLiteral("trayIconPaused") : QStringLiteral("trayIconOn"));
-            QPixmap px = trayIcon(paused).pixmap(QSize(16, 16), dpr);
+            icon->setObjectName(dimmed ? QStringLiteral("trayIconDimmed") : QStringLiteral("trayIconOn"));
+            QPixmap px = trayIcon(dimmed).pixmap(QSize(16, 16), dpr);
             px.setDevicePixelRatio(dpr);
             icon->setPixmap(px);
             icons->addWidget(icon);
         }
+        auto *tooltip = new QLabel(trayTooltip(&host), canvas.data());
+        tooltip->setObjectName(QStringLiteral("meta"));
+        icons->addWidget(tooltip);
         icons->addStretch(1);
         layout->addLayout(icons);
         auto *menu = new QMenu(canvas.data());
         menu->setWindowFlags(Qt::Widget);
-        TrayMenuActions actions = buildTrayMenu(menu);
-        refreshTrayMenu(actions, true);
-        if (state == QLatin1String("tray-menu-disk-low")) {
-            refreshTrayDiskWarnings(menu, actions, diskWarningLines(appState));
-        }
+        const TrayMenuActions actions = fillTrayMenu(menu, &host);
         menu->setActiveAction(actions.settings);
         layout->addWidget(menu);
         root = canvas.data();
         settle(*root);
         root->adjustSize();
         settle(*root);
-    } else if (state == QLatin1String("calibrate-dialog")) {
-        auto *dialog = new CalibrationDialog();
-        dialog->setAttribute(Qt::WA_DontShowOnScreen, true);
-        dialog->fitHeight();
-        canvas.reset(dialog);
-        root = canvas.data();
-        settle(*root);
-    } else if (state == QLatin1String("calibrate-bubble") || state == QLatin1String("calibrate-bubble-outside")) {
-        canvas.reset(makeCanvas());
-        auto *layout = new QVBoxLayout(canvas.data());
-        layout->setContentsMargins(20, 20, 20, 20);
-        auto *bubble = new CalibrationBubble(canvas.data());
-        bubble->setWindowFlags(Qt::Widget);
-        if (state == QLatin1String("calibrate-bubble")) {
-            bubble->showOverNuke(QPointF(0.89, 0.72));
-        } else {
-            bubble->showOutside(true);
-        }
-        layout->addWidget(bubble);
-        root = canvas.data();
-        settle(*root);
-        root->adjustSize();
-        settle(*root);
     } else if (state == QLatin1String("update-dialog")) {
-        canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("2.1"),
+        canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"),
                                                  QStringLiteral(MIGHTYTOOLS_VERSION)));
         canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
         root = canvas.data();
@@ -380,6 +398,8 @@ int runUiShot(const QStringList &args)
     descriptor.insert(QStringLiteral("version"), QStringLiteral(MIGHTYTOOLS_VERSION));
     descriptor.insert(QStringLiteral("platform"), QGuiApplication::platformName());
     descriptor.insert(QStringLiteral("fixture"), true);
+    descriptor.insert(QStringLiteral("page"), mainWindow.currentPage());
+    descriptor.insert(QStringLiteral("toolsOn"), QJsonArray::fromStringList(host.runningIds()));
     descriptor.insert(QStringLiteral("windowFont"), fontOf(&window));
     QJsonArray tree;
     for (QWidget *widget : window.findChildren<QWidget *>()) {
@@ -423,129 +443,6 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
-    if (probe != QLatin1String("threshold-focus")) {
-        fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));
-        return 2;
-    }
-
-    int failures = 0;
-    const auto check = [&failures](bool ok, const char *what) {
-        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", what);
-        if (!ok) {
-            ++failures;
-        }
-    };
-    const auto settle = []() {
-        for (int i = 0; i < 5; ++i) {
-            QCoreApplication::sendPostedEvents();
-            QCoreApplication::processEvents();
-        }
-    };
-
-    // AppState sin persistencia y un disco de prueba: no se lee ni se escribe nada real.
-    AppState state(AppState::Persistence::None);
-    state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
-    state.setDriveReadings({fixtureDrive("C:/", "C:", "Windows", 931, 182)}, QStringList(), true, QDateTime::currentDateTime());
-
-    // La tarjeta interactiva real (con sus connects y su filtro de clicks), sola en una ventana de la
-    // plataforma offscreen: show() ahi no llega a ninguna pantalla.
-    QWidget host;
-    auto *layout = new QVBoxLayout(&host);
-    auto *card = new DiskCard(&state, true, &host);
-    layout->addWidget(card);
-    QObject::connect(&state, &AppState::changed, card, &DiskCard::refresh);
-    host.resize(440, 260);
-    host.show();
-    host.activateWindow();
-    settle();
-
-    auto *spin = card->findChild<QSpinBox *>(QStringLiteral("threshold"));
-    auto *edit = spin ? spin->findChild<QLineEdit *>() : nullptr;
-    check(spin && edit, "la fila del disco tiene su campo de umbral");
-    if (!spin || !edit) {
-        return 1;
-    }
-    const auto editing = [spin]() {
-        QWidget *focused = QApplication::focusWidget();
-        return focused && (focused == spin || spin->isAncestorOf(focused));
-    };
-    const auto type = [&](const QString &text) {
-        spin->setFocus(Qt::MouseFocusReason);
-        settle();
-        edit->selectAll();
-        edit->insert(text);
-    };
-    const auto press = [&](int key) {
-        QWidget *target = QApplication::focusWidget() ? QApplication::focusWidget() : spin;
-        QKeyEvent down(QEvent::KeyPress, key, Qt::NoModifier);
-        QCoreApplication::sendEvent(target, &down);
-        QKeyEvent up(QEvent::KeyRelease, key, Qt::NoModifier);
-        if (QApplication::focusWidget()) {
-            QCoreApplication::sendEvent(QApplication::focusWidget(), &up);
-        }
-        settle();
-    };
-    const auto threshold = [&state]() { return state.diskWatches().value(0).value; };
-
-    // Al abrir la ventana nada tiene el teclado: Qt le da el foco solo al primer control que acepta
-    // Tab, y el campo del umbral no tiene que ser ese.
-    check(QApplication::activeWindow() == &host, "la ventana de prueba esta activa");
-    check(!editing(), "al abrir la ventana, el campo no tiene el teclado");
-
-    // Otra ventana al frente y de vuelta: al reactivarse tampoco lo toma.
-    QWidget other;
-    other.resize(100, 100);
-    other.show();
-    other.activateWindow();
-    settle();
-    host.activateWindow();
-    settle();
-    check(QApplication::activeWindow() == &host, "la ventana de prueba vuelve a estar activa");
-    check(!editing(), "al volver a la ventana, el campo no tiene el teclado");
-    other.hide();
-    host.activateWindow();
-    settle();
-
-    // Un click REAL en el campo tiene que seguir activandolo. Qt da foco por click solo a los eventos
-    // que llegan del sistema de ventanas (un sendEvent no cuenta), asi que aca se verifica lo que Qt
-    // mira en ese momento: que el campo y su spin box (el campo le pasa el foco a el) acepten foco
-    // por click. El click con el mouse lo prueba Lega.
-    check((edit->focusPolicy() & Qt::ClickFocus) == Qt::ClickFocus
-              && (spin->focusPolicy() & Qt::ClickFocus) == Qt::ClickFocus,
-          "el campo acepta foco por click");
-    check((spin->focusPolicy() & Qt::TabFocus) == 0, "el campo no acepta foco por Tab");
-
-    // Precondicion: sin esto los chequeos de "solto el teclado" no prueban nada.
-    type(QStringLiteral("75"));
-    check(editing(), "al escribir, el campo tiene el teclado");
-
-    press(Qt::Key_Return);
-    check(threshold() == 75, "Enter guarda el valor escrito (75)");
-    check(!editing(), "Enter suelta el campo");
-
-    type(QStringLiteral("20"));
-    press(Qt::Key_Escape);
-    check(threshold() == 75, "Escape no guarda lo escrito (sigue en 75)");
-    check(spin->value() == 75, "Escape vuelve el campo al valor guardado");
-    check(!editing(), "Escape suelta el campo");
-
-    type(QStringLiteral("30"));
-    QPushButton *add = card->addButton();
-    const QPointF inside(add->width() / 2.0, add->height() / 2.0);
-    QMouseEvent click(QEvent::MouseButtonPress, inside, add->mapToGlobal(inside), Qt::LeftButton, Qt::LeftButton,
-                      Qt::NoModifier);
-    QCoreApplication::sendEvent(add, &click);
-    settle();
-    check(threshold() == 30, "un click afuera guarda el valor escrito (30)");
-    check(!editing(), "un click afuera suelta el campo");
-
-    type(QStringLiteral("40"));
-    QMouseEvent clickInside(QEvent::MouseButtonPress, QPointF(5, 5), edit->mapToGlobal(QPointF(5, 5)), Qt::LeftButton,
-                            Qt::LeftButton, Qt::NoModifier);
-    QCoreApplication::sendEvent(edit, &clickInside);
-    settle();
-    check(editing(), "un click adentro del mismo campo lo deja escribiendo");
-
-    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "ui-probe ok" : "ui-probe FALLO", failures);
-    return failures == 0 ? 0 : 1;
+    fprintf(stderr, "ui-probe: unknown case '%s'\n", qPrintable(probe));
+    return 2;
 }

@@ -28,4 +28,11 @@ QList<ModuleDescriptor> all()
     return available;
 }
 
+QHash<QString, HelpProvider> helpProviders()
+{
+    QHash<QString, HelpProvider> providers;
+    // Ej.: providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
+    return providers;
+}
+
 } // namespace ModuleRegistry

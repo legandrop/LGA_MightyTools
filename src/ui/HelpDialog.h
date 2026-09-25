@@ -1,18 +1,19 @@
 #ifndef MIGHTYTOOLS_HELPDIALOG_H
 #define MIGHTYTOOLS_HELPDIALOG_H
 
-#include "core/Shortcut.h"
+#include "ui/HelpSection.h"
 
 #include <QDialog>
+#include <QList>
 
-// Ayuda: version, autor, link a GitHub y como se usa (los updates viven en la ventana principal, no aca). Mismo
-// lenguaje que el HelpDialog de LGA_VideoDownloader: sin marco del sistema, su propia caja
-// redondeada sobre un velo que oscurece la ventana.
+// Ayuda unica de la app (canvas, seccion 6): version, autor, link a GitHub y una seccion por
+// herramienta. Mismo lenguaje que el HelpDialog de LGA_VideoDownloader: sin marco del sistema, su
+// propia caja redondeada sobre un velo que oscurece la ventana.
 class HelpDialog : public QDialog
 {
     Q_OBJECT
 public:
-    HelpDialog(const Shortcut &addKeyframe, const Shortcut &frameDopeSheet, QWidget *parent = nullptr);
+    explicit HelpDialog(const QList<HelpSection> &sections, QWidget *parent = nullptr);
 
     // Abre el dialogo modal centrado sobre la ventana, con el velo detras.
     int execOver(QWidget *window);

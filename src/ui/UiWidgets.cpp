@@ -1,8 +1,14 @@
 #include "ui/UiWidgets.h"
 #include "ui/Theme.h"
 
+#include <QBoxLayout>
 #include <QHBoxLayout>
+#include <QDesktopServices>
+#include <QEvent>
 #include <QIconEngine>
+#include <QMouseEvent>
+#include <QUrl>
+#include <QVBoxLayout>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
@@ -96,6 +102,19 @@ IconSpec buildIcon(Icon icon)
         // Flecha del desplegable del intervalo.
         s.viewBox = 8; s.stroke = 1.3; s.cap = Qt::FlatCap; s.join = Qt::MiterJoin;
         p.moveTo(1, 2.5); p.lineTo(4, 5.5); p.lineTo(7, 2.5);
+        break;
+    case Icon::General:
+        // "General" de la barra lateral: engranaje de trazos del canvas (circulo y ocho rayos).
+        s.viewBox = 16; s.stroke = 1.4;
+        p.addEllipse(QPointF(8, 8), 2.4, 2.4);
+        p.moveTo(8, 1.5); p.lineTo(8, 3.5);
+        p.moveTo(8, 12.5); p.lineTo(8, 14.5);
+        p.moveTo(1.5, 8); p.lineTo(3.5, 8);
+        p.moveTo(12.5, 8); p.lineTo(14.5, 8);
+        p.moveTo(3.4, 3.4); p.lineTo(4.8, 4.8);
+        p.moveTo(11.2, 11.2); p.lineTo(12.6, 12.6);
+        p.moveTo(3.4, 12.6); p.lineTo(4.8, 11.2);
+        p.moveTo(11.2, 4.8); p.lineTo(12.6, 3.4);
         break;
     }
     return s;
@@ -261,6 +280,157 @@ QString Chip::text() const
     return m_label->text();
 }
 
+// ------------------------------------------------------------------ LinkLabel
+
+LinkLabel::LinkLabel(const QString &text, const QString &url, QWidget *parent)
+    : QLabel(text, parent)
+    , m_url(url)
+{
+    setObjectName(QStringLiteral("linkLabel"));
+    setCursor(Qt::PointingHandCursor);
+    setAttribute(Qt::WA_Hover);
+    setToolTip(url);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+}
+
+bool LinkLabel::event(QEvent *event)
+{
+    if (event->type() == QEvent::HoverEnter || event->type() == QEvent::HoverLeave) {
+        Ui::setStyleProperty(this, "hover", event->type() == QEvent::HoverEnter);
+    }
+    return QLabel::event(event);
+}
+
+void LinkLabel::mouseReleaseEvent(QMouseEvent *event)
+{
+    // Solo un click real del usuario llega aca: las corridas automatizadas nunca abren links.
+    if (event->button() == Qt::LeftButton && rect().contains(event->pos())) {
+        QDesktopServices::openUrl(QUrl(m_url));
+    }
+    QLabel::mouseReleaseEvent(event);
+}
+
+// ------------------------------------------------------------------ ToggleSwitch
+
+ToggleSwitch::ToggleSwitch(QWidget *parent)
+    : QAbstractButton(parent)
+{
+    setCheckable(true);
+    setFocusPolicy(Qt::NoFocus);
+    setCursor(Qt::PointingHandCursor);
+    setFixedSize(30, 17);
+}
+
+QSize ToggleSwitch::sizeHint() const
+{
+    return QSize(30, 17);
+}
+
+void ToggleSwitch::paintEvent(QPaintEvent *)
+{
+    // Medidas del canvas: caja 30 x 17 con borde de 1 y radio 9; perilla de 11 a 2 px del borde
+    // interno (left 2 apagado, left 15 prendido).
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const bool on = isChecked();
+    const QRectF box = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
+    painter.setPen(QPen(Theme::color(on ? Theme::kPrimaryBorder : Theme::kSwitchOffBorder), 1.0));
+    painter.setBrush(Theme::color(on ? Theme::kPrimary : Theme::kSwitchOff));
+    painter.drawRoundedRect(box, 8.5, 8.5);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(Theme::color(on ? Theme::kSwitchKnobOn : Theme::kSwitchKnobOff));
+    const qreal left = 1 + (on ? 15 : 2);
+    painter.drawEllipse(QRectF(left, 1 + 2, 11, 11));
+}
+
+// ------------------------------------------------------------------ StatusDot
+
+StatusDot::StatusDot(int diameter, QWidget *parent)
+    : QWidget(parent)
+{
+    setFixedSize(diameter, diameter);
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+}
+
+void StatusDot::setTone(const QString &tone)
+{
+    if (tone == m_tone) {
+        return;
+    }
+    m_tone = tone;
+    update();
+}
+
+void StatusDot::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QRectF r = QRectF(rect());
+    if (m_tone == QLatin1String("off")) {
+        // Hueco con borde de 1.5 px, como `.dot.off` del canvas.
+        painter.setPen(QPen(Theme::color(Theme::kDotOffBorder), 1.5));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(r.adjusted(0.75, 0.75, -0.75, -0.75));
+        return;
+    }
+    const char *hex = Theme::kOk;
+    if (m_tone == QLatin1String("paused")) {
+        hex = Theme::kDotPaused;
+    } else if (m_tone == QLatin1String("warn")) {
+        hex = Theme::kWarn;
+    } else if (m_tone == QLatin1String("err")) {
+        hex = Theme::kError;
+    }
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(Theme::color(hex));
+    painter.drawEllipse(r);
+}
+
+// ------------------------------------------------------------------ StatusCard
+
+StatusCard::StatusCard(QWidget *parent)
+    : QFrame(parent)
+{
+    // Medidas del canvas (`.status`): 10 x 14 de relleno, 12 entre piezas, 58 de alto minimo.
+    setObjectName(QStringLiteral("card"));
+    setMinimumHeight(58);
+    auto *row = new QHBoxLayout(this);
+    row->setContentsMargins(14, 10, 14, 10);
+    row->setSpacing(12);
+    m_dot = Ui::label(QString(), "statusDot", this);
+    row->addWidget(m_dot, 0, Qt::AlignVCenter);
+    auto *texts = new QVBoxLayout();
+    texts->setSpacing(2);
+    m_title = Ui::label(QString(), "cardTitle", this);
+    m_text = Ui::caption(QString(), this);
+    texts->addWidget(m_title);
+    texts->addWidget(m_text);
+    row->addLayout(texts, 1);
+    m_button = Ui::button(QString(), QString(), QString(), this);
+    m_button->setObjectName(QStringLiteral("statusButton"));
+    row->addWidget(m_button, 0, Qt::AlignVCenter);
+}
+
+void StatusCard::set(const QString &dot, const QString &title, const QString &text, const QString &button,
+                     const QString &buttonVariant, const QString &cardTone, const QString &buttonSize)
+{
+    Ui::setStyleProperty(m_dot, "state", dot);
+    Ui::setStyleProperty(this, "tone", cardTone);
+    m_title->setText(title);
+    m_text->setText(text);
+    m_button->setText(button);
+    m_button->setVisible(!button.isEmpty());
+    // Boton de 78 de ancho minimo (`.btn`), salvo el chico (`.btn.sm`).
+    m_button->setMinimumWidth(buttonSize.isEmpty() ? 78 : 0);
+    Ui::setStyleProperty(m_button, "variant", buttonVariant);
+    Ui::setStyleProperty(m_button, "btnSize", buttonSize);
+}
+
+QString StatusCard::title() const
+{
+    return m_title->text();
+}
+
 // ------------------------------------------------------------------ Ui
 
 namespace Ui {
@@ -298,6 +468,36 @@ void setStyleProperty(QWidget *widget, const char *name, const QVariant &value)
     }
     widget->setProperty(name, value);
     repolish(widget);
+}
+
+QLabel *label(const QString &text, const char *objectName, QWidget *parent)
+{
+    auto *l = new QLabel(text, parent);
+    l->setObjectName(QLatin1String(objectName));
+    return l;
+}
+
+QLabel *caption(const QString &text, QWidget *parent)
+{
+    auto *l = label(text, "caption", parent);
+    l->setWordWrap(true);
+    return l;
+}
+
+QFrame *card(QWidget *parent)
+{
+    auto *frame = new QFrame(parent);
+    frame->setObjectName(QStringLiteral("card"));
+    return frame;
+}
+
+void addDivider(QBoxLayout *layout, QWidget *parent)
+{
+    layout->addSpacing(8);
+    auto *divider = new QFrame(parent);
+    divider->setObjectName(QStringLiteral("divider"));
+    layout->addWidget(divider);
+    layout->addSpacing(8);
 }
 
 } // namespace Ui

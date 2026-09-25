@@ -1,68 +1,19 @@
 #include "ui/HelpDialog.h"
-#include "core/Shortcut.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
-#include <QDesktopServices>
 #include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
-#include <QUrl>
 #include <QVBoxLayout>
 
 namespace {
 
-constexpr int DIALOG_WIDTH = 400;
-constexpr auto kGithubUrl = "https://github.com/legandrop";
-
-QLabel *label(const QString &text, const char *name, QWidget *parent)
-{
-    auto *l = new QLabel(text, parent);
-    l->setObjectName(QLatin1String(name));
-    return l;
-}
-
-QString strong(const QString &text)
-{
-    return QStringLiteral("<span style=\"color:%1;\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
-}
-
-// Link a GitHub como el GitHubLinkLabel del Help de FileManager S3: texto plano subrayado que
-// cambia de color con el mouse encima. Un <a> dentro de un QLabel no tiene hover, por eso es un
-// label propio. El color es mas claro que el de las otras apps, que casi no se lee sobre oscuro.
-class GithubLink : public QLabel
-{
-public:
-    explicit GithubLink(QWidget *parent) : QLabel(QStringLiteral("github.com/legandrop"), parent)
-    {
-        setObjectName(QStringLiteral("helpLink"));
-        setCursor(Qt::PointingHandCursor);
-        setAttribute(Qt::WA_Hover);
-        setToolTip(QLatin1String(kGithubUrl));
-        setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    }
-
-protected:
-    bool event(QEvent *event) override
-    {
-        if (event->type() == QEvent::HoverEnter || event->type() == QEvent::HoverLeave) {
-            Ui::setStyleProperty(this, "hover", event->type() == QEvent::HoverEnter);
-        }
-        return QLabel::event(event);
-    }
-
-    void mouseReleaseEvent(QMouseEvent *event) override
-    {
-        if (event->button() == Qt::LeftButton && rect().contains(event->pos())) {
-            QDesktopServices::openUrl(QUrl(QLatin1String(kGithubUrl)));
-        }
-        QLabel::mouseReleaseEvent(event);
-    }
-};
+// Medidas del canvas (seccion 6): 520 de ancho, 20 x 24 de relleno, 14 entre bloques.
+constexpr int DIALOG_WIDTH = 520;
 
 } // namespace
 
@@ -91,7 +42,7 @@ bool Scrim::eventFilter(QObject *watched, QEvent *event)
 
 // ------------------------------------------------------------------ HelpDialog
 
-HelpDialog::HelpDialog(const Shortcut &addKeyframe, const Shortcut &frameDopeSheet, QWidget *parent)
+HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     : QDialog(parent)
 {
     setObjectName(QStringLiteral("helpDialog"));
@@ -101,8 +52,8 @@ HelpDialog::HelpDialog(const Shortcut &addKeyframe, const Shortcut &frameDopeShe
     setFixedWidth(DIALOG_WIDTH);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(22, 18, 22, 18);
-    layout->setSpacing(12);
+    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setSpacing(14);
 
     // Encabezado igual al Help de las otras apps LGA (HelpTab de FileManager S3): nombre en violeta,
     // version en gris claro, "Developed by" y el link, todo pegado sin aire entre lineas.
@@ -110,59 +61,59 @@ HelpDialog::HelpDialog(const Shortcut &addKeyframe, const Shortcut &frameDopeShe
     header->setSpacing(0);
     auto *titleRow = new QHBoxLayout();
     titleRow->setSpacing(8);
-    titleRow->addWidget(label(QStringLiteral("LGA Mighty Tools"), "helpTitle", this), 0, Qt::AlignBaseline);
-    titleRow->addWidget(label(QStringLiteral("v" MIGHTYTOOLS_VERSION), "helpVersion", this), 0, Qt::AlignBaseline);
+    titleRow->addWidget(Ui::label(QStringLiteral("LGA Mighty Tools"), "helpTitle", this), 0, Qt::AlignBaseline);
+    titleRow->addWidget(Ui::label(QStringLiteral("v" MIGHTYTOOLS_VERSION), "helpVersion", this), 0, Qt::AlignBaseline);
     titleRow->addStretch(1);
     auto *close = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     Ui::setIcon(close, Icon::X, Theme::color(Theme::kIcon));
     close->setToolTip(QStringLiteral("Close"));
     titleRow->addWidget(close, 0, Qt::AlignVCenter);
     header->addLayout(titleRow);
-    header->addWidget(label(QStringLiteral("Developed by Lega Pugliese"), "helpDeveloped", this));
-    header->addWidget(new GithubLink(this));
+    header->addWidget(Ui::label(QStringLiteral("Developed by Lega Pugliese"), "helpDeveloped", this));
+    auto *link = new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), this);
+    link->setObjectName(QStringLiteral("helpLink"));
+    header->addWidget(link);
     layout->addLayout(header);
 
     auto *rule = new QFrame(this);
     rule->setObjectName(QStringLiteral("helpRule"));
     layout->addWidget(rule);
 
-    layout->addWidget(label(QStringLiteral("How it works"), "helpSection", this));
-    const QStringList steps = {
-        QStringLiteral("Put the pointer over a knob in Nuke and press %1 to set a key.")
-            .arg(strong(addKeyframe.displayText())),
-        QStringLiteral("Calibrate the %1 once: one click on an empty spot.").arg(strong(QStringLiteral("Dope Sheet"))),
-        QStringLiteral("Press %1 to select every key in the Dope Sheet and frame them.")
-            .arg(strong(frameDopeSheet.displayText())),
-        QStringLiteral("Under %1, add the drives to watch: you get a notification when one runs low.")
-            .arg(strong(QStringLiteral("Disk space"))),
-    };
-    auto *stepsBox = new QVBoxLayout();
-    stepsBox->setSpacing(4);
-    for (int i = 0; i < steps.size(); ++i) {
-        // Numero en su propia columna de ancho fijo: con "1." y "2." en el mismo texto, el ancho
-        // distinto de las cifras corria el comienzo de cada paso.
-        auto *row = new QHBoxLayout();
-        row->setSpacing(0);
-        auto *number = label(QStringLiteral("%1.").arg(i + 1), "helpBody", this);
-        number->setFixedWidth(20);
-        row->addWidget(number, 0, Qt::AlignTop);
-        auto *l = label(steps.at(i), "helpBody", this);
-        l->setTextFormat(Qt::RichText);
-        l->setWordWrap(true);
-        row->addWidget(l, 1);
-        stepsBox->addLayout(row);
+    // Una seccion por herramienta, prendida o apagada: la de una apagada dice que hace antes de
+    // prenderla.
+    for (const HelpSection &section : sections) {
+        auto *block = new QVBoxLayout();
+        block->setSpacing(6);
+        block->addWidget(Ui::label(section.title, "helpToolTitle", this));
+        for (int i = 0; i < section.steps.size(); ++i) {
+            // Numero en su propia columna de ancho fijo: con "1." y "2." en el mismo texto, el ancho
+            // distinto de las cifras corria el comienzo de cada paso.
+            auto *row = new QHBoxLayout();
+            row->setSpacing(0);
+            auto *number = Ui::label(QStringLiteral("%1.").arg(i + 1), "helpBody", this);
+            number->setFixedWidth(20);
+            row->addWidget(number, 0, Qt::AlignTop);
+            auto *step = Ui::label(section.steps.at(i), "helpBody", this);
+            step->setTextFormat(Qt::RichText);
+            step->setWordWrap(true);
+            row->addWidget(step, 1);
+            block->addLayout(row);
+        }
+        if (!section.note.isEmpty()) {
+            auto *note = Ui::label(section.note, "helpNote", this);
+            note->setWordWrap(true);
+            block->addWidget(note);
+        }
+        layout->addLayout(block);
     }
-    layout->addLayout(stepsBox);
 
 #ifdef Q_OS_MACOS
     const QString where = QStringLiteral("the menu bar");
 #else
     const QString where = QStringLiteral("the tray");
 #endif
-    auto *note = label(QStringLiteral("The shortcuts only work while Nuke is in front; other apps keep these keys. "
-                                      "Closing the window keeps Nuke Shortcuts running in %1.")
-                           .arg(where),
-                       "helpNote", this);
+    auto *note = Ui::label(QStringLiteral("Closing the window keeps LGA Mighty Tools running in %1.").arg(where),
+                           "helpNote", this);
     note->setWordWrap(true);
     layout->addWidget(note);
 

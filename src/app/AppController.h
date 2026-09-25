@@ -1,0 +1,79 @@
+#ifndef MIGHTYTOOLS_APPCONTROLLER_H
+#define MIGHTYTOOLS_APPCONTROLLER_H
+
+#include "app/HostServices.h"
+
+#include <QObject>
+#include <QPointer>
+#include <QString>
+
+#include <memory>
+
+class MainWindow;
+class ModuleHost;
+class QMenu;
+class QSystemTrayIcon;
+class SettingsStore;
+class SingleInstanceServer;
+class UpdateService;
+
+// La app residente: el host de herramientas, la ventana, el icono de la bandeja (o de la barra de
+// menu), el updater, el inicio con el sistema y la instancia unica. Lo de cada herramienta vive en
+// su modulo; aca queda solo lo general (reemplaza al TrayController de Nuke Shortcuts).
+class AppController : public QObject, public HostServices
+{
+    Q_OBJECT
+
+public:
+    struct Options
+    {
+        bool dryRunInput = false;
+        // Medicion de consumo (--measure-idle): settings en memoria, sin bandeja, sin updater, sin
+        // canal de instancia unica y como corrida automatizada. La ventana se arma y no se muestra.
+        bool measurement = false;
+    };
+
+    explicit AppController(const Options &options, QObject *parent = nullptr);
+    ~AppController() override;
+
+    ModuleHost *host() const { return m_host; }
+    MainWindow *mainWindow() const { return m_window; }
+
+    // HostServices
+    void notify(const QString &moduleId, const QString &title, const QString &body, ModuleContext::NoticeIcon icon,
+                int msecs) override;
+    void showPanel(const QString &moduleId) override;
+    bool hideWindow() override;
+    void showWindow() override;
+    QWidget *window() const override;
+
+public slots:
+    void showSettings();
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    void onToggleRequested(const QString &id, bool on);
+    void onReleaseRequested(const QString &id);
+    void onFirstToolOn();
+    void refreshTray();
+    void rebuildMenu();
+    void refreshAutoStart();
+    void onAutoStartToggled(bool enabled);
+    bool firstRunView() const;
+    void quit();
+
+    Options m_options;
+    std::unique_ptr<SettingsStore> m_store;
+    ModuleHost *m_host = nullptr;
+    MainWindow *m_window = nullptr;
+    QSystemTrayIcon *m_tray = nullptr;
+    QMenu *m_menu = nullptr;
+    UpdateService *m_updates = nullptr;
+    SingleInstanceServer *m_server = nullptr;
+    QString m_lastNotifier;
+    bool m_buildTree = false;
+};
+
+#endif // MIGHTYTOOLS_APPCONTROLLER_H

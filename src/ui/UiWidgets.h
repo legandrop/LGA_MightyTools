@@ -1,11 +1,13 @@
 #ifndef MIGHTYTOOLS_UIWIDGETS_H
 #define MIGHTYTOOLS_UIWIDGETS_H
 
+#include <QAbstractButton>
 #include <QFrame>
 #include <QIcon>
 #include <QLabel>
 #include <QWidget>
 
+class QBoxLayout;
 class QPainter;
 class QPushButton;
 
@@ -13,7 +15,7 @@ class QPushButton;
 // uiwidgets.h de LGA_VideoDownloader (mismos trazos y medidas). Todo se pinta con QPainter a la
 // escala real del dispositivo, sin mapas de bits reescalados ni SVG (el deploy no lleva qsvg).
 
-enum class Icon { Help, Folder, X, Minimize, Close, Pencil, Plus, ChevronDown };
+enum class Icon { Help, Folder, X, Minimize, Close, Pencil, Plus, ChevronDown, General };
 
 namespace Icons {
 // Pinta el icono dentro de rect (se escala desde su viewBox original).
@@ -70,6 +72,67 @@ private:
     QString m_tone;
 };
 
+// Link de texto subrayado que cambia de color con el mouse encima y abre `url` con un click (el
+// GitHubLinkLabel del Help de FileManager S3). Un <a> dentro de un QLabel no tiene hover.
+class LinkLabel : public QLabel
+{
+    Q_OBJECT
+public:
+    LinkLabel(const QString &text, const QString &url, QWidget *parent = nullptr);
+protected:
+    bool event(QEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+private:
+    QString m_url;
+};
+
+// Interruptor de encendido de una herramienta (30 x 17, el `.sw` del canvas). Checkable: toggled()
+// avisa el cambio. No toma foco de teclado (regla de la app).
+class ToggleSwitch : public QAbstractButton
+{
+    Q_OBJECT
+public:
+    explicit ToggleSwitch(QWidget *parent = nullptr);
+    QSize sizeHint() const override;
+protected:
+    void paintEvent(QPaintEvent *event) override;
+};
+
+// Punto de estado dibujado: lleno con el tono (ok, paused, warn, err) o hueco con borde (off).
+class StatusDot : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit StatusDot(int diameter, QWidget *parent = nullptr);
+    void setTone(const QString &tone);
+    QString tone() const { return m_tone; }
+protected:
+    void paintEvent(QPaintEvent *event) override;
+private:
+    QString m_tone = QStringLiteral("ok");
+};
+
+// Tarjeta de estado con punto, titulo, texto y boton (`.card.status` del canvas): la de Nuke
+// Shortcuts y el aviso del panel de apagado.
+class StatusCard : public QFrame
+{
+    Q_OBJECT
+public:
+    explicit StatusCard(QWidget *parent = nullptr);
+    // dot: "on", "paused", "warn", "error"; tone de la tarjeta: "", "warn", "err"; variant del boton:
+    // "", "primary"; size: "" (30 px) o "sm". Boton vacio = sin boton.
+    void set(const QString &dot, const QString &title, const QString &text, const QString &button,
+             const QString &buttonVariant, const QString &cardTone, const QString &buttonSize = QString());
+    QPushButton *button() const { return m_button; }
+    QString title() const;
+
+private:
+    QLabel *m_dot = nullptr;
+    QLabel *m_title = nullptr;
+    QLabel *m_text = nullptr;
+    QPushButton *m_button = nullptr;
+};
+
 // Ayudas para construir botones con las variantes de la hoja de estilo.
 namespace Ui {
 QPushButton *button(const QString &text, const QString &variant = QString(), const QString &size = QString(),
@@ -78,6 +141,15 @@ void setIcon(QPushButton *button, Icon icon, const QColor &color, int size = 14)
 void repolish(QWidget *widget);
 // Cambia una propiedad de estilo y vuelve a pulir solo si cambio.
 void setStyleProperty(QWidget *widget, const char *name, const QVariant &value);
+
+// Piezas de las tarjetas del diseno (las usan el host y los paneles de las herramientas).
+QLabel *label(const QString &text, const char *objectName, QWidget *parent);
+// Texto gris de dos lineas o mas (`.cap` del canvas).
+QLabel *caption(const QString &text, QWidget *parent);
+// Tarjeta vacia (`.card`): fondo, radio 8, sin layout.
+QFrame *card(QWidget *parent);
+// Linea divisoria con 8 px de aire arriba y abajo (`.divider`).
+void addDivider(QBoxLayout *layout, QWidget *parent);
 } // namespace Ui
 
 #endif // MIGHTYTOOLS_UIWIDGETS_H

@@ -40,9 +40,24 @@ public:
     // silencioso salvo que haya una version nueva.
     void checkForUpdates(bool manual);
 
+    // "Check now" de General (D-13): el resultado va a la fila por las senales (checking,
+    // upToDate, updateAvailable) en vez de un cartel; los errores siguen saliendo en cartel.
+    void checkInline();
+    // "Update" de la fila: baja e instala la version que encontro el ultimo chequeo.
+    void installAvailable();
+
+signals:
+    void checking();
+    void upToDate(const QString &latestVersion);
+    void updateAvailable(const QString &version);
+    // El chequeo termino sin resultado para la fila (error ya mostrado, o sin release).
+    void checkFailed();
+
 private:
-    void startCheckRequest(bool manual);
-    void onCheckFinished(bool manual);
+    enum class Mode { Automatic, Manual, Inline };
+
+    void startCheckRequest(Mode mode);
+    void onCheckFinished(Mode mode);
 
     void promptForUpdate(const QString &version, const QUrl &downloadUrl,
                          const QString &assetName, const QString &sha256Digest);
@@ -66,6 +81,12 @@ private:
 
     bool m_busy = false;
     bool m_automaticCheckScheduled = false;
+
+    // Lo que encontro el ultimo chequeo con version nueva, para "Update" de la fila.
+    QString m_availableVersion;
+    QUrl m_availableUrl;
+    QString m_availableAsset;
+    QString m_availableDigest;
 
     // ------------------------------------------------------ descarga por streaming
     // El asset NO se acumula en RAM: se escribe al disco a medida que llega y el

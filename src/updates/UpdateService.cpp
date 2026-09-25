@@ -201,7 +201,7 @@ void UpdateService::checkForUpdates(bool manual)
     if (!m_network) {
         return;
     }
-
+    const Mode mode = manual ? Mode::Manual : Mode::Automatic;
     if (m_busy) {
         if (manual) {
             QMessageBox::information(parentWindow(), tr("Updates"),
@@ -211,10 +211,36 @@ void UpdateService::checkForUpdates(bool manual)
     }
 
     m_busy = true;
-    startCheckRequest(manual);
+    startCheckRequest(mode);
 }
 
-void UpdateService::startCheckRequest(bool manual)
+void UpdateService::checkInline()
+{
+    if (!m_network) {
+        return;
+    }
+    if (m_busy) {
+        QMessageBox::information(parentWindow(), tr("Updates"), tr("An update operation is already in progress."));
+        return;
+    }
+    m_busy = true;
+    startCheckRequest(Mode::Inline);
+}
+
+void UpdateService::installAvailable()
+{
+    if (m_availableVersion.isEmpty() || !m_availableUrl.isValid()) {
+        return;
+    }
+    if (m_busy) {
+        QMessageBox::information(parentWindow(), tr("Updates"), tr("An update operation is already in progress."));
+        return;
+    }
+    m_busy = true;
+    downloadAndRunUpdate(m_availableUrl, m_availableAsset, m_availableDigest, m_availableVersion);
+}
+
+void UpdateService::startCheckRequest(Mode mode)
 {
     // Guard de re-entrancia, simetrico al de m_downloadReply en downloadAndRunUpdate:
     // si ya hay un chequeo en vuelo, no se pisa con uno nuevo.
@@ -233,13 +259,17 @@ void UpdateService::startCheckRequest(bool manual)
     request.setTransferTimeout(kCheckTimeoutMs);
 
     m_checkReply = m_network->get(request);
-    connect(m_checkReply, &QNetworkReply::finished, this, [this, manual]() { onCheckFinished(manual); });
+    connect(m_checkReply, &QNetworkReply::finished, this, [this, mode]() { onCheckFinished(mode); });
+    emit checking();
 
-    qDebug() << "[UpdateService] Chequeando updates, manual=" << manual;
+    qDebug() << "[UpdateService] Chequeando updates, modo=" << int(mode);
 }
 
-void UpdateService::onCheckFinished(bool manual)
+void UpdateService::onCheckFinished(Mode mode)
 {
+    // Manual (menu) e Inline ("Check now" de General) muestran los errores en cartel; el automatico
+    // se calla en todo lo que no sea "hay version nueva".
+    const bool manual = mode != Mode::Automatic;
     QNetworkReply *reply = m_checkReply;
     m_checkReply = nullptr;
 
@@ -248,6 +278,7 @@ void UpdateService::onCheckFinished(bool manual)
         // startCheckRequest), pero si pasa no hay nada mas que vaya a liberar
         // m_busy, asi que se libera aca para no dejar el servicio trabado.
         m_busy = false;
+        emit checkFailed();
         return;
     }
 
@@ -256,11 +287,11 @@ void UpdateService::onCheckFinished(bool manual)
     const QByteArray payload = reply->readAll();
     reply->deleteLater();
 
-    // El chequeo automatico se calla en TODO lo que no sea "hay version nueva": no
-    // interrumpe al usuario para decirle que ya esta al dia.
     if (error != QNetworkReply::NoError) {
         qDebug() << "[UpdateService] Chequeo fallo, networkError=" << error
                  << "httpStatus=" << httpStatus;
+        m_busy = false;
+        emit checkFailed();
         if (manual) {
             QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
                                  tr("Could not check for updates. Please try again later.\n\n"
@@ -269,7 +300,6 @@ void UpdateService::onCheckFinished(bool manual)
                                           QString::number(static_cast<int>(error)),
                                           QString::fromUtf8(payload.left(2048))));
         }
-        m_busy = false;
         return;
     }
 
@@ -279,6 +309,8 @@ void UpdateService::onCheckFinished(bool manual)
     // reportada como "no hay update", ocultando el problema real.
     if (httpStatus != 200) {
         qDebug() << "[UpdateService] Chequeo con status HTTP invalido, httpStatus=" << httpStatus;
+        m_busy = false;
+        emit checkFailed();
         if (manual) {
             QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
                                  tr("Could not check for updates. Please try again later.\n\n"
@@ -286,40 +318,43 @@ void UpdateService::onCheckFinished(bool manual)
                                      .arg(QString::number(httpStatus), kManifestUrl,
                                           QString::fromUtf8(payload.left(2048))));
         }
-        m_busy = false;
         return;
     }
 
     const ReleaseInfo info = parseManifest(payload);
     if (info.version.isEmpty()) {
         qDebug() << "[UpdateService] Sin release instalable en el manifiesto.";
+        m_busy = false;
+        emit checkFailed();
         if (manual) {
             QMessageBox::information(parentWindow(), tr("Updates"),
                                      tr("No installable update was found."));
         }
-        m_busy = false;
         return;
     }
 
     if (!info.downloadUrl.isValid()) {
         qDebug() << "[UpdateService] Release" << info.version << "sin asset que matchee el patron.";
+        m_busy = false;
+        emit checkFailed();
         if (manual) {
             QMessageBox::information(parentWindow(), tr("Updates"),
                                      tr("Release %1 does not contain an installable asset.")
                                          .arg(info.version));
         }
-        m_busy = false;
         return;
     }
 
     if (!VersionCompare::isNewer(info.version, QApplication::applicationVersion())) {
         qDebug() << "[UpdateService] Ya esta al dia (remoto=" << info.version
                  << ", local=" << QApplication::applicationVersion() << ")";
-        if (manual) {
+        m_busy = false;
+        // La fila de General lo dice sin cartel (D-13); el menu de la bandeja sigue con su cartel.
+        emit upToDate(QApplication::applicationVersion());
+        if (mode == Mode::Manual) {
             QMessageBox::information(parentWindow(), tr("Updates"),
                                      tr("You are running the latest version."));
         }
-        m_busy = false;
         return;
     }
 
@@ -330,17 +365,28 @@ void UpdateService::onCheckFinished(bool manual)
     if (info.assetDigest.isEmpty()) {
         qDebug() << "[UpdateService] Release" << info.version
                  << "sin digest SHA-256 valido en el manifiesto; no se descarga.";
+        m_busy = false;
+        emit checkFailed();
         if (manual) {
             QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
                                  tr("Release %1 does not include a valid integrity digest. "
                                     "Refusing to download an unverifiable installer.")
                                      .arg(info.version));
         }
-        m_busy = false;
         return;
     }
 
     qDebug() << "[UpdateService] Hay update disponible:" << info.version;
+    m_availableVersion = info.version;
+    m_availableUrl = info.downloadUrl;
+    m_availableAsset = info.assetName;
+    m_availableDigest = info.assetDigest;
+    emit updateAvailable(info.version);
+    if (mode == Mode::Inline) {
+        // La fila muestra "vX is available" con "Update": no hace falta el cartel.
+        m_busy = false;
+        return;
+    }
     // m_busy queda en true a proposito: sigue representando la operacion en curso
     // durante el dialogo y, si el usuario acepta, durante el arranque de la
     // descarga. Se libera en promptForUpdate (si elige "Later") o en

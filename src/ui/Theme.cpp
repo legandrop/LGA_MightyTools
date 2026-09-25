@@ -248,10 +248,41 @@ QLabel#helpLink[hover="true"] { color: #C9C0F5; }
 QLabel#helpSection { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 QLabel#helpBody { color: #a9a9ae; font-size: @fs13; }
 QLabel#helpNote { color: @textCaption; font-size: @fs12; }
-QFrame#helpRule { background-color: @border; border: none; min-height: 1px; max-height: 1px; }
+QFrame#helpRule { background-color: @divider; border: none; min-height: 1px; max-height: 1px; }
+QLabel#helpToolTitle { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
+
+/* Ventana de herramientas (forma A): barra lateral, encabezado del panel y paginas del host. */
+QFrame#sidebar { background-color: @side; border: none; border-right: 1px solid @divider; }
+QLabel#sideLabel { color: @textFaint; font-size: @fs11; }
+QLabel#sideName { color: @text; font-size: @fs13_5; }
+QLabel#sideName[off="true"] { color: @textCaption; }
+QLabel#sideName[sel="true"] { color: @textBright; }
+QLabel#sideStatus { color: @textFaint; font-size: @fs11_5; }
+QLabel#sideStatus[tone="ok"] { color: @statusOk; }
+QLabel#sideStatus[tone="warn"] { color: @warn; }
+QLabel#sideStatus[tone="err"] { color: @error; }
+QScrollArea#pane, QWidget#paneContent { background-color: @window; border: none; }
+QFrame#modIcon { background-color: @modIconBg; border: 1px solid @modIconBorder; border-radius: 8px; }
+QLabel#modTitle { color: @textBright; font-size: @fs16; font-weight: 600; }
+QLabel#platTag { color: @textFaint; font-size: @fs11; font-weight: 500; border: 1px solid @platBorder; border-radius: 4px; padding: 1px 5px; }
+QLabel#offBullet { color: @text; font-size: @fs13; }
+QLabel#offBulletMark { color: @dotPaused; font-size: @fs13; }
+QLabel#welcomeTitle { color: @textStrong; font-size: @fs16; font-weight: 600; }
+QFrame#miniCard { background-color: @miniCard; border: none; border-radius: 8px; }
+QLabel#miniTitle { color: @textStrong; font-size: @fs13; font-weight: 600; }
+QLabel#runningText { color: @text; font-size: @fs13; }
+QLabel#aboutName { color: @aboutName; font-size: @fs13_5; font-weight: 600; }
+QLabel#meta[tone="ok"] { color: @ok; }
+QLabel#meta[tone="warn"] { color: @warn; }
+QLabel#linkLabel { color: @link; font-size: @fs13; font-weight: 500; text-decoration: underline; }
+QLabel#linkLabel[hover="true"] { color: #C9C0F5; }
+QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 14px; min-height: 22px; max-height: 22px; background: transparent; }
 )QSS");
 
     const QList<QPair<const char *, QString>> tokens = {
+        {"@statusOk", kStatusOk}, {"@sideSelected", kSideSelected}, {"@side", kSide},
+        {"@modIconBg", kModIconBg}, {"@modIconBorder", kModIconBorder}, {"@platBorder", kPlatBorder},
+        {"@miniCard", kMiniCard}, {"@aboutName", kAboutName}, {"@dotPaused", kDotPaused},
         {"@window", kWindow}, {"@card", kCard}, {"@tile", kTile}, {"@fieldBorder", kFieldBorder},
         {"@field", kField}, {"@border", kBorder}, {"@divider", kDivider}, {"@dialog", kDialog},
         {"@textStrong", kTextStrong}, {"@textBright", kTextBright}, {"@textMuted", kTextMuted},
@@ -266,6 +297,11 @@ QFrame#helpRule { background-color: @border; border: none; min-height: 1px; max-
         qss.replace(QLatin1String(token.first), token.second);
     }
     return qss;
+}
+
+QString fontSize(qreal px)
+{
+    return fs(px);
 }
 
 } // namespace Theme

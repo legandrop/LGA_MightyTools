@@ -46,6 +46,28 @@ inline constexpr const char *kError = "#e8836f";
 inline constexpr const char *kBarFill = "#4e4e4e";
 inline constexpr const char *kWarnMark = "#e6c56b";
 
+// Ventana de herramientas (forma A del canvas): barra lateral, filas, encabezado del panel.
+inline constexpr const char *kSide = "#131313";
+inline constexpr const char *kSideHover = "#1b1b1b";
+inline constexpr const char *kSideSelected = "#212027";
+inline constexpr const char *kToolIconOn = "#b7aef0";   ///< icono de una herramienta prendida
+inline constexpr const char *kToolIconOff = "#5a5a5a";  ///< icono en la fila de una apagada
+inline constexpr const char *kStatusOk = "#8fb866";     ///< linea de estado verde de una fila
+inline constexpr const char *kDotPaused = "#555555";
+inline constexpr const char *kDotOffBorder = "#4a4a4a";
+inline constexpr const char *kModIconBg = "#1f1d27";
+inline constexpr const char *kModIconBorder = "#2e2a40";
+inline constexpr const char *kPlatBorder = "#2c2c2c";
+inline constexpr const char *kMiniCard = "#191919";     ///< tarjetas de la bienvenida
+inline constexpr const char *kAboutName = "#9f84d6";
+// Interruptor
+inline constexpr const char *kPrimary = "#443a91";
+inline constexpr const char *kPrimaryBorder = "#5243a8";
+inline constexpr const char *kSwitchOff = "#2d2d33";
+inline constexpr const char *kSwitchOffBorder = "#3a3a44";
+inline constexpr const char *kSwitchKnobOff = "#7a7a80";
+inline constexpr const char *kSwitchKnobOn = "#DDDBEE";
+
 inline QColor color(const char *hex) { return QColor(QLatin1String(hex)); }
 
 // Fuente de interfaz (Inter) en pixeles, con peso opcional.
@@ -55,6 +77,9 @@ QFont uiFont(qreal pixelSize, int weight = QFont::Normal);
 void apply(QApplication &app);
 
 QString styleSheet();
+
+// Tamano de fuente del diseno (px, puede ser 13.5) en puntos, como lo escribe la hoja de estilo.
+QString fontSize(qreal px);
 
 } // namespace Theme
 
