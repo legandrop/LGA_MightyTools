@@ -42,6 +42,7 @@ QHash<QString, HelpProvider> helpProviders()
 {
     QHash<QString, HelpProvider> providers;
     // Ej.: providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
+    providers.insert(QStringLiteral("openInNukeX"), &openInNukeXHelp);
     return providers;
 }
 

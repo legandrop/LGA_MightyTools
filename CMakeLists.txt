@@ -90,6 +90,7 @@ set(SOURCES
     src/modules/openinnukex/OpenInNukeXDescriptor.cpp
     src/modules/openinnukex/OpenInNukeXMessages.cpp
     src/modules/openinnukex/OpenInNukeXModule.cpp
+    src/modules/openinnukex/OpenInNukeXPanel.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/NukeWatcherCommon.cpp
@@ -140,6 +141,7 @@ set(HEADERS
     src/modules/openinnukex/OpenInNukeXDescriptor.h
     src/modules/openinnukex/OpenInNukeXMessages.h
     src/modules/openinnukex/OpenInNukeXModule.h
+    src/modules/openinnukex/OpenInNukeXPanel.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
     src/platform/ForegroundWatcher.h

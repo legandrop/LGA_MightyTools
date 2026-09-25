@@ -2,10 +2,14 @@
 #define MIGHTYTOOLS_OPENINNUKEX_DESCRIPTOR_H
 
 #include "app/Module.h"
+#include "ui/HelpSection.h"
 
 // El descriptor de "Open in NukeX" (plan 4.2, seccion 2; canvas de diseno, tarjeta "onx"). Se
 // suma a ModuleRegistry::all() en src/app/ModuleRegistry.cpp.
 ModuleDescriptor openInNukeXDescriptor();
+
+// Seccion de la ayuda unica (canvas, seccion 6). Se suma a ModuleRegistry::helpProviders().
+HelpSection openInNukeXHelp(const SettingsReader &value);
 
 // La logica de runExternal(), compartida por dos caminos:
 //  - ModuleDescriptor::runExternal: el modo corto de Windows (main.cpp resuelve esto ANTES de

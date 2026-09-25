@@ -333,6 +333,23 @@ ExternalResult openInNukeXRunExternal(const ExternalRequest &request)
     return ExternalResult::Pending;
 }
 
+HelpSection openInNukeXHelp(const SettingsReader &value)
+{
+    Q_UNUSED(value);
+    // Texto EXACTO del canvas de diseno, seccion 6 (Ayuda). hb()/strong() resaltan el mismo
+    // termino que el canvas, con Theme::kTextBright.
+    return HelpSection{
+        QStringLiteral("Open in NukeX"),
+        {
+            QStringLiteral("Press %1 so .nk files open with Mighty Tools.").arg(HelpSection::strong(QStringLiteral("Apply"))),
+            QStringLiteral("Pick the %1 to use when none is open.").arg(HelpSection::strong(QStringLiteral("NukeX version"))),
+            QStringLiteral("Install the %1 so scripts open in the NukeX you already have open.")
+                .arg(HelpSection::strong(QStringLiteral("Nuke Bridge"))),
+        },
+        QString(),
+    };
+}
+
 ModuleDescriptor openInNukeXDescriptor()
 {
     ModuleDescriptor descriptor;
