@@ -1,0 +1,20 @@
+<!--
+  Payload del Nuke Bridge (el plugin Python que corre DENTRO de NukeX), embebido en el exe.
+
+  Esta carpeta (`nuke_plugin/LGA_OpenInNukeX/`) ES el plugin que NukeBridge::install() copia a
+  `<.nuke>/LGA_OpenInNukeX/` (D-04, plan seccion 2 y Doc_Decisiones D-04): vive dentro de este
+  repo, viaja adentro del exe via este .qrc, y conserva su PROPIA version (el archivo VERSION de
+  esta carpeta, no la de la app). El origen es `~/.nuke/LGA_OpenInNukeX` (repo LGA_OpenInNukeX,
+  que se archiva); estos tres archivos se copiaron sin cambios de contenido.
+
+  Los recursos quedan bajo el prefijo "/bridge", asi que en runtime se leen como
+  ":/bridge/init.py", ":/bridge/LGA_QtAdapter_OpenInNukeX.py" y ":/bridge/VERSION"
+  (NukeBridge::payloadPath() en src/modules/openinnukex/NukeBridge.cpp).
+-->
+<RCC>
+    <qresource prefix="/bridge">
+        <file alias="init.py">LGA_OpenInNukeX/init.py</file>
+        <file alias="LGA_QtAdapter_OpenInNukeX.py">LGA_OpenInNukeX/LGA_QtAdapter_OpenInNukeX.py</file>
+        <file alias="VERSION">LGA_OpenInNukeX/VERSION</file>
+    </qresource>
+</RCC>

@@ -42,6 +42,9 @@ find_package(Qt6 COMPONENTS Core Gui Widgets Network REQUIRED)
 
 set(RESOURCES
     resources/resources.qrc
+    # Payload del Nuke Bridge (init.py, LGA_QtAdapter_OpenInNukeX.py, VERSION), embebido en el exe
+    # con su propia version (D-04). Ver nuke_plugin/OpenInNukeXBridge.qrc.
+    nuke_plugin/OpenInNukeXBridge.qrc
 )
 
 if(WIN32)
@@ -68,6 +71,13 @@ set(SOURCES
     src/core/DiskSpace.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
+    src/modules/openinnukex/NukeBridge.cpp
+    src/modules/openinnukex/NukeOpener.cpp
+    src/modules/openinnukex/NukeScanner.cpp
+    src/modules/openinnukex/NukeXPath.cpp
+    src/modules/openinnukex/OpenInNukeXDescriptor.cpp
+    src/modules/openinnukex/OpenInNukeXMessages.cpp
+    src/modules/openinnukex/OpenInNukeXModule.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
@@ -101,6 +111,13 @@ set(HEADERS
     src/core/DiskSpace.h
     src/core/LgaRegistry.h
     src/core/Shortcut.h
+    src/modules/openinnukex/NukeBridge.h
+    src/modules/openinnukex/NukeOpener.h
+    src/modules/openinnukex/NukeScanner.h
+    src/modules/openinnukex/NukeXPath.h
+    src/modules/openinnukex/OpenInNukeXDescriptor.h
+    src/modules/openinnukex/OpenInNukeXMessages.h
+    src/modules/openinnukex/OpenInNukeXModule.h
     src/platform/AutoStart.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
@@ -125,6 +142,7 @@ set(HEADERS
 # Capa de plataforma: una implementacion por sistema detras de los headers de src/platform/.
 if(WIN32)
     list(APPEND SOURCES
+        src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
@@ -137,18 +155,23 @@ if(WIN32)
         src/updates/VersionCompare.cpp
     )
     list(APPEND HEADERS
+        src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
         src/updates/UpdateService.h
         src/updates/VersionCompare.h
     )
 elseif(APPLE)
     list(APPEND SOURCES
+        src/modules/openinnukex/mac/MacFileAssociation.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
         src/platform/mac/LocalDrivesMac.cpp
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/SystemInputMac.cpp
+    )
+    list(APPEND HEADERS
+        src/modules/openinnukex/mac/MacFileAssociation.h
     )
 endif()
 
@@ -166,7 +189,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE user32 dwmapi advapi32)
+    # ole32: IOpenWithLauncher / CLSIDFromString (selector nativo "Abrir con"). shell32:
+    # ShellExecuteW / SHChangeNotify (ms-settings:defaultapps, aviso de asociacion cambiada).
+    # Todo en WinFileAssociation.cpp.
+    target_link_libraries(${PROJECT_NAME} PRIVATE user32 dwmapi advapi32 ole32 shell32)
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework AppKit"

@@ -1,5 +1,7 @@
 #include "app/ModuleRegistry.h"
 
+#include "modules/openinnukex/OpenInNukeXDescriptor.h"
+
 #include <QtGlobal>
 
 // Una linea por herramienta, en el orden de la lista de la ventana. Cada modulo declara su
@@ -11,6 +13,7 @@ QList<ModuleDescriptor> all()
 {
     QList<ModuleDescriptor> list;
     // Ej.: list << nukeShortcutsDescriptor();
+    list << openInNukeXDescriptor();
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
