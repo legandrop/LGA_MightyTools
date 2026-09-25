@@ -2,7 +2,9 @@
 #define MIGHTYTOOLS_LINKREDIRECTOR_ROUTING_H
 
 #include "app/Module.h" // SettingsReader
+#include "modules/linkredirector/LinkRedirectorTypes.h"
 
+#include <QList>
 #include <QString>
 #include <QStringList>
 
@@ -78,6 +80,26 @@ QString browserToSyncAsDefault(bool isNowSystemDefault, const QString &previousS
 // ruta), nunca la URL completa (salvo el flag de debug "linkRedirectorLogFullUrl").
 QString safeLogTarget(const QString &argument);
 QString logTarget(const QString &argument);
+
+// ---- Etapa 2: armado de la lista de un combo de navegador (panel, canvas seccion 3 "estados").
+//
+// Items, en orden: "-" (ningun navegador), uno por cada detectado, un "<nombre> (custom)" SOLO si
+// `configuredExePath` no esta vacio y no aparece entre los detectados (para no perder lo guardado),
+// y por ultimo "Browse...". El item marcado con `selected = true` es el que coincide con
+// `configuredExePath` (o "-" si esta vacio y no hay ninguno igual).
+struct ComboItem
+{
+    enum class Kind { None, Detected, Custom, Browse };
+    Kind kind = Kind::Detected;
+    QString label;   ///< texto visible ("-", "Google Chrome", "Brave (custom)", "Browse...")
+    QString exePath; ///< vacio para None y Browse
+    bool selected = false;
+};
+
+QList<ComboItem> buildBrowserComboItems(const QString &configuredExePath, const QList<DetectedBrowser> &detected);
+
+// Texto del campo cerrado del combo: el label del item seleccionado (o "-" si no hay ninguno).
+QString selectedComboLabel(const QList<ComboItem> &items);
 
 } // namespace LinkRedirectorRouting
 

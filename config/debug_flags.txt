@@ -3,3 +3,5 @@
 log=true
 # dryRunInput=true: los atajos solo loguean los pasos, no mueven el mouse ni aprietan teclas.
 dryRunInput=false
+# linkRedirectorLogFullUrl=true: el modo corto de links loguea la URL completa (por defecto, solo el host).
+#linkRedirectorLogFullUrl=false
