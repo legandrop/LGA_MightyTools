@@ -166,6 +166,7 @@ if(WIN32)
     list(APPEND SOURCES
         src/modules/linkredirector/win/BrowserDetectionWin.cpp
         src/modules/linkredirector/win/BrowserRegistrationWin.cpp
+        src/modules/openinnukex/win/UserChoiceLatest.cpp
         src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp

@@ -1,8 +1,10 @@
 #include "modules/openinnukex/win/WinFileAssociation.h"
+#include "modules/openinnukex/win/UserChoiceLatest.h"
 
 #include "platform/win/RegistryHelper.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QThread>
@@ -167,8 +169,10 @@ QString currentNkProgId()
     // UserChoiceLatest manda si tiene un ProgId propio; si no, se cae al UserChoice legado. Sin
     // depender de si el hash "esta activo": esa lectura (HashVersion) vive del lado de
     // UserChoiceLatest.h (ver trySetUserChoiceLatestHash), no aca.
+    // Windows guarda el ProgId de UserChoiceLatest en la SUBCLAVE UserChoiceLatest\ProgId (valor
+    // ProgId), no en UserChoiceLatest directamente.
     const QString latestPath = QStringLiteral(
-        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoiceLatest");
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoiceLatest\\ProgId");
     const QString latestProgId = RegistryHelper::readString(HKEY_CURRENT_USER, latestPath, QStringLiteral("ProgId"));
     if (!latestProgId.isEmpty()) {
         return latestProgId;
@@ -176,7 +180,14 @@ QString currentNkProgId()
 
     const QString legacyPath = QStringLiteral(
         "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoice");
-    return RegistryHelper::readString(HKEY_CURRENT_USER, legacyPath, QStringLiteral("ProgId"));
+    const QString legacyProgId = RegistryHelper::readString(HKEY_CURRENT_USER, legacyPath, QStringLiteral("ProgId"));
+    if (!legacyProgId.isEmpty()) {
+        return legacyProgId;
+    }
+
+    // Sin ninguna eleccion del usuario, el Explorador usa la clase de la extension: el doble click
+    // ya abre con ese ProgId.
+    return RegistryHelper::readString(HKEY_CURRENT_USER, QStringLiteral("Software\\Classes\\.nk"), QString());
 }
 
 bool isNkAssociatedWithUs()
@@ -195,21 +206,19 @@ bool isNkAssociatedWithUs()
 
 bool writeUserChoice(const QString &extension, const QString &progIdValue, QString *reason)
 {
-    Q_UNUSED(extension);
-    Q_UNUSED(progIdValue);
-    // ---- COSTURA D-03 --------------------------------------------------------------------
-    // La escritura de UserChoice/UserChoiceLatest (el hash legado Y el de Windows 11) la entrega
-    // OTRO ejecutor en src/modules/openinnukex/win/UserChoiceLatest.{h,cpp}
-    // (API: applyAssociation(ext, progId, ...) -> ApplyResult con ok/motivo/avisos, e
-    // isLatestHashActive()). Todavia no existe en este build: el supervisor conecta esta funcion
-    // reemplazando el cuerpo por la llamada real. Hasta entonces, apply() SIEMPRE cae al selector
-    // nativo "Abrir con" (o a ms-settings:defaultapps).
-    if (reason) {
-        *reason = QStringLiteral("no disponible todavia");
+    // D-03: UserChoice y UserChoiceLatest con el hash calculado en C++ (UserChoiceLatest.h),
+    // verificado contra los hashes que escribe Windows. Sin helper .NET.
+    const UserChoiceLatest::ApplyResult r = UserChoiceLatest::applyAssociation(extension, progIdValue);
+    for (const QString &warning : r.warnings) {
+        qWarning().noquote() << "[openInNukeX] asociacion:" << warning;
     }
-    qInfo("[openInNukeX] writeUserChoice: no disponible todavia en este build "
-          "(ver src/modules/openinnukex/win/UserChoiceLatest.h, D-03). Se cae al selector nativo.");
-    return false;
+    qInfo().noquote() << "[openInNukeX] asociacion" << extension << "->" << progIdValue
+                      << (r.ok ? "escrita" : "no escrita") << "| OpenWithHost" << r.dllVersion
+                      << "| intentos" << r.latestAttempts;
+    if (!r.ok && reason) {
+        *reason = r.reason;
+    }
+    return r.ok;
 }
 
 bool isOldClientInstalled()
