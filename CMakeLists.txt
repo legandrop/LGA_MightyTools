@@ -68,6 +68,11 @@ set(SOURCES
     src/core/DiskSpace.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
+    src/modules/linkredirector/BrowserDetectionCommon.cpp
+    src/modules/linkredirector/LinkRedirectorDescriptor.cpp
+    src/modules/linkredirector/LinkRedirectorExternal.cpp
+    src/modules/linkredirector/LinkRedirectorModule.cpp
+    src/modules/linkredirector/LinkRedirectorRouting.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
@@ -101,6 +106,13 @@ set(HEADERS
     src/core/DiskSpace.h
     src/core/LgaRegistry.h
     src/core/Shortcut.h
+    src/modules/linkredirector/BrowserDetection.h
+    src/modules/linkredirector/BrowserRegistration.h
+    src/modules/linkredirector/LinkRedirectorDescriptor.h
+    src/modules/linkredirector/LinkRedirectorExternal.h
+    src/modules/linkredirector/LinkRedirectorModule.h
+    src/modules/linkredirector/LinkRedirectorRouting.h
+    src/modules/linkredirector/LinkRedirectorTypes.h
     src/platform/AutoStart.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
@@ -125,6 +137,8 @@ set(HEADERS
 # Capa de plataforma: una implementacion por sistema detras de los headers de src/platform/.
 if(WIN32)
     list(APPEND SOURCES
+        src/modules/linkredirector/win/BrowserDetectionWin.cpp
+        src/modules/linkredirector/win/BrowserRegistrationWin.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
@@ -143,6 +157,8 @@ if(WIN32)
     )
 elseif(APPLE)
     list(APPEND SOURCES
+        src/modules/linkredirector/mac/BrowserDetectionMac.cpp
+        src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
@@ -176,6 +192,7 @@ elseif(APPLE)
     )
     # Los .mm con ARC: sin retain/release a mano.
     set_source_files_properties(
+        src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/NukeWatcherMac.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")

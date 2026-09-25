@@ -1,4 +1,5 @@
 #include "app/ModuleRegistry.h"
+#include "modules/linkredirector/LinkRedirectorDescriptor.h"
 
 #include <QtGlobal>
 
@@ -11,6 +12,7 @@ QList<ModuleDescriptor> all()
 {
     QList<ModuleDescriptor> list;
     // Ej.: list << nukeShortcutsDescriptor();
+    list << linkRedirectorDescriptor();
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
