@@ -229,7 +229,12 @@ Status inspect(const QString &nukeDir)
     return status;
 }
 
-Error install(const QString &nukeDir, QString *detailForLog, bool publishToRegistry)
+bool publishToLgaRegistry(const QString &nukeDir)
+{
+    return LgaRegistry::saveNukeDirectory(nukeDir);
+}
+
+Error install(const QString &nukeDir, QString *detailForLog, bool automatedRun, RegistryPublisher publisher)
 {
     QString ignored;
     QString &detail = detailForLog ? *detailForLog : ignored;
@@ -265,11 +270,15 @@ Error install(const QString &nukeDir, QString *detailForLog, bool publishToRegis
     }
 
     // Recien cuando la instalacion salio bien se publica la carpeta: registrar una `.nuke` en la
-    // que el bridge no quedo instalado le daria a las otras apps LGA una ruta inutil. El
-    // self-test instala en carpetas temporales con publishToRegistry=false para no pisar
-    // %APPDATA%\LGA\nuke.json (el registro COMPARTIDO de verdad) con esas rutas de prueba.
-    if (publishToRegistry) {
-        LgaRegistry::saveNukeDirectory(clean);
+    // que el bridge no quedo instalado le daria a las otras apps LGA una ruta inutil. En
+    // automatedRun (self-test, --ui-shot, --ui-probe) NUNCA se llama a `publisher`, aunque la
+    // carpeta de instalacion sea una temporal legitima: el registro compartido no tiene forma de
+    // distinguir una ruta de prueba de una real, asi que la guarda es sobre automatedRun, no sobre
+    // la carpeta.
+    if (automatedRun) {
+        qInfo("NukeBridge: automatedRun=true, NO se publica %s en el registro LGA compartido", qUtf8Printable(clean));
+    } else if (publisher) {
+        publisher(clean);
     }
 
     qInfo("NukeBridge: instalado v%s en %s", qUtf8Printable(bundledVersion()), qUtf8Printable(pluginDir));

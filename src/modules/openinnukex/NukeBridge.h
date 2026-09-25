@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 // Nuke Bridge: el componente Python que corre DENTRO de NukeX (puerto 54325), portado de
 // `~/.nuke/LGA_OpenInNukeX` (QtClient/src/nukebridge.{h,cpp}, v1.83). Diferencia con el origen:
 // el payload (`init.py`, `LGA_QtAdapter_OpenInNukeX.py`, `VERSION`) ya no vive en una carpeta
@@ -73,20 +75,36 @@ enum class Error {
     WriteFailed,    ///< no se pudo copiar, crear la carpeta o tocar el init.py
 };
 
+/// Publica `nukeDir` en el registro LGA compartido de verdad (`LgaRegistry::saveNukeDirectory`).
+/// `install()` la llama por default; el self-test la reemplaza por una de prueba para poder
+/// verificar CUANDO se llama sin tocar jamas `%APPDATA%\LGA\nuke.json`.
+using RegistryPublisher = std::function<bool(const QString &nukeDir)>;
+bool publishToLgaRegistry(const QString &nukeDir);
+
 /// Copia los `.py` y el `VERSION` a `<nukeDir>/LGA_OpenInNukeX/`, agrega la linea al `init.py`
-/// de `<nukeDir>` si falta, y publica la carpeta en el registro LGA (salvo `publishToRegistry =
-/// false`). `detailForLog` (puede ser nullptr) recibe el detalle tecnico en castellano, para el
-/// log; la UI (etapa 2) traduce el codigo de `Error` a un mensaje en ingles (ver
+/// de `<nukeDir>` si falta, y publica la carpeta en el registro LGA llamando a `publisher` SALVO
+/// que `automatedRun` sea true. `detailForLog` (puede ser nullptr) recibe el detalle tecnico en
+/// castellano, para el log; la UI traduce el codigo de `Error` a un mensaje en ingles (ver
 /// OpenInNukeXMessages.h).
 ///
-/// `publishToRegistry` existe SOLO para el self-test: instalar en una carpeta temporal para
-/// probar la guarda de repo o el chip de version no puede terminar escribiendo esa carpeta
-/// temporal en `%APPDATA%\LGA\nuke.json`, el registro COMPARTIDO que leen otras apps LGA de
-/// verdad (PipeSync). Todo llamador real (panel, etapa 2) deja el default `true`.
-Error install(const QString &nukeDir, QString *detailForLog, bool publishToRegistry = true);
+/// `automatedRun` es OBLIGATORIO y sin default a proposito (ver ModuleContext::automatedRun()):
+/// un incidente real (2026-09-25) fue que el self-test, instalando en una carpeta TEMPORAL para
+/// probar la guarda de repo, terminaba igual escribiendo `%APPDATA%\LGA\nuke.json` — el registro
+/// COMPARTIDO que leen otras apps LGA de verdad (PipeSync) — porque el guard anterior
+/// (`publishToRegistry`) era un parametro con default `true` que alguien tenia que acordarse de
+/// desactivar. Sin default, cada llamador (panel real, self-test) tiene que decidir explicitamente
+/// y a proposito. El panel pasa `context().automatedRun()`; el self-test, `true` siempre. Instalar
+/// en una carpeta TEMPORAL sigue escribiendo esos archivos de verdad (es lo que prueba la guarda de
+/// repo): lo unico que `automatedRun` bloquea es la publicacion en el registro COMPARTIDO.
+///
+/// `publisher` inyecta QUIEN publica (default: el registro LGA real). El self-test inyecta una
+/// funcion de prueba propia para demostrar, con `automatedRun` en true y en false, que la
+/// publicacion se llama o no se llama, SIN escribir ni leer jamas el `nuke.json` real.
+Error install(const QString &nukeDir, QString *detailForLog, bool automatedRun,
+              RegistryPublisher publisher = publishToLgaRegistry);
 
 /// Deja una copia de `LGA_OpenInNukeX/` en `destDir` para instalar a mano (panel manual del
-/// inventario). No toca ningun `init.py` ni el registro LGA.
+/// inventario). No toca ningun `init.py` ni el registro LGA: no necesita `automatedRun`.
 Error exportPayload(const QString &destDir, QString *detailForLog);
 
 } // namespace NukeBridge
