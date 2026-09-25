@@ -1,0 +1,12 @@
+# Complementa .gitattributes: hace que el editor escriba los line endings
+# correctos ANTES de que Git los vea, en vez de corregirlos al commitear.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+
+# Scripts nativos de Windows: CRLF (ver .gitattributes)
+[*.{bat,cmd,ps1}]
+end_of_line = crlf

@@ -1,0 +1,15 @@
+# Rutas aprobadas en el firewall por aplicacion de la maquina Windows de trabajo.
+# run_headless.ps1 avisa si el exe que va a lanzar esta fuera de todas ellas: un exe no aprobado
+# que se conecta a internet queda retenido y no se puede matar. El aviso no bloquea: un exe de
+# prueba sin red puede correr desde cualquier lado.
+#
+# Un patron por linea. Se expanden las variables de entorno (%LOCALAPPDATA%). "\**" = todo lo
+# que cuelga de esa carpeta. Tambien se pueden sumar rutas con -NetAllowed o con la variable
+# LGA_QA_NET_ALLOWED (separadas por ';').
+#
+# Cuando se aprueba una ruta nueva en el firewall, se agrega aca.
+
+# LGA Video Downloader
+C:\Portable\LGA\VideoDownloader\**
+%LOCALAPPDATA%\LGA\VideoDownloader\tools\**
+C:\Portable\LGA_VideoDownloader\build\**

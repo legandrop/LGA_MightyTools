@@ -1,0 +1,5 @@
+# Flags de debug de LGA_MightyTools.
+# log=true escribe debug.log en la raiz del repo (al lado de config/) o en la carpeta instalada.
+log=true
+# dryRunInput=true: los atajos solo loguean los pasos, no mueven el mouse ni aprietan teclas.
+dryRunInput=false
