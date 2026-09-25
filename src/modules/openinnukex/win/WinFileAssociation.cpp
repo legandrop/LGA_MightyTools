@@ -169,8 +169,10 @@ QString currentNkProgId()
     // UserChoiceLatest manda si tiene un ProgId propio; si no, se cae al UserChoice legado. Sin
     // depender de si el hash "esta activo": esa lectura (HashVersion) vive del lado de
     // UserChoiceLatest.h (ver trySetUserChoiceLatestHash), no aca.
+    // Windows guarda el ProgId de UserChoiceLatest en la SUBCLAVE UserChoiceLatest\ProgId (valor
+    // ProgId), no en UserChoiceLatest directamente.
     const QString latestPath = QStringLiteral(
-        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoiceLatest");
+        "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoiceLatest\\ProgId");
     const QString latestProgId = RegistryHelper::readString(HKEY_CURRENT_USER, latestPath, QStringLiteral("ProgId"));
     if (!latestProgId.isEmpty()) {
         return latestProgId;
@@ -178,7 +180,14 @@ QString currentNkProgId()
 
     const QString legacyPath = QStringLiteral(
         "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.nk\\UserChoice");
-    return RegistryHelper::readString(HKEY_CURRENT_USER, legacyPath, QStringLiteral("ProgId"));
+    const QString legacyProgId = RegistryHelper::readString(HKEY_CURRENT_USER, legacyPath, QStringLiteral("ProgId"));
+    if (!legacyProgId.isEmpty()) {
+        return legacyProgId;
+    }
+
+    // Sin ninguna eleccion del usuario, el Explorador usa la clase de la extension: el doble click
+    // ya abre con ese ProgId.
+    return RegistryHelper::readString(HKEY_CURRENT_USER, QStringLiteral("Software\\Classes\\.nk"), QString());
 }
 
 bool isNkAssociatedWithUs()
