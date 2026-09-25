@@ -8,7 +8,9 @@
 #include "app/SettingsStore.h"
 #include "platform/ProcessStats.h"
 
+#include <QAbstractEventDispatcher>
 #include <QApplication>
+#include <QSet>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QThread>
@@ -171,6 +173,39 @@ int idle(const QStringList &arguments)
     }
     const ProcessStats start = ProcessStats::current();
     print("start", QStringLiteral("-"), start);
+    // Todo lo que tiene un timer registrado en el despachador (QTimer, QBasicTimer, animaciones de
+    // estilo): lo unico que puede despertar al hilo principal con todo apagado.
+    {
+        QSet<QObject *> objects;
+        for (QWidget *widget : QApplication::allWidgets()) {
+            objects.insert(widget);
+            for (QObject *child : widget->findChildren<QObject *>()) {
+                objects.insert(child);
+            }
+        }
+        for (QObject *child : qApp->findChildren<QObject *>()) {
+            objects.insert(child);
+        }
+        for (QObject *child : app.findChildren<QObject *>()) {
+            objects.insert(child);
+        }
+        objects.insert(&app);
+        objects.insert(qApp);
+        int timers = 0;
+        for (QObject *object : objects) {
+            for (const QAbstractEventDispatcher::TimerInfo &timer :
+                 QAbstractEventDispatcher::instance()->registeredTimers(object)) {
+                ++timers;
+                std::printf("measure timer class=%s name=%s interval=%dms\n", object->metaObject()->className(),
+                            qPrintable(object->objectName()), timer.interval);
+            }
+        }
+        std::printf("measure timers-registered=%d\n", timers);
+        std::fflush(stdout);
+    }
+    // El reposo se mide con la lectura barata del CPU: la foto completa (ProcessStats::current)
+    // recorre los hilos de todo el sistema y su costo entraria en la medicion.
+    const qint64 startCpu = ProcessStats::cpuMsNow();
 
     // Una muestra por minuto: la curva dice si hay un consumo continuo o solo el arranque.
     for (int elapsed = 0; elapsed < seconds;) {
@@ -179,16 +214,16 @@ int idle(const QStringList &arguments)
         QTimer::singleShot(step * 1000, &loop, &QEventLoop::quit);
         loop.exec();
         elapsed += step;
-        const ProcessStats sample = ProcessStats::current();
-        std::printf("measure sample t=%ds cpu_since_start=%lldms threads=%lld\n", elapsed,
-                    static_cast<long long>(sample.cpuMs - start.cpuMs), static_cast<long long>(sample.threads));
+        std::printf("measure sample t=%ds cpu_since_start=%lldms\n", elapsed,
+                    static_cast<long long>(ProcessStats::cpuMsNow() - startCpu));
         std::fflush(stdout);
     }
+    const qint64 endCpu = ProcessStats::cpuMsNow();
     const ProcessStats end = ProcessStats::current();
     print("end", QStringLiteral("-"), end);
-    const qint64 cpu = end.cpuMs - start.cpuMs;
+    const qint64 cpu = endCpu - startCpu;
     std::printf("measure result idle seconds=%d settle=%d cpu_ms=%lld cpu_total_ms=%lld private_delta_KB=%lld %s\n",
-                seconds, settle, static_cast<long long>(cpu), static_cast<long long>(end.cpuMs - early.cpuMs),
+                seconds, settle, static_cast<long long>(cpu), static_cast<long long>(endCpu - early.cpuMs),
                 static_cast<long long>((end.privateBytes - start.privateBytes) / 1024), cpu < 50 ? "ok" : "FALLO");
     std::fflush(stdout);
     return cpu < 50 ? 0 : 1;
