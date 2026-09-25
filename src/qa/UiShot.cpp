@@ -76,6 +76,14 @@ QString canvasState(const QString &id)
     if (id == QLatin1String("diskSpace")) {
         return QStringLiteral("low");
     }
+    // Los estados normales del canvas (pOnx('ok'), pFs('on')); si la herramienta todavia no los
+    // declara, va con el primero que tenga.
+    if (id == QLatin1String("openInNukeX")) {
+        return QStringLiteral("ok");
+    }
+    if (id == QLatin1String("folderSwitch")) {
+        return QStringLiteral("on");
+    }
     return QString();
 }
 
@@ -104,7 +112,13 @@ bool canvasFixture(ModuleHost &host, const QString &exceptId)
         if (d.id == exceptId || canvasOff(d.id)) {
             continue;
         }
-        if (!enable(host, d.id, canvasState(d.id))) {
+        if (!host.enableForCapture(d.id, QString())) {
+            fprintf(stderr, "ui-shot: %s could not be built for capture\n", qPrintable(d.id));
+            return false;
+        }
+        const QString wanted = canvasState(d.id);
+        const bool known = host.module(d.id)->captureStates().contains(wanted);
+        if (!enable(host, d.id, known ? wanted : QString())) {
             fprintf(stderr, "ui-shot: %s rejected its canvas state\n", qPrintable(d.id));
             return false;
         }

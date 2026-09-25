@@ -263,6 +263,12 @@ QLabel#sideStatus[tone="ok"] { color: @statusOk; }
 QLabel#sideStatus[tone="warn"] { color: @warn; }
 QLabel#sideStatus[tone="err"] { color: @error; }
 QScrollArea#pane, QWidget#paneContent { background-color: @window; border: none; }
+/* Scroll vertical fino y oscuro (el canvas no lo dibuja; el de Fusion es claro y con flechas). */
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px 2px 2px 0px; }
+QScrollBar::handle:vertical { background: #333333; border-radius: 4px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: #444444; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
 QFrame#modIcon { background-color: @modIconBg; border: 1px solid @modIconBorder; border-radius: 8px; }
 QLabel#modTitle { color: @textBright; font-size: @fs16; font-weight: 600; }
 QLabel#platTag { color: @textFaint; font-size: @fs11; font-weight: 500; border: 1px solid @platBorder; border-radius: 4px; padding: 1px 5px; }
