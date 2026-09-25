@@ -6,7 +6,7 @@
 #include <QString>
 
 // Chequeo de espacio libre: tipos y reglas puras, sin sistema de archivos ni timers. Los usan
-// AppState (lo que se guarda), DiskMonitor (cuando avisar), la tarjeta "Disk space" y el self-test.
+// DiskState (lo que se guarda), DiskMonitor (cuando avisar), la tarjeta "Watched drives" y el self-test.
 
 // Un disco local tal como se leyo del sistema (platform/LocalDrives).
 struct DriveInfo

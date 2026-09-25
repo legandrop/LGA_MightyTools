@@ -1,4 +1,4 @@
-#include "actions/ActionRunner.h"
+#include "modules/nukeshortcuts/ActionRunner.h"
 #include "platform/InputInjector.h"
 
 #include <QDebug>

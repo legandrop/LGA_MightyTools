@@ -1,6 +1,6 @@
-#include "ui/DiskCard.h"
+#include "modules/diskspace/DiskCard.h"
 
-#include "core/AppState.h"
+#include "modules/diskspace/DiskState.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -272,7 +272,7 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
 
 // ------------------------------------------------------------------ DiskCard
 
-DiskCard::DiskCard(AppState *state, bool interactive, QWidget *parent)
+DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     : QFrame(parent)
     , m_state(state)
     , m_interactive(interactive)
@@ -284,7 +284,7 @@ DiskCard::DiskCard(AppState *state, bool interactive, QWidget *parent)
 
     auto *head = new QHBoxLayout();
     head->setSpacing(6);
-    head->addWidget(label(QStringLiteral("Disk space"), "cardTitle", this), 1);
+    head->addWidget(label(QStringLiteral("Watched drives"), "cardTitle", this), 1);
     m_chip = new Chip(this);
     head->addWidget(m_chip, 0, Qt::AlignVCenter);
     layout->addLayout(head);
@@ -405,13 +405,13 @@ void DiskCard::rebuildRows(const QList<DiskWatch> &watches)
         row->show();
         m_rows.insert(row->root(), row);
         if (m_interactive) {
-            connect(row, &DriveRow::thresholdChanged, m_state, &AppState::setDiskThreshold);
-            connect(row, &DriveRow::removeRequested, m_state, &AppState::removeDiskWatch);
+            connect(row, &DriveRow::thresholdChanged, m_state, &DiskState::setDiskThreshold);
+            connect(row, &DriveRow::removeRequested, m_state, &DiskState::removeDiskWatch);
         }
     }
     // El layout de la tarjeta guarda el alto del contenedor de filas de cuando estaba vacio, y el
-    // aviso de que cambio llega recien con el proximo ciclo de eventos. MainWindow mide su alto en el
-    // mismo refresco (fitHeight): sin esto, las filas nuevas quedan aplastadas.
+    // aviso de que cambio llega recien con el proximo ciclo de eventos. el panel mide su alto en el
+    // mismo refresco: sin esto, las filas nuevas quedan aplastadas.
     m_rowsLayout->invalidate();
     m_rowsLayout->parentWidget()->updateGeometry();
 }
@@ -490,15 +490,20 @@ void DiskCard::showAddMenu()
     }
 }
 
-void DiskCard::showIntervalMenu()
+void DiskCard::fillIntervalMenu(QMenu *menu) const
 {
-    QMenu menu(this);
     for (const int minutes : DiskSpace::intervalChoices()) {
-        QAction *action = menu.addAction(DiskSpace::intervalText(minutes));
+        QAction *action = menu->addAction(DiskSpace::intervalText(minutes));
         action->setData(minutes);
         action->setCheckable(true);
         action->setChecked(minutes == m_state->diskCheckMinutes());
     }
+}
+
+void DiskCard::showIntervalMenu()
+{
+    QMenu menu(this);
+    fillIntervalMenu(&menu);
     QAction *chosen = menu.exec(m_intervalButton->mapToGlobal(QPoint(0, m_intervalButton->height() + 2)));
     if (chosen) {
         m_state->setDiskCheckMinutes(chosen->data().toInt());

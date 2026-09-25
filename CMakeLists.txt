@@ -78,12 +78,23 @@ set(SOURCES
     src/core/DebugFlags.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
+    src/modules/diskspace/DiskCard.cpp
+    src/modules/diskspace/DiskMonitor.cpp
+    src/modules/diskspace/DiskSpace.cpp
+    src/modules/diskspace/DiskSpaceModule.cpp
+    src/modules/diskspace/DiskState.cpp
     src/modules/linkredirector/BrowserDetectionCommon.cpp
     src/modules/linkredirector/LinkRedirectorDescriptor.cpp
     src/modules/linkredirector/LinkRedirectorExternal.cpp
     src/modules/linkredirector/LinkRedirectorModule.cpp
     src/modules/linkredirector/LinkRedirectorPanel.cpp
     src/modules/linkredirector/LinkRedirectorRouting.cpp
+    src/modules/nukeshortcuts/ActionRunner.cpp
+    src/modules/nukeshortcuts/CalibrationDialog.cpp
+    src/modules/nukeshortcuts/CalibrationSession.cpp
+    src/modules/nukeshortcuts/NukeShortcutsModule.cpp
+    src/modules/nukeshortcuts/NukeShortcutsPanel.cpp
+    src/modules/nukeshortcuts/NukeShortcutsState.cpp
     src/modules/openinnukex/NukeBridge.cpp
     src/modules/openinnukex/NukeOpener.cpp
     src/modules/openinnukex/NukeScanner.cpp
@@ -93,6 +104,7 @@ set(SOURCES
     src/modules/openinnukex/OpenInNukeXModule.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
+    src/platform/LocalDrivesCommon.cpp
     src/platform/NukeWatcherCommon.cpp
     src/qa/Measure.cpp
     src/qa/SelfTest.cpp
@@ -127,6 +139,11 @@ set(HEADERS
     src/core/DebugFlags.h
     src/core/LgaRegistry.h
     src/core/Shortcut.h
+    src/modules/diskspace/DiskCard.h
+    src/modules/diskspace/DiskMonitor.h
+    src/modules/diskspace/DiskSpace.h
+    src/modules/diskspace/DiskSpaceModule.h
+    src/modules/diskspace/DiskState.h
     src/modules/linkredirector/BrowserDetection.h
     src/modules/linkredirector/BrowserRegistration.h
     src/modules/linkredirector/LinkRedirectorDescriptor.h
@@ -135,6 +152,12 @@ set(HEADERS
     src/modules/linkredirector/LinkRedirectorPanel.h
     src/modules/linkredirector/LinkRedirectorRouting.h
     src/modules/linkredirector/LinkRedirectorTypes.h
+    src/modules/nukeshortcuts/ActionRunner.h
+    src/modules/nukeshortcuts/CalibrationDialog.h
+    src/modules/nukeshortcuts/CalibrationSession.h
+    src/modules/nukeshortcuts/NukeShortcutsModule.h
+    src/modules/nukeshortcuts/NukeShortcutsPanel.h
+    src/modules/nukeshortcuts/NukeShortcutsState.h
     src/modules/openinnukex/NukeBridge.h
     src/modules/openinnukex/NukeOpener.h
     src/modules/openinnukex/NukeScanner.h
@@ -147,6 +170,7 @@ set(HEADERS
     src/platform/ForegroundWatcher.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
+    src/platform/LocalDrives.h
     src/platform/NukeWatcher.h
     src/platform/ProcessStats.h
     src/platform/SystemInput.h
@@ -175,6 +199,7 @@ if(WIN32)
         src/platform/win/ForegroundWatcherWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
+        src/platform/win/LocalDrivesWin.cpp
         src/platform/win/NukeWatcherWin.cpp
         src/platform/win/ProcessStatsWin.cpp
         src/platform/win/RegistryHelper.cpp
@@ -214,6 +239,7 @@ elseif(APPLE)
         src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
+        src/platform/mac/LocalDrivesMac.cpp
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp

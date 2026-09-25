@@ -1,7 +1,7 @@
 #ifndef MIGHTYTOOLS_LOCALDRIVES_H
 #define MIGHTYTOOLS_LOCALDRIVES_H
 
-#include "core/DiskSpace.h"
+#include "modules/diskspace/DiskSpace.h"
 
 #include <QList>
 #include <QString>

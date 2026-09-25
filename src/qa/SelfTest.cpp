@@ -356,6 +356,35 @@ void testExternal(const Check &check)
     check(!notMine.handled, QStringLiteral("modo corto: NotMine sigue a la instancia unica"));
 }
 
+// Cada herramienta registrada, de verdad (en corrida automatizada: atajos contados, inyector en
+// solo loguear): prender y apagar 20 veces no deja objeto, timers, hilos, atajos ni inyector.
+void testRealModules(const Check &check)
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.automatedRun = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    const int timers0 = qAppTimers();
+    const int threads0 = qAppThreads();
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        bool alwaysBuilt = true;
+        for (int i = 0; i < 20; ++i) {
+            host.setEnabled(d.id, true);
+            alwaysBuilt = alwaysBuilt && host.isRunning(d.id);
+            host.setEnabled(d.id, false);
+        }
+        flushDeletes();
+        check(alwaysBuilt && host.module(d.id) == nullptr && host.runningCount() == 0,
+              QStringLiteral("[%1] 20 ciclos: se construye al prender y queda nulo al apagar").arg(d.id));
+        check(host.hotkeyHub()->registeredCount() == 0 && host.hotkeyHub()->declaredCount() == 0
+                  && host.hotkeyHub()->clientCount() == 0 && !host.injectorAlive(),
+              QStringLiteral("[%1] apagada: 0 atajos registrados o declarados, sin inyector").arg(d.id));
+        check(qAppTimers() == timers0 && qAppThreads() == threads0,
+              QStringLiteral("[%1] QTimer y QThread de qApp vuelven a los iniciales (%2/%3 -> %4/%5)")
+                  .arg(d.id).arg(timers0).arg(threads0).arg(qAppTimers()).arg(qAppThreads()));
+    }
+}
+
 } // namespace
 
 namespace SelfTest {
@@ -375,6 +404,7 @@ int run()
     testCapture(check);
     testPersistentRegistration(check);
     testExternal(check);
+    testRealModules(check);
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {

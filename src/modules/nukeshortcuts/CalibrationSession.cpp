@@ -1,6 +1,6 @@
-#include "ui/CalibrationSession.h"
+#include "modules/nukeshortcuts/CalibrationSession.h"
 
-#include "actions/ActionRunner.h"
+#include "modules/nukeshortcuts/ActionRunner.h"
 #include "platform/InputInjector.h"
 #include "platform/NukeWatcher.h"
 #include "platform/SystemInput.h"

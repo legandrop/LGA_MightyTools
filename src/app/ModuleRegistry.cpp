@@ -1,5 +1,7 @@
 #include "app/ModuleRegistry.h"
+#include "modules/diskspace/DiskSpaceModule.h"
 #include "modules/linkredirector/LinkRedirectorDescriptor.h"
+#include "modules/nukeshortcuts/NukeShortcutsModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -18,6 +20,8 @@ QList<ModuleDescriptor> all()
 {
     QList<ModuleDescriptor> list;
     // Ej.: list << nukeShortcutsDescriptor();
+    list << nukeShortcutsDescriptor();
+    list << diskSpaceDescriptor();
     list << openInNukeXDescriptor();
 #if defined(Q_OS_WIN)
     list << folderSwitchDescriptor();
@@ -41,7 +45,8 @@ QList<ModuleDescriptor> all()
 QHash<QString, HelpProvider> helpProviders()
 {
     QHash<QString, HelpProvider> providers;
-    // Ej.: providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
+    providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
+    providers.insert(QStringLiteral("diskSpace"), &diskSpaceHelp);
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     return providers;
 }

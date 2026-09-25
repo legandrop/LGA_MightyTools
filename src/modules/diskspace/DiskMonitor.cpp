@@ -1,19 +1,19 @@
-#include "core/DiskMonitor.h"
-#include "core/AppState.h"
+#include "modules/diskspace/DiskMonitor.h"
+#include "modules/diskspace/DiskState.h"
 
 #include <QDebug>
 #include <QSet>
 #include <QStringList>
 #include <QTimer>
 
-DiskMonitor::DiskMonitor(AppState *state, Sources sources, QObject *parent)
+DiskMonitor::DiskMonitor(DiskState *state, Sources sources, QObject *parent)
     : QObject(parent)
     , m_state(state)
     , m_sources(std::move(sources))
 {
     m_timer = new QTimer(this);
     connect(m_timer, &QTimer::timeout, this, [this]() { checkNow(true); });
-    connect(m_state, &AppState::changed, this, &DiskMonitor::onStateChanged);
+    connect(m_state, &DiskState::changed, this, &DiskMonitor::onStateChanged);
 }
 
 QDateTime DiskMonitor::now() const

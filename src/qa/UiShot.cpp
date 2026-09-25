@@ -5,6 +5,8 @@
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
 #include "app/TrayMenu.h"
+#include "modules/diskspace/DiskCard.h"
+#include "modules/diskspace/DiskState.h"
 #include "ui/HelpDialog.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
@@ -23,6 +25,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
+#include <QLineEdit>
+#include <QMouseEvent>
+#include <QPushButton>
+#include <QSpinBox>
 #include <QLabel>
 #include <QMenu>
 #include <QPixmap>
@@ -159,6 +166,19 @@ QStringList allStates(const ModuleHost &host)
         }
     }
     return states;
+}
+
+// Disco de prueba de la sonda: nunca uno real.
+DriveInfo probeDrive()
+{
+    constexpr double kGiB = 1024.0 * 1024.0 * 1024.0;
+    DriveInfo drive;
+    drive.root = QStringLiteral("C:/");
+    drive.label = QStringLiteral("C:");
+    drive.name = QStringLiteral("Windows");
+    drive.totalBytes = qint64(931 * kGiB);
+    drive.freeBytes = qint64(182 * kGiB);
+    return drive;
 }
 
 QList<HelpSection> helpSections(const ModuleHost &host)
@@ -443,6 +463,129 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
-    fprintf(stderr, "ui-probe: unknown case '%s'\n", qPrintable(probe));
-    return 2;
+    if (probe != QLatin1String("threshold-focus")) {
+        fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));
+        return 2;
+    }
+
+    int failures = 0;
+    const auto check = [&failures](bool ok, const char *what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", what);
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const auto settle = []() {
+        for (int i = 0; i < 5; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    };
+
+    // DiskState sin persistencia y un disco de prueba: no se lee ni se escribe nada real.
+    DiskState state(nullptr);
+    state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
+    state.setDriveReadings({probeDrive()}, QStringList(), true, QDateTime::currentDateTime());
+
+    // La tarjeta interactiva real (con sus connects y su filtro de clicks), sola en una ventana de la
+    // plataforma offscreen: show() ahi no llega a ninguna pantalla.
+    QWidget host;
+    auto *layout = new QVBoxLayout(&host);
+    auto *card = new DiskCard(&state, true, &host);
+    layout->addWidget(card);
+    QObject::connect(&state, &DiskState::changed, card, &DiskCard::refresh);
+    host.resize(440, 260);
+    host.show();
+    host.activateWindow();
+    settle();
+
+    auto *spin = card->findChild<QSpinBox *>(QStringLiteral("threshold"));
+    auto *edit = spin ? spin->findChild<QLineEdit *>() : nullptr;
+    check(spin && edit, "la fila del disco tiene su campo de umbral");
+    if (!spin || !edit) {
+        return 1;
+    }
+    const auto editing = [spin]() {
+        QWidget *focused = QApplication::focusWidget();
+        return focused && (focused == spin || spin->isAncestorOf(focused));
+    };
+    const auto type = [&](const QString &text) {
+        spin->setFocus(Qt::MouseFocusReason);
+        settle();
+        edit->selectAll();
+        edit->insert(text);
+    };
+    const auto press = [&](int key) {
+        QWidget *target = QApplication::focusWidget() ? QApplication::focusWidget() : spin;
+        QKeyEvent down(QEvent::KeyPress, key, Qt::NoModifier);
+        QCoreApplication::sendEvent(target, &down);
+        QKeyEvent up(QEvent::KeyRelease, key, Qt::NoModifier);
+        if (QApplication::focusWidget()) {
+            QCoreApplication::sendEvent(QApplication::focusWidget(), &up);
+        }
+        settle();
+    };
+    const auto threshold = [&state]() { return state.diskWatches().value(0).value; };
+
+    // Al abrir la ventana nada tiene el teclado: Qt le da el foco solo al primer control que acepta
+    // Tab, y el campo del umbral no tiene que ser ese.
+    check(QApplication::activeWindow() == &host, "la ventana de prueba esta activa");
+    check(!editing(), "al abrir la ventana, el campo no tiene el teclado");
+
+    // Otra ventana al frente y de vuelta: al reactivarse tampoco lo toma.
+    QWidget other;
+    other.resize(100, 100);
+    other.show();
+    other.activateWindow();
+    settle();
+    host.activateWindow();
+    settle();
+    check(QApplication::activeWindow() == &host, "la ventana de prueba vuelve a estar activa");
+    check(!editing(), "al volver a la ventana, el campo no tiene el teclado");
+    other.hide();
+    host.activateWindow();
+    settle();
+
+    // Un click REAL en el campo tiene que seguir activandolo. Qt da foco por click solo a los eventos
+    // que llegan del sistema de ventanas (un sendEvent no cuenta), asi que aca se verifica lo que Qt
+    // mira en ese momento: que el campo y su spin box (el campo le pasa el foco a el) acepten foco
+    // por click. El click con el mouse lo prueba Lega.
+    check((edit->focusPolicy() & Qt::ClickFocus) == Qt::ClickFocus
+              && (spin->focusPolicy() & Qt::ClickFocus) == Qt::ClickFocus,
+          "el campo acepta foco por click");
+    check((spin->focusPolicy() & Qt::TabFocus) == 0, "el campo no acepta foco por Tab");
+
+    // Precondicion: sin esto los chequeos de "solto el teclado" no prueban nada.
+    type(QStringLiteral("75"));
+    check(editing(), "al escribir, el campo tiene el teclado");
+
+    press(Qt::Key_Return);
+    check(threshold() == 75, "Enter guarda el valor escrito (75)");
+    check(!editing(), "Enter suelta el campo");
+
+    type(QStringLiteral("20"));
+    press(Qt::Key_Escape);
+    check(threshold() == 75, "Escape no guarda lo escrito (sigue en 75)");
+    check(spin->value() == 75, "Escape vuelve el campo al valor guardado");
+    check(!editing(), "Escape suelta el campo");
+
+    type(QStringLiteral("30"));
+    QPushButton *add = card->addButton();
+    const QPointF inside(add->width() / 2.0, add->height() / 2.0);
+    QMouseEvent click(QEvent::MouseButtonPress, inside, add->mapToGlobal(inside), Qt::LeftButton, Qt::LeftButton,
+                      Qt::NoModifier);
+    QCoreApplication::sendEvent(add, &click);
+    settle();
+    check(threshold() == 30, "un click afuera guarda el valor escrito (30)");
+    check(!editing(), "un click afuera suelta el campo");
+
+    type(QStringLiteral("40"));
+    QMouseEvent clickInside(QEvent::MouseButtonPress, QPointF(5, 5), edit->mapToGlobal(QPointF(5, 5)), Qt::LeftButton,
+                            Qt::LeftButton, Qt::NoModifier);
+    QCoreApplication::sendEvent(edit, &clickInside);
+    settle();
+    check(editing(), "un click adentro del mismo campo lo deja escribiendo");
+
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "ui-probe ok" : "ui-probe FALLO", failures);
+    return failures == 0 ? 0 : 1;
 }
