@@ -8,6 +8,7 @@
 #include "modules/openinnukex/OpenInNukeXModule.h"
 
 #ifdef Q_OS_WIN
+#include "modules/openinnukex/win/UserChoiceLatest.h"
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/openinnukex/mac/MacFileAssociation.h"
@@ -137,7 +138,7 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
         marker.close();
 
         QString detail;
-        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, false);
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
         check(err == NukeBridge::Error::SourceRepo,
               QStringLiteral("bridge: rechaza instalar sobre una carpeta con QtClient/CMakeLists.txt"));
     }
@@ -148,7 +149,7 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
         gitMarker.close();
 
         QString detail;
-        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, false);
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
         check(err == NukeBridge::Error::SourceRepo,
               QStringLiteral("bridge: rechaza instalar sobre una carpeta con .git (guarda D-04)"));
     }
@@ -156,7 +157,7 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
         QTemporaryDir tmp; // carpeta limpia: ni CMakeLists.txt ni .git
         check(tmp.isValid(), QStringLiteral("bridge: carpeta temporal limpia creada"));
         QString detail;
-        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, false);
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
         check(err == NukeBridge::Error::None,
               QStringLiteral("bridge: instala en una carpeta temporal limpia (detalle: %1)").arg(detail));
 
@@ -164,6 +165,47 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
         check(status.installed(), QStringLiteral("bridge: inspect() ve la instalacion recien hecha como instalada"));
         check(status.installedVersion == NukeBridge::bundledVersion(),
               QStringLiteral("bridge: la version instalada coincide con la embebida"));
+    }
+}
+
+// Incidente real (2026-09-25): un self-test anterior instalaba en una carpeta temporal para
+// probar la guarda de repo y terminaba igual escribiendo el registro LGA COMPARTIDO de verdad
+// (%APPDATA%\LGA\nuke.json), porque el guard de entonces (`publishToRegistry`) tenia un default
+// que nadie desactivo. Este caso demuestra, con un `RegistryPublisher` DE PRUEBA inyectado (nunca
+// `NukeBridge::publishToLgaRegistry`, nunca el archivo real), que `automatedRun` bloquea la
+// publicacion — y que la guarda PUEDE fallar de verdad: con automatedRun=false el publisher de
+// prueba SI se llama, así se sabe que el chequeo no es un `if` que siempre da lo mismo.
+void testAutomatedRunNeverPublishesRegistry(const std::function<void(bool, const QString &)> &check)
+{
+    int publishCalls = 0;
+    QString publishedTo;
+    const NukeBridge::RegistryPublisher fakePublisher = [&](const QString &dir) {
+        ++publishCalls;
+        publishedTo = dir;
+        return true;
+    };
+
+    {
+        QTemporaryDir tmp;
+        QString detail;
+        publishCalls = 0;
+        publishedTo.clear();
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, /*automatedRun=*/true, fakePublisher);
+        check(err == NukeBridge::Error::None, QStringLiteral("automatedRun: la instalacion en la carpeta temporal igual sucede"));
+        check(publishCalls == 0,
+              QStringLiteral("automatedRun=true: NUNCA se llama al publisher del registro LGA (ni de prueba ni real)"));
+    }
+    {
+        // Mismo publisher DE PRUEBA, nunca el real: demuestra que la guarda puede fallar (con
+        // automatedRun=false SI publica), sin arriesgar el nuke.json real en ningun momento.
+        QTemporaryDir tmp;
+        QString detail;
+        publishCalls = 0;
+        publishedTo.clear();
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, /*automatedRun=*/false, fakePublisher);
+        check(err == NukeBridge::Error::None, QStringLiteral("sin automatedRun: la instalacion tambien sucede"));
+        check(publishCalls == 1 && publishedTo == QDir::cleanPath(tmp.path()),
+              QStringLiteral("automatedRun=false: SI llama al publisher inyectado (la guarda distingue los dos casos)"));
     }
 }
 
@@ -291,6 +333,23 @@ ExternalResult openInNukeXRunExternal(const ExternalRequest &request)
     return ExternalResult::Pending;
 }
 
+HelpSection openInNukeXHelp(const SettingsReader &value)
+{
+    Q_UNUSED(value);
+    // Texto EXACTO del canvas de diseno, seccion 6 (Ayuda). hb()/strong() resaltan el mismo
+    // termino que el canvas, con Theme::kTextBright.
+    return HelpSection{
+        QStringLiteral("Open in NukeX"),
+        {
+            QStringLiteral("Press %1 so .nk files open with Mighty Tools.").arg(HelpSection::strong(QStringLiteral("Apply"))),
+            QStringLiteral("Pick the %1 to use when none is open.").arg(HelpSection::strong(QStringLiteral("NukeX version"))),
+            QStringLiteral("Install the %1 so scripts open in the NukeX you already have open.")
+                .arg(HelpSection::strong(QStringLiteral("Nuke Bridge"))),
+        },
+        QString(),
+    };
+}
+
 ModuleDescriptor openInNukeXDescriptor()
 {
     ModuleDescriptor descriptor;
@@ -336,9 +395,15 @@ ModuleDescriptor openInNukeXDescriptor()
         testVersionSortAndScan(check);
         testClaimsExternal(check);
         testBridgeSourceRepoGuard(check);
+        testAutomatedRunNeverPublishesRegistry(check);
         testBridgeChipState(check);
         testNukeXPath(check);
         testEmbeddedPayload(check);
+#ifdef Q_OS_WIN
+        // Vectores puros del hash de UserChoiceLatest/UserChoice (D-03), verificados contra
+        // Windows: no lee el registro, propios de win/UserChoiceLatest.cpp.
+        UserChoiceLatest::runSelfTestVectors(check);
+#endif
     };
 
     descriptor.simulateAction = [](const QString &action, const QStringList &args) -> int {

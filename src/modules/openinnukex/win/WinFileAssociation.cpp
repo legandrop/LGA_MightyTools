@@ -234,30 +234,36 @@ ApplyOutcome apply(bool reapply)
 {
     ApplyOutcome outcome;
 
+    // outcome.errors es lo que el usuario ve en "Association finished with warnings"
+    // (OpenInNukeXMessages::associationFinishedWithWarnings): va en INGLES. El detalle tecnico en
+    // castellano (rc de la API, el motivo exacto de UserChoiceLatest) queda solo en el log, via
+    // qWarning/qInfo de mas abajo y de writeUserChoice().
     if (reapply) {
         if (!cleanConflictingKeys()) {
-            outcome.errors << QStringLiteral("Error al limpiar el registro");
+            outcome.errors << QStringLiteral("Could not clean up the registry.");
         }
         QThread::msleep(500);
     }
 
     if (!registerProgId()) {
-        outcome.errors << QStringLiteral("Error al registrar el ProgID");
+        outcome.errors << QStringLiteral("Could not register the ProgID.");
     }
     if (!registerDefaultAppCapabilities()) {
-        outcome.errors << QStringLiteral("Error al registrar la app en Apps predeterminadas");
+        outcome.errors << QStringLiteral("Could not register the app in Default apps.");
     }
 
     const QString ext = QString::fromWCharArray(kExtensionW);
     const QString pid = progId();
     if (!registerExtensionClass(ext, pid)) {
-        outcome.errors << QStringLiteral("Error al registrar la extension");
+        outcome.errors << QStringLiteral("Could not register the .nk extension.");
     }
 
     QString reason;
     const bool associationWritten = writeUserChoice(ext, pid, &reason);
     if (!associationWritten) {
-        outcome.errors << QStringLiteral("No se pudo escribir la asociacion de .nk (%1)").arg(reason);
+        // `reason` (el motivo tecnico de UserChoiceLatest, en castellano) ya quedo en el log
+        // dentro de writeUserChoice(): no se le agrega crudo al mensaje que ve el usuario.
+        outcome.errors << QStringLiteral("Could not write the .nk association.");
     }
 
     notifyAssociationChanged();
@@ -277,7 +283,7 @@ ApplyOutcome apply(bool reapply)
     }
 
     if (!openDefaultAppsSettings()) {
-        outcome.errors << QStringLiteral("No se pudo abrir Apps predeterminadas de Windows");
+        outcome.errors << QStringLiteral("Could not open Windows Default apps.");
     }
 
     outcome.result = (!outcome.errors.isEmpty() && !pickerLaunched) ? ApplyResult::Failed
@@ -306,7 +312,7 @@ bool releaseAssociation(QString *error)
     notifyAssociationChanged();
 
     if (!ok && error) {
-        *error = QStringLiteral("No se pudieron borrar todas las claves de la asociacion");
+        *error = QStringLiteral("Could not remove all the association keys.");
     }
     return ok;
 }

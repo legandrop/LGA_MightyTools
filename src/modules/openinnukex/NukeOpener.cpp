@@ -100,31 +100,32 @@ void NukeOpener::handleNoBridgeRunning()
     const QString nukeExecutablePath = NukeXPath::read(m_options.nukeXPathFile);
 
     if (nukeExecutablePath.isEmpty()) {
-        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeNotConfigured());
+        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeNotConfigured(), m_options.parentWidget, m_options.automatedRun);
         finishOnce(1);
         return;
     }
     if (!QFile::exists(nukeExecutablePath)) {
-        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeXPathGone(nukeExecutablePath));
+        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeXPathGone(nukeExecutablePath), m_options.parentWidget,
+                                    m_options.automatedRun);
         finishOnce(1);
         return;
     }
 
     QString errorDetail;
     if (!launchNukeXProcess(nukeExecutablePath, m_options.nkFilePath, &errorDetail)) {
-        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeXFailedToStart(errorDetail));
+        OpenInNukeXMessages::report(OpenInNukeXMessages::nukeXFailedToStart(errorDetail), m_options.parentWidget,
+                                    m_options.automatedRun);
         finishOnce(1);
         return;
     }
 
     if (m_options.showLaunchNotice) {
-        // Cartel "NukeX Launcher" con cuenta regresiva (inventario, seccion "Cartel NukeX
-        // Launcher"): la ventanita no modal en si es etapa 2 (panel de UI). Aca solo se deja el
-        // aviso de que TOCARIA mostrarla, por el mismo punto de salida que el resto de los
-        // mensajes del modulo.
-        OpenInNukeXMessages::report({QStringLiteral("NukeX Launcher"),
-                                      QStringLiteral("No NukeX instance found, opening a new one..."),
-                                      OpenInNukeXMessage::Icon::Information});
+        // Cartel "NukeX Launcher" con cuenta regresiva (inventario, seccion homonima): no modal,
+        // se cierra solo a los 3 segundos. Igual que el origen (nukeopener.cpp: 3 s del cartel +
+        // 1 s de margen antes de salir), NukeOpener no termina hasta que el cartel se cierra.
+        OpenInNukeXMessages::showLaunchNotice(m_options.parentWidget, m_options.automatedRun,
+                                              [this]() { finishOnce(0); });
+        return;
     }
     finishOnce(0);
 }
