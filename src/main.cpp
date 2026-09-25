@@ -1,4 +1,5 @@
 #include "actions/ActionRunner.h"
+#include "app/ModuleRegistry.h"
 #include "core/AppPaths.h"
 #include "core/AppState.h"
 #include "core/DiskMonitor.h"

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 0.02 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 0.03 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -58,6 +58,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/actions/ActionRunner.cpp
+    src/app/ModuleRegistry.cpp
     src/core/AppPaths.cpp
     src/core/AppSettings.cpp
     src/core/AppState.cpp
@@ -88,6 +89,9 @@ set(SOURCES
 
 set(HEADERS
     src/actions/ActionRunner.h
+    src/app/Module.h
+    src/app/ModuleContext.h
+    src/app/ModuleRegistry.h
     src/core/AppPaths.h
     src/core/AppSettings.h
     src/core/AppState.h
