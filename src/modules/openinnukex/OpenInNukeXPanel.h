@@ -5,8 +5,11 @@
 #include "modules/openinnukex/NukeScanner.h"
 
 #include <QList>
+#include <QPointer>
 #include <QString>
 #include <QWidget>
+
+class QThread;
 
 class ModuleContext;
 class Chip;
@@ -86,6 +89,7 @@ private:
     Chip *m_assocChip = nullptr;
     QPushButton *m_applyButton = nullptr;
     bool m_applyRunning = false;
+    QPointer<QThread> m_applyThread; ///< el hilo de Apply/Re-apply en curso, si hay uno (Windows)
 
     // "Preferred Nuke version"
     QLabel *m_scanStatusLabel = nullptr;

@@ -123,7 +123,19 @@ OpenInNukeXPanel::OpenInNukeXPanel(ModuleContext &context, QWidget *parent)
     }
 }
 
-OpenInNukeXPanel::~OpenInNukeXPanel() = default;
+OpenInNukeXPanel::~OpenInNukeXPanel()
+{
+    // Red de seguridad: si el usuario cierra el panel (apaga el modulo, cambia de herramienta) con
+    // Apply/Re-apply todavia corriendo, no se puede dejar que QThread se destruya con el hilo vivo
+    // (QThread avisa por consola y el proceso puede terminar mal). quit()+wait() son seguros de
+    // llamar desde este hilo aunque el otro siga ejecutando WinFileAssociation::apply(); el
+    // callback en cola hacia onApplyFinished() no llega a correr sobre un panel ya destruido: Qt
+    // descarta los eventos en cola de un QObject al borrarlo.
+    if (m_applyThread && m_applyThread->isRunning()) {
+        m_applyThread->quit();
+        m_applyThread->wait();
+    }
+}
 
 QStringList OpenInNukeXPanel::captureStates()
 {
@@ -234,7 +246,10 @@ void OpenInNukeXPanel::onApplyClicked()
     m_applyButton->setEnabled(false);
 
 #ifdef Q_OS_WIN
-    auto *thread = new QThread(this);
+    // Sin padre Qt: si el panel se destruye con Apply corriendo (~1.5 s: los msleep de reintento
+    // mas el hash de UserChoiceLatest), el destructor lo desconecta y lo espera en vez de dejar
+    // que QThread se destruya con el hilo todavia vivo. Se guarda en m_applyThread para eso.
+    auto *thread = new QThread();
     auto *worker = new ApplyWorker(reapply);
     worker->moveToThread(thread);
     connect(thread, &QThread::started, worker, &ApplyWorker::run);
@@ -242,6 +257,7 @@ void OpenInNukeXPanel::onApplyClicked()
     connect(worker, &ApplyWorker::finished, thread, &QThread::quit);
     connect(worker, &ApplyWorker::finished, worker, &QObject::deleteLater);
     connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    m_applyThread = thread;
     thread->start();
 #elif defined(Q_OS_MACOS)
     Q_UNUSED(reapply);
