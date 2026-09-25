@@ -1,6 +1,8 @@
 #include "app/ModuleRegistry.h"
 #include "modules/linkredirector/LinkRedirectorDescriptor.h"
 
+#include "modules/openinnukex/OpenInNukeXDescriptor.h"
+
 #include <QtGlobal>
 
 #if defined(Q_OS_WIN)
@@ -16,6 +18,7 @@ QList<ModuleDescriptor> all()
 {
     QList<ModuleDescriptor> list;
     // Ej.: list << nukeShortcutsDescriptor();
+    list << openInNukeXDescriptor();
 #if defined(Q_OS_WIN)
     list << folderSwitchDescriptor();
 #endif

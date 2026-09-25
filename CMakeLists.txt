@@ -42,6 +42,9 @@ find_package(Qt6 COMPONENTS Core Gui Widgets Network REQUIRED)
 
 set(RESOURCES
     resources/resources.qrc
+    # Payload del Nuke Bridge (init.py, LGA_QtAdapter_OpenInNukeX.py, VERSION), embebido en el exe
+    # con su propia version (D-04). Ver nuke_plugin/OpenInNukeXBridge.qrc.
+    nuke_plugin/OpenInNukeXBridge.qrc
 )
 
 if(WIN32)
@@ -80,6 +83,13 @@ set(SOURCES
     src/modules/linkredirector/LinkRedirectorExternal.cpp
     src/modules/linkredirector/LinkRedirectorModule.cpp
     src/modules/linkredirector/LinkRedirectorRouting.cpp
+    src/modules/openinnukex/NukeBridge.cpp
+    src/modules/openinnukex/NukeOpener.cpp
+    src/modules/openinnukex/NukeScanner.cpp
+    src/modules/openinnukex/NukeXPath.cpp
+    src/modules/openinnukex/OpenInNukeXDescriptor.cpp
+    src/modules/openinnukex/OpenInNukeXMessages.cpp
+    src/modules/openinnukex/OpenInNukeXModule.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/NukeWatcherCommon.cpp
@@ -123,6 +133,13 @@ set(HEADERS
     src/modules/linkredirector/LinkRedirectorModule.h
     src/modules/linkredirector/LinkRedirectorRouting.h
     src/modules/linkredirector/LinkRedirectorTypes.h
+    src/modules/openinnukex/NukeBridge.h
+    src/modules/openinnukex/NukeOpener.h
+    src/modules/openinnukex/NukeScanner.h
+    src/modules/openinnukex/NukeXPath.h
+    src/modules/openinnukex/OpenInNukeXDescriptor.h
+    src/modules/openinnukex/OpenInNukeXMessages.h
+    src/modules/openinnukex/OpenInNukeXModule.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
     src/platform/ForegroundWatcher.h
@@ -149,6 +166,7 @@ if(WIN32)
     list(APPEND SOURCES
         src/modules/linkredirector/win/BrowserDetectionWin.cpp
         src/modules/linkredirector/win/BrowserRegistrationWin.cpp
+        src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
         src/platform/win/ForegroundWatcherWin.cpp
@@ -172,6 +190,7 @@ if(WIN32)
         src/modules/folderswitch/WindowUtils.cpp
     )
     list(APPEND HEADERS
+        src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
         src/updates/UpdateService.h
         src/updates/VersionCompare.h
@@ -187,6 +206,7 @@ elseif(APPLE)
     list(APPEND SOURCES
         src/modules/linkredirector/mac/BrowserDetectionMac.cpp
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
+        src/modules/openinnukex/mac/MacFileAssociation.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/HotkeyServiceMac.cpp
@@ -195,6 +215,9 @@ elseif(APPLE)
         src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp
         src/platform/mac/WindowFrameMac.cpp
+    )
+    list(APPEND HEADERS
+        src/modules/openinnukex/mac/MacFileAssociation.h
     )
 endif()
 
@@ -218,6 +241,7 @@ if(WIN32)
         advapi32
         psapi
         # Folder Switch: Shell COM (FolderResolver), UI Automation (WindowUtils/UiaSwitcher).
+        # Open in NukeX: IOpenWithLauncher, ShellExecuteW, SHChangeNotify (WinFileAssociation).
         shell32
         ole32
         oleaut32
