@@ -67,6 +67,8 @@ int cycles(const QStringList &arguments)
         count = 20;
     }
     const QString only = argAfter(arguments, QStringLiteral("--measure-cycles"), 2);
+    // --no-panel: sin abrir la pagina de la herramienta (separa lo del modulo de lo del panel).
+    const bool withPanel = !arguments.contains(QStringLiteral("--no-panel"));
 
     MemorySettingsStore store;
     HostOptions options;
@@ -102,7 +104,9 @@ int cycles(const QStringList &arguments)
         clock.start();
         for (int i = 0; i < count; ++i) {
             host.setEnabled(d.id, true);
-            window.selectPage(d.id);
+            if (withPanel) {
+                window.selectPage(d.id);
+            }
             pump(20);
             host.setEnabled(d.id, false);
             window.selectPage(MainWindow::kGeneral);
@@ -145,24 +149,46 @@ int idle(const QStringList &arguments)
     std::printf("measure mode=idle seconds=%d platform=%s\n", seconds, qPrintable(QGuiApplication::platformName()));
     print("boot", QStringLiteral("-"), boot);
 
+    // El reposo se cuenta despues de asentarse el arranque (plan 4.3: "despues del chequeo de
+    // updates"): en los primeros segundos trabajan hilos del pool de Windows que se retiran solos.
+    bool okSettle = false;
+    int settle = argAfter(arguments, QStringLiteral("--measure-idle"), 2).toInt(&okSettle);
+    if (!okSettle || settle < 0) {
+        settle = 60;
+    }
+
     AppController::Options options;
     options.measurement = true;
     AppController app(options);
-    // Lo que tarda en asentarse el arranque (pintado inicial, cargas perezosas de Qt).
     pump(3000);
-    const ProcessStats start = ProcessStats::current();
-    print("start", QStringLiteral("-"), start);
-    std::printf("measure private-all-off KB=%lld tools-on=%d\n", static_cast<long long>(start.privateBytes / 1024),
+    const ProcessStats early = ProcessStats::current();
+    print("early", QStringLiteral("-"), early);
+    std::printf("measure private-all-off KB=%lld tools-on=%d\n", static_cast<long long>(early.privateBytes / 1024),
                 app.host()->runningCount());
     std::fflush(stdout);
+    if (settle > 3) {
+        pump((settle - 3) * 1000);
+    }
+    const ProcessStats start = ProcessStats::current();
+    print("start", QStringLiteral("-"), start);
 
-    QEventLoop loop;
-    QTimer::singleShot(seconds * 1000, &loop, &QEventLoop::quit);
-    loop.exec();
+    // Una muestra por minuto: la curva dice si hay un consumo continuo o solo el arranque.
+    for (int elapsed = 0; elapsed < seconds;) {
+        const int step = qMin(60, seconds - elapsed);
+        QEventLoop loop;
+        QTimer::singleShot(step * 1000, &loop, &QEventLoop::quit);
+        loop.exec();
+        elapsed += step;
+        const ProcessStats sample = ProcessStats::current();
+        std::printf("measure sample t=%ds cpu_since_start=%lldms threads=%lld\n", elapsed,
+                    static_cast<long long>(sample.cpuMs - start.cpuMs), static_cast<long long>(sample.threads));
+        std::fflush(stdout);
+    }
     const ProcessStats end = ProcessStats::current();
     print("end", QStringLiteral("-"), end);
     const qint64 cpu = end.cpuMs - start.cpuMs;
-    std::printf("measure result idle seconds=%d cpu_ms=%lld private_delta_KB=%lld %s\n", seconds, static_cast<long long>(cpu),
+    std::printf("measure result idle seconds=%d settle=%d cpu_ms=%lld cpu_total_ms=%lld private_delta_KB=%lld %s\n",
+                seconds, settle, static_cast<long long>(cpu), static_cast<long long>(end.cpuMs - early.cpuMs),
                 static_cast<long long>((end.privateBytes - start.privateBytes) / 1024), cpu < 50 ? "ok" : "FALLO");
     std::fflush(stdout);
     return cpu < 50 ? 0 : 1;

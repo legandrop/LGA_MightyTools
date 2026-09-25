@@ -59,6 +59,25 @@ private:
     Qt::TextElideMode m_mode = Qt::ElideRight;
 };
 
+// Texto gris de una o mas lineas (`.cap` del canvas) con el interlineado del diseno: 17 px por
+// linea, con la media diferencia arriba como CSS. QLabel usa el de la fuente (16 px a 13 px) y en
+// un panel con varias descripciones la diferencia se acumula. Texto plano; el tono (warn, err) y el
+// color siguen saliendo de la hoja de estilo (QLabel#caption).
+class CaptionLabel : public QLabel
+{
+    Q_OBJECT
+public:
+    explicit CaptionLabel(const QString &text, QWidget *parent = nullptr, int lineHeight = 17);
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+    int heightForWidth(int width) const override;
+protected:
+    void paintEvent(QPaintEvent *event) override;
+private:
+    int lineCount(int width) const;
+    int m_lineHeight = 17;
+};
+
 // Chip de estado: tono (ok, err, src, key o neutro) + texto.
 class Chip : public QFrame
 {

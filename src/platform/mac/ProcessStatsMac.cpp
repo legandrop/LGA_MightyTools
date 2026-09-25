@@ -2,6 +2,7 @@
 
 #include <libproc.h>
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <sys/proc_info.h>
 #include <unistd.h>
 

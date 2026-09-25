@@ -56,8 +56,7 @@ QFont uiFont(qreal pixelSize, int weight)
 {
     QFont font(QStringLiteral("Inter"));
     font.setPointSizeF(pixelSize * pointsPerPixel());
-    font.setWeight(static_cast<QFont::Weight>(weight));
-    return font;
+    font.setWeight(static_cast<QFont::Weight>(weight));    return font;
 }
 
 void apply(QApplication &app)
@@ -114,7 +113,8 @@ QToolTip { background-color: @tile; color: @text; border: 1px solid #333333; pad
 QLabel#titleBarTitle { color: @textMuted; font-size: @fs13; font-weight: 500; }
 QFrame#titleBarSeparator { background-color: @border; border: none; }
 
-QFrame#card { background-color: @card; border: none; border-radius: 8px; }
+/* Tarjeta: 1 px de borde transparente como `.card` del canvas (el de color lo ponen warn y err). */
+QFrame#card { background-color: @card; border: 1px solid transparent; border-radius: 8px; }
 QLabel#cardTitle { color: @textStrong; font-size: @fs14; font-weight: 600; }
 QLabel#caption { color: @textFaint; font-size: @fs13; }
 QLabel#caption[tone="err"] { color: @error; }
@@ -162,11 +162,11 @@ QPushButton#segButton:checked { background-color: #393455; border: 1px solid #4c
 QPushButton#segButton[pos="right"]:checked { border-left: 1px solid #4c4770; }
 QPushButton#fieldButton {
     background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; color: @textStrong;
-    padding: 0px 6px 0px 8px; min-height: 22px; max-height: 22px; font-size: @fs12_5; font-weight: 400;
+    padding: 0px 8px 0px 8px; min-height: 22px; max-height: 22px; font-size: @fs12_5; font-weight: 400;
 }
 QPushButton#fieldButton:hover { border-color: #3d3d3d; background-color: #1f1f1f; }
 QPushButton#linkButton {
-    background-color: transparent; border: none; color: @link; padding: 0px; min-height: 24px; max-height: 24px;
+    background-color: transparent; border: none; color: @link; padding: 0px; min-height: 16px; max-height: 16px;
     font-size: @fs13; font-weight: 500; text-align: left;
 }
 QPushButton#linkButton:hover { color: #b9aef0; }
@@ -193,7 +193,7 @@ QPushButton[variant="primary"]:pressed { background-color: #3b3280; }
 QPushButton[variant="ghost"] { background-color: transparent; color: @textMuted; padding: 0px 8px; }
 QPushButton[variant="ghost"]:hover { background-color: #2a2a2a; color: @textStrong; }
 QPushButton[btnSize="sm"] { min-height: 26px; max-height: 26px; font-size: @fs12_5; padding: 0px 10px; }
-QPushButton[btnSize="icon"] { min-height: 26px; max-height: 26px; min-width: 28px; max-width: 28px; padding: 0px; }
+QPushButton[btnSize="icon"] { min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; padding: 0px; }
 QPushButton#closeButton { border: 1px solid #3B316A; }
 
 /* Campo de solo lectura */
@@ -202,7 +202,8 @@ ElidedLabel#fieldValue { color: @textCaption; font-size: @fs13_5; }
 ElidedLabel#fieldValue[empty="true"] { color: @textPlaceholder; }
 
 /* Chips */
-QFrame#chip { background-color: #2b2b2b; border: 1px solid #383838; border-radius: 4px; min-height: 18px; max-height: 18px; }
+/* En Qt min/max-height no cuentan el borde: 16 + 2 = los 18 de `.chip` y 18 + 2 = los 20 de `.kc`. */
+QFrame#chip { background-color: #2b2b2b; border: 1px solid #383838; border-radius: 4px; min-height: 16px; max-height: 16px; }
 QFrame#chip QLabel { color: #c5c8c7; font-size: @fs11_5; font-weight: 600; }
 QFrame#chip[tone="ok"] { background-color: #1f2a17; border-color: #3a4d27; }
 QFrame#chip[tone="ok"] QLabel { color: @ok; }
@@ -210,7 +211,7 @@ QFrame#chip[tone="err"] { background-color: #35211f; border-color: #5c3330; }
 QFrame#chip[tone="err"] QLabel { color: @error; }
 QFrame#chip[tone="src"] { background-color: transparent; border-color: #333333; }
 QFrame#chip[tone="src"] QLabel { color: @textMuted; font-weight: 500; }
-QFrame#chip[tone="key"] { min-height: 20px; max-height: 20px; }
+QFrame#chip[tone="key"] { min-height: 18px; max-height: 18px; }
 QFrame#chip[tone="warn"] { background-color: #2d2614; border-color: #4d4020; }
 QFrame#chip[tone="warn"] QLabel { color: @warn; }
 
@@ -218,7 +219,7 @@ QFrame#chip[tone="warn"] QLabel { color: @warn; }
    declara transparente en todos los estados porque el hover del indicador se filtra al fondo del
    QCheckBox. La tilde es PNG y no SVG a proposito: el exe no carga Qt6Svg y el deploy no lleva el
    plugin qsvg, asi que un SVG desapareceria en la copia instalada sin ningun error. */
-QCheckBox, QCheckBox:hover, QCheckBox:checked, QCheckBox:unchecked { background: transparent; color: @text; spacing: 10px; font-size: @fs13_5; }
+QCheckBox, QCheckBox:hover, QCheckBox:checked, QCheckBox:unchecked { background: transparent; color: @text; spacing: 10px; font-size: @fs13_5; min-height: 20px; }
 QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #3a3744; background-color: #2a2832; }
 QCheckBox::indicator:unchecked:hover { background-color: #3a3744; }
 QCheckBox::indicator:checked { border: 1px solid #4c4770; background-color: #393455; image: url(:/icons/check.png); }
@@ -268,7 +269,7 @@ QLabel#platTag { color: @textFaint; font-size: @fs11; font-weight: 500; border: 
 QLabel#offBullet { color: @text; font-size: @fs13; }
 QLabel#offBulletMark { color: @dotPaused; font-size: @fs13; }
 QLabel#welcomeTitle { color: @textStrong; font-size: @fs16; font-weight: 600; }
-QFrame#miniCard { background-color: @miniCard; border: none; border-radius: 8px; }
+QFrame#miniCard { background-color: @miniCard; border: 1px solid transparent; border-radius: 8px; }
 QLabel#miniTitle { color: @textStrong; font-size: @fs13; font-weight: 600; }
 QLabel#runningText { color: @text; font-size: @fs13; }
 QLabel#aboutName { color: @aboutName; font-size: @fs13_5; font-weight: 600; }

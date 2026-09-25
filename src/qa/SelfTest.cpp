@@ -9,6 +9,7 @@
 #include "app/SettingsStore.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "platform/ProcessStats.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -367,6 +368,11 @@ void testRealModules(const Check &check)
     const int timers0 = qAppTimers();
     const int threads0 = qAppThreads();
     for (const ModuleDescriptor &d : host.descriptors()) {
+        // Un ciclo de calentamiento: lo que Qt carga una sola vez por proceso no es del modulo.
+        host.setEnabled(d.id, true);
+        host.setEnabled(d.id, false);
+        flushDeletes();
+        const ProcessStats before = ProcessStats::current();
         bool alwaysBuilt = true;
         for (int i = 0; i < 20; ++i) {
             host.setEnabled(d.id, true);
@@ -382,6 +388,18 @@ void testRealModules(const Check &check)
         check(qAppTimers() == timers0 && qAppThreads() == threads0,
               QStringLiteral("[%1] QTimer y QThread de qApp vuelven a los iniciales (%2/%3 -> %4/%5)")
                   .arg(d.id).arg(timers0).arg(threads0).arg(qAppTimers()).arg(qAppThreads()));
+        // Lo que Qt no ve: handles, hilos y objetos GDI/USER del sistema (un timer del sistema que
+        // queda vivo es un objeto USER).
+        const ProcessStats after = ProcessStats::current();
+        const auto near = [](qint64 a, qint64 b) { return a < 0 || b < 0 || qAbs(a - b) <= 2; };
+        check(near(before.handles, after.handles) && near(before.threads, after.threads)
+                  && near(before.gdiObjects, after.gdiObjects) && near(before.userObjects, after.userObjects),
+              QStringLiteral("[%1] 20 ciclos: handles %2, hilos %3, GDI %4, USER %5 (tolerancia 2)")
+                  .arg(d.id)
+                  .arg(after.handles - before.handles)
+                  .arg(after.threads - before.threads)
+                  .arg(after.gdiObjects - before.gdiObjects)
+                  .arg(after.userObjects - before.userObjects));
     }
 }
 

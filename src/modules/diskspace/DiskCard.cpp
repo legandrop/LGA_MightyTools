@@ -121,6 +121,10 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_missing = label(QStringLiteral("Not connected"), "meta", this);
     top->addWidget(m_missing, 0, Qt::AlignVCenter);
     top->addStretch(1);
+    // Fila de 26 de alto como la del canvas (`.row` con min-height 26).
+    auto *topStrut = new QWidget(this);
+    topStrut->setFixedSize(0, 26);
+    top->addWidget(topStrut);
 
     auto *controls = new QHBoxLayout();
     controls->setContentsMargins(0, 0, 0, 0);
@@ -172,6 +176,10 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     foot->addWidget(m_free, 1);
     m_threshold = label(QString(), "meta", this);
     foot->addWidget(m_threshold, 0);
+    // La linea de abajo es una `.row` de 22 de alto en el canvas.
+    auto *footStrut = new QWidget(this);
+    footStrut->setFixedSize(0, 22);
+    foot->addWidget(footStrut);
     column->addLayout(foot);
 
     connect(m_value, qOverload<int>(&QSpinBox::valueChanged), this,
@@ -284,7 +292,10 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
 
     auto *head = new QHBoxLayout();
     head->setSpacing(6);
-    head->addWidget(label(QStringLiteral("Watched drives"), "cardTitle", this), 1);
+    // `.head` del canvas: el titulo ocupa 22 de alto.
+    QLabel *title = label(QStringLiteral("Watched drives"), "cardTitle", this);
+    title->setMinimumHeight(22);
+    head->addWidget(title, 1);
     m_chip = new Chip(this);
     head->addWidget(m_chip, 0, Qt::AlignVCenter);
     layout->addLayout(head);
@@ -302,6 +313,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     list->setContentsMargins(0, 0, 0, 0);
     list->setSpacing(0);
     m_intervalRow = new QWidget(m_listBlock);
+    m_intervalRow->setMinimumHeight(26); // `.row` de 26 del canvas
     auto *interval = new QHBoxLayout(m_intervalRow);
     interval->setContentsMargins(0, 0, 0, 0);
     interval->setSpacing(8);
