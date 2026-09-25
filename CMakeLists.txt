@@ -102,6 +102,7 @@ set(HEADERS
     src/core/LgaRegistry.h
     src/core/Shortcut.h
     src/platform/AutoStart.h
+    src/platform/ForegroundWatcher.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
     src/platform/LocalDrives.h
@@ -126,6 +127,7 @@ set(HEADERS
 if(WIN32)
     list(APPEND SOURCES
         src/platform/win/AutoStartWin.cpp
+        src/platform/win/ForegroundWatcherWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
         src/platform/win/LocalDrivesWin.cpp
@@ -135,11 +137,26 @@ if(WIN32)
         # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
         src/updates/UpdateService.cpp
         src/updates/VersionCompare.cpp
+        # Modulo Folder Switch: solo Windows (plan, 2 "Folder Switch").
+        src/modules/folderswitch/DialogSwitcher.cpp
+        src/modules/folderswitch/FolderResolver.cpp
+        src/modules/folderswitch/FolderSwitchLogic.cpp
+        src/modules/folderswitch/FolderSwitchModule.cpp
+        src/modules/folderswitch/FolderSwitchState.cpp
+        src/modules/folderswitch/UiaSwitcher.cpp
+        src/modules/folderswitch/WindowUtils.cpp
     )
     list(APPEND HEADERS
         src/platform/win/RegistryHelper.h
         src/updates/UpdateService.h
         src/updates/VersionCompare.h
+        src/modules/folderswitch/DialogSwitcher.h
+        src/modules/folderswitch/FolderResolver.h
+        src/modules/folderswitch/FolderSwitchLogic.h
+        src/modules/folderswitch/FolderSwitchModule.h
+        src/modules/folderswitch/FolderSwitchState.h
+        src/modules/folderswitch/UiaSwitcher.h
+        src/modules/folderswitch/WindowUtils.h
     )
 elseif(APPLE)
     list(APPEND SOURCES
@@ -166,7 +183,16 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE user32 dwmapi advapi32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        user32
+        dwmapi
+        advapi32
+        # Folder Switch: Shell COM (FolderResolver), UI Automation (WindowUtils/UiaSwitcher).
+        shell32
+        ole32
+        oleaut32
+        uuid
+    )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework AppKit"
