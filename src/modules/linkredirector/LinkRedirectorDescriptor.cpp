@@ -242,6 +242,37 @@ void linkRedirectorSelfTest(const std::function<void(bool ok, const QString &wha
           QStringLiteral("exclusion: un handler ajeno no se confunde con el propio"));
     check(!LinkRedirectorBrowserRegistration::isOwnHandlerId(QString()),
           QStringLiteral("exclusion: un handler vacio no se confunde con el propio"));
+
+    // ---- Etapa 2: armado de la lista de un combo (panel, canvas seccion 3 "estados").
+    const QList<DetectedBrowser> detected = {
+        DetectedBrowser{QStringLiteral("Google Chrome"), QStringLiteral("C:/Chrome/chrome.exe"), QStringLiteral("ChromeHTML")},
+        DetectedBrowser{QStringLiteral("Firefox"), QStringLiteral("C:/Firefox/firefox.exe"), QStringLiteral("FirefoxURL")},
+    };
+    {
+        const QList<ComboItem> items = buildBrowserComboItems(QString(), detected);
+        check(items.size() == 4, QStringLiteral("combo: sin nada configurado, '-' + 2 detectados + Browse..."));
+        check(items.first().kind == ComboItem::Kind::None && items.first().selected,
+              QStringLiteral("combo: sin nada configurado, '-' queda seleccionado"));
+        check(items.last().kind == ComboItem::Kind::Browse && items.last().label == QLatin1String("Browse..."),
+              QStringLiteral("combo: 'Browse...' siempre al final"));
+        check(selectedComboLabel(items) == QLatin1String("-"), QStringLiteral("combo: etiqueta del campo cerrado, sin nada configurado"));
+    }
+    {
+        const QList<ComboItem> items = buildBrowserComboItems(QStringLiteral("C:/Firefox/firefox.exe"), detected);
+        check(items.size() == 4, QStringLiteral("combo: navegador detectado configurado, sin entrada custom de mas"));
+        check(!items.first().selected, QStringLiteral("combo: con algo configurado, '-' no queda seleccionado"));
+        check(selectedComboLabel(items) == QLatin1String("Firefox"), QStringLiteral("combo: etiqueta del detectado elegido"));
+    }
+    {
+        // La ruta guardada no esta entre los detectados (se borro, o la deteccion no la lista):
+        // se agrega como entrada "(custom)", nunca se pierde ni cae a "-".
+        const QList<ComboItem> items = buildBrowserComboItems(QStringLiteral("C:/Apps/Brave/Brave.exe"), detected);
+        check(items.size() == 5, QStringLiteral("combo: navegador custom agrega una entrada de mas"));
+        const ComboItem &custom = items.at(items.size() - 2); // justo antes de "Browse..."
+        check(custom.kind == ComboItem::Kind::Custom && custom.label == QLatin1String("Brave (custom)") && custom.selected,
+              QStringLiteral("combo: entrada '(custom)' con el nombre del archivo, seleccionada"));
+        check(selectedComboLabel(items) == QLatin1String("Brave (custom)"), QStringLiteral("combo: etiqueta del custom elegido"));
+    }
 }
 
 int linkRedirectorSimulateAction(const QString &action, const QStringList &args)
@@ -286,10 +317,28 @@ ModuleDescriptor linkRedirectorDescriptor()
     d.releaseSystem = linkRedirectorReleaseSystem;
 
     d.claimsExternal = LinkRedirectorExternal::claims;
-    d.runExternal = LinkRedirectorExternal::handle;
+    // Sin context: el modo corto de Windows y la herramienta apagada (Module.h, runExternal). El
+    // aviso "navegador no disponible" sale como QMessageBox en ese camino (LinkRedirectorExternal.cpp).
+    d.runExternal = [](const ExternalRequest &request) { return LinkRedirectorExternal::handle(request); };
 
     d.selfTest = linkRedirectorSelfTest;
     d.simulateAction = linkRedirectorSimulateAction;
 
     return d;
+}
+
+HelpSection linkRedirectorHelp(const SettingsReader &value)
+{
+    Q_UNUSED(value); // sin datos dinamicos: el texto es fijo, igual que el canvas.
+    HelpSection section;
+    section.title = QStringLiteral("Link Redirector");
+    section.steps = {
+        QStringLiteral("Press %1 so links come to Mighty Tools.").arg(HelpSection::strong(QStringLiteral("Make Default"))),
+        QStringLiteral("Add keywords, one per line. A link that contains any of them opens in the alternative "
+                       "browser; everything else opens in the default browser."),
+    };
+    section.note = QStringLiteral(
+        "If a selected browser is unavailable, Mighty Tools warns you and uses the other one for that link. "
+        "Use «-» to leave a browser role empty.");
+    return section;
 }

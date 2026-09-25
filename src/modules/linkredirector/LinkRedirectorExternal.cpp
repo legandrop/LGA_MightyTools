@@ -1,21 +1,35 @@
 #include "modules/linkredirector/LinkRedirectorExternal.h"
 #include "modules/linkredirector/LinkRedirectorRouting.h"
 #include "modules/linkredirector/BrowserDetection.h"
+#include "app/ModuleContext.h"
 
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QMessageBox>
 #include <QProcess>
 
 namespace {
 
-// Unico punto de salida del aviso "navegador no disponible" (tablero de diseno, seccion 5). Etapa 2
-// lo reemplaza por un dialogo (modo corto de Windows) o una notificacion de bandeja (mac, app
-// residente); por ahora solo loguea, para no bloquear la etapa 1 sin panel.
-// TODO(etapa 2): presentar `title` + `caption` como dialogo/notificacion en vez de un simple log.
-void showBrowserWarning(const QString &title, const QString &caption)
+// Unico punto de salida del aviso "navegador no disponible" (tablero de diseno, seccion 5). Siempre
+// loguea (privacidad + diagnostico); en corrida automatizada (request.dryRun) nunca muestra nada mas.
+// Si no, dos caminos segun quien haya recibido el link:
+//  - Modo corto de Windows (context == nullptr): QMessageBox::warning con el Theme de la app, el
+//    mismo sistema de dialogos que el updater (Theme::apply ya corrio en main.cpp antes de este
+//    camino: ver ExternalDispatch::run, llamado despues de applyAppStyle(app)).
+//  - App residente de mac (context != nullptr, Module::handleExternal con la herramienta prendida):
+//    context->notify(...), la notificacion de bandeja de la app (el click abre el panel).
+void showBrowserWarning(const QString &title, const QString &caption, bool dryRun, ModuleContext *context)
 {
     qWarning() << "[linkRedirector]" << title << "-" << caption;
+    if (dryRun) {
+        return;
+    }
+    if (context) {
+        context->notify(title, caption, ModuleContext::NoticeIcon::Warning, 8000);
+        return;
+    }
+    QMessageBox::warning(nullptr, title, caption);
 }
 
 // Abre `target` (URL o archivo local) con el ejecutable `exePath`. Nunca se llama en dryRun.
@@ -66,7 +80,7 @@ bool claims(const QString &argument)
            lower.endsWith(QLatin1String(".xhtml"));
 }
 
-ExternalResult handle(const ExternalRequest &request)
+ExternalResult handle(const ExternalRequest &request, ModuleContext *context)
 {
     using namespace LinkRedirectorRouting;
 
@@ -106,7 +120,7 @@ ExternalResult handle(const ExternalRequest &request)
     }
 
     if (usedFallback && request.moduleEnabled && reason != UnavailableReason::None) {
-        showBrowserWarning(warningTitle(), warningCaption(reason, chosenExe));
+        showBrowserWarning(warningTitle(), warningCaption(reason, chosenExe), request.dryRun, context);
     }
 
     if (request.dryRun) {

@@ -135,4 +135,56 @@ QString logTarget(const QString &argument)
     return safeLogTarget(argument);
 }
 
+QList<ComboItem> buildBrowserComboItems(const QString &configuredExePath, const QList<DetectedBrowser> &detected)
+{
+    QList<ComboItem> items;
+
+    ComboItem none;
+    none.kind = ComboItem::Kind::None;
+    none.label = QStringLiteral("-");
+    none.selected = configuredExePath.isEmpty();
+    items << none;
+
+    bool foundConfigured = configuredExePath.isEmpty();
+    for (const DetectedBrowser &browser : detected) {
+        ComboItem item;
+        item.kind = ComboItem::Kind::Detected;
+        item.label = browser.name;
+        item.exePath = browser.exePath;
+        item.selected = !configuredExePath.isEmpty() && browser.exePath.compare(configuredExePath, Qt::CaseInsensitive) == 0;
+        if (item.selected) {
+            foundConfigured = true;
+        }
+        items << item;
+    }
+
+    // Lo guardado no aparece entre los detectados (una ruta borrada, o un navegador que la deteccion
+    // no lista): se agrega igual, para no perder la configuracion del usuario ni mostrar "-" por error.
+    if (!foundConfigured) {
+        ComboItem custom;
+        custom.kind = ComboItem::Kind::Custom;
+        custom.label = QStringLiteral("%1 (custom)").arg(QFileInfo(configuredExePath).completeBaseName());
+        custom.exePath = configuredExePath;
+        custom.selected = true;
+        items << custom;
+    }
+
+    ComboItem browse;
+    browse.kind = ComboItem::Kind::Browse;
+    browse.label = QStringLiteral("Browse...");
+    items << browse;
+
+    return items;
+}
+
+QString selectedComboLabel(const QList<ComboItem> &items)
+{
+    for (const ComboItem &item : items) {
+        if (item.selected) {
+            return item.label;
+        }
+    }
+    return QStringLiteral("-");
+}
+
 } // namespace LinkRedirectorRouting

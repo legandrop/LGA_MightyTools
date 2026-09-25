@@ -82,6 +82,7 @@ set(SOURCES
     src/modules/linkredirector/LinkRedirectorDescriptor.cpp
     src/modules/linkredirector/LinkRedirectorExternal.cpp
     src/modules/linkredirector/LinkRedirectorModule.cpp
+    src/modules/linkredirector/LinkRedirectorPanel.cpp
     src/modules/linkredirector/LinkRedirectorRouting.cpp
     src/modules/openinnukex/NukeBridge.cpp
     src/modules/openinnukex/NukeOpener.cpp
@@ -131,6 +132,7 @@ set(HEADERS
     src/modules/linkredirector/LinkRedirectorDescriptor.h
     src/modules/linkredirector/LinkRedirectorExternal.h
     src/modules/linkredirector/LinkRedirectorModule.h
+    src/modules/linkredirector/LinkRedirectorPanel.h
     src/modules/linkredirector/LinkRedirectorRouting.h
     src/modules/linkredirector/LinkRedirectorTypes.h
     src/modules/openinnukex/NukeBridge.h
