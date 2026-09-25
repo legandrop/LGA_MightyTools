@@ -11,6 +11,7 @@
 
 #include <memory>
 
+class ForegroundWatcher;
 class HostServices;
 class HotkeyHub;
 class InputInjector;
@@ -84,6 +85,13 @@ public:
     void releaseInjector();
     bool injectorAlive() const { return m_injector != nullptr; }
 
+    // Observador de ventana al frente compartido (plan 4.4), mismo refcount que el inyector: hoy lo
+    // usa Folder Switch; el dia que Nuke Shortcuts migre su propio hook (NukeWatcherWin) aca, sigue
+    // sirviendo a los dos con una sola instancia.
+    ForegroundWatcher *acquireForeground();
+    void releaseForeground();
+    bool foregroundAlive() const { return m_foreground != nullptr; }
+
     // Captura: construye el modulo en modo captura (sin start) y le fija el estado. False si el
     // modulo no existe o no conoce el estado (el arnes lo reporta como error).
     bool enableForCapture(const QString &id, const QString &state);
@@ -117,6 +125,8 @@ private:
     QList<QPointer<Module>> m_pendingDelete;
     std::unique_ptr<InputInjector> m_injector;
     int m_injectorUsers = 0;
+    std::unique_ptr<ForegroundWatcher> m_foreground;
+    int m_foregroundUsers = 0;
 };
 
 #endif // MIGHTYTOOLS_MODULEHOST_H

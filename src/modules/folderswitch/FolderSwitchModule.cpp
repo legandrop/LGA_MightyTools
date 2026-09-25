@@ -4,22 +4,25 @@
 #include "modules/folderswitch/DialogSwitcher.h"
 #include "modules/folderswitch/FolderResolver.h"
 #include "modules/folderswitch/FolderSwitchLogic.h"
+#include "modules/folderswitch/RecentFoldersPopup.h"
 #include "modules/folderswitch/WindowUtils.h"
 #include "platform/ForegroundWatcher.h"
+#include "ui/ShortcutRow.h"
 
+#include <QAction>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
-#include <QLabel>
+#include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 #include <QSet>
 #include <QTimer>
-#include <QVBoxLayout>
-#include <QWidget>
 
 namespace {
 constexpr int kManualHotkeyId = 1;
@@ -36,22 +39,21 @@ FolderSwitchModule::~FolderSwitchModule() = default;
 
 void FolderSwitchModule::declareAndRegisterShortcuts()
 {
-    m_manualShortcut = m_state.manualShortcut();
-    m_recentShortcut = m_state.recentShortcut();
-
     ModuleHotkeys *hk = context().hotkeys();
-    m_manualTakenBy = hk->declare(kManualHotkeyId, m_manualShortcut);
-    m_recentTakenBy = hk->declare(kRecentHotkeyId, m_recentShortcut);
+    const Shortcut manual = m_state.manualShortcut();
+    const Shortcut recent = m_state.recentShortcut();
+    m_manualTakenBy = hk->declare(kManualHotkeyId, manual);
+    m_recentTakenBy = hk->declare(kRecentHotkeyId, recent);
 
-    m_manualRegistered = m_manualTakenBy.isEmpty() && hk->registerHotkey(kManualHotkeyId, m_manualShortcut);
-    m_recentRegistered = m_recentTakenBy.isEmpty() && hk->registerHotkey(kRecentHotkeyId, m_recentShortcut);
+    m_manualRegistered = m_manualTakenBy.isEmpty() && hk->registerHotkey(kManualHotkeyId, manual);
+    m_recentRegistered = m_recentTakenBy.isEmpty() && hk->registerHotkey(kRecentHotkeyId, recent);
 
-    qInfo() << "[folderSwitch] Atajo manual" << m_manualShortcut.toPortableString() << "->"
+    qInfo() << "[folderSwitch] Atajo manual" << manual.toPortableString() << "->"
             << (m_manualRegistered
                     ? QStringLiteral("registrado")
                     : (m_manualTakenBy.isEmpty() ? QStringLiteral("rechazado por el sistema")
                                                  : QStringLiteral("tomado por %1").arg(m_manualTakenBy)));
-    qInfo() << "[folderSwitch] Atajo de recientes" << m_recentShortcut.toPortableString() << "->"
+    qInfo() << "[folderSwitch] Atajo de recientes" << recent.toPortableString() << "->"
             << (m_recentRegistered
                     ? QStringLiteral("registrado")
                     : (m_recentTakenBy.isEmpty() ? QStringLiteral("rechazado por el sistema")
@@ -62,16 +64,24 @@ void FolderSwitchModule::start()
 {
     declareAndRegisterShortcuts();
 
-    // active=false en toda corrida automatizada: el objeto existe (para que stop() tenga algo que
-    // destruir y el self-test pueda medir el ciclo de vida) pero no instala ningun hook real.
-    m_foregroundWatcher = std::make_unique<ForegroundWatcher>(!context().automatedRun());
-    connect(m_foregroundWatcher.get(), &ForegroundWatcher::foregroundChanged, this,
-            &FolderSwitchModule::onForegroundChanged);
+    // Observador de ventana al frente COMPARTIDO (plan 4.4): el host crea uno solo por proceso, con
+    // el primer modulo prendido que lo pide, y lo destruye cuando ya ninguno lo usa. Este modulo no
+    // instala ningun hook propio.
+    ForegroundWatcher *watcher = context().foreground();
+    m_foregroundAcquired = true;
+    connect(watcher, &ForegroundWatcher::foregroundChanged, this, &FolderSwitchModule::onForegroundChanged);
     connect(context().hotkeys(), &ModuleHotkeys::activated, this, &FolderSwitchModule::onHotkeyActivated);
 }
 
 void FolderSwitchModule::stop()
 {
+    // Contrato de Module.h ("Vida"): stop() cierra los popups no modales que el modulo haya abierto.
+    // hide() dispara RecentFoldersPopup::hideEvent(), que termina su QEventLoop y hace que
+    // handleRecentHotkey() vuelva con "" elegido (ver el guard con QPointer ahi).
+    if (m_recentPopup) {
+        m_recentPopup->hide();
+    }
+
     disconnect(context().hotkeys(), nullptr, this, nullptr);
     context().hotkeys()->unregisterAll();
     m_manualRegistered = false;
@@ -79,7 +89,10 @@ void FolderSwitchModule::stop()
     m_manualTakenBy.clear();
     m_recentTakenBy.clear();
 
-    m_foregroundWatcher.reset();
+    if (m_foregroundAcquired) {
+        disconnect(context().foreground(), nullptr, this, nullptr);
+        m_foregroundAcquired = false;
+    }
 
     m_lastManagerHwnd = nullptr;
     m_lastManagerType = ManagerType::None;
@@ -99,7 +112,7 @@ ModuleStatus FolderSwitchModule::status() const
         if (!m_manualRegistered && !m_recentRegistered) {
             s.text = QStringLiteral("Both shortcuts are off");
         } else {
-            const Shortcut &bad = m_manualRegistered ? m_recentShortcut : m_manualShortcut;
+            const Shortcut bad = m_manualRegistered ? m_state.recentShortcut() : m_state.manualShortcut();
             s.text = QStringLiteral("%1 is off").arg(bad.displayText());
         }
         return s;
@@ -119,41 +132,115 @@ bool FolderSwitchModule::isPaused() const
     return !m_state.enabled();
 }
 
+FolderSwitchPanel::ViewState FolderSwitchModule::currentViewState() const
+{
+    FolderSwitchPanel::ViewState v;
+    v.enabled = m_state.enabled();
+    v.autoSwitch = m_state.autoSwitch();
+    v.manualShortcut = m_state.manualShortcut();
+    v.recentShortcut = m_state.recentShortcut();
+    v.manualRegistered = m_manualRegistered;
+    v.recentRegistered = m_recentRegistered;
+    v.lastSwitch = m_state.lastSwitch();
+    return v;
+}
+
+void FolderSwitchModule::refreshPanel()
+{
+    if (m_panel) {
+        m_panel->setState(currentViewState());
+    }
+}
+
 QWidget *FolderSwitchModule::createPanel(QWidget *parent)
 {
-    // Placeholder de la etapa 1: sin la ventana/ModuleHost integrados todavia no hay donde probar el
-    // panel real (atajos editables, checkbox de auto-switch, tarjeta de ultima carpeta, popup de
-    // recientes). Eso es la etapa 2.
-    auto *panel = new QWidget(parent);
-    auto *layout = new QVBoxLayout(panel);
-    auto *label = new QLabel(QStringLiteral("Folder Switch"), panel);
-    layout->addWidget(label);
-    layout->addStretch();
+    auto *panel = new FolderSwitchPanel(parent);
+    m_panel = panel;
+    panel->setState(currentViewState());
+    panel->manualRow()->setValidator([this](const Shortcut &candidate) { return validateShortcut(candidate); });
+    panel->recentRow()->setValidator([this](const Shortcut &candidate) { return validateShortcut(candidate); });
+
+    connect(panel, &FolderSwitchPanel::toggleRequested, this, &FolderSwitchModule::setEnabled);
+    connect(panel, &FolderSwitchPanel::autoSwitchToggled, this, &FolderSwitchModule::setAutoSwitch);
+    connect(panel, &FolderSwitchPanel::manualShortcutRecorded, this, &FolderSwitchModule::setManualShortcut);
+    connect(panel, &FolderSwitchPanel::recentShortcutRecorded, this, &FolderSwitchModule::setRecentShortcut);
+
+    // Fixture de captura que necesita el panel ya construido (ver comentario de m_pendingRowFixture).
+    if (m_pendingRowFixture == QLatin1String("recording")) {
+        panel->manualRow()->showRecordingFixture(QStringLiteral("Ctrl + Alt + ..."));
+    } else if (m_pendingRowFixture == QLatin1String("rejected")) {
+        Shortcut rejected;
+        rejected.modifiers = Qt::ControlModifier | Qt::AltModifier;
+        rejected.key = Qt::Key_K;
+        panel->manualRow()->setError(
+            QStringLiteral("%1 is taken by another app. Kept %2.")
+                .arg(rejected.displayText(), m_state.manualShortcut().displayText()));
+    }
+
     return panel;
+}
+
+void FolderSwitchModule::fillTrayMenu(QMenu *menu)
+{
+    QAction *toggle = menu->addAction(m_state.enabled() ? QStringLiteral("Pause switching") : QStringLiteral("Resume switching"));
+    connect(toggle, &QAction::triggered, this, [this]() { setEnabled(!m_state.enabled()); });
+}
+
+void FolderSwitchModule::setEnabled(bool enabled)
+{
+    if (enabled == m_state.enabled()) {
+        return;
+    }
+    m_state.setEnabled(enabled);
+    refreshPanel();
+    emit statusChanged();
+}
+
+void FolderSwitchModule::setAutoSwitch(bool autoSwitch)
+{
+    if (autoSwitch == m_state.autoSwitch()) {
+        return;
+    }
+    m_state.setAutoSwitch(autoSwitch);
+    refreshPanel();
+}
+
+QString FolderSwitchModule::validateShortcut(const Shortcut &candidate) const
+{
+    // El grabador pregunta declaredByOtherModule() ANTES de probe() (ModuleContext.h): asi un choque
+    // con otra herramienta de Mighty Tools da "Already used by X." en vez de confundirse con el
+    // generico "taken by another app" del sistema operativo.
+    ModuleHotkeys *hk = context().hotkeys();
+    const QString other = hk->declaredByOtherModule(candidate);
+    if (!other.isEmpty()) {
+        return QStringLiteral("Already used by %1.").arg(other);
+    }
+    if (!hk->probe(candidate)) {
+        return QStringLiteral("%1 is taken by another app.").arg(candidate.displayText());
+    }
+    return QString();
 }
 
 bool FolderSwitchModule::setManualShortcut(const Shortcut &shortcut)
 {
     ModuleHotkeys *hk = context().hotkeys();
+    const Shortcut previous = m_state.manualShortcut();
     const QString takenBy = hk->declare(kManualHotkeyId, shortcut);
-    if (!takenBy.isEmpty()) {
-        m_manualTakenBy = takenBy;
-        m_manualRegistered = false;
-        emit statusChanged();
-        return false;
-    }
-    const bool ok = hk->registerHotkey(kManualHotkeyId, shortcut);
-    m_manualTakenBy.clear();
+    const bool ok = takenBy.isEmpty() && hk->registerHotkey(kManualHotkeyId, shortcut);
     if (ok) {
-        m_manualShortcut = shortcut;
+        m_manualTakenBy.clear();
         m_manualRegistered = true;
         m_state.setManualShortcut(shortcut);
     } else {
-        // El sistema lo rechazo: se vuelve a declarar y registrar el anterior para no dejar la
-        // declaracion apuntando a una combinacion que no quedo activa.
-        hk->declare(kManualHotkeyId, m_manualShortcut);
-        m_manualRegistered = hk->registerHotkey(kManualHotkeyId, m_manualShortcut);
+        // Rechazada (por otra herramienta o por el sistema operativo): se vuelve a declarar y
+        // registrar la anterior, que seguia andando. El motivo del rechazo ya lo mostro el validador
+        // del ShortcutRow ("Already used by X."/"Y is taken by another app."); aca solo importa que
+        // la combinacion vieja no se pierda ni quede la declaracion apuntando a una que no se activo.
+        hk->declare(kManualHotkeyId, previous);
+        m_manualTakenBy.clear();
+        m_manualRegistered = hk->registerHotkey(kManualHotkeyId, previous);
     }
+    refreshPanel();
     emit statusChanged();
     return ok;
 }
@@ -161,31 +248,28 @@ bool FolderSwitchModule::setManualShortcut(const Shortcut &shortcut)
 bool FolderSwitchModule::setRecentShortcut(const Shortcut &shortcut)
 {
     ModuleHotkeys *hk = context().hotkeys();
+    const Shortcut previous = m_state.recentShortcut();
     const QString takenBy = hk->declare(kRecentHotkeyId, shortcut);
-    if (!takenBy.isEmpty()) {
-        m_recentTakenBy = takenBy;
-        m_recentRegistered = false;
-        emit statusChanged();
-        return false;
-    }
-    const bool ok = hk->registerHotkey(kRecentHotkeyId, shortcut);
-    m_recentTakenBy.clear();
+    const bool ok = takenBy.isEmpty() && hk->registerHotkey(kRecentHotkeyId, shortcut);
     if (ok) {
-        m_recentShortcut = shortcut;
+        m_recentTakenBy.clear();
         m_recentRegistered = true;
         m_state.setRecentShortcut(shortcut);
     } else {
-        hk->declare(kRecentHotkeyId, m_recentShortcut);
-        m_recentRegistered = hk->registerHotkey(kRecentHotkeyId, m_recentShortcut);
+        hk->declare(kRecentHotkeyId, previous);
+        m_recentTakenBy.clear();
+        m_recentRegistered = hk->registerHotkey(kRecentHotkeyId, previous);
     }
+    refreshPanel();
     emit statusChanged();
     return ok;
 }
 
 void FolderSwitchModule::onForegroundChanged(quintptr hwndValue, quint32 /*pid*/, const QString & /*exeName*/)
 {
-    // Defensa en profundidad: el watcher esta inerte (sin hook real) en toda corrida automatizada, asi
-    // que esto nunca deberia dispararse ahi. Si algun dia deja de serlo, no se toca ningun dialogo ajeno.
+    // Defensa en profundidad: el watcher compartido esta inerte (sin hook real) en toda corrida
+    // automatizada, asi que esto nunca deberia dispararse ahi. Si algun dia deja de serlo, no se
+    // toca ningun dialogo ajeno.
     if (context().automatedRun()) {
         return;
     }
@@ -264,10 +348,41 @@ void FolderSwitchModule::handleManualHotkey()
 
 void FolderSwitchModule::handleRecentHotkey()
 {
-    // El popup de carpetas recientes es la etapa 2 (panel, popup, bandeja): el atajo ya se declara y
-    // se registra ahora (chip "In use" del panel futuro y choques con otras herramientas ya
-    // funcionan), pero al presionarlo todavia no hay nada que mostrar.
-    qDebug() << "[folderSwitch] Atajo de recientes: popup pendiente para la etapa 2.";
+    // Como el atajo manual: funciona tambien en pausa, solo exige un file dialog al frente.
+    HWND dialog = GetForegroundWindow();
+    if (!dialog || !(WindowUtils::isFileDialogWindow(dialog) || WindowUtils::isQtFileDialog(dialog))) {
+        qDebug() << "[folderSwitch] Recientes: el foreground no es un file dialog.";
+        return;
+    }
+    if (m_recentPopup) {
+        return; // ya hay uno abierto
+    }
+
+    // Vive en la pila, con window() de padre (contrato de Module.h). RecentFoldersPopup::exec()
+    // corre un QEventLoop propio: si el usuario apaga el modulo (o lo borra) mientras esta abierto,
+    // stop() lo cierra llamando hide() -- y el QPointer de aca evita tocar `this` si ademas el
+    // modulo ya se borro cuando exec() vuelve.
+    RecentFoldersPopup popup(m_state.recentFolders(), context().window());
+    m_recentPopup = &popup;
+    QPointer<FolderSwitchModule> self(this);
+    const QString path = popup.exec(QCursor::pos());
+    if (!self) {
+        return;
+    }
+    m_recentPopup = nullptr;
+
+    if (path.isEmpty() || !IsWindow(dialog)) {
+        return;
+    }
+    // Devolverle el foco al dialogo antes de escribirle la ruta, con la misma demora que el cambio
+    // automatico.
+    SetForegroundWindow(dialog);
+    QPointer<FolderSwitchModule> weakSelf(this);
+    QTimer::singleShot(FolderSwitchLogic::kSwitchDelayMs, this, [weakSelf, dialog, path]() {
+        if (weakSelf && IsWindow(dialog)) {
+            weakSelf->applyFolder(dialog, path, QStringLiteral("Recent"));
+        }
+    });
 }
 
 QString FolderSwitchModule::resolveLastManagerPath() const
@@ -318,6 +433,7 @@ void FolderSwitchModule::applyFolder(HWND dialogHwnd, const QString &path, const
     last.when = QDateTime::currentDateTime();
     m_state.setLastSwitch(last);
     m_state.addRecentFolder(path);
+    refreshPanel();
     qDebug() << "[folderSwitch] switchDialog" << (ok ? "OK" : "FALLO") << "path=" << path << "source=" << source;
 }
 
@@ -335,6 +451,118 @@ void FolderSwitchModule::recordManagerFolder(HWND managerHwnd, ManagerType type)
             m_state.addRecentFolder(path);
         }
     });
+}
+
+// ---------------------------------------------------------------------------------------------
+// Capturas de QA (--ui-shot). Ver Module.h, "Captura": nunca se lee el sistema, todo es fixture.
+// ---------------------------------------------------------------------------------------------
+
+namespace {
+// Ruta larga de prueba: fuerza la elision al medio del campo "Last folder" (canvas, seccion 3), como
+// en el ejemplo del propio canvas ("N:\Proyectos\2026_Serie…230\Comp\Renders\v012\").
+const QString kFixturePath =
+    QStringLiteral("N:\\Proyectos\\2026_SerieDocumental_Temporada03_Episodio230\\Comp\\Renders\\v012\\");
+
+QStringList fixtureRecentFolders()
+{
+    return {
+        QStringLiteral("N:\\Proyectos\\2026_SerieDocumental\\Comp\\Renders\\v012\\"),
+        QStringLiteral("N:\\Proyectos\\2026_SerieDocumental\\Comp\\Renders\\v011\\"),
+        QStringLiteral("D:\\Descargas"),
+        QStringLiteral("C:\\Users\\lega\\Documents\\Referencias"),
+        QStringLiteral("N:\\Proyectos\\Cliente_XYZ\\Assets"),
+    };
+}
+} // namespace
+
+QStringList FolderSwitchModule::captureStates() const
+{
+    return {
+        QStringLiteral("on"),      QStringLiteral("empty"),  QStringLiteral("paused"),
+        QStringLiteral("paused-no-shortcuts"), QStringLiteral("failed"), QStringLiteral("hotkey-busy"),
+        QStringLiteral("failed-hotkey-busy"), QStringLiteral("recording"), QStringLiteral("rejected"),
+        QStringLiteral("recent-popup"), QStringLiteral("recent-popup-one"), QStringLiteral("recent-popup-empty"),
+    };
+}
+
+bool FolderSwitchModule::applyCaptureState(const QString &state)
+{
+    m_pendingRowFixture.clear();
+    auto setLast = [this](bool applied) {
+        FolderSwitchState::LastSwitch last;
+        last.path = kFixturePath;
+        last.source = QStringLiteral("Explorer");
+        last.applied = applied;
+        last.when = QDateTime(QDate(2026, 9, 25), QTime(12, 41));
+        m_state.setLastSwitch(last);
+    };
+
+    if (state == QLatin1String("on")) {
+        m_state.setEnabled(true);
+        m_state.setAutoSwitch(true);
+        m_manualRegistered = true;
+        m_recentRegistered = true;
+        setLast(true);
+    } else if (state == QLatin1String("empty")) {
+        m_state.setEnabled(true);
+        m_state.setAutoSwitch(true);
+        m_manualRegistered = true;
+        m_recentRegistered = true;
+        m_state.setLastSwitch(FolderSwitchState::LastSwitch());
+    } else if (state == QLatin1String("paused")) {
+        m_state.setEnabled(false);
+        m_manualRegistered = true;
+        m_recentRegistered = true;
+        setLast(true);
+    } else if (state == QLatin1String("paused-no-shortcuts")) {
+        m_state.setEnabled(false);
+        m_manualRegistered = false;
+        m_recentRegistered = false;
+        m_state.setLastSwitch(FolderSwitchState::LastSwitch());
+    } else if (state == QLatin1String("failed")) {
+        m_state.setEnabled(true);
+        m_manualRegistered = true;
+        m_recentRegistered = true;
+        setLast(false);
+    } else if (state == QLatin1String("hotkey-busy")) {
+        // El canvas ('busy') tomaba el atajo manual: el de recientes sigue libre.
+        m_state.setEnabled(true);
+        m_manualRegistered = false;
+        m_recentRegistered = true;
+        setLast(true);
+    } else if (state == QLatin1String("failed-hotkey-busy")) {
+        m_state.setEnabled(true);
+        m_manualRegistered = false;
+        m_recentRegistered = true;
+        setLast(false);
+    } else if (state == QLatin1String("recording") || state == QLatin1String("rejected")) {
+        m_state.setEnabled(true);
+        m_manualRegistered = true;
+        m_recentRegistered = true;
+        setLast(true);
+        m_pendingRowFixture = state;
+    } else if (state == QLatin1String("recent-popup") || state == QLatin1String("recent-popup-one")
+               || state == QLatin1String("recent-popup-empty")) {
+        // Sin panel que fijar: createCaptureWidget() arma el popup con datos de prueba.
+    } else {
+        return false;
+    }
+    refreshPanel();
+    return true;
+}
+
+QWidget *FolderSwitchModule::createCaptureWidget(const QString &state, QWidget *parent)
+{
+    if (state == QLatin1String("recent-popup")) {
+        return new RecentFoldersPopup(fixtureRecentFolders(), parent);
+    }
+    if (state == QLatin1String("recent-popup-one")) {
+        return new RecentFoldersPopup(QStringList{fixtureRecentFolders().first()}, parent);
+    }
+    if (state == QLatin1String("recent-popup-empty")) {
+        return new RecentFoldersPopup(QStringList{}, parent);
+    }
+    return nullptr;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -409,8 +637,9 @@ QList<Shortcut> folderSwitchConfiguredShortcuts(const SettingsReader &value)
 
 // -----------------------------------------------------------------------------------------------
 // Test doubles de ModuleContext/ModuleHotkeys, solo para --self-test: todavia no existe una
-// implementacion real de ModuleContext (la construye el host, en paralelo). Viven aca, no se
-// compilan ni se linkean fuera de este modulo.
+// implementacion real de ModuleContext ajena a esta corrida (el host es real, pero levantarlo entero
+// para un self-test de un solo modulo es mas de lo que hace falta). Viven aca, no se compilan ni se
+// linkean fuera de este modulo.
 // -----------------------------------------------------------------------------------------------
 
 class FakeModuleHotkeys : public ModuleHotkeys
@@ -467,6 +696,8 @@ private:
 class FakeModuleContext : public ModuleContext
 {
 public:
+    FakeModuleContext() : m_foreground(false) {}
+
     QString moduleId() const override { return QStringLiteral("folderSwitch"); }
     QString moduleTitle() const override { return QStringLiteral("Folder Switch"); }
 
@@ -484,6 +715,7 @@ public:
 
     ModuleHotkeys *hotkeys() override { return &m_hotkeys; }
     InputInjector *injector() override { return nullptr; } // el modulo no lo usa (ver comentario del .h)
+    ForegroundWatcher *foreground() override { return &m_foreground; }
 
     void notify(const QString &, const QString &, NoticeIcon, int) override {}
     void showPanel() override {}
@@ -496,6 +728,7 @@ public:
 private:
     QHash<QString, QVariant> m_values;
     FakeModuleHotkeys m_hotkeys;
+    ForegroundWatcher m_foreground; // active=false: sin hook real (ver constructor)
 };
 
 // Ventanas de prueba invisibles (nunca se muestran: sin WS_VISIBLE, sin ShowWindow) para ejercitar la
@@ -663,14 +896,15 @@ void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &chec
         module.start();
         check(module.manualShortcutRegistered() && module.recentShortcutRegistered(),
               QStringLiteral("start(): los dos atajos de fabrica se registran sin choques"));
-        check(ctx.hotkeysForTest().isRegistered(kManualHotkeyId) && ctx.hotkeysForTest().isRegistered(kRecentHotkeyId),
+        check(ctx.hotkeysForTest().isRegistered(1) && ctx.hotkeysForTest().isRegistered(2),
               QStringLiteral("start(): ModuleHotkeys tiene los dos ids registrados"));
-        check(module.hasForegroundWatcher(), QStringLiteral("start(): crea el observador de ventana al frente"));
+        check(module.hasForegroundWatcher(), QStringLiteral("start(): toma el observador de ventana al frente compartido"));
         check(module.status().tone == ModuleTone::Active, QStringLiteral("status(): On con los dos atajos libres"));
         module.stop();
-        check(!ctx.hotkeysForTest().isRegistered(kManualHotkeyId) && !ctx.hotkeysForTest().isRegistered(kRecentHotkeyId),
+        check(!ctx.hotkeysForTest().isRegistered(1) && !ctx.hotkeysForTest().isRegistered(2),
               QStringLiteral("stop(): 0 atajos registrados"));
-        check(!module.hasForegroundWatcher(), QStringLiteral("stop(): sin watcher"));
+        check(!module.hasForegroundWatcher(), QStringLiteral("stop(): suelta el observador compartido"));
+        check(!module.hasRecentPopup(), QStringLiteral("stop(): sin popup de recientes abierto"));
     }
 
     // ---- Choque de atajo con otra herramienta (declare()) ----
@@ -705,7 +939,55 @@ void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &chec
         module.stop();
     }
 
+    // ---- validateShortcut(): el mensaje que ve el ShortcutRow de la etapa 2 ----
+    {
+        FakeModuleContext ctx;
+        Shortcut takenByOther;
+        takenByOther.modifiers = Qt::ControlModifier;
+        takenByOther.key = Qt::Key_K;
+        ctx.hotkeysForTest().setForeignDeclaration(takenByOther, QStringLiteral("Nuke Shortcuts"));
+        Shortcut takenBySystem;
+        takenBySystem.modifiers = Qt::ControlModifier;
+        takenBySystem.key = Qt::Key_J;
+
+        FolderSwitchModule module(ctx);
+        check(module.validateShortcut(takenByOther) == QStringLiteral("Already used by Nuke Shortcuts."),
+              QStringLiteral("validateShortcut: choque con otra herramienta (declaredByOtherModule)"));
+        ctx.hotkeysForTest().setRejectRegister(takenBySystem);
+        check(module.validateShortcut(takenBySystem) == QStringLiteral("Ctrl+J is taken by another app."),
+              QStringLiteral("validateShortcut: rechazo del sistema (probe)"));
+        Shortcut free;
+        free.modifiers = Qt::ControlModifier;
+        free.key = Qt::Key_H;
+        check(module.validateShortcut(free).isEmpty(),
+              QStringLiteral("validateShortcut: una combinacion libre no da error (negativo)"));
+    }
+
+    // ---- setManualShortcut(): D-16, el atajo editable con el lapiz ----
+    {
+        FakeModuleContext ctx;
+        FolderSwitchModule module(ctx);
+        module.start();
+        Shortcut fresh;
+        fresh.modifiers = Qt::ControlModifier | Qt::AltModifier;
+        fresh.key = Qt::Key_P;
+        check(module.setManualShortcut(fresh), QStringLiteral("setManualShortcut: una combinacion libre se acepta"));
+        check(module.manualShortcutRegistered(), QStringLiteral("setManualShortcut: queda registrada"));
+
+        ctx.hotkeysForTest().setForeignDeclaration(FolderSwitchState::defaultRecentShortcut(),
+                                                   QStringLiteral("Otra herramienta"));
+        check(!module.setManualShortcut(FolderSwitchState::defaultRecentShortcut()),
+              QStringLiteral("setManualShortcut: una combinacion de otra herramienta se rechaza (negativo)"));
+        check(module.manualShortcutRegistered(),
+              QStringLiteral("setManualShortcut: al rechazar, la anterior sigue registrada"));
+        module.stop();
+    }
+
     windowClassificationSelfTest(check);
+    // El popup de recientes (RecentFoldersPopup) es un QWidget: --self-test corre bajo
+    // QCoreApplication (sin QApplication), asi que no se puede construir aca -- "si se puede" del
+    // encargo no se da. Su navegacion por teclado (orden, wrap, Esc) se verifica con las capturas
+    // recent-popup/-one/-empty (--ui-shot) y a mano, no automatizado.
 }
 
 // --simulate-action switch-dialog <hwnd> <folder>: equivalente al --test-switch del origen, pero solo
@@ -769,4 +1051,19 @@ ModuleDescriptor folderSwitchDescriptor()
     d.selfTest = folderSwitchSelfTest;
     d.simulateAction = folderSwitchSimulateAction;
     return d;
+}
+
+HelpSection folderSwitchHelp(const SettingsReader &)
+{
+    HelpSection section;
+    section.title = QStringLiteral("Folder Switch");
+    section.steps = {
+        QStringLiteral("Open a folder in %1 or %2.")
+            .arg(HelpSection::strong(QStringLiteral("Explorer")), HelpSection::strong(QStringLiteral("XYplorer"))),
+        QStringLiteral("Go to the %1 or %2 dialog of any app.")
+            .arg(HelpSection::strong(QStringLiteral("Open")), HelpSection::strong(QStringLiteral("Save"))),
+        QStringLiteral("The dialog jumps to that folder."),
+    };
+    section.note = QStringLiteral("Works with Windows file dialogs and Qt ones, like Nuke's.");
+    return section;
 }

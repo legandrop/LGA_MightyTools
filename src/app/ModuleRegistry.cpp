@@ -42,6 +42,9 @@ QHash<QString, HelpProvider> helpProviders()
 {
     QHash<QString, HelpProvider> providers;
     // Ej.: providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
+#if defined(Q_OS_WIN)
+    providers.insert(QStringLiteral("folderSwitch"), &folderSwitchHelp);
+#endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     return providers;
 }

@@ -7,6 +7,7 @@
 
 #include <functional>
 
+class Chip;
 class QFrame;
 class QHBoxLayout;
 class QLabel;
@@ -32,6 +33,10 @@ public:
     void setShortcut(const Shortcut &shortcut);
     Shortcut shortcut() const { return m_shortcut; }
     void setValidator(Validator validator) { m_validator = std::move(validator); }
+
+    // Chip junto al nombre (Folder Switch: "In use" cuando otra app o herramienta ya tiene el
+    // atajo). Tono vacio lo oculta. Aditivo: sin llamarlo, la fila se ve igual que antes.
+    void setExtraChip(const QString &tone, const QString &text);
 
     bool isRecording() const { return m_recording; }
     void startRecording();
@@ -64,6 +69,7 @@ private:
     bool m_recording = false;
 
     QLabel *m_name = nullptr;
+    Chip *m_extraChip = nullptr;
     QWidget *m_keys = nullptr;
     QHBoxLayout *m_keysLayout = nullptr;
     QFrame *m_recorder = nullptr;
