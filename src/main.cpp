@@ -250,6 +250,15 @@ int runSelfTest()
         check(state.drives().size() == 2, QStringLiteral("el listado completo trae tambien los discos sin vigilar"));
     }
 
+    // La logica propia de cada herramienta (ModuleDescriptor::selfTest).
+    for (const ModuleDescriptor &module : ModuleRegistry::all()) {
+        if (module.selfTest) {
+            module.selfTest([&check, &module](bool ok, const QString &what) {
+                check(ok, QStringLiteral("[%1] %2").arg(module.id, what));
+            });
+        }
+    }
+
     std::printf("%s: %d fallas\n", failures == 0 ? "self-test ok" : "self-test FALLO", failures);
     return failures == 0 ? 0 : 1;
 }
