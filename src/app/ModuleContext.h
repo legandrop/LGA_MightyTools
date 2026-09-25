@@ -7,6 +7,7 @@
 #include <QString>
 #include <QVariant>
 
+class ForegroundWatcher;
 class InputInjector;
 class QWidget;
 
@@ -92,6 +93,11 @@ public:
     // Servicios compartidos, perezosos: se crean con el primer pedido.
     virtual ModuleHotkeys *hotkeys() = 0;
     virtual InputInjector *injector() = 0;
+    // Observador de "que ventana esta al frente" (plan 4.4): una sola instancia por proceso, creada
+    // con el primer modulo prendido que la pide y destruida cuando ya ninguno la usa (refcount). En
+    // corrida automatizada, sin hook real (ver ForegroundWatcher.h). Hoy la usa Folder Switch; Nuke
+    // Shortcuts sigue con su propio hook (NukeWatcherWin) hasta que se migre aparte.
+    virtual ForegroundWatcher *foreground() = 0;
 
     // Notificacion del sistema; el click abre la ventana en el panel de este modulo.
     virtual void notify(const QString &title, const QString &body, NoticeIcon icon, int msecs) = 0;

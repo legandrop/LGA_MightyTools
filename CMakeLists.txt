@@ -167,7 +167,9 @@ if(WIN32)
         src/modules/folderswitch/FolderResolver.cpp
         src/modules/folderswitch/FolderSwitchLogic.cpp
         src/modules/folderswitch/FolderSwitchModule.cpp
+        src/modules/folderswitch/FolderSwitchPanel.cpp
         src/modules/folderswitch/FolderSwitchState.cpp
+        src/modules/folderswitch/RecentFoldersPopup.cpp
         src/modules/folderswitch/UiaSwitcher.cpp
         src/modules/folderswitch/WindowUtils.cpp
     )
@@ -179,7 +181,9 @@ if(WIN32)
         src/modules/folderswitch/FolderResolver.h
         src/modules/folderswitch/FolderSwitchLogic.h
         src/modules/folderswitch/FolderSwitchModule.h
+        src/modules/folderswitch/FolderSwitchPanel.h
         src/modules/folderswitch/FolderSwitchState.h
+        src/modules/folderswitch/RecentFoldersPopup.h
         src/modules/folderswitch/UiaSwitcher.h
         src/modules/folderswitch/WindowUtils.h
     )
@@ -189,6 +193,7 @@ elseif(APPLE)
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
+        src/platform/mac/ForegroundWatcherMac.cpp
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
         src/platform/mac/NukeWatcherMac.mm

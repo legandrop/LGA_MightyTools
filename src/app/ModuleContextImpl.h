@@ -29,6 +29,7 @@ public:
 
     ModuleHotkeys *hotkeys() override;
     InputInjector *injector() override;
+    ForegroundWatcher *foreground() override;
 
     void notify(const QString &title, const QString &body, NoticeIcon icon, int msecs) override;
 
@@ -49,6 +50,7 @@ private:
     int m_index = 0;
     ModuleHotkeysImpl *m_hotkeys = nullptr;
     InputInjector *m_injector = nullptr;
+    ForegroundWatcher *m_foreground = nullptr;
     bool m_windowHidden = false;
     bool m_windowWasVisible = false;
 };

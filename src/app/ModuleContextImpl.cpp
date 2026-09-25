@@ -27,6 +27,10 @@ ModuleContextImpl::~ModuleContextImpl()
         m_injector = nullptr;
         m_host->releaseInjector();
     }
+    if (m_foreground) {
+        m_foreground = nullptr;
+        m_host->releaseForeground();
+    }
     if (m_windowHidden) {
         restoreWindow();
     }
@@ -86,6 +90,14 @@ InputInjector *ModuleContextImpl::injector()
         m_injector = m_host->acquireInjector();
     }
     return m_injector;
+}
+
+ForegroundWatcher *ModuleContextImpl::foreground()
+{
+    if (!m_foreground) {
+        m_foreground = m_host->acquireForeground();
+    }
+    return m_foreground;
 }
 
 void ModuleContextImpl::notify(const QString &title, const QString &body, NoticeIcon icon, int msecs)

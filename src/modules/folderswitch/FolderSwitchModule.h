@@ -3,15 +3,17 @@
 
 #include "app/Module.h"
 #include "core/Shortcut.h"
+#include "modules/folderswitch/FolderSwitchPanel.h"
 #include "modules/folderswitch/FolderSwitchState.h"
+#include "ui/HelpSection.h"
 
+#include <QPointer>
 #include <QString>
-
-#include <memory>
 
 #include <windows.h>
 
-class ForegroundWatcher;
+class FolderSwitchPanel;
+class RecentFoldersPopup;
 
 // Modulo Folder Switch (Windows unicamente): cambia la carpeta de los dialogos Abrir/Guardar a la
 // que el usuario tiene abierta en Explorer o XYplorer, con un atajo manual (Ctrl+Alt+O) y otro para
@@ -23,10 +25,10 @@ class ForegroundWatcher;
 // (platforms = PlatformWindows en el descriptor) y ModuleRegistry.cpp lo incluye detras de
 // `#if defined(Q_OS_WIN)`: nunca se parsea al compilar para mac.
 //
-// Etapa 1 (este archivo): logica completa de deteccion/inyeccion, los dos atajos declarados y
-// registrados en ModuleContext::hotkeys(), y el estado persistido (FolderSwitchState). Sin panel real
-// (createPanel() es un placeholder) ni popup de carpetas recientes: eso es la etapa 2, cuando el
-// atajo de recientes ya tiene un menu que mostrar (D-16: atajos editables).
+// Etapa 2 (este archivo): panel real (FolderSwitchPanel), popup de carpetas recientes
+// (RecentFoldersPopup) que el atajo de recientes abre de verdad, entrada de bandeja
+// "Pause/Resume switching", capturas de QA y el observador de ventana al frente COMPARTIDO
+// (context().foreground(), plan 4.4) en vez de uno propio.
 class FolderSwitchModule : public Module
 {
     Q_OBJECT
@@ -39,24 +41,36 @@ public:
     void stop() override;
     ModuleStatus status() const override;
     QWidget *createPanel(QWidget *parent) override;
+    void fillTrayMenu(QMenu *menu) override;
     bool isPaused() const override;
 
-    // Leido por el panel de la etapa 2 (chips "In use" junto a cada atajo) y por --self-test.
+    QStringList captureStates() const override;
+    bool applyCaptureState(const QString &state) override;
+    QWidget *createCaptureWidget(const QString &state, QWidget *parent) override;
+
+    // Leido por el panel (chips "In use" junto a cada atajo) y por --self-test.
     bool manualShortcutRegistered() const { return m_manualRegistered; }
     bool recentShortcutRegistered() const { return m_recentRegistered; }
     // Titulo de la otra herramienta de Mighty Tools que ya declaro esa combinacion; vacio si el
     // atajo esta libre o si lo que lo rechazo fue el sistema operativo (otra app fuera de esta app).
     QString manualShortcutTakenBy() const { return m_manualTakenBy; }
     QString recentShortcutTakenBy() const { return m_recentTakenBy; }
-    // Solo true entre start() y stop(): lo usa --self-test para confirmar que stop() no deja el
-    // observador de ventana al frente vivo.
-    bool hasForegroundWatcher() const { return m_foregroundWatcher != nullptr; }
+    // Solo true entre start() y stop(): lo usa --self-test para confirmar que stop() suelta el
+    // observador de ventana al frente compartido (context().foreground()).
+    bool hasForegroundWatcher() const { return m_foregroundAcquired; }
+    // Solo true mientras el popup de recientes esta abierto: lo usa --self-test.
+    bool hasRecentPopup() const { return m_recentPopup != nullptr; }
 
-    // Para el panel de la etapa 2 (D-16: atajos editables con el lapiz, como en Nuke Shortcuts).
-    // Declara y registra la combinacion nueva; si el sistema o otra herramienta la rechazan, deja la
-    // anterior como estaba y devuelve false.
+    // Interruptor general y "Switch automatically": los llama el panel y la bandeja.
+    void setEnabled(bool enabled);
+    void setAutoSwitch(bool autoSwitch);
+    // D-16: atajos editables con el lapiz. Declara y registra la combinacion nueva; si el sistema o
+    // otra herramienta la rechazan, deja la anterior como estaba y devuelve false.
     bool setManualShortcut(const Shortcut &shortcut);
     bool setRecentShortcut(const Shortcut &shortcut);
+    // Motivo de rechazo para el validador de un ShortcutRow (declaredByOtherModule ANTES de probe,
+    // ver ModuleContext.h): "Already used by %1." o "%1 is taken by another app.", vacio si sirve.
+    QString validateShortcut(const Shortcut &candidate) const;
 
 private slots:
     void onForegroundChanged(quintptr hwnd, quint32 pid, const QString &exeName);
@@ -73,16 +87,22 @@ private:
     void performSwitch(HWND dialogHwnd);
     void applyFolder(HWND dialogHwnd, const QString &path, const QString &source);
     void recordManagerFolder(HWND managerHwnd, ManagerType type);
+    FolderSwitchPanel::ViewState currentViewState() const;
+    void refreshPanel();
 
     FolderSwitchState m_state;
-    std::unique_ptr<ForegroundWatcher> m_foregroundWatcher;
+    bool m_foregroundAcquired = false;
 
-    Shortcut m_manualShortcut;
-    Shortcut m_recentShortcut;
     bool m_manualRegistered = false;
     bool m_recentRegistered = false;
     QString m_manualTakenBy;
     QString m_recentTakenBy;
+
+    QPointer<FolderSwitchPanel> m_panel;
+    RecentFoldersPopup *m_recentPopup = nullptr; // vivo solo durante exec(); ver handleRecentHotkey()
+    // "recording"/"rejected": createPanel() los aplica sobre la fila recien construida, porque
+    // applyCaptureState() siempre corre ANTES de que exista el panel (ver Module.h, "Captura").
+    QString m_pendingRowFixture;
 
     // Estado del ultimo manager (Explorer/XYplorer) visto en foreground, y del ida-y-vuelta entre un
     // dialogo y ese manager. Mismos campos que TrayController en el origen.
@@ -100,5 +120,9 @@ private:
 // (+Building_Blocks/canvas/MightyTools.html, entrada "fs" de MODS), icono vectorial, fabrica, atajos
 // configurados, self-test y simulate-action.
 ModuleDescriptor folderSwitchDescriptor();
+
+// Seccion de la ayuda unica (canvas, seccion 6 "Folder Switch"), registrada en
+// ModuleRegistry::helpProviders().
+HelpSection folderSwitchHelp(const SettingsReader &value);
 
 #endif // MIGHTYTOOLS_FOLDERSWITCH_MODULE_H

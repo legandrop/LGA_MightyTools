@@ -51,6 +51,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_name->setObjectName(QStringLiteral("shortcutName"));
     row->addWidget(m_name, 1);
 
+    // Chip opcional (Folder Switch: "In use"), oculto hasta que setExtraChip() lo pida.
+    m_extraChip = new Chip(this);
+    m_extraChip->hide();
+    row->addWidget(m_extraChip, 0, Qt::AlignVCenter);
+
     m_keys = new QWidget(this);
     m_keysLayout = new QHBoxLayout(m_keys);
     m_keysLayout->setContentsMargins(0, 0, 0, 0);
@@ -93,6 +98,16 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
             startRecording();
         }
     });
+}
+
+void ShortcutRow::setExtraChip(const QString &tone, const QString &text)
+{
+    if (tone.isEmpty()) {
+        m_extraChip->hide();
+        return;
+    }
+    m_extraChip->set(tone, text);
+    m_extraChip->show();
 }
 
 void ShortcutRow::setShortcut(const Shortcut &shortcut)

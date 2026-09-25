@@ -3,6 +3,7 @@
 #include "app/HotkeyHub.h"
 #include "app/ModuleContextImpl.h"
 #include "app/SettingsStore.h"
+#include "platform/ForegroundWatcher.h"
 #include "platform/InputInjector.h"
 
 #include <QDebug>
@@ -288,6 +289,23 @@ void ModuleHost::releaseInjector()
 {
     if (m_injectorUsers > 0 && --m_injectorUsers == 0) {
         m_injector.reset();
+    }
+}
+
+ForegroundWatcher *ModuleHost::acquireForeground()
+{
+    if (!m_foreground) {
+        // Inerte (sin hook real) en toda corrida automatizada, igual que el inyector en dry-run.
+        m_foreground = std::make_unique<ForegroundWatcher>(!m_options.automatedRun);
+    }
+    ++m_foregroundUsers;
+    return m_foreground.get();
+}
+
+void ModuleHost::releaseForeground()
+{
+    if (m_foregroundUsers > 0 && --m_foregroundUsers == 0) {
+        m_foreground.reset();
     }
 }
 
