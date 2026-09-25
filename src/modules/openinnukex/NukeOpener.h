@@ -8,6 +8,8 @@
 
 #include <functional>
 
+class QWidget;
+
 // Manda un .nk a un NukeX ya corriendo (Nuke Bridge, TCP a localhost:54325) o, si no contesta,
 // lanza NukeX con la ruta preferida de nukeXpath.txt. Portado de
 // `~/.nuke/LGA_OpenInNukeX/QtClient/src/nukeopener.{h,cpp}` (v1.83).
@@ -35,6 +37,12 @@ public:
         QString host = QStringLiteral("localhost");
         int port = 54325;
         bool showLaunchNotice = false;              ///< setting showLaunchNotice (apagado por defecto)
+        // En la practica NukeOpener::open() solo se llama con dryRun/automatedRun ya en false (el
+        // llamador corta antes, ver OpenInNukeXDescriptor::openInNukeXRunExternal): este campo es
+        // una segunda guarda, por si algun camino futuro construye un NukeOpener bajo una corrida
+        // automatizada sin pasar por ahi.
+        bool automatedRun = false;
+        QWidget *parentWidget = nullptr;            ///< padre de los QMessageBox/el cartel (nullptr vale)
     };
 
     explicit NukeOpener(QObject *parent = nullptr);

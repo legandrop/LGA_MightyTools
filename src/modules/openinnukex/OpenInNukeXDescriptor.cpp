@@ -8,6 +8,7 @@
 #include "modules/openinnukex/OpenInNukeXModule.h"
 
 #ifdef Q_OS_WIN
+#include "modules/openinnukex/win/UserChoiceLatest.h"
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/openinnukex/mac/MacFileAssociation.h"
@@ -381,6 +382,11 @@ ModuleDescriptor openInNukeXDescriptor()
         testBridgeChipState(check);
         testNukeXPath(check);
         testEmbeddedPayload(check);
+#ifdef Q_OS_WIN
+        // Vectores puros del hash de UserChoiceLatest/UserChoice (D-03), verificados contra
+        // Windows: no lee el registro, propios de win/UserChoiceLatest.cpp.
+        UserChoiceLatest::runSelfTestVectors(check);
+#endif
     };
 
     descriptor.simulateAction = [](const QString &action, const QStringList &args) -> int {

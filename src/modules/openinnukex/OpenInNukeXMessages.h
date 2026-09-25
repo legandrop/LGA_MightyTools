@@ -5,14 +5,20 @@
 
 #include <QString>
 
+#include <functional>
+
+class QDialog;
+class QWidget;
+
 // Todos los mensajes de Open in NukeX, con el texto EXACTO en ingles de la tabla "Mensajes de
 // Open in NukeX" del canvas de diseno (seccion 5), que a su vez reemplaza los 20 mensajes
 // castellano/mixtos/sin-i18n del cliente v1.83 (inventario, "Mensajes de error y avisos").
 //
-// Cada mensaje se arma aca como {titulo, texto, icono} pero NO se muestra: la presentacion
-// (Dialogs::info/warn/error de la UI) es etapa 2. Por ahora todo mensaje pasa por
-// OpenInNukeXMessages::report(), el UNICO punto de salida del modulo, que solo loguea
-// (comentario en el .cpp marca donde se conecta el sistema de dialogos).
+// Cada mensaje se arma aca como {titulo, texto, icono} y se presenta con
+// OpenInNukeXMessages::report(), el UNICO punto de salida del modulo: un QMessageBox con el
+// Theme de la app (el mismo sistema que usa el updater — Theme::apply() estiliza QMessageBox
+// globalmente, ver ui/Theme.cpp), un solo boton OK. En corrida automatizada nunca se muestra
+// nada: solo el log.
 struct OpenInNukeXMessage
 {
     enum class Icon { Information, Warning, Critical };
@@ -53,9 +59,24 @@ OpenInNukeXMessage nukeNotConfigured();                     // no hay ruta guard
 OpenInNukeXMessage nukeXPathGone(const QString &path);      // la ruta guardada ya no existe
 OpenInNukeXMessage nukeXFailedToStart(const QString &errorDetail); // CreateProcessW/startDetached fallo
 
-// Unico punto de salida del modulo. Por ahora un qWarning/qInfo segun el icono; el comentario del
-// .cpp marca donde etapa 2 lo conecta al sistema de dialogos de la UI (Dialogs::info/warn/error).
-void report(const OpenInNukeXMessage &message);
+// Unico punto de salida del modulo: siempre loguea (qInfo/qWarning), y si `automatedRun` es
+// false ADEMAS muestra un QMessageBox con el Theme de la app, con `parent` como padre (nullptr
+// vale: el modo corto de Windows y el .nk de mac no siempre tienen una ventana a mano). Con
+// `automatedRun` true (self-test, --ui-shot, --ui-probe, ExternalRequest::dryRun,
+// ModuleContext::automatedRun()) NUNCA se muestra nada, solo el log.
+void report(const OpenInNukeXMessage &message, QWidget *parent, bool automatedRun);
+
+// Cartel "NukeX Launcher" (inventario, seccion homonima): no modal, cuenta regresiva 3-2-1 en el
+// texto de un boton deshabilitado, se cierra solo. Solo se llama si el setting `showLaunchNotice`
+// esta prendido Y `automatedRun` es false. `onClosed` corre cuando el cartel se cierra solo (para
+// que quien lo llamo pueda esperarlo antes de terminar, como hacia el cliente v1.83 antes de
+// salir del modo corto).
+void showLaunchNotice(QWidget *parent, bool automatedRun, const std::function<void()> &onClosed);
+
+// Solo construye el cartel (sin arrancar el timer ni mostrarlo): lo usa
+// OpenInNukeXModule::createCaptureWidget() para el estado de captura "launcher-notice" (Module.h:
+// "sin exec() ni show()"). El objeto es hijo de `parent` y no toma ninguna accion por si solo.
+QDialog *buildLaunchNoticeWidget(QWidget *parent);
 
 } // namespace OpenInNukeXMessages
 
