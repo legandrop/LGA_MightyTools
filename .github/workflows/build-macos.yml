@@ -1,0 +1,45 @@
+name: Build macOS
+
+# Compila la version de macOS en un runner de GitHub y corre el self-test. Sirve para saber que el
+# codigo de mac compila sin tener una Mac a mano; no reemplaza la prueba real de los atajos, que
+# necesita el permiso de Accesibilidad y a Nuke abierto.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "mac"
+          target: "desktop"
+          arch: "clang_64"
+          cache: true
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" -DCMAKE_OSX_ARCHITECTURES=arm64
+
+      - name: Build
+        run: cmake --build build -j 4
+
+      - name: Self-test
+        run: '"build/LGA Mighty Tools.app/Contents/MacOS/LGA Mighty Tools" --self-test'
+
+      - name: Bundle
+        run: |
+          cd build
+          macdeployqt "LGA Mighty Tools.app"
+          ditto -c -k --keepParent "LGA Mighty Tools.app" LGA_MightyTools_Mac.zip
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: LGA_MightyTools_Mac
+          path: build/LGA_MightyTools_Mac.zip
+          retention-days: 14

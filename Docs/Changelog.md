@@ -1,5 +1,12 @@
 # Changelog — LGA Mighty Tools
 
+v0.02:
+
+Vuelve el workflow de GitHub que compila la versión de mac y corre el self-test en un runner (se
+dispara a mano). Había quedado afuera del arranque porque la credencial de GitHub no tenía permiso para
+publicar workflows; con el permiso dado, se suma con el nombre nuevo de la app y del bundle.
+[ CI - Build de mac en GitHub ]
+
 v0.01:
 
 Arranque del repo. Mighty Tools reúne en una sola app de bandeja cinco herramientas que hoy son apps
