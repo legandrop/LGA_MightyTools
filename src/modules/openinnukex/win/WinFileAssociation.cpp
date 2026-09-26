@@ -97,6 +97,10 @@ bool registerProgId()
     ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey(), QString(), QStringLiteral("Nuke Script File"));
     ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey() + QStringLiteral("\\shell\\open\\command"),
                                       QString(), QStringLiteral("\"%1\" \"%2\"").arg(exePath, QStringLiteral("%1")));
+    // El icono de los .nk: sin esto queda el DefaultIcon del cliente viejo (su app_icon.ico, que ya no
+    // existe si se desinstalo). Vive dentro del ProgID: se va con el al soltar o desinstalar.
+    ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey() + QStringLiteral("\\DefaultIcon"), QString(),
+                                      QStringLiteral("\"%1\",0").arg(exePath));
     return ok;
 }
 
@@ -189,6 +193,9 @@ Ownership evaluateOwnership()
 // puede saber si el exe existe.
 bool missingOnPresentLocalDrive(const QString &exePath)
 {
+    if (!exePath.trimmed().endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
+        return false; // no es un exe: no se puede saber de que programa es
+    }
     const QString native = QDir::toNativeSeparators(exePath.trimmed());
     if (native.size() < 4 || !native.at(0).isLetter() || native.at(1) != QLatin1Char(':')
         || native.at(2) != QLatin1Char('\\')) {
@@ -357,9 +364,12 @@ QStringList removeOldClientLeftovers(bool oldClientInstalled)
     if (!RegistryHelper::keyExists(HKEY_CURRENT_USER, capsPath)) {
         return removed;
     }
-    const QString icon = RegistryHelper::readString(HKEY_CURRENT_USER, capsPath, QStringLiteral("ApplicationIcon"));
+    const QString icon = RegistryHelper::readString(HKEY_CURRENT_USER, capsPath, QStringLiteral("ApplicationIcon")).trimmed();
     const QString oldExe = RegistryHelper::commandExecutable(icon);
-    if (!missingOnPresentLocalDrive(oldExe)) {
+    // Sin comillas y con espacios (C:\Program Files\...\x.exe,0), commandExecutable corta en el
+    // primer espacio ("C:\Program") y ese "exe" nunca existe: no se puede saber, no se borra.
+    const bool unquotedWithSpaces = !icon.startsWith(QLatin1Char('"')) && icon.contains(QLatin1Char(' '));
+    if (unquotedWithSpaces || !missingOnPresentLocalDrive(oldExe)) {
         qInfo() << "[openInNukeX] restos del cliente viejo: se dejan (el exe existe o no se puede saber):" << oldExe;
         return removed;
     }

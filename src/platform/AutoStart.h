@@ -20,7 +20,8 @@ namespace AutoStart {
 bool isEnabled();
 
 // Activa o desactiva el inicio automatico para el ejecutable actual. En Windows, desactivar borra el
-// valor de Run y la marca de Task Manager (StartupApproved\Run) con el mismo nombre.
+// valor de Run y la marca de Task Manager (StartupApproved\Run) con el mismo nombre SOLO si el valor
+// apunta a este exe (el de otra copia no se toca; devuelve true).
 bool setEnabled(bool enabled);
 
 // --uninstall-cleanup: borra la entrada de inicio SOLO si apunta a ESTE exe (propiedad por

@@ -71,7 +71,10 @@ bool setEnabled(bool enabled)
         return ok;
     }
     // Desactivar = borrar puntualmente ESTE valor (y su marca de Task Manager), sin tocar el resto
-    // de las claves.
+    // de las claves, y SOLO si apunta a este exe: el de otra copia (la instalada, un build) es suyo.
+    if (!RegistryHelper::commandPointsTo(storedCommand(), RegistryHelper::ownExePath())) {
+        return true; // no hay nada de este exe
+    }
     const bool runOk = RegistryHelper::deleteValue(HKEY_CURRENT_USER, kRunKey, kValueName);
     const bool approvedOk = RegistryHelper::deleteValue(HKEY_CURRENT_USER, kStartupApprovedKey, kValueName);
     return runOk && approvedOk;

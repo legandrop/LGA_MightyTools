@@ -436,6 +436,8 @@ void scenarioOwnInstall(HiveSession &session, const Check &check)
               && RegistryHelper::commandPointsTo(readSz(hive, kRun, QStringLiteral("LGA_MightyTools")), own),
           QStringLiteral("1 siembra: lo propio quedo en el hive con dos valores de RegisteredApplications (A1)"));
     check(WinFileAssociation::isNkAssociatedWithUs(), QStringLiteral("1 siembra: .nk asociado con este exe segun el hive"));
+    check(readSz(hive, kNkProgId + QStringLiteral("\\DefaultIcon")) == quoted(own) + QStringLiteral(",0"),
+          QStringLiteral("1 siembra: el ProgID trae DefaultIcon con el icono de este exe (no el .ico del cliente viejo)"));
 
     const UninstallCleanup::Report report = UninstallCleanup::run(ModuleRegistry::all());
     check(report.failures == 0,
@@ -494,6 +496,13 @@ void scenarioOthersOwnOurNames(HiveSession &session, const Check &check)
           QStringLiteral("2 negativos: ProgID del exe viejo, Classes\\.nk y UserChoice que apuntan a el, Capabilities y Run de un build de "
                          "desarrollo, RegisteredApplications a otra Capabilities y comando '<exe>.old' sobreviven intactos%1")
               .arg(describeDiff(before, after)));
+
+    // La casilla de Ajustes: apagar el inicio con Windows desde ESTE exe no borra el Run (ni la marca
+    // de Task Manager) de otra copia.
+    const bool offOk = AutoStart::setEnabled(false);
+    const Snapshot afterOff = snapshot(hive);
+    check(offOk && afterOff == before,
+          QStringLiteral("2 AutoStart::setEnabled(false) no borra el Run ni StartupApproved de otra copia%1").arg(describeDiff(before, afterOff)));
 }
 
 // 3. A1: la migracion del valor viejo y que soltar uno nunca rompa al otro; valores colgados.
@@ -564,9 +573,10 @@ void scenarioOldClientLeftovers(HiveSession &session, const Check &check)
               && putSz(hive, kNkProgId + QStringLiteral("\\shell\\open\\command"), QString(), quoted(missing) + QStringLiteral(" \"%1\"")),
           QStringLiteral("4 siembra: lo ajeno y el ProgID compartido"));
     const Snapshot base = snapshot(hive);
-    const auto seedOld = [&](const QString &exe) {
+    // `icon` es el valor ApplicationIcon tal cual (el cliente viejo lo escribia `"<exe>",0`).
+    const auto seedOld = [&](const QString &icon) {
         bool ok = putSz(hive, kOldCaps, QStringLiteral("ApplicationName"), QStringLiteral("LGA OpenInNukeX"));
-        ok &= putSz(hive, kOldCaps, QStringLiteral("ApplicationIcon"), quoted(exe) + QStringLiteral(",0"));
+        ok &= putSz(hive, kOldCaps, QStringLiteral("ApplicationIcon"), icon);
         ok &= putSz(hive, kOldCaps + QStringLiteral("\\FileAssociations"), QStringLiteral(".nk"), kNkProgIdName);
         ok &= putSz(hive, kRegApps, QStringLiteral("OpenInNukeX"), kOldCaps);
         return ok;
@@ -579,7 +589,7 @@ void scenarioOldClientLeftovers(HiveSession &session, const Check &check)
     if (!tempIsFixed) {
         std::printf("info A4: %%TEMP%% no esta en una unidad fija: el caso positivo no se puede probar aca\n");
     } else {
-        check(seedOld(missing), QStringLiteral("4 siembra: restos del cliente viejo con el exe ausente"));
+        check(seedOld(quoted(missing) + QStringLiteral(",0")), QStringLiteral("4 siembra: restos del cliente viejo con el exe ausente"));
         const Snapshot withOld = snapshot(hive);
         const QStringList kept = WinFileAssociation::removeOldClientLeftovers(/*oldClientInstalled=*/true);
         const Snapshot afterKept = snapshot(hive);
@@ -592,25 +602,44 @@ void scenarioOldClientLeftovers(HiveSession &session, const Check &check)
                              "Software\\OpenInNukeX; Classes\\LGA.NukeScript.1 queda (%1)%2")
                   .arg(removed.join(QStringLiteral(", ")), describeDiff(base, afterRemoved)));
         dropOld();
+        if (!missing.contains(QLatin1Char(' '))) {
+            // Sin comillas pero sin espacios: la ruta se lee entera y el exe falta: se borra.
+            seedOld(missing + QStringLiteral(",0"));
+            const QStringList unquoted = WinFileAssociation::removeOldClientLeftovers(/*oldClientInstalled=*/false);
+            const Snapshot afterUnquoted = snapshot(hive);
+            check(unquoted.size() == 3 && afterUnquoted == base,
+                  QStringLiteral("4 A4: icono sin comillas y sin espacios con el exe ausente se borra%1")
+                      .arg(describeDiff(base, afterUnquoted)));
+            dropOld();
+        }
     }
 
-    // Negativos: el exe existe, esta en la red, o en una unidad que no esta.
-    QStringList negatives = {own, QStringLiteral("\\\\server\\share\\LGA_OpenInNukeX\\OpenInNukeX.exe")};
+    // Negativos: el exe existe, esta en la red, en una unidad que no esta, el icono no es un exe, o
+    // viene sin comillas y con espacios (se cortaria en "C:\Program", que parece ausente).
+    QString noExe = missing;
+    noExe.chop(4);
+    QStringList negatives = {
+        quoted(own) + QStringLiteral(",0"),
+        quoted(QStringLiteral("\\\\server\\share\\LGA_OpenInNukeX\\OpenInNukeX.exe")) + QStringLiteral(",0"),
+        quoted(noExe + QStringLiteral(".ico")) + QStringLiteral(",0"),
+        QStringLiteral("C:\\Program Files\\LGA_OpenInNukeX_selftest_%1\\OpenInNukeX.exe,0").arg(QCoreApplication::applicationPid()),
+    };
     const DWORD drives = GetLogicalDrives();
     for (wchar_t letter = L'Z'; letter >= L'D'; --letter) {
         if (!(drives & (1u << (letter - L'A')))) {
-            negatives << QStringLiteral("%1:\\LGA_OpenInNukeX\\OpenInNukeX.exe").arg(QChar(letter));
+            negatives << quoted(QStringLiteral("%1:\\LGA_OpenInNukeX\\OpenInNukeX.exe").arg(QChar(letter))) + QStringLiteral(",0");
             break;
         }
     }
-    for (const QString &exe : negatives) {
-        seedOld(exe);
+    for (const QString &icon : negatives) {
+        seedOld(icon);
         const Snapshot withOld = snapshot(hive);
         const QStringList removed = WinFileAssociation::removeOldClientLeftovers(/*oldClientInstalled=*/false);
         const Snapshot after = snapshot(hive);
         check(removed.isEmpty() && after == withOld,
-              QStringLiteral("4 A4 negativo: con el exe en '%1' (existe, red o unidad ausente) no se borra nada%2")
-                  .arg(exe, describeDiff(withOld, after)));
+              QStringLiteral("4 A4 negativo: ApplicationIcon %1 (existe, red, unidad ausente, no es exe o sin comillas con "
+                             "espacios) no borra nada%2")
+                  .arg(icon, describeDiff(withOld, after)));
         dropOld();
     }
     const Snapshot end = snapshot(hive);

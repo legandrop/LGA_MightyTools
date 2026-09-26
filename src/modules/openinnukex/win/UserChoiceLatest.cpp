@@ -10,6 +10,7 @@
 //   - comparar int con uint promueve ambos a long: aca se compara en qint64.
 
 #include "modules/openinnukex/win/UserChoiceLatest.h"
+#include "platform/win/RegistryHelper.h"
 
 #include <QChar>
 #include <QCryptographicHash>
@@ -1319,9 +1320,10 @@ LegacyWrite writeLegacy(const std::wstring &choicePath, const QString &extension
     return w;
 }
 
+// Por RegistryHelper: una prueba sobre un hive privado lo calla (ShellNotifySuppression).
 void notifyShell()
 {
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    RegistryHelper::notifyAssociationsChanged();
 }
 
 } // namespace
