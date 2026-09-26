@@ -527,8 +527,8 @@ void scenarioMigrationAndCoexistence(HiveSession &session, const Check &check)
     WinFileAssociation::registerClasses(&errors);
     check(readSz(hive, kRegApps, QStringLiteral("LGA_MightyTools")).isEmpty()
               && readSz(hive, kRegApps, WinFileAssociation::registeredApplicationValue()) == kNkCaps
-              && readSz(hive, kNkCaps, QStringLiteral("ApplicationName")) == QLatin1String("LGA Mighty Tools (Nuke scripts)"),
-          QStringLiteral("3 A1: registrar .nk migra LGA_MightyTools -> LGA_MightyTools_NukeScripts ('LGA Mighty Tools (Nuke scripts)')"));
+              && readSz(hive, kNkCaps, QStringLiteral("ApplicationName")) == QLatin1String("Open in NukeX"),
+          QStringLiteral("3 A1: registrar .nk migra LGA_MightyTools -> LGA_MightyTools_NukeScripts ('Open in NukeX')"));
 
     LinkRedirectorBrowserRegistration::registerAsBrowser();
     WinFileAssociation::registerClasses(&errors);

@@ -28,7 +28,7 @@ constexpr wchar_t kRegisteredAppValue[] = L"LGA_MightyTools_NukeScripts";
 // apunta a NUESTRAS Capabilities: si apunta a las del navegador, es de Link Redirector.
 constexpr wchar_t kLegacyRegisteredAppValue[] = L"LGA_MightyTools";
 // Nombre visible en Apps predeterminadas. Provisorio: lo confirma Lega.
-constexpr wchar_t kApplicationName[] = L"LGA Mighty Tools (Nuke scripts)";
+constexpr wchar_t kApplicationName[] = L"Open in NukeX";
 constexpr wchar_t kAppRootPath[] = L"Software\\LGA_MightyTools";
 constexpr wchar_t kCapabilitiesPath[] = L"Software\\LGA_MightyTools\\Capabilities";
 constexpr wchar_t kRegisteredAppsPath[] = L"Software\\RegisteredApplications";

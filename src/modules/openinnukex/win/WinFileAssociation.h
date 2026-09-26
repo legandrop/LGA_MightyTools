@@ -18,7 +18,7 @@ using HWND = HWND__ *;
 // Diferencias con el origen (D-03, D-04, D-09, plan 4.6):
 //  - El ProgID `LGA.NukeScript.1` SE REUTILIZA (para que la eleccion que ya hizo un usuario del
 //    cliente viejo siga valiendo), pero `shell\open\command` apunta a ESTE exe.
-//  - Capabilities en `Software\LGA_MightyTools\Capabilities` ("LGA Mighty Tools (Nuke scripts)") y
+//  - Capabilities en `Software\LGA_MightyTools\Capabilities` ("Open in NukeX") y
 //    su PROPIO valor en RegisteredApplications, `LGA_MightyTools_NukeScripts`: `LGA_MightyTools` es
 //    el del navegador (Link Redirector). Soltar uno nunca rompe el otro.
 //  - Sin el helper .NET `LGA_WinSetFTA.exe` (D-03: cero dependencias de .NET). TODA la escritura
