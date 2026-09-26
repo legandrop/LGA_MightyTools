@@ -59,6 +59,7 @@ private:
     // ---- "Preferred Nuke version" ----
     void startScan();
     void rebuildVersionButtons();
+    void updateChosenVersionHighlight(); ///< resalta el boton cuya ruta coincide con la cargada
     void onVersionButtonClicked(const NukeVersion &version);
     void onBrowseNukeXClicked();
     void onSaveNukeXClicked();

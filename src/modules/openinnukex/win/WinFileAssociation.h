@@ -4,6 +4,14 @@
 #include <QString>
 #include <QStringList>
 
+// HWND sin incluir windows.h: la UI (OpenInNukeXPanel.cpp) no lleva headers de Win32 (regla de la
+// app). Mismo truco que usaba winfileassociation.h del cliente v1.83: `struct HWND__` es el mismo
+// tipo incompleto que winnt.h declara antes de definirlo, asi que si este header y windows.h
+// conviven en la misma unidad de traduccion (WinFileAssociation.cpp), el alias es identico y no
+// hay redefinicion en conflicto.
+struct HWND__;
+using HWND = HWND__ *;
+
 // Asociacion de `.nk` en Windows, portada de
 // `~/.nuke/LGA_OpenInNukeX/QtClient/src/winfileassociation.{h,cpp}` (v1.83).
 //
@@ -52,7 +60,13 @@ bool isNkAssociatedWithUs();
 /// `reapply=true` corre primero `cleanConflictingKeys()` (borra UserChoice/UserChoiceLatest antes
 /// de reintentar): es el camino de "Re-apply" para quien no aparece como Associated, nunca el
 /// primer paso (comentario del header).
-ApplyOutcome apply(bool reapply);
+///
+/// `parentHwnd`: la ventana dueña del selector nativo "Abrir con" si el hash silencioso no
+/// alcanza (`IOpenWithLauncher::Launch`). El cliente v1.83 pasaba `winId()` de su ventana; en
+/// esta app se habia perdido (regresion detectada en la auditoria), y el picker aparecia sin
+/// dueño (puede salir detras de la ventana o sin foco). `nullptr` sigue siendo valido: el picker
+/// aparece sin ventana dueña, como si no se pasara ninguna.
+ApplyOutcome apply(bool reapply, HWND parentHwnd = nullptr);
 
 /// D-09: suelta lo que apply() escribio. No toca UserChoice/UserChoiceLatest si apuntan a OTRA
 /// app (nunca le saca la asociacion a alguien mas).

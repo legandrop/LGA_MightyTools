@@ -75,6 +75,13 @@ inline constexpr const char *kSwitchKnobOn = "#DDDBEE";
 // resaltada del popup de carpetas recientes de Folder Switch.
 inline constexpr const char *kRowHover = "#2a2a2a";
 
+// "Elegido" (canvas: --chk-bg/--chk-border): un botón entre varios que queda marcado como el
+// activo sin ser la acción principal (el segButton de Disk Space ya lo pinta a mano; el keycap de
+// versión de Nuke elegida de Open in NukeX lo usa por property "chosen", ver Theme::styleSheet()).
+inline constexpr const char *kChosenBg = "#393455";
+inline constexpr const char *kChosenBorder = "#4c4770";
+inline constexpr const char *kChosenText = "#DDDBEE";
+
 inline QColor color(const char *hex) { return QColor(QLatin1String(hex)); }
 
 // Fuente de interfaz (Inter) en pixeles, con peso opcional.

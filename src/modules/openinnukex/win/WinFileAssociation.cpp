@@ -117,7 +117,7 @@ struct IOpenWithLauncher : public IUnknown
     virtual HRESULT STDMETHODCALLTYPE Launch(HWND hWndParent, const wchar_t *lpszPath, int flags) = 0;
 };
 
-bool launchOpenWithPicker()
+bool launchOpenWithPicker(HWND parentHwnd)
 {
     const HRESULT comRc = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const bool comOwned = SUCCEEDED(comRc);
@@ -131,7 +131,9 @@ bool launchOpenWithPicker()
         if (SUCCEEDED(CoCreateInstance(clsid, nullptr, CLSCTX_LOCAL_SERVER, kIID_IOpenWithLauncher,
                                        reinterpret_cast<void **>(&launcher)))) {
             CoAllowSetForegroundWindow(launcher, nullptr);
-            const HRESULT hr = launcher->Launch(nullptr, kExtensionW, 0x2004);
+            // v1.83 pasaba winId() de su ventana; se lo devolvimos (auditoria) para que el picker
+            // salga dueño de la ventana de LGA Mighty Tools, no huerfano.
+            const HRESULT hr = launcher->Launch(parentHwnd, kExtensionW, 0x2004);
             launched = SUCCEEDED(hr) || hr == HRESULT_FROM_WIN32(ERROR_CANCELLED);
             launcher->Release();
         }
@@ -230,7 +232,7 @@ bool isOldClientInstalled()
         || RegistryHelper::keyExists(HKEY_CURRENT_USER, QString::fromWCharArray(kOldClientUninstallKey));
 }
 
-ApplyOutcome apply(bool reapply)
+ApplyOutcome apply(bool reapply, HWND parentHwnd)
 {
     ApplyOutcome outcome;
 
@@ -273,7 +275,7 @@ ApplyOutcome apply(bool reapply)
         return outcome;
     }
 
-    const bool pickerLaunched = launchOpenWithPicker();
+    const bool pickerLaunched = launchOpenWithPicker(parentHwnd);
     QThread::msleep(800);
     notifyAssociationChanged();
 
