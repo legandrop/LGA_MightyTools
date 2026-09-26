@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v0.06:
+
+La ventana mostraba la barra de título de Windows (el marco se aplicaba antes de atender WM_NCCALCSIZE),
+Match words no tomaba el teclado (el filtro de foco pisaba el focus proxy del campo) y los estados de
+Open in NukeX y Link Redirector no se releían: ahora se releen al volver a la ventana, desde
+UserChoiceLatest y por el nombre del desinstalador. La app ya no deja el registro sucio: `--uninstall-
+cleanup`, llamado por el desinstalador, borra solo lo que apunta a este exe; cada herramienta registra
+su propia entrada en Apps predeterminadas y soltar una no rompe la otra; Apply borra los restos del
+cliente viejo. Un self-test prueba todo sobre un registro privado. El ejemplo de Match words es genérico.
+[ Registro - Limpieza propia al desinstalar, ventana sin barra nativa y estados que se releen ]
+
 v0.05:
 
 Las notificaciones salían con el ícono genérico de Windows y el nombre del archivo como encabezado.
