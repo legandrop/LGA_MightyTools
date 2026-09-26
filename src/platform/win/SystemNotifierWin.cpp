@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QProcess>
@@ -23,6 +24,7 @@ namespace {
 
 constexpr int kPauseBetweenToastsMs = 500;
 constexpr int kPowerShellTimeoutMs = 20000;
+constexpr int kWaitSliceMs = 100;
 
 struct Toast
 {
@@ -120,6 +122,12 @@ public:
         m_condition.wakeAll();
     }
 
+    bool stopRequested()
+    {
+        QMutexLocker locker(&m_mutex);
+        return m_stop;
+    }
+
     void process()
     {
         while (true) {
@@ -135,8 +143,10 @@ public:
                 toast = m_queue.dequeue();
             }
             showToast(toast);
-            // Pausa entre avisos para no apilar toasts (PipeSync).
-            QThread::msleep(kPauseBetweenToastsMs);
+            // Pausa entre avisos para no apilar toasts (PipeSync), cortada si la app se cierra.
+            for (int waited = 0; waited < kPauseBetweenToastsMs && !stopRequested(); waited += kWaitSliceMs) {
+                QThread::msleep(kWaitSliceMs);
+            }
         }
     }
 
@@ -155,11 +165,22 @@ private:
         process.start(QStringLiteral("powershell.exe"),
                       {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"), QStringLiteral("-ExecutionPolicy"),
                        QStringLiteral("Bypass"), QStringLiteral("-Command"), script});
-        if (!process.waitForFinished(kPowerShellTimeoutMs)) {
-            qWarning() << "[SystemNotifier] PowerShell no termino en" << kPowerShellTimeoutMs << "ms; se corta";
-            process.kill();
-            process.waitForFinished(2000);
-            return;
+        // Se espera de a tramos cortos: si la app se cierra con un toast en vuelo, se corta PowerShell
+        // y el hilo termina enseguida (en PipeSync el cierre podia borrar el worker en uso).
+        QElapsedTimer elapsed;
+        elapsed.start();
+        while (!process.waitForFinished(kWaitSliceMs)) {
+            const bool stopping = stopRequested();
+            if (stopping || elapsed.elapsed() >= kPowerShellTimeoutMs || process.state() == QProcess::NotRunning) {
+                if (process.state() != QProcess::NotRunning) {
+                    qWarning().noquote() << (stopping ? QStringLiteral("[SystemNotifier] La app se cierra: se corta PowerShell")
+                                                      : QStringLiteral("[SystemNotifier] PowerShell no termino en %1 ms; se corta")
+                                                            .arg(kPowerShellTimeoutMs));
+                    process.kill();
+                    process.waitForFinished(1000);
+                }
+                return;
+            }
         }
         qInfo().noquote() << QStringLiteral("[SystemNotifier] Toast '%1' (icono %2x%3) -> salida %4: %5")
                                  .arg(toast.title)
@@ -195,8 +216,14 @@ SystemNotifier::~SystemNotifier()
     if (d->thread) {
         d->worker->stop();
         d->thread->quit();
-        d->thread->wait(3000);
-        delete d->worker;
+        if (d->thread->wait(3000)) {
+            delete d->worker;
+        } else {
+            // No deberia pasar (el hilo corta PowerShell en 100 ms). Si pasa, se sueltan hilo y worker
+            // en vez de borrarlos en uso: la app ya esta saliendo.
+            qWarning() << "[SystemNotifier] El hilo de notificaciones no termino a tiempo; se suelta";
+            d->thread->setParent(nullptr);
+        }
     }
 }
 
