@@ -194,6 +194,7 @@ if(WIN32)
         src/modules/folderswitch/FolderSwitchState.cpp
         src/modules/folderswitch/RecentFoldersPopup.cpp
         src/modules/folderswitch/UiaSwitcher.cpp
+        src/modules/folderswitch/UiaTimeouts.cpp
         src/modules/folderswitch/WindowUtils.cpp
     )
     list(APPEND HEADERS
@@ -209,6 +210,7 @@ if(WIN32)
         src/modules/folderswitch/FolderSwitchState.h
         src/modules/folderswitch/RecentFoldersPopup.h
         src/modules/folderswitch/UiaSwitcher.h
+        src/modules/folderswitch/UiaTimeouts.h
         src/modules/folderswitch/WindowUtils.h
     )
 elseif(APPLE)

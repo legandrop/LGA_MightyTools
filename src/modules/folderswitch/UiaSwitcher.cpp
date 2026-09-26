@@ -1,13 +1,20 @@
 #include "modules/folderswitch/UiaSwitcher.h"
 
+#include "modules/folderswitch/FolderSwitchLogic.h"
+#include "modules/folderswitch/UiaTimeouts.h"
+
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QStringList>
 
 #include <uiautomation.h>
 #include <objbase.h>
 
-// Copia de LGA_FolderSwitch (src/core/UiaSwitcher.cpp), sin cambios de logica.
+// Copia de LGA_FolderSwitch (src/core/UiaSwitcher.cpp). Unico cambio de logica respecto del origen:
+// se mide y se acota (plan, seccion 11 y auditoria de la etapa 2): switchQtDialogImpl() tiene muchos
+// puntos de salida, asi que la medicion queda en un solo wrapper alrededor de toda la funcion en vez
+// de repetirse en cada return.
 
 namespace {
 
@@ -29,11 +36,9 @@ QString bstrToQString(BSTR bstr)
     return QString::fromWCharArray(bstr, static_cast<int>(SysStringLen(bstr)));
 }
 
-} // namespace
-
-namespace UiaSwitcher {
-
-bool switchQtDialog(HWND dlg, const QString &folder)
+// Todo el cuerpo original (ver comentario de arriba); switchQtDialog() de mas abajo es el unico
+// punto de entrada publico y el unico que mide.
+bool switchQtDialogImpl(HWND dlg, const QString &folder)
 {
     if (!dlg || folder.isEmpty()) {
         return false;
@@ -46,6 +51,7 @@ bool switchQtDialog(HWND dlg, const QString &folder)
         qWarning() << "[UiaSwitcher] No se pudo crear IUIAutomation, hr=" << hr;
         return false;
     }
+    UiaTimeouts::apply(automation);
 
     IUIAutomationElement *element = nullptr;
     hr = automation->ElementFromHandle(dlg, &element);
@@ -215,6 +221,19 @@ bool switchQtDialog(HWND dlg, const QString &folder)
     element->Release();
     automation->Release();
     return true;
+}
+
+} // namespace
+
+namespace UiaSwitcher {
+
+bool switchQtDialog(HWND dlg, const QString &folder)
+{
+    QElapsedTimer timer;
+    timer.start();
+    const bool result = switchQtDialogImpl(dlg, folder);
+    FolderSwitchLogic::logCallTiming("switchQtDialog", timer.elapsed());
+    return result;
 }
 
 } // namespace UiaSwitcher

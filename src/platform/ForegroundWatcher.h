@@ -6,17 +6,18 @@
 
 #include <memory>
 
-// Observador de "que ventana esta al frente", pensado para terminar siendo un SERVICIO COMPARTIDO
-// del host (plan 4.4): un solo hook de sistema para todos los modulos que lo necesiten (hoy Folder
-// Switch; mas adelante Nuke Shortcuts, que hoy tiene el suyo propio en NukeWatcherWin.cpp con un
-// `g_instance` sin tocar). Mientras no exista ese servicio, cada modulo crea y destruye su propia
-// instancia en start()/stop().
+// Observador de "que ventana esta al frente", servicio COMPARTIDO del host (plan 4.4): una sola
+// instancia por proceso, que ModuleHost crea con el primer modulo prendido que la pide
+// (ModuleContext::foreground()) y destruye cuando ya ninguno la usa (refcount, igual que el
+// inyector). Hoy la usa Folder Switch; Nuke Shortcuts todavia tiene su propio hook en
+// NukeWatcherWin.cpp con un `g_instance` sin tocar, pendiente de migrar aca.
 //
 // A diferencia de NukeWatcherWin (un `g_instance` global que se pisa si se instancia dos veces), esta
 // clase admite VARIAS instancias vivas a la vez sin punteros estaticos por instancia: el callback de
 // Windows resuelve la instancia dueña por el handle del hook en un registro compartido (ver
-// ForegroundWatcherWin.cpp). Asi el dia de mañana el host puede tener una sola instancia repartida
-// entre modulos, o (como ahora) cada modulo la suya, sin que se pisen entre si.
+// ForegroundWatcherWin.cpp). Eso es lo que permite que hoy haya una sola instancia repartida entre
+// los modulos que la piden (el caso real) y que el self-test pueda construir la suya propia sin
+// pisar la del host.
 //
 // `active = false` (usado en toda corrida automatizada: --self-test, --ui-shot, --simulate-action, la
 // medicion de consumo) crea el objeto pero NO instala ningun hook ni consulta el sistema: sirve para
