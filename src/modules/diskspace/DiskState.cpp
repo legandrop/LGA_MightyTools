@@ -45,6 +45,12 @@ DiskState::DiskState(ModuleContext *context, QObject *parent)
         }
         watch.value = DiskSpace::clampValue(watch.value, watch.unit);
         m_diskWatches.append(watch);
+        DiskSpace::AlertState alert;
+        alert.wasLow = m_context->value(watchKey(i, "wasLow"), false).toBool();
+        alert.lastNotified = QDateTime::fromString(m_context->value(watchKey(i, "lastNotified")).toString(), Qt::ISODate);
+        if (alert.wasLow || alert.lastNotified.isValid()) {
+            m_alerts.insert(watch.root, alert);
+        }
     }
     qInfo() << "[DiskState] Cargado:" << m_diskWatches.size() << "discos vigilados cada" << m_diskCheckMinutes << "min";
 }
@@ -57,6 +63,25 @@ bool DiskState::isWatched(const QString &root) const
         }
     }
     return false;
+}
+
+DiskSpace::AlertState DiskState::alertState(const QString &root) const
+{
+    return m_alerts.value(root);
+}
+
+void DiskState::setAlertState(const QString &root, const DiskSpace::AlertState &alert)
+{
+    if (!isWatched(root)) {
+        return;
+    }
+    const DiskSpace::AlertState previous = m_alerts.value(root);
+    if (previous.wasLow == alert.wasLow && previous.lastNotified == alert.lastNotified) {
+        return;
+    }
+    m_alerts.insert(root, alert);
+    // Se escribe solo cuando cambia (al cruzar el umbral o al avisar), no en cada chequeo.
+    writeDiskWatches();
 }
 
 bool DiskState::driveReading(const QString &root, DriveInfo *drive) const
@@ -103,6 +128,13 @@ void DiskState::writeDiskWatches()
         m_context->setValue(watchKey(i, "value"), watch.value);
         m_context->setValue(watchKey(i, "unit"), DiskSpace::unitToString(watch.unit));
         m_context->setValue(watchKey(i, "name"), watch.name);
+        const auto alert = m_alerts.constFind(watch.root);
+        if (alert != m_alerts.constEnd()) {
+            m_context->setValue(watchKey(i, "wasLow"), alert->wasLow);
+            if (alert->lastNotified.isValid()) {
+                m_context->setValue(watchKey(i, "lastNotified"), alert->lastNotified.toString(Qt::ISODate));
+            }
+        }
     }
     m_context->setValue(kDiskWatches + QStringLiteral("/size"), int(m_diskWatches.size()));
 }
@@ -146,6 +178,8 @@ void DiskState::removeDiskWatch(const QString &root)
     for (int i = 0; i < m_diskWatches.size(); ++i) {
         if (m_diskWatches.at(i).root == root) {
             m_diskWatches.removeAt(i);
+            // Un disco que se deja de vigilar olvida su historial: si se vuelve a agregar, avisa de nuevo.
+            m_alerts.remove(root);
             writeDiskWatches();
             qInfo() << "[DiskState] Disco sin vigilar:" << root;
             emit changed();

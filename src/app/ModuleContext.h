@@ -95,8 +95,9 @@ public:
     virtual InputInjector *injector() = 0;
     // Observador de "que ventana esta al frente" (plan 4.4): una sola instancia por proceso, creada
     // con el primer modulo prendido que la pide y destruida cuando ya ninguno la usa (refcount). En
-    // corrida automatizada, sin hook real (ver ForegroundWatcher.h). Hoy la usa Folder Switch; Nuke
-    // Shortcuts sigue con su propio hook (NukeWatcherWin) hasta que se migre aparte.
+    // corrida automatizada, sin hook real salvo que la corrida pida observar (HostOptions::
+    // observeForeground; ver ForegroundWatcher.h). La usan Folder Switch y Nuke Shortcuts: con los
+    // dos prendidos hay un solo hook.
     virtual ForegroundWatcher *foreground() = 0;
 
     // Notificacion del sistema; el click abre la ventana en el panel de este modulo.

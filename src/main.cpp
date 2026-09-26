@@ -4,11 +4,13 @@
 #include "app/SettingsStore.h"
 #include "app/SingleInstance.h"
 #include "core/AppPaths.h"
+#include "core/AppSettings.h"
 #include "core/BuildTree.h"
 #include "core/DebugFlags.h"
 #include "core/LgaRegistry.h"
 #include "platform/AutoStart.h"
 #include "platform/ComApartment.h"
+#include "platform/WindowActivation.h"
 #include "qa/Measure.h"
 #include "qa/SelfTest.h"
 #include "qa/UiShot.h"
@@ -81,14 +83,35 @@ bool hasArg(int argc, char *argv[], const char *name)
     return false;
 }
 
-// --simulate-action <accion> [args]: la secuencia real de una herramienta con el inyector en solo
-// loguear. "<id>:<accion>" elige la herramienta; sin prefijo, se prueba cada una (la que no conoce
-// la accion devuelve 2).
+// --simulate-action <accion> [args] [--settings-file <ruta>]: la secuencia real de una herramienta
+// con el inyector en solo loguear. "<id>:<accion>" elige la herramienta; sin prefijo, se prueba cada
+// una (la que no conoce la accion devuelve 2). Los settings se leen EN MEMORIA (vacios): la prueba no
+// ve el settings.ini del usuario. Con --settings-file se leen de ese archivo, elegido a proposito.
+const char kSimulateUsage[] =
+    "usage: --simulate-action <tool:action> [args] [--settings-file <settings.ini>]\n"
+    "  settings are read in memory (empty) unless --settings-file is given\n";
+
 int runSimulateAction(const QStringList &arguments)
 {
-    const int index = arguments.indexOf(QStringLiteral("--simulate-action"));
-    const QString which = arguments.value(index + 1);
-    const QStringList rest = arguments.mid(index + 2);
+    QStringList args = arguments;
+    const int fileIndex = args.indexOf(QStringLiteral("--settings-file"));
+    if (fileIndex >= 0) {
+        if (fileIndex + 1 >= args.size()) {
+            std::fprintf(stderr, "%s", kSimulateUsage);
+            return 2;
+        }
+        AppSettings::useFile(args.at(fileIndex + 1));
+        args.remove(fileIndex, 2);
+    } else {
+        AppSettings::useMemoryOnly();
+    }
+    const int index = args.indexOf(QStringLiteral("--simulate-action"));
+    const QString which = args.value(index + 1);
+    if (which.isEmpty()) {
+        std::fprintf(stderr, "%s", kSimulateUsage);
+        return 2;
+    }
+    const QStringList rest = args.mid(index + 2);
     const QString moduleId = which.contains(QLatin1Char(':')) ? which.section(QLatin1Char(':'), 0, 0) : QString();
     const QString action = which.contains(QLatin1Char(':')) ? which.section(QLatin1Char(':'), 1) : which;
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {
@@ -131,6 +154,7 @@ int main(int argc, char *argv[])
     if (hasArg(argc, argv, "--self-test")) {
         QCoreApplication app(argc, argv);
         setNames();
+        AppSettings::useMemoryOnly();
         return SelfTest::run();
     }
     if (hasArg(argc, argv, "--simulate-action")) {
@@ -159,6 +183,8 @@ int main(int argc, char *argv[])
     // Captura y medicion: salen antes del modo corto, de la instancia unica, de la bandeja, de los
     // atajos y del updater. No tocan nada de la copia que el usuario tiene abierta.
     if (automated) {
+        // Ni leer ni escribir el settings.ini del usuario.
+        AppSettings::useMemoryOnly();
         applyAppStyle(app);
         if (uiShot) {
             return runUiShot(app.arguments());
@@ -189,6 +215,9 @@ int main(int argc, char *argv[])
     // Instancia unica. La segunda copia sin argumentos le pide a la residente que muestre la ventana.
     static QLockFile singleInstanceLock(QDir(QDir::tempPath()).filePath(QStringLiteral("com.lga.mightytools.singleton.lock")));
     if (!singleInstanceLock.tryLock(100)) {
+        // Windows solo deja pasar al frente la ventana de otro proceso si el que tiene el foco (esta
+        // copia, que lanzo el usuario) lo autoriza.
+        WindowActivation::allowAnyProcessToActivate();
         const bool shown = SingleInstance::askResidentToShow();
         qInfo() << "LGA_MightyTools ya esta corriendo; se le pidio la ventana:" << shown;
         return 0;
@@ -203,6 +232,19 @@ int main(int argc, char *argv[])
     AppController::Options options;
     options.dryRunInput = hasArg(argc, argv, "--dry-run-input") || DebugFlags::isOn(QStringLiteral("dryRunInput"));
 
+    // El canal de la instancia unica escucha desde ya, aunque la bandeja no este lista: un pedido de
+    // otra copia en ese rato queda anotado y la ventana se abre apenas existe.
+    AppController *controller = nullptr;
+    bool showPending = false;
+    auto *server = new SingleInstanceServer(&app);
+    QObject::connect(server, &SingleInstanceServer::showRequested, &app, [&controller, &showPending]() {
+        if (controller) {
+            controller->showSettings();
+        } else {
+            showPending = true;
+        }
+    });
+
     // Al arrancar con la sesion, el shell suele no tener la bandeja lista todavia. El reintento vive
     // DENTRO del event loop (nunca un loop bloqueante antes de exec(): el proceso quedaria sin
     // bombear mensajes y el shell lo mostraria colgado). Patron de FolderSwitch.
@@ -210,20 +252,26 @@ int main(int argc, char *argv[])
     constexpr int kTrayPollMs = 500;
     int trayWaitedMs = 0;
     std::function<void()> pollTray;
-    pollTray = [&app, &trayWaitedMs, &pollTray, options]() {
-        if (QSystemTrayIcon::isSystemTrayAvailable()) {
-            if (trayWaitedMs > 0) {
-                qInfo() << "La bandeja tardo" << trayWaitedMs << "ms en estar disponible.";
+    pollTray = [&app, &trayWaitedMs, &pollTray, options, &controller, &showPending]() {
+        const bool trayReady = QSystemTrayIcon::isSystemTrayAvailable();
+        if (trayReady || trayWaitedMs >= kTrayWaitMs) {
+            AppController::Options start = options;
+            if (trayReady) {
+                if (trayWaitedMs > 0) {
+                    qInfo() << "La bandeja tardo" << trayWaitedMs << "ms en estar disponible.";
+                }
+            } else {
+                // Sin bandeja la app quedaria corriendo invisible y sin forma de llegar a ella salvo
+                // abrir otra copia: se abre la ventana. Antes salia con 1, y un inicio con la sesion
+                // en un shell lento perdia las herramientas prendidas de todo el dia.
+                qWarning() << "No hay bandeja del sistema despues de esperar" << (kTrayWaitMs / 1000)
+                           << "s; se abre la ventana para que la app no quede invisible.";
+                start.openWindow = true;
             }
-            new AppController(options, &app);
+            start.openWindow = start.openWindow || showPending;
+            controller = new AppController(start, &app);
             qInfo() << "LGA_MightyTools" << MIGHTYTOOLS_VERSION << "iniciado.";
             logStartupDiagnostics();
-            return;
-        }
-        if (trayWaitedMs >= kTrayWaitMs) {
-            // Nada de cartel: es una app de bandeja, un modal al arranque no lo ve nadie.
-            qWarning() << "No hay bandeja del sistema despues de esperar" << (kTrayWaitMs / 1000) << "s; se sale.";
-            QCoreApplication::exit(1);
             return;
         }
         trayWaitedMs += kTrayPollMs;

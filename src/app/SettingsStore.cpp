@@ -11,7 +11,7 @@ QVariant FileSettingsStore::value(const QString &key, const QVariant &defaultVal
 
 void FileSettingsStore::setValue(const QString &key, const QVariant &value)
 {
-    const auto settings = AppSettings::open();
+    const auto settings = AppSettings::openForWrite();
     settings->setValue(key, value);
     settings->sync();
     if (settings->status() != QSettings::NoError) {
@@ -21,7 +21,7 @@ void FileSettingsStore::setValue(const QString &key, const QVariant &value)
 
 void FileSettingsStore::remove(const QString &key)
 {
-    const auto settings = AppSettings::open();
+    const auto settings = AppSettings::openForWrite();
     settings->remove(key);
     settings->sync();
 }

@@ -57,7 +57,6 @@ private:
     Sources m_sources;
     QTimer *m_timer = nullptr;
     int m_timerMinutes = 0;
-    QHash<QString, DiskSpace::AlertState> m_alerts;
 };
 
 #endif // MIGHTYTOOLS_DISKMONITOR_H

@@ -148,10 +148,8 @@ void MainWindow::buildUi()
         m_items.insert(d.id, item);
         connect(item, &SidebarItem::picked, this, &MainWindow::selectPage);
         connect(item, &SidebarItem::toggleRequested, this, [this](const QString &id, bool on) {
-            // Prender desde la fila tambien la elige, como en el canvas.
-            if (on) {
-                selectPage(id);
-            }
+            // Prender o apagar desde la fila tambien la elige, como en el canvas.
+            selectPage(id);
             emit toggleRequested(id, on);
         });
 

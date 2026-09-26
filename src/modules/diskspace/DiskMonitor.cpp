@@ -50,14 +50,8 @@ void DiskMonitor::onStateChanged()
         m_timerMinutes = m_state->diskCheckMinutes();
         m_timer->setInterval(m_timerMinutes * 60 * 1000);
     }
-    // Un disco que se dejo de vigilar olvida su historial: si se vuelve a agregar, avisa de nuevo.
-    QSet<QString> watched;
-    for (const DiskWatch &watch : m_state->diskWatches()) {
-        watched.insert(watch.root);
-    }
-    for (auto it = m_alerts.begin(); it != m_alerts.end();) {
-        it = watched.contains(it.key()) ? std::next(it) : m_alerts.erase(it);
-    }
+    // El historial de avisos vive en DiskState (se guarda con cada disco y se borra al dejar de
+    // vigilarlo): apagar y prender Disk Space no repite un aviso.
 }
 
 void DiskMonitor::refreshAll()
@@ -93,13 +87,17 @@ void DiskMonitor::checkNow(bool mayNotify)
             continue; // desenchufado: no cuenta como bajo y conserva su historial
         }
         const bool low = DiskSpace::isLow(watch, drive);
-        DiskSpace::AlertState &alert = m_alerts[watch.root];
-        if (DiskSpace::shouldNotify(low, alert, current)) {
-            qInfo() << "[DiskMonitor] Aviso:" << watch.root << DiskSpace::formatBytes(drive.freeBytes) << "libres, umbral"
-                    << DiskSpace::thresholdText(watch);
+        DiskSpace::AlertState alert = m_state->alertState(watch.root);
+        const bool notify = DiskSpace::shouldNotify(low, alert, current);
+        if (notify) {
             alert.lastNotified = current;
-            emit lowSpace(drive, watch);
         }
         alert.wasLow = low;
+        m_state->setAlertState(watch.root, alert);
+        if (notify) {
+            qInfo() << "[DiskMonitor] Aviso:" << watch.root << DiskSpace::formatBytes(drive.freeBytes) << "libres, umbral"
+                    << DiskSpace::thresholdText(watch);
+            emit lowSpace(drive, watch);
+        }
     }
 }

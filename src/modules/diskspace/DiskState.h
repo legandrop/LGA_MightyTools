@@ -38,6 +38,12 @@ public:
     // Los vigilados que estan enchufados y por debajo de su umbral, en el orden de la lista.
     QList<DiskWatch> lowWatches() const;
 
+    // Historial de avisos de cada disco vigilado (si estaba bajo y cuando se aviso por ultima vez).
+    // Se guarda con el disco en la seccion: apagar y prender Disk Space, o reiniciar la app, no
+    // repite un aviso antes de las 6 h. Dejar de vigilar un disco borra su historial.
+    DiskSpace::AlertState alertState(const QString &root) const;
+    void setAlertState(const QString &root, const DiskSpace::AlertState &alert);
+
     // Cada setter escribe (si corresponde) y avisa SOLO si el valor cambio.
     void setDiskCheckMinutes(int minutes);
     // Un disco nuevo toma la unidad y el valor del ultimo de la lista; sin ninguno, 50 GB.
@@ -58,6 +64,7 @@ private:
     ModuleContext *m_context = nullptr;
     int m_diskCheckMinutes = DiskSpace::kDefaultIntervalMinutes;
     QList<DiskWatch> m_diskWatches;
+    QHash<QString, DiskSpace::AlertState> m_alerts;
     QHash<QString, DriveInfo> m_drives;
     QDateTime m_lastDiskCheck;
 };

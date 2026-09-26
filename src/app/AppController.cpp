@@ -5,7 +5,6 @@
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
-#include "app/SingleInstance.h"
 #include "app/TrayMenu.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
@@ -116,8 +115,7 @@ AppController::AppController(const Options &options, QObject *parent)
             }
         });
 
-        m_server = new SingleInstanceServer(this);
-        connect(m_server, &SingleInstanceServer::showRequested, this, &AppController::showSettings);
+        // El canal de la instancia unica lo abre main() desde el arranque, antes de la bandeja.
         // mac: los .nk y los links llegan a la residente como QFileOpenEvent.
         qApp->installEventFilter(this);
     }
@@ -164,16 +162,16 @@ AppController::AppController(const Options &options, QObject *parent)
     }
 
     if (!m_options.measurement) {
-        // La copia instalada abre la ventana la primera vez (D-06, canvas seccion 7). La marca se
-        // guarda SOLO en una copia instalada: un arranque desde build/ no consume el primer arranque
-        // de la instalacion futura. Con nada prendido la app no hace nada desde la bandeja: tambien
-        // se abre la ventana, asi se ve por donde empezar.
+        // La ventana se abre sola SOLO en el primer arranque de la copia instalada (D-06, canvas
+        // seccion 7); despues, cuando la abre el usuario (bandeja, otra copia). La marca se guarda
+        // solo en una copia instalada: un arranque desde build/ no consume el primer arranque de la
+        // instalacion futura. main() pide openWindow si no hay bandeja o si otra copia la pidio antes.
         const bool installed = AutoStart::availability().available;
         const bool firstLaunch = installed && !m_store->value(kFirstRunCompleted, false).toBool();
         if (firstLaunch) {
             m_store->setValue(kFirstRunCompleted, true);
         }
-        if (firstLaunch || m_host->runningCount() == 0) {
+        if (firstLaunch || m_options.openWindow) {
             showSettings();
         }
     }

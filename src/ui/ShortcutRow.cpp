@@ -2,7 +2,9 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
+#include <QApplication>
 #include <QDebug>
+#include <QEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -166,6 +168,9 @@ void ShortcutRow::startRecording()
     setRecordingVisible(true, partialText(Qt::NoModifier));
     // grabKeyboard y no el foco: la app no da foco de teclado a nada (Theme::apply).
     grabKeyboard();
+    // Un click afuera (en otra fila, otra tarjeta, la barra lateral) cancela, como el umbral de un
+    // disco lo confirma: la grabacion nunca queda colgada esperando teclas.
+    qApp->installEventFilter(this);
     qDebug() << "[ShortcutRow] Grabando atajo para" << m_name->text();
 }
 
@@ -178,9 +183,22 @@ void ShortcutRow::cancelRecording()
     setError(QString());
 }
 
+bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (m_recording && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
+        auto *target = static_cast<QWidget *>(watched);
+        // El lapiz tiene su propio click (alterna): el resto de la fila y todo lo de afuera cancela.
+        if (target != m_editButton && !m_editButton->isAncestorOf(target)) {
+            cancelRecording();
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
 void ShortcutRow::finishRecording()
 {
     m_recording = false;
+    qApp->removeEventFilter(this);
     releaseKeyboard();
     setRecordingVisible(false, QString());
 }

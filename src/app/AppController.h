@@ -14,7 +14,6 @@ class ModuleHost;
 class QMenu;
 class QSystemTrayIcon;
 class SettingsStore;
-class SingleInstanceServer;
 class UpdateService;
 
 // La app residente: el host de herramientas, la ventana, el icono de la bandeja (o de la barra de
@@ -31,6 +30,9 @@ public:
         // Medicion de consumo (--measure-idle): settings en memoria, sin bandeja, sin updater, sin
         // canal de instancia unica y como corrida automatizada. La ventana se arma y no se muestra.
         bool measurement = false;
+        // Abrir la ventana al arrancar: no hay bandeja (la app quedaria invisible) u otra copia la
+        // pidio mientras la bandeja no estaba lista.
+        bool openWindow = false;
     };
 
     explicit AppController(const Options &options, QObject *parent = nullptr);
@@ -71,7 +73,6 @@ private:
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_menu = nullptr;
     UpdateService *m_updates = nullptr;
-    SingleInstanceServer *m_server = nullptr;
     QString m_lastNotifier;
     bool m_buildTree = false;
 };

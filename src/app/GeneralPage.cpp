@@ -296,6 +296,8 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
     m_updateResult->setVisible(!text.isEmpty());
 #endif
     const bool available = state.kind == UpdateRowState::Kind::Available;
+    // Mientras dice "Checking…" no se puede pedir otro chequeo.
+    m_updateButton->setEnabled(state.kind != UpdateRowState::Kind::Checking);
     m_updateButton->setText(available ? QStringLiteral("Update") : QStringLiteral("Check now"));
     Ui::setStyleProperty(m_updateButton, "variant", available ? QStringLiteral("primary") : QString());
 }

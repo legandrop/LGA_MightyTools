@@ -177,6 +177,7 @@ set(HEADERS
     src/platform/NukeWatcher.h
     src/platform/ProcessStats.h
     src/platform/SystemInput.h
+    src/platform/WindowActivation.h
     src/platform/WindowFrame.h
     src/qa/Measure.h
     src/qa/SelfTest.h
@@ -208,6 +209,7 @@ if(WIN32)
         src/platform/win/ProcessStatsWin.cpp
         src/platform/win/RegistryHelper.cpp
         src/platform/win/SystemInputWin.cpp
+        src/platform/win/WindowActivationWin.cpp
         src/platform/win/WindowFrameWin.cpp
         # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
         src/updates/UpdateService.cpp
@@ -255,6 +257,7 @@ elseif(APPLE)
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp
+        src/platform/mac/WindowActivationMac.cpp
         src/platform/mac/WindowFrameMac.cpp
     )
     list(APPEND HEADERS

@@ -273,9 +273,10 @@ bool FolderSwitchModule::setRecentShortcut(const Shortcut &shortcut)
 
 void FolderSwitchModule::onForegroundChanged(quintptr hwndValue, quint32 /*pid*/, const QString & /*exeName*/)
 {
-    // Defensa en profundidad: el watcher compartido esta inerte (sin hook real) en toda corrida
-    // automatizada, asi que esto nunca deberia dispararse ahi. Si algun dia deja de serlo, no se
-    // toca ningun dialogo ajeno.
+    // En corrida automatizada el watcher compartido esta inerte, salvo cuando la corrida pide
+    // observar de verdad (HostOptions::observeForeground: la medicion de consumo y el conteo de
+    // hooks del self-test). Ahi los avisos SI llegan, y por eso esta guarda: nunca se toca un dialogo
+    // ajeno en una corrida automatizada.
     if (context().automatedRun()) {
         return;
     }

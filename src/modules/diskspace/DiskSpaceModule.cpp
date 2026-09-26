@@ -296,6 +296,58 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         check(damaged.diskWatches().size() == 1 && damaged.diskCheckMinutes() == DiskSpace::kDefaultIntervalMinutes,
               QStringLiteral("settings: una entrada ilegible y un intervalo invalido se descartan"));
     }
+
+    // ---- El historial de avisos sobrevive a apagar y prender (se guarda con cada disco).
+    {
+        MemorySettingsStore store;
+        HostOptions options;
+        options.automatedRun = true;
+        ModuleHost host({}, &store, options);
+        ModuleContextImpl context(&host, kId, QStringLiteral("Disk Space"), 1);
+        QHash<QString, DriveInfo> disks;
+        DriveInfo d;
+        d.root = QStringLiteral("D:/");
+        d.label = QStringLiteral("D:");
+        d.totalBytes = 1000 * kGiB;
+        d.freeBytes = 10 * kGiB;
+        disks.insert(d.root, d);
+        QDateTime clock = t0;
+        DiskMonitor::Sources sources;
+        sources.query = [&disks](const QString &root, DriveInfo *drive) {
+            if (!disks.contains(root)) {
+                return false;
+            }
+            *drive = disks.value(root);
+            return true;
+        };
+        sources.now = [&clock]() { return clock; };
+        int notified = 0;
+        {
+            DiskState state(&context);
+            state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
+            DiskMonitor monitor(&state, sources);
+            QObject::connect(&monitor, &DiskMonitor::lowSpace, [&notified](const DriveInfo &, const DiskWatch &) { ++notified; });
+            monitor.checkNow(true);
+        }
+        check(notified == 1 && store.value(QStringLiteral("diskSpace/watched/1/lastNotified")).toString() == t0.toString(Qt::ISODate),
+              QStringLiteral("historial: el aviso queda guardado con su disco"));
+        clock = t0.addSecs(3600);
+        {
+            DiskState state(&context); // "prender de nuevo": estado nuevo desde la seccion
+            DiskMonitor monitor(&state, sources);
+            QObject::connect(&monitor, &DiskMonitor::lowSpace, [&notified](const DriveInfo &, const DiskWatch &) { ++notified; });
+            monitor.checkNow(true);
+            check(notified == 1, QStringLiteral("historial: apagar y prender no repite el aviso antes de las 6 h"));
+            clock = t0.addSecs(6 * 3600);
+            monitor.checkNow(true);
+            check(notified == 2, QStringLiteral("historial: a las 6 h repite, como siempre"));
+            state.removeDiskWatch(QStringLiteral("D:/"));
+            state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
+            clock = clock.addSecs(60);
+            monitor.checkNow(true);
+            check(notified == 3, QStringLiteral("historial: dejar de vigilar y volver a agregar avisa de nuevo"));
+        }
+    }
 }
 
 } // namespace
