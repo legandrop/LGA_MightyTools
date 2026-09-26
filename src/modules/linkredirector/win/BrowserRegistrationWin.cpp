@@ -7,7 +7,6 @@
 #include <QDir>
 
 #include <shellapi.h>
-#include <shlobj.h>
 
 // Port de LGA_LinkRedirector src/windows/DefaultBrowser.cpp (v0.173), con las claves renombradas
 // para Mighty Tools (plan 4.6): ProgId "LGA.MightyTools.URL", clave "StartMenuInternet\LGA_MightyTools"
@@ -21,6 +20,9 @@ const QString kProgId         = QStringLiteral("LGA.MightyTools.URL");   // Prog
 const QString kStartMenu      = QStringLiteral("Software\\Clients\\StartMenuInternet\\LGA_MightyTools");
 const QString kClasses        = QStringLiteral("Software\\Classes\\LGA.MightyTools.URL");
 const QString kRegisteredApps = QStringLiteral("Software\\RegisteredApplications");
+// A lo que apunta NUESTRO valor de RegisteredApplications. El `.nk` de Open in NukeX usa otro valor
+// (LGA_MightyTools_NukeScripts, WinFileAssociation.cpp): cada modulo escribe y borra solo el suyo.
+const QString kCapabilities   = kStartMenu + QStringLiteral("\\Capabilities");
 
 QString exePath()
 {
@@ -100,7 +102,7 @@ bool registerAsBrowser(QString *error)
                                       kStartMenu + QLatin1String("\\Capabilities"));
 
     // Notificar al shell que cambiaron las asociaciones (para que Windows reindexe).
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
+    RegistryHelper::notifyAssociationsChanged();
 
     if (ok) {
         qInfo() << "[linkRedirector] Registrado como navegador candidato. exe:" << exePath();
@@ -115,21 +117,41 @@ bool registerAsBrowser(QString *error)
 
 bool unregisterAsBrowser(QString *error)
 {
-    Q_UNUSED(error);
+    // Propiedad por CONTENIDO (regla "Registro limpio"): se borra solo lo que apunta a ESTE exe. Otra
+    // copia (un build de desarrollo, otra carpeta) usa los mismos nombres de clave; lo suyo queda.
+    // Primero se evalua todo, despues se borra.
     const HKEY hk = HKEY_CURRENT_USER;
+    const QString exe = exePath();
+    const bool startMenuExists = RegistryHelper::keyExists(hk, kStartMenu);
+    const bool startMenuOwned = RegistryHelper::commandPointsTo(
+        RegistryHelper::readString(hk, kStartMenu + QLatin1String("\\shell\\open\\command")), exe);
+    const bool classesOwned = RegistryHelper::commandPointsTo(
+        RegistryHelper::readString(hk, kClasses + QLatin1String("\\shell\\open\\command")), exe);
+    // El valor de RegisteredApplications se decide por la ruta a la que apunta: la nuestra, y que esa
+    // clave sea nuestra o ya no exista (un valor colgado no le sirve a nadie).
+    const QString registered = RegistryHelper::readString(hk, kRegisteredApps, kAppKey);
+    const bool registeredOwned = registered.compare(kCapabilities, Qt::CaseInsensitive) == 0
+                                 && (startMenuOwned || !startMenuExists);
+
     bool ok = true;
-    ok &= RegistryHelper::deleteTree(hk, kStartMenu);
-    ok &= RegistryHelper::deleteTree(hk, kClasses);
-    // Borrar el valor de RegisteredApplications.
-    HKEY key = nullptr;
-    const std::wstring sub = kRegisteredApps.toStdWString();
-    if (RegOpenKeyExW(hk, sub.c_str(), 0, KEY_SET_VALUE, &key) == ERROR_SUCCESS) {
-        const std::wstring val = kAppKey.toStdWString();
-        RegDeleteValueW(key, val.c_str());
-        RegCloseKey(key);
+    if (registeredOwned) {
+        ok &= RegistryHelper::deleteValue(hk, kRegisteredApps, kAppKey);
     }
-    SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, nullptr, nullptr);
-    qInfo() << "[linkRedirector] Registro como navegador retirado (ok:" << ok << ").";
+    if (startMenuOwned) {
+        ok &= RegistryHelper::deleteTree(hk, kStartMenu);
+    }
+    if (classesOwned) {
+        ok &= RegistryHelper::deleteTree(hk, kClasses);
+    }
+    RegistryHelper::notifyAssociationsChanged();
+    qInfo() << "[linkRedirector] Registro como navegador retirado. StartMenuInternet:"
+            << (startMenuOwned ? "borrado" : (startMenuExists ? "de otra copia, queda" : "no estaba"))
+            << "| ProgId:" << (classesOwned ? "borrado" : "no era de este exe")
+            << "| RegisteredApplications:" << (registeredOwned ? "borrado" : "no era de este exe")
+            << "| ok:" << ok;
+    if (!ok && error) {
+        *error = QStringLiteral("Could not remove all the browser registration keys.");
+    }
     return ok;
 }
 
