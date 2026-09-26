@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v0.04:
+
+Las cinco herramientas funcionan dentro de la app, cada una con su interruptor. Faltaba todo lo que va
+arriba del contrato: la ventana con barra lateral, la bandeja con una sección por herramienta, General,
+el primer arranque con todo apagado, la ayuda única y los ports de Nuke Shortcuts, Disk Space, Folder
+Switch, Link Redirector y Open in NukeX, con el plugin de Nuke adentro del repo. La asociación de `.nk`
+calcula el hash de Windows 11 en C++, sin .NET, y coincide con los hashes que guardó Windows. Lo apagado
+no consume: 20 ciclos por herramienta sin fugas, 16 ms de CPU en 10 minutos de reposo, +2,2 MB. Corrige
+también lo que v0.03 daba por hecho y no estaba: el self-test ahora sí recorre las pruebas de cada
+herramienta.
+[ Herramientas - Las cinco herramientas en la ventana con barra lateral ]
+
 v0.03:
 
 Contrato de las herramientas, antes de escribir la ventana. Cada una se describe con datos estáticos
