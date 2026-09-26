@@ -25,7 +25,9 @@
 #include <QSet>
 #include <QTimer>
 
+#include <exdisp.h>
 #include <objbase.h>
+#include <objidl.h>
 #include <uiautomation.h>
 
 namespace {
@@ -898,6 +900,37 @@ void uiaTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
     automation->Release();
 }
 
+// El limite de las llamadas a Explorer: el valor tiene que ser una constante RPC_C_BINDING_* (con
+// milisegundos, IRpcOptions::Set falla con E_INVALIDARG y el proxy queda sin limite), y Set tiene que
+// aceptarlo sobre el proxy real de IShellWindows (solo lectura: no toca ninguna ventana).
+void explorerRpcTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
+{
+    const ULONG value = FolderResolver::kExplorerRpcTimeout;
+    check(value == RPC_C_BINDING_MIN_TIMEOUT || value == RPC_C_BINDING_DEFAULT_TIMEOUT
+              || value == RPC_C_BINDING_MAX_TIMEOUT,
+          QStringLiteral("Explorer: el limite RPC es una constante RPC_C_BINDING_* (no milisegundos)"));
+
+    IShellWindows *shellWindows = nullptr;
+    if (FAILED(CoCreateInstance(CLSID_ShellWindows, nullptr, CLSCTX_ALL, IID_IShellWindows,
+                                reinterpret_cast<void **>(&shellWindows)))
+        || !shellWindows) {
+        qInfo() << "[folderSwitch] self-test: sin IShellWindows en esta sesion, no se prueba IRpcOptions::Set";
+        return;
+    }
+    IRpcOptions *rpcOptions = nullptr;
+    if (SUCCEEDED(shellWindows->QueryInterface(IID_IRpcOptions, reinterpret_cast<void **>(&rpcOptions)))
+        && rpcOptions) {
+        const HRESULT hr = rpcOptions->Set(shellWindows, COMBND_RPCTIMEOUT, value);
+        check(SUCCEEDED(hr), QStringLiteral("Explorer: IRpcOptions::Set acepta el limite sobre IShellWindows (hr=%1)").arg(hr));
+        // Negativo: 2000 (milisegundos) es rechazado, que es lo que dejaba el proxy sin limite.
+        const HRESULT bad = rpcOptions->Set(shellWindows, COMBND_RPCTIMEOUT, 2000);
+        check(FAILED(bad), QStringLiteral("Explorer: IRpcOptions::Set rechaza 2000 (no son milisegundos)"));
+        rpcOptions->Set(shellWindows, COMBND_RPCTIMEOUT, value);
+        rpcOptions->Release();
+    }
+    shellWindows->Release();
+}
+
 void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &check)
 {
     // ---- Deduplicado y orden de recientes (sin ModuleContext: todo en memoria) ----
@@ -1061,6 +1094,7 @@ void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &chec
     windowClassificationSelfTest(check);
     qtDialogCacheSelfTest(check);
     uiaTimeoutSelfTest(check);
+    explorerRpcTimeoutSelfTest(check);
     // El popup de recientes (RecentFoldersPopup) es un QWidget: --self-test corre bajo
     // QCoreApplication (sin QApplication), asi que no se puede construir aca -- "si se puede" del
     // encargo no se da. Su navegacion por teclado (orden, wrap, Esc) se verifica con las capturas

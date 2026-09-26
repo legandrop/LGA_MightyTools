@@ -10,6 +10,11 @@
 // sola vez para todo el proceso (plan 4.4): este modulo no lo toca.
 namespace FolderResolver {
 
+// Limite de las llamadas RPC a Explorer (IRpcOptions, COMBND_RPCTIMEOUT). Es una constante
+// RPC_C_BINDING_* (escala relativa 0-10), NO milisegundos: la minima, porque una llamada sana a
+// IShellWindows/IWebBrowser2 tarda pocos ms y un Explorer trabado no tiene que frenar la app.
+constexpr ULONG kExplorerRpcTimeout = RPC_C_BINDING_MIN_TIMEOUT;
+
 // Explorer via COM (IShellWindows/IWebBrowser2). QString() si no se pudo resolver (carpeta virtual,
 // LocationURL vacio, etc.).
 QString resolveExplorerPath(HWND hwnd);

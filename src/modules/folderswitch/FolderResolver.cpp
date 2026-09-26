@@ -14,34 +14,30 @@
 
 // Copia de LGA_FolderSwitch (src/core/FolderResolver.cpp). Unico cambio de logica respecto del
 // origen (plan, seccion 11 y auditoria de la etapa 2): resolveExplorerPathImpl() se mide, y su
-// llamada Shell COM (cruza a Explorer.exe, un proceso ajeno) se acota con IRpcOptions.
+// llamada Shell COM (cruza a Explorer.exe, un proceso ajeno) se acota con IRpcOptions, proxy por proxy.
 
 namespace {
 
-// Acota la llamada cruzada a Explorer.exe: IShellWindows es un proxy a un objeto QUE YA ESTA
-// CORRIENDO en Explorer, asi que cada metodo es una llamada RPC entre procesos. Si Explorer esta
-// trabado, sin esto el hilo de UI de toda la app queda esperando lo que tarde Explorer en
-// responder (puede ser indefinido). IRpcOptions::Set con COMBND_RPCTIMEOUT es la forma
-// documentada de acotar UN proxy sin tocar hilos ni el apartment de COM (a diferencia de
-// CoCancelCall, que necesita un hilo aparte para cancelar el que esta bloqueado). 2000 ms: una
-// llamada sana a IShellWindows/IWebBrowser2 tarda unos pocos ms; dos segundos ya distingue eso de
-// un Explorer realmente trabado, sin sumar una espera larga al cambio de foreground.
-constexpr ULONG kExplorerRpcTimeoutMs = 2000;
-
-void limitShellWindowsTimeout(IShellWindows *shellWindows)
+// Acota las llamadas cruzadas a Explorer.exe: IShellWindows, y cada IDispatch/IWebBrowser2 que
+// devuelve, son proxies a objetos QUE YA ESTAN CORRIENDO en Explorer, asi que cada metodo es una
+// llamada RPC entre procesos. Si Explorer esta trabado, sin esto el hilo de UI de toda la app queda
+// esperando lo que tarde Explorer (puede ser indefinido). IRpcOptions::Set con COMBND_RPCTIMEOUT es
+// la forma documentada de acotar UN proxy sin tocar hilos ni el apartment de COM. Ojo: el valor NO son
+// milisegundos sino una de las constantes RPC_C_BINDING_* (escala relativa 0-10); cualquier otro
+// numero hace fallar Set() con E_INVALIDARG y el proxy queda sin limite. Cada proxy se acota por
+// separado: el limite de IShellWindows no alcanza a los IWebBrowser2 que devuelve.
+void limitProxyTimeout(IUnknown *proxy, const char *what)
 {
     IRpcOptions *rpcOptions = nullptr;
-    if (FAILED(shellWindows->QueryInterface(IID_IRpcOptions, reinterpret_cast<void **>(&rpcOptions)))
+    if (FAILED(proxy->QueryInterface(IID_IRpcOptions, reinterpret_cast<void **>(&rpcOptions)))
         || !rpcOptions) {
-        // Sin proxy RPC (por ejemplo si Explorer expusiera el objeto in-proc): sin IRpcOptions no hay
-        // forma de acotar esta llamada especifica sin mover a un hilo. Riesgo documentado en el
-        // informe.
-        qWarning() << "[folderSwitch] IRpcOptions no disponible en IShellWindows: llamada a Explorer sin timeout";
+        // Sin proxy RPC (objeto en el mismo apartment): no hay llamada entre procesos que acotar.
+        qDebug() << "[folderSwitch] IRpcOptions no disponible en" << what << ": sin limite de tiempo";
         return;
     }
-    const HRESULT hr = rpcOptions->Set(shellWindows, COMBND_RPCTIMEOUT, kExplorerRpcTimeoutMs);
+    const HRESULT hr = rpcOptions->Set(proxy, COMBND_RPCTIMEOUT, FolderResolver::kExplorerRpcTimeout);
     if (FAILED(hr)) {
-        qWarning() << "[folderSwitch] IRpcOptions::Set(COMBND_RPCTIMEOUT) fallo, hr=" << hr;
+        qWarning() << "[folderSwitch] IRpcOptions::Set(COMBND_RPCTIMEOUT) fallo en" << what << ", hr=" << hr;
     }
     rpcOptions->Release();
 }
@@ -59,7 +55,7 @@ QString resolveExplorerPathImpl(HWND hwnd)
         qWarning() << "[FolderResolver] CoCreateInstance(ShellWindows) fallo, hr=" << hr;
         return QString();
     }
-    limitShellWindowsTimeout(shellWindows);
+    limitProxyTimeout(shellWindows, "IShellWindows");
 
     QString result;
 
@@ -77,6 +73,7 @@ QString resolveExplorerPathImpl(HWND hwnd)
             continue;
         }
 
+        limitProxyTimeout(dispatch, "IDispatch");
         IWebBrowser2 *browser = nullptr;
         HRESULT qi = dispatch->QueryInterface(IID_IWebBrowser2, reinterpret_cast<void **>(&browser));
         dispatch->Release();
@@ -84,6 +81,7 @@ QString resolveExplorerPathImpl(HWND hwnd)
             continue;
         }
 
+        limitProxyTimeout(browser, "IWebBrowser2");
         SHANDLE_PTR hwndPtr = 0;
         HRESULT gotHwnd = browser->get_HWND(&hwndPtr);
         if (FAILED(gotHwnd) || reinterpret_cast<HWND>(hwndPtr) != hwnd) {
