@@ -5,13 +5,16 @@
 #include <QPoint>
 #include <QRect>
 
-#include <memory>
+class ForegroundWatcher;
 
-// Sabe si Nuke esta al frente y donde esta su ventana principal. Una implementacion por plataforma:
-//  - Windows (platform/win/NukeWatcherWin.cpp): SetWinEventHook(EVENT_SYSTEM_FOREGROUND) y el
-//    nombre del exe del proceso de la ventana.
-//  - macOS   (platform/mac/NukeWatcherMac.mm): NSWorkspace (app activa) y el API de Accesibilidad
-//    para el marco de la ventana principal.
+// Sabe si Nuke esta al frente y donde esta su ventana principal. No observa el sistema por su
+// cuenta: escucha el ForegroundWatcher compartido del host (plan 4.4, un solo hook para todas las
+// herramientas) y decide por el nombre del ejecutable (NukeWatcherCommon.cpp). Lo que queda por
+// plataforma son las consultas puntuales:
+//  - Windows (platform/win/NukeWatcherWin.cpp): la ventana del frente AHORA y el marco de la ventana
+//    principal de Nuke (DWM).
+//  - macOS   (platform/mac/NukeWatcherMac.mm): la app activa AHORA (NSWorkspace) y el API de
+//    Accesibilidad para el marco de la ventana principal.
 //
 // Nuke se reconoce por el PROCESO, nunca por la clase de ventana: la version AutoHotkey miraba
 // `Qt5QWindowIcon`, que deja de existir con Nuke 16 (Qt 6).
@@ -24,10 +27,11 @@ class NukeWatcher : public QObject
     Q_OBJECT
 
 public:
-    explicit NukeWatcher(QObject *parent = nullptr);
-    ~NukeWatcher() override;
+    // `foreground` es el servicio del host (ModuleContext::foreground()); vive mas que este objeto.
+    explicit NukeWatcher(ForegroundWatcher *foreground, QObject *parent = nullptr);
+    ~NukeWatcher() override = default;
 
-    // Lo ultimo que aviso el sistema (llega encolado, unos milisegundos despues del cambio).
+    // Lo ultimo que aviso el servicio (llega encolado, unos milisegundos despues del cambio).
     bool nukeInFront() const { return m_nukeInFront; }
     // Pregunta AHORA cual es la ventana del frente, sin esperar el aviso. Lo usa el atajo antes de
     // actuar: si el usuario acaba de salir de Nuke, el aviso todavia puede no haber llegado.
@@ -49,8 +53,6 @@ signals:
 private:
     void setNukeInFront(bool inFront);
 
-    struct Private;
-    std::unique_ptr<Private> d;
     bool m_nukeInFront = false;
 };
 

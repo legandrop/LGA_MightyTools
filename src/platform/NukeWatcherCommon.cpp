@@ -1,6 +1,19 @@
 #include "platform/NukeWatcher.h"
 
+#include "platform/ForegroundWatcher.h"
+
+#include <QDebug>
 #include <QRegularExpression>
+
+NukeWatcher::NukeWatcher(ForegroundWatcher *foreground, QObject *parent)
+    : QObject(parent)
+{
+    // Sin hook propio (el `g_instance` de antes): lo decide el nombre del exe que avisa el servicio.
+    connect(foreground, &ForegroundWatcher::foregroundChanged, this,
+            [this](quintptr, quint32, const QString &exeName) { setNukeInFront(isNukeExecutable(exeName)); });
+    m_nukeInFront = isNukeExecutable(foreground->foregroundExeName());
+    qInfo() << "[NukeWatcher] Nuke al frente al arrancar:" << m_nukeInFront;
+}
 
 bool NukeWatcher::isNukeExecutable(const QString &fileName)
 {

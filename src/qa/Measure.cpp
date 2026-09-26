@@ -6,6 +6,7 @@
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
+#include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
 
 #include <QAbstractEventDispatcher>
@@ -75,6 +76,8 @@ int cycles(const QStringList &arguments)
     MemorySettingsStore store;
     HostOptions options;
     options.automatedRun = true;
+    // El hook de ventana al frente de verdad (solo observa): es un objeto USER y tiene que contar.
+    options.observeForeground = true;
     ModuleHost host(ModuleRegistry::all(), &store, options);
     // La ventana real (con sus paginas), sin mostrarla: el panel de cada herramienta se crea en ella.
     MainWindow window(&host, MainWindow::Mode::Capture, nullptr);
@@ -131,6 +134,37 @@ int cycles(const QStringList &arguments)
                     static_cast<long long>(after.gdiObjects - before.gdiObjects),
                     static_cast<long long>(after.userObjects - before.userObjects), okQt ? "igual" : "DISTINTO",
                     host.hotkeyHub()->registeredCount(), pass ? "ok" : "FALLO");
+        std::fflush(stdout);
+        if (!pass) {
+            ++failures;
+        }
+    }
+    // Plan 4.4: las herramientas que miran la ventana del frente comparten UN hook.
+    const QStringList pair = {QStringLiteral("nukeShortcuts"), QStringLiteral("folderSwitch")};
+    if (only.isEmpty() && host.descriptor(pair.at(0)) && host.descriptor(pair.at(1))) {
+        const int hooks0 = ForegroundWatcher::installedHooks();
+        const ProcessStats before = ProcessStats::current();
+        int hooksBoth = -1;
+        for (int i = 0; i < count; ++i) {
+            host.setEnabled(pair.at(0), true);
+            host.setEnabled(pair.at(1), true);
+            hooksBoth = ForegroundWatcher::installedHooks();
+            host.setEnabled(pair.at(0), false);
+            host.setEnabled(pair.at(1), false);
+            pump(20);
+        }
+        pump(300);
+        const ProcessStats after = ProcessStats::current();
+        const int hooksOff = ForegroundWatcher::installedHooks();
+        const bool pass = hooks0 == 0 && hooksBoth == 1 && hooksOff == 0 && within(before.handles, after.handles, 2)
+                          && within(before.threads, after.threads, 2) && within(before.gdiObjects, after.gdiObjects, 2)
+                          && within(before.userObjects, after.userObjects, 2);
+        std::printf("measure result pair nukeShortcuts+folderSwitch cycles=%d hooks_off=%d hooks_both=%d hooks_after=%d "
+                    "handles=%+lld threads=%+lld gdi=%+lld user=%+lld %s\n",
+                    count, hooks0, hooksBoth, hooksOff, static_cast<long long>(after.handles - before.handles),
+                    static_cast<long long>(after.threads - before.threads),
+                    static_cast<long long>(after.gdiObjects - before.gdiObjects),
+                    static_cast<long long>(after.userObjects - before.userObjects), pass ? "ok" : "FALLO");
         std::fflush(stdout);
         if (!pass) {
             ++failures;

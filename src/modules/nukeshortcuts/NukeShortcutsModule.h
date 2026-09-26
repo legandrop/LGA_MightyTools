@@ -19,9 +19,9 @@ class QTimer;
 // lo que era del TrayController (registrar segun Nuke al frente, el runner, el calibrador, el
 // permiso de Accesibilidad) vive aca.
 //
-// Todo lo que consume nace en start() y muere en stop(): el NukeWatcher (hook de ventana al frente;
-// se muda a un servicio compartido con Folder Switch), los atajos, el ActionRunner, el sondeo del
-// permiso en mac y una calibracion en curso.
+// Todo lo que consume nace en start() y muere en stop(): el NukeWatcher (escucha el servicio
+// compartido de ventana al frente, sin hook propio), los atajos, el ActionRunner, el sondeo del
+// permiso en mac y una calibracion en curso. El servicio lo suelta el contexto al apagarla.
 class NukeShortcutsModule : public Module
 {
     Q_OBJECT

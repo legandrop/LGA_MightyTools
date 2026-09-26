@@ -11,11 +11,10 @@
 
 namespace {
 
-// Registro compartido hook -> instancia: a diferencia de un puntero estatico unico por instancia (el
-// `g_instance`/`s_instance` de NukeWatcherWin y del ForegroundWatcher original de Folder Switch, que
-// se pisan si se instancia dos veces), este mapa admite varias instancias vivas a la vez -- una por
-// modulo que lo use, hasta que exista el servicio compartido del host (plan 4.4). El callback de
-// Windows llega con SU PROPIO HWINEVENTHOOK, asi que nunca hace falta recorrer el mapa entero.
+// Registro compartido hook -> instancia, en vez de un puntero estatico unico por instancia (el
+// `g_instance` que tenia NukeWatcherWin se pisaba si se instanciaba dos veces). El host tiene una sola
+// instancia, pero el mapa admite varias sin que se pisen. El callback de Windows llega con SU PROPIO
+// HWINEVENTHOOK, asi que nunca hace falta recorrer el mapa entero.
 QHash<HWINEVENTHOOK, ForegroundWatcher *> &registry()
 {
     static QHash<HWINEVENTHOOK, ForegroundWatcher *> map;
@@ -48,7 +47,6 @@ QString exeNameOfWindow(HWND hwnd, DWORD *outPid)
 // Nested a proposito: desde C++11 una clase anidada tiene acceso a los miembros privados de la
 // clase que la contiene, y por eso el callback (que Windows exige como funcion C, sin "this") puede
 // llamar al setter privado `ForegroundWatcher::setForeground` sin exponerlo en el header publico.
-// Mismo truco que NukeWatcherWin.cpp.
 struct ForegroundWatcher::Private
 {
     HWINEVENTHOOK hook = nullptr;
@@ -105,6 +103,11 @@ ForegroundWatcher::~ForegroundWatcher()
         registry().remove(d->hook);
         UnhookWinEvent(d->hook);
     }
+}
+
+int ForegroundWatcher::installedHooks()
+{
+    return int(registry().size());
 }
 
 void ForegroundWatcher::setForeground(quintptr hwnd, quint32 pid, const QString &exeName)

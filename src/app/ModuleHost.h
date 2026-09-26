@@ -27,6 +27,9 @@ struct HostOptions
     bool automatedRun = false; ///< toda corrida automatizada (incluye captura)
     bool buildTree = false;    ///< el exe corre desde un arbol de build (LgaBuildTree::isBuildTree)
     bool dryRunInput = false;  ///< --dry-run-input o dryRunInput=true en debug_flags
+    // El observador de ventana al frente se instala de verdad aunque la corrida sea automatizada: solo
+    // observa, no actua. Lo usan la medicion de consumo y el conteo de hooks del self-test.
+    bool observeForeground = false;
 };
 
 // Dueno de las herramientas (plan 4.2 y 4.3). Lee [modules]/<id>/enabled, construye cada modulo al

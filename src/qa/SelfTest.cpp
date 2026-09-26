@@ -9,6 +9,7 @@
 #include "app/SettingsStore.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
 
 #include <QCoreApplication>
@@ -364,6 +365,8 @@ void testRealModules(const Check &check)
     MemorySettingsStore store;
     HostOptions options;
     options.automatedRun = true;
+    // El hook de ventana al frente de verdad (solo observa): sus objetos del sistema tienen que volver.
+    options.observeForeground = true;
     ModuleHost host(ModuleRegistry::all(), &store, options);
     const int timers0 = qAppTimers();
     const int threads0 = qAppThreads();
@@ -403,6 +406,49 @@ void testRealModules(const Check &check)
     }
 }
 
+// Plan 4.4: un solo hook de ventana al frente para todas las herramientas. Con el observador real
+// (solo observa): Nuke Shortcuts y Folder Switch prendidos -> 1 hook; los dos apagados -> 0.
+void testSharedForeground(const Check &check)
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.automatedRun = true;
+    options.observeForeground = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    const QString ns = QStringLiteral("nukeShortcuts");
+    const QString fs = QStringLiteral("folderSwitch");
+    if (!host.descriptor(ns) || !host.descriptor(fs)) {
+        std::printf("info sin Folder Switch en esta plataforma: el conteo de hooks se prueba solo con Nuke Shortcuts\n");
+    }
+    const int hooks0 = ForegroundWatcher::installedHooks();
+    check(hooks0 == 0, QStringLiteral("ventana al frente: 0 hooks antes de prender nada (%1)").arg(hooks0));
+    host.setEnabled(ns, true);
+    check(ForegroundWatcher::installedHooks() == 1 && host.foregroundAlive(),
+          QStringLiteral("ventana al frente: Nuke Shortcuts prendido -> 1 hook (%1)").arg(ForegroundWatcher::installedHooks()));
+    if (host.descriptor(fs)) {
+        host.setEnabled(fs, true);
+        check(ForegroundWatcher::installedHooks() == 1,
+              QStringLiteral("ventana al frente: con Folder Switch tambien, sigue 1 hook (%1)").arg(ForegroundWatcher::installedHooks()));
+        host.setEnabled(ns, false);
+        flushDeletes();
+        check(ForegroundWatcher::installedHooks() == 1 && host.foregroundAlive(),
+              QStringLiteral("ventana al frente: apagado Nuke Shortcuts, Folder Switch conserva el hook"));
+        host.setEnabled(fs, false);
+    } else {
+        host.setEnabled(ns, false);
+    }
+    flushDeletes();
+    check(ForegroundWatcher::installedHooks() == 0 && !host.foregroundAlive(),
+          QStringLiteral("ventana al frente: los dos apagados -> 0 hooks y sin servicio (%1)").arg(ForegroundWatcher::installedHooks()));
+    // Negativo: dos observadores sueltos son dos hooks. El contador los ve.
+    {
+        ForegroundWatcher first(true);
+        ForegroundWatcher second(true);
+        check(ForegroundWatcher::installedHooks() == 2, QStringLiteral("negativo: dos observadores sueltos cuentan 2 hooks"));
+    }
+    check(ForegroundWatcher::installedHooks() == 0, QStringLiteral("negativo: al destruirlos vuelve a 0"));
+}
+
 } // namespace
 
 namespace SelfTest {
@@ -423,6 +469,7 @@ int run()
     testPersistentRegistration(check);
     testExternal(check);
     testRealModules(check);
+    testSharedForeground(check);
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {

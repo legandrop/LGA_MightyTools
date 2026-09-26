@@ -295,8 +295,9 @@ void ModuleHost::releaseInjector()
 ForegroundWatcher *ModuleHost::acquireForeground()
 {
     if (!m_foreground) {
-        // Inerte (sin hook real) en toda corrida automatizada, igual que el inyector en dry-run.
-        m_foreground = std::make_unique<ForegroundWatcher>(!m_options.automatedRun);
+        // Inerte (sin hook real) en corrida automatizada, igual que el inyector en dry-run; salvo que
+        // la corrida pida observar (medicion, conteo de hooks): observar no actua sobre nada.
+        m_foreground = std::make_unique<ForegroundWatcher>(!m_options.automatedRun || m_options.observeForeground);
     }
     ++m_foregroundUsers;
     return m_foreground.get();
