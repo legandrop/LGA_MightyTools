@@ -140,10 +140,16 @@ bool isRegistered()
 
 QString currentDefaultHandlerId()
 {
-    return RegistryHelper::readString(
-        HKEY_CURRENT_USER,
-        QStringLiteral("Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\UserChoice"),
-        QStringLiteral("ProgId"));
+    // Windows 11 guarda la eleccion en UserChoiceLatest\ProgId y puede dejar el UserChoice legado con el
+    // navegador anterior (medido: UserChoice decia LinkRedirectorURL con Mighty Tools elegido). Manda
+    // Latest; el legado queda para Windows 10. Mismo criterio que la asociacion de .nk.
+    const QString base = QStringLiteral("Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\http\\");
+    const QString latest = RegistryHelper::readString(HKEY_CURRENT_USER, base + QStringLiteral("UserChoiceLatest\\ProgId"),
+                                                      QStringLiteral("ProgId"));
+    if (!latest.isEmpty()) {
+        return latest;
+    }
+    return RegistryHelper::readString(HKEY_CURRENT_USER, base + QStringLiteral("UserChoice"), QStringLiteral("ProgId"));
 }
 
 bool isDefaultBrowser()

@@ -225,11 +225,16 @@ bool writeUserChoice(const QString &extension, const QString &progIdValue, QStri
 
 bool isOldClientInstalled()
 {
-    return RegistryHelper::keyExists(HKEY_LOCAL_MACHINE, QString::fromWCharArray(kOldClientUninstallKey))
-        || RegistryHelper::keyExists(HKEY_LOCAL_MACHINE,
-                                     QStringLiteral("Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\"
-                                                    "Uninstall\\{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1"))
-        || RegistryHelper::keyExists(HKEY_CURRENT_USER, QString::fromWCharArray(kOldClientUninstallKey));
+    // Instalado = la entrada de desinstalacion tiene nombre, como la lista de Apps de Windows. El
+    // desinstalador de Inno puede dejar la clave vacia (medido en la maquina de Lega, en HKCU): la
+    // clave sola no alcanza.
+    const auto listed = [](HKEY root, const QString &key) {
+        return !RegistryHelper::readString(root, key, QStringLiteral("DisplayName")).isEmpty();
+    };
+    return listed(HKEY_LOCAL_MACHINE, QString::fromWCharArray(kOldClientUninstallKey))
+        || listed(HKEY_LOCAL_MACHINE, QStringLiteral("Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\"
+                                                     "Uninstall\\{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1"))
+        || listed(HKEY_CURRENT_USER, QString::fromWCharArray(kOldClientUninstallKey));
 }
 
 ApplyOutcome apply(bool reapply, HWND parentHwnd)
