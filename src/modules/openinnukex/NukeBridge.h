@@ -49,8 +49,8 @@ struct Status
 enum class ChipState {
     NotInstalled,           ///< "Not installed"
     Installed,              ///< "Installed · v%1" (misma version)
-    UpdateAvailable,        ///< "Update available · v%1" (version distinta)
-    InstalledUnknownVersion ///< "Installed · unknown version" (VERSION ilegible o ausente)
+    UpdateAvailable,        ///< "Update available · v%1" (la instalada es MENOR que la embebida)
+    InstalledUnknownVersion ///< "Installed · unknown version" (VERSION ilegible, ausente o no numerica)
 };
 
 /// No mira el disco: es una funcion pura sobre `status` y la version embebida, para que el

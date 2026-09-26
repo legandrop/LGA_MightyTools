@@ -602,7 +602,8 @@ void OpenInNukeXPanel::refreshBridgeStatus()
         break;
     case NukeBridge::ChipState::Installed:
         chipTone = QStringLiteral("ok");
-        chipText = QStringLiteral("Installed · v%1").arg(NukeBridge::bundledVersion());
+        // La instalada: igual a la embebida, o MAS NUEVA (otra copia de la app mas reciente).
+        chipText = QStringLiteral("Installed · v%1").arg(status.installedVersion);
         buttonText = QStringLiteral("Reinstall");
         break;
     case NukeBridge::ChipState::UpdateAvailable:

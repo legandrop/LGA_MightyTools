@@ -8,6 +8,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QTextStream>
+#include <QVersionNumber>
 #include <QtGlobal>
 
 namespace {
@@ -179,8 +180,24 @@ ChipState chipState(const Status &status)
     if (status.installedVersion.isEmpty()) {
         return ChipState::InstalledUnknownVersion;
     }
-    const QString bundled = bundledVersion();
-    if (!bundled.isEmpty() && status.installedVersion != bundled) {
+    // Se ofrece actualizar SOLO si la instalada es MENOR que la embebida, comparando por segmento
+    // (1.9 < 1.10). Una instalada MAS NUEVA (otra copia de la app mas reciente la puso) no se pisa
+    // con una vieja. Una version que no es una lista de enteros ("1.83-beta") cuenta como ilegible.
+    const auto parse = [](const QString &text, bool *ok) {
+        const QString trimmed = text.trimmed();
+        qsizetype end = -1;
+        const QVersionNumber version = QVersionNumber::fromString(trimmed, &end);
+        *ok = !trimmed.isEmpty() && !version.isNull() && end == trimmed.size();
+        return version;
+    };
+    bool installedOk = false;
+    const QVersionNumber installed = parse(status.installedVersion, &installedOk);
+    if (!installedOk) {
+        return ChipState::InstalledUnknownVersion;
+    }
+    bool bundledOk = false;
+    const QVersionNumber bundled = parse(bundledVersion(), &bundledOk);
+    if (bundledOk && QVersionNumber::compare(installed, bundled) < 0) {
         return ChipState::UpdateAvailable;
     }
     return ChipState::Installed;

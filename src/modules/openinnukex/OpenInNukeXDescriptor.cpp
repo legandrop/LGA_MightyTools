@@ -225,9 +225,22 @@ void testBridgeChipState(const std::function<void(bool, const QString &)> &check
     check(NukeBridge::chipState(status) == NukeBridge::ChipState::Installed,
           QStringLiteral("chip: misma version que el bundle -> Installed"));
 
-    status.installedVersion = NukeBridge::bundledVersion() + QStringLiteral(".viejo");
+    // Solo se ofrece actualizar si la instalada es MENOR que la embebida (comparacion por segmento).
+    status.installedVersion = QStringLiteral("0.1");
     check(NukeBridge::chipState(status) == NukeBridge::ChipState::UpdateAvailable,
-          QStringLiteral("chip: version distinta -> Update available"));
+          QStringLiteral("chip: instalada 0.1 menor que la embebida %1 -> Update available").arg(NukeBridge::bundledVersion()));
+
+    status.installedVersion = NukeBridge::bundledVersion() + QStringLiteral(".1");
+    check(NukeBridge::chipState(status) == NukeBridge::ChipState::Installed,
+          QStringLiteral("chip: instalada MAS NUEVA (%1) -> Installed, nunca Update available").arg(status.installedVersion));
+
+    status.installedVersion = NukeBridge::bundledVersion() + QStringLiteral(".0");
+    check(NukeBridge::chipState(status) == NukeBridge::ChipState::Installed,
+          QStringLiteral("chip: %1 es la misma version que %2 -> Installed").arg(status.installedVersion, NukeBridge::bundledVersion()));
+
+    status.installedVersion = NukeBridge::bundledVersion() + QStringLiteral("-viejo");
+    check(NukeBridge::chipState(status) == NukeBridge::ChipState::InstalledUnknownVersion,
+          QStringLiteral("chip: version no numerica -> Installed, unknown version"));
 }
 
 void testNukeXPath(const std::function<void(bool, const QString &)> &check)
