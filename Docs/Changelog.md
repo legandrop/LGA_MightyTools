@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v0.05:
+
+Las notificaciones salían con el ícono genérico de Windows y el nombre del archivo como encabezado.
+Ahora son un toast nativo con el ícono de la app en grande, el mismo mecanismo de PipeSync, para las
+cinco herramientas; PowerShell corre sin ventana y se corta si la app se cierra con un aviso en vuelo. El exe lleva recurso de versión con el nombre visible.
+Se cierran también las observaciones de las auditorías: la ayuda scrollea y entra en pantallas chicas,
+la segunda copia trae la ventana al frente, la ventana se abre sola solo en el primer arranque, leer
+settings no crea carpetas, Check now se deshabilita mientras chequea, un click afuera corta el grabador
+de atajos, Disk Space conserva su historial de avisos, y el menú de la bandeja, el keycap del disco
+desenchufado y el chip de plataformas quedan como el diseño.
+[ Notificaciones y ayuda - Toast con el icono de la app y correcciones de las auditorias ]
+
 v0.04:
 
 Las cinco herramientas funcionan dentro de la app, cada una con su interruptor. Faltaba todo lo que va
