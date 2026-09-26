@@ -13,6 +13,10 @@
 #include "platform/ProcessStats.h"
 #include "platform/SystemNotifier.h"
 
+#ifdef Q_OS_WIN
+#include "qa/RegistryHiveTest.h"
+#endif
+
 #include <QCoreApplication>
 #include <QImageReader>
 #include <QImage>
@@ -517,6 +521,11 @@ int run()
         const QString prefix = QStringLiteral("[%1] ").arg(d.id);
         d.selfTest([&check, prefix](bool ok, const QString &what) { check(ok, prefix + what); });
     }
+
+#ifdef Q_OS_WIN
+    // Registro y --uninstall-cleanup sobre un hive privado (nunca el HKCU real).
+    RegistryHiveTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[registro] ") + what); });
+#endif
 
     std::printf("%s: %d fallas\n", failures == 0 ? "self-test ok" : "self-test FALLO", failures);
     return failures == 0 ? 0 : 1;

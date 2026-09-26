@@ -221,6 +221,8 @@ if(WIN32)
         src/platform/win/SystemNotifierWin.cpp
         src/platform/win/WindowActivationWin.cpp
         src/platform/win/WindowFrameWin.cpp
+        # Self-test del registro sobre un hive privado (RegLoadAppKey): solo Windows.
+        src/qa/RegistryHiveTest.cpp
         # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
         src/updates/UpdateService.cpp
         src/updates/VersionCompare.cpp
@@ -239,6 +241,7 @@ if(WIN32)
     list(APPEND HEADERS
         src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
+        src/qa/RegistryHiveTest.h
         src/updates/UpdateService.h
         src/updates/VersionCompare.h
         src/modules/folderswitch/DialogSwitcher.h

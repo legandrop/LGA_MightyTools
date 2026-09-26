@@ -8,6 +8,7 @@
 //    vive durante el destructor del modulo; la ventana escondida vuelve; persistentRegistration.
 //  - El modo corto (ExternalDispatch) con Done, Pending, el tope de tiempo y NotMine.
 //  - El selfTest() de cada herramienta registrada.
+//  - Windows: el registro y --uninstall-cleanup sobre un hive privado (qa/RegistryHiveTest.h).
 namespace SelfTest {
 int run();
 } // namespace SelfTest
