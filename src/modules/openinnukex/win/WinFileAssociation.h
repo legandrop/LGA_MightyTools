@@ -18,7 +18,9 @@ using HWND = HWND__ *;
 // Diferencias con el origen (D-03, D-04, D-09, plan 4.6):
 //  - El ProgID `LGA.NukeScript.1` SE REUTILIZA (para que la eleccion que ya hizo un usuario del
 //    cliente viejo siga valiendo), pero `shell\open\command` apunta a ESTE exe.
-//  - Capabilities y RegisteredApplications van con el nombre "LGA Mighty Tools", no "OpenInNukeX".
+//  - Capabilities en `Software\LGA_MightyTools\Capabilities` ("LGA Mighty Tools (Nuke scripts)") y
+//    su PROPIO valor en RegisteredApplications, `LGA_MightyTools_NukeScripts`: `LGA_MightyTools` es
+//    el del navegador (Link Redirector). Soltar uno nunca rompe el otro.
 //  - Sin el helper .NET `LGA_WinSetFTA.exe` (D-03: cero dependencias de .NET). TODA la escritura
 //    de UserChoice/UserChoiceLatest (el hash legado pre-Windows 11 Y el de Windows 11) la porta
 //    OTRO ejecutor a `src/modules/openinnukex/win/UserChoiceLatest.{h,cpp}` (API:
@@ -32,9 +34,11 @@ using HWND = HWND__ *;
 //  - `cleanConflictingKeys()` corre SOLO en re-apply (releaseAssociation()/Re-apply explicito),
 //    nunca como primer paso silencioso de apply(): un usuario ya "Associated" no deberia perder
 //    su UserChoice por abrir el panel.
-//  - `releaseAssociation()` es nuevo (D-09): suelta el ProgID, las Capabilities y
-//    RegisteredApplications, y limpia UserChoice/UserChoiceLatest de `.nk` SOLO si hoy apuntan a
-//    nuestro ProgID (nunca el de otra app).
+//  - `releaseAssociation()` es nuevo (D-09) y decide la propiedad por CONTENIDO (regla "Registro
+//    limpio"): el ProgID solo si su comando apunta a ESTE exe (es COMPARTIDO con el cliente viejo);
+//    UserChoice/UserChoiceLatest y el valor por defecto de `Classes\.nk` solo si apuntan a ese
+//    ProgID propio; las Capabilities si su icono es este exe; los valores de RegisteredApplications
+//    por la ruta a la que apuntan. Lo usan el aviso de apagado y --uninstall-cleanup.
 namespace WinFileAssociation {
 
 enum class ApplyResult { Success, NeedsUserConfirmation, Failed };
@@ -68,14 +72,29 @@ bool isNkAssociatedWithUs();
 /// aparece sin ventana dueña, como si no se pasara ninguna.
 ApplyOutcome apply(bool reapply, HWND parentHwnd = nullptr);
 
-/// D-09: suelta lo que apply() escribio. No toca UserChoice/UserChoiceLatest si apuntan a OTRA
-/// app (nunca le saca la asociacion a alguien mas).
+/// D-09: suelta lo que apply() escribio y es de ESTE exe (ver el comentario de arriba). No toca
+/// UserChoice/UserChoiceLatest si apuntan a OTRA app (nunca le saca la asociacion a alguien mas).
 bool releaseAssociation(QString *error);
+
+/// El valor propio de RegisteredApplications (`LGA_MightyTools_NukeScripts`).
+QString registeredApplicationValue();
+
+/// ProgID + Capabilities + RegisteredApplications + `Classes\.nk`, sin UserChoice, sin aviso al
+/// shell y sin selector. Migra el valor `LGA_MightyTools` de versiones anteriores si todavia apunta
+/// a estas Capabilities. Lo usan apply() y el self-test con hive privado. `errors` en ingles (UI).
+bool registerClasses(QStringList *errors);
 
 /// True si el cliente viejo (LGA OpenInNukeX, instalador Inno con permisos de administrador)
 /// sigue instalado, detectado por su clave de desinstalacion
 /// `{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1` (plan 4.6, seccion 9).
 bool isOldClientInstalled();
+
+/// A4: restos del cliente viejo en HKCU (`Software\OpenInNukeX\Capabilities`, su valor
+/// `OpenInNukeX` de RegisteredApplications y `Software\OpenInNukeX` si queda vacia). Solo si
+/// `oldClientInstalled` es false Y el exe al que apuntan no existe en una unidad local fija presente
+/// (nunca red ni unidad desconectada). Nunca toca `Classes\LGA.NukeScript.1`. Devuelve lo borrado
+/// (tambien queda en el log). La llama apply() (boton Apply) con isOldClientInstalled().
+QStringList removeOldClientLeftovers(bool oldClientInstalled);
 
 /// Costura de D-03 (ver comentario de arriba del archivo). Devuelve false con `*reason` en
 /// "no disponible todavia" hasta que el supervisor conecte `win/UserChoiceLatest.{h,cpp}`.

@@ -314,44 +314,6 @@ LONG setString(HKEY key, const wchar_t *name, const QString &value)
                           DWORD((w.size() + 1) * sizeof(wchar_t)));
 }
 
-QStringList valueNames(HKEY root, const std::wstring &path)
-{
-    QStringList out;
-    RegKey key;
-    if (RegOpenKeyExW(root, path.c_str(), 0, KEY_READ, &key.h) != ERROR_SUCCESS) {
-        return out;
-    }
-    for (DWORD i = 0;; ++i) {
-        wchar_t name[16384];
-        DWORD len = 16384;
-        const LONG rc = RegEnumValueW(key.h, i, name, &len, nullptr, nullptr, nullptr, nullptr);
-        if (rc != ERROR_SUCCESS) {
-            break;
-        }
-        out << QString::fromWCharArray(name, int(len));
-    }
-    return out;
-}
-
-QStringList subKeyNames(HKEY root, const std::wstring &path)
-{
-    QStringList out;
-    RegKey key;
-    if (RegOpenKeyExW(root, path.c_str(), 0, KEY_READ, &key.h) != ERROR_SUCCESS) {
-        return out;
-    }
-    for (DWORD i = 0;; ++i) {
-        wchar_t name[256];
-        DWORD len = 256;
-        const LONG rc = RegEnumKeyExW(key.h, i, name, &len, nullptr, nullptr, nullptr, nullptr);
-        if (rc != ERROR_SUCCESS) {
-            break;
-        }
-        out << QString::fromWCharArray(name, int(len));
-    }
-    return out;
-}
-
 // Ultima escritura de la clave (FILETIME UTC, 100 ns). 0 si falla.
 quint64 lastWriteTime(HKEY key)
 {
@@ -1409,35 +1371,9 @@ ApplyResult applyAssociation(const QString &extensionIn, const QString &progId, 
     // Eleccion anterior del usuario, para poder volver a ella si esta escritura falla.
     result.previousProgId = readUserString(latestPath + L"\\ProgId", L"ProgId");
 
-    // 1. Toasts falsos: valores DWORD 0 por cada ProgID y aplicacion de la extension.
-    {
-        const std::wstring classesExt = extension.toStdWString();
-        QStringList toastIds;
-        for (const QString &name : valueNames(HKEY_CLASSES_ROOT, classesExt + L"\\OpenWithProgids")) {
-            toastIds << name + QLatin1Char('_') + extension;
-        }
-        for (const QString &app : subKeyNames(HKEY_CLASSES_ROOT, classesExt + L"\\OpenWithList")) {
-            toastIds << QStringLiteral("Applications\\") + app + QLatin1Char('_') + extension;
-        }
-        if (!toastIds.isEmpty()) {
-            RegKey toasts;
-            if (RegOpenKeyExW(HKEY_CURRENT_USER,
-                              L"Software\\Microsoft\\Windows\\CurrentVersion\\ApplicationAssociationToasts",
-                              0, KEY_SET_VALUE, &toasts.h) != ERROR_SUCCESS) {
-                result.warnings << QStringLiteral("No se pudo abrir ApplicationAssociationToasts");
-            } else {
-                const DWORD zero = 0;
-                for (const QString &id : toastIds) {
-                    const std::wstring name = id.toStdWString();
-                    if (RegSetValueExW(toasts.h, name.c_str(), 0, REG_DWORD,
-                                       reinterpret_cast<const BYTE *>(&zero),
-                                       sizeof(zero)) != ERROR_SUCCESS) {
-                        result.warnings << QStringLiteral("No se pudo escribir el toast %1").arg(id);
-                    }
-                }
-            }
-        }
-    }
+    // 1. (Ya no se escriben toasts en ApplicationAssociationToasts: el hash no los usa, y marcaban en
+    //    0 los ProgID de TODAS las apps de la extension, datos ajenos que la desinstalacion no puede
+    //    atribuir. Regla "Registro limpio".)
 
     // 2. UserChoice clasico.
     const LegacyWrite legacy = writeLegacy(choicePath, extension, sid, progId, userExperience);

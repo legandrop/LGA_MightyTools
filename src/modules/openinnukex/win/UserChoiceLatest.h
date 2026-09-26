@@ -31,8 +31,8 @@
 //      del sistema; son las que cubren las pruebas de goldens.
 //   2. Lectura del sistema: SID, MachineId, cadenas de validacion de
 //      Windows.Internal.OpenWithHost.dll, texto de experiencia de shell32.dll, HashVersion.
-//   3. Escritura: applyAssociation() hace la secuencia del helper (toasts, UserChoice,
-//      UserChoiceLatest y aviso al shell) con el empaquetado de Windows. Escribe en HKCU de la
+//   3. Escritura: applyAssociation() hace la secuencia del helper (UserChoice, UserChoiceLatest
+//      y aviso al shell; sin sus toasts) con el empaquetado de Windows. Escribe en HKCU de la
 //      maquina: nunca desde una prueba.
 //
 // Hay dos empaquetados del texto hasheado (HashMode):
@@ -237,7 +237,8 @@ struct ApplyResult {
 };
 
 // Asocia extension -> progId para el usuario actual:
-//   1. toasts de ApplicationAssociationToasts en 0 para los ProgID y aplicaciones de la extension;
+//   1. (sin toasts: el helper original escribia ApplicationAssociationToasts en 0 para los ProgID
+//      de TODAS las apps de la extension; el hash no los usa y eran datos ajenos, se sacaron);
 //   2. UserChoice clasico: borrar, ProgId y Hash calculado con la ultima escritura de la clave
 //      truncada al minuto;
 //   3. UserChoiceLatest\ProgId\ProgId = progId, marca = ultima escritura de esa clave truncada al
