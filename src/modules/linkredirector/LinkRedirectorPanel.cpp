@@ -227,7 +227,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
 
     m_matchWords = new LinkRedirectorMatchWordsEdit(wordsCard);
     m_matchWords->setObjectName(QStringLiteral("linkRedirectorMatchWords"));
-    m_matchWords->setPlaceholderText(QStringLiteral("netflixstudios"));
+    m_matchWords->setPlaceholderText(QStringLiteral("google.com"));
     // Solo por click (regla de foco de la app): con StrongFocus (el default de QTextEdit),
     // activar la ventana le daria el foco al primer campo que acepta Tab.
     m_matchWords->setFocusPolicy(Qt::ClickFocus);

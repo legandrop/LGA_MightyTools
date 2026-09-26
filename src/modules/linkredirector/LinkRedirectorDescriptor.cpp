@@ -128,11 +128,11 @@ void linkRedirectorSelfTest(const std::function<void(bool ok, const QString &wha
     }
 
     // ---- Ruteo por palabras: mayusculas, substring, vacias.
-    check(matchesAnyWord(QStringLiteral("https://NetflixStudios.com/x"), {QStringLiteral("netflixstudios")}),
+    check(matchesAnyWord(QStringLiteral("https://Google.COM/x"), {QStringLiteral("google.com")}),
           QStringLiteral("match: sin importar mayusculas"));
     check(matchesAnyWord(QStringLiteral("https://sub.frame.io/abc"), {QStringLiteral("frame.io")}),
           QStringLiteral("match: substring en el medio de la URL"));
-    check(!matchesAnyWord(QStringLiteral("https://example.com"), {QStringLiteral("netflixstudios")}),
+    check(!matchesAnyWord(QStringLiteral("https://example.com"), {QStringLiteral("google.com")}),
           QStringLiteral("match: no matchea si no esta la palabra"));
     check(!matchesAnyWord(QStringLiteral("https://example.com"), {QString(), QStringLiteral("   ")}),
           QStringLiteral("match: las palabras vacias (o solo espacios) no matchean todo"));

@@ -96,7 +96,7 @@ bool LinkRedirectorModule::applyCaptureState(const QString &state)
     };
     const QString kChrome = QStringLiteral("C:/Program Files/Google/Chrome/Application/chrome.exe");
     const QString kFirefox = QStringLiteral("C:/Program Files/Mozilla Firefox/firefox.exe");
-    const QStringList kWords = {QStringLiteral("netflixstudios"), QStringLiteral("frame.io"), QStringLiteral("shotgrid")};
+    const QStringList kWords = {QStringLiteral("google.com"), QStringLiteral("frame.io"), QStringLiteral("shotgrid")};
 
     if (state == QLatin1String("default") || state == QLatin1String("combo-open")) {
         m_captureIsDefault = true;
