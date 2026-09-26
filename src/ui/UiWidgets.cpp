@@ -13,6 +13,7 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QStyle>
+#include <QTextLayout>
 #include <QVariant>
 #include <QtMath>
 
@@ -250,14 +251,86 @@ void ElidedLabel::paintEvent(QPaintEvent *)
     painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, shownText());
 }
 
+// ------------------------------------------------------------------ CaptionLabel
+
+CaptionLabel::CaptionLabel(const QString &text, QWidget *parent, int lineHeight)
+    : QLabel(text, parent)
+    , m_lineHeight(lineHeight)
+{
+    setObjectName(QStringLiteral("caption"));
+    setWordWrap(true);
+    setTextFormat(Qt::PlainText);
+}
+
+int CaptionLabel::lineCount(int width) const
+{
+    if (text().isEmpty()) {
+        return 1;
+    }
+    QTextLayout layout(text(), font());
+    QTextOption option;
+    option.setWrapMode(wordWrap() ? QTextOption::WordWrap : QTextOption::NoWrap);
+    layout.setTextOption(option);
+    int lines = 0;
+    layout.beginLayout();
+    for (QTextLine line = layout.createLine(); line.isValid(); line = layout.createLine()) {
+        line.setLineWidth(qMax(1, width));
+        ++lines;
+    }
+    layout.endLayout();
+    return qMax(1, lines);
+}
+
+int CaptionLabel::heightForWidth(int width) const
+{
+    const QMargins m = contentsMargins();
+    return lineCount(width - m.left() - m.right()) * m_lineHeight + m.top() + m.bottom();
+}
+
+QSize CaptionLabel::sizeHint() const
+{
+    const QMargins m = contentsMargins();
+    const int natural = QFontMetrics(font()).horizontalAdvance(text()) + 1;
+    return QSize(natural + m.left() + m.right(), m_lineHeight + m.top() + m.bottom());
+}
+
+QSize CaptionLabel::minimumSizeHint() const
+{
+    const QMargins m = contentsMargins();
+    return QSize(wordWrap() ? 0 : sizeHint().width(), m_lineHeight + m.top() + m.bottom());
+}
+
+void CaptionLabel::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setPen(palette().color(foregroundRole()));
+    const QRect area = contentsRect();
+    QTextLayout layout(text(), font());
+    QTextOption option;
+    option.setWrapMode(wordWrap() ? QTextOption::WordWrap : QTextOption::NoWrap);
+    layout.setTextOption(option);
+    layout.beginLayout();
+    int index = 0;
+    for (QTextLine line = layout.createLine(); line.isValid(); line = layout.createLine()) {
+        line.setLineWidth(qMax(1, area.width()));
+        // Como CSS: la caja de cada linea mide m_lineHeight y el texto queda centrado en ella.
+        const qreal halfLeading = (m_lineHeight - (line.ascent() + line.descent())) / 2.0;
+        line.setPosition(QPointF(0, index * m_lineHeight + halfLeading));
+        ++index;
+    }
+    layout.endLayout();
+    layout.draw(&painter, area.topLeft());
+}
+
 // ------------------------------------------------------------------ Chip
 
 Chip::Chip(QWidget *parent)
     : QFrame(parent)
 {
     setObjectName(QStringLiteral("chip"));
+    // 6 + el borde de 1 = los 7 de `.chip`/`.kc` del canvas (padding 0 6px con borde).
     auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(7, 0, 7, 0);
+    layout->setContentsMargins(6, 0, 6, 0);
     layout->setSpacing(0);
     m_label = new QLabel(this);
     layout->addWidget(m_label);
@@ -479,9 +552,7 @@ QLabel *label(const QString &text, const char *objectName, QWidget *parent)
 
 QLabel *caption(const QString &text, QWidget *parent)
 {
-    auto *l = label(text, "caption", parent);
-    l->setWordWrap(true);
-    return l;
+    return new CaptionLabel(text, parent);
 }
 
 QFrame *card(QWidget *parent)

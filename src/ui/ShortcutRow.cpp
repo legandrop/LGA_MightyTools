@@ -82,11 +82,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     Ui::setIcon(m_editButton, Icon::Pencil, Theme::color(Theme::kIcon), 14);
     m_editButton->setToolTip(QStringLiteral("Change shortcut"));
     m_editButton->setAccessibleName(QStringLiteral("Change shortcut"));
-    row->addSpacing(4);
+    // Mismo aire que entre las teclas (`.row` con gap 5 del canvas).
     row->addWidget(m_editButton, 0, Qt::AlignVCenter);
     column->addLayout(row);
 
-    m_caption = new QLabel(description, this);
+    m_caption = new CaptionLabel(description, this);
     m_caption->setObjectName(QStringLiteral("caption"));
     m_caption->setWordWrap(true);
     column->addWidget(m_caption);

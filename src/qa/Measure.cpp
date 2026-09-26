@@ -8,7 +8,9 @@
 #include "app/SettingsStore.h"
 #include "platform/ProcessStats.h"
 
+#include <QAbstractEventDispatcher>
 #include <QApplication>
+#include <QSet>
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QThread>
@@ -67,6 +69,8 @@ int cycles(const QStringList &arguments)
         count = 20;
     }
     const QString only = argAfter(arguments, QStringLiteral("--measure-cycles"), 2);
+    // --no-panel: sin abrir la pagina de la herramienta (separa lo del modulo de lo del panel).
+    const bool withPanel = !arguments.contains(QStringLiteral("--no-panel"));
 
     MemorySettingsStore store;
     HostOptions options;
@@ -102,7 +106,9 @@ int cycles(const QStringList &arguments)
         clock.start();
         for (int i = 0; i < count; ++i) {
             host.setEnabled(d.id, true);
-            window.selectPage(d.id);
+            if (withPanel) {
+                window.selectPage(d.id);
+            }
             pump(20);
             host.setEnabled(d.id, false);
             window.selectPage(MainWindow::kGeneral);
@@ -145,24 +151,79 @@ int idle(const QStringList &arguments)
     std::printf("measure mode=idle seconds=%d platform=%s\n", seconds, qPrintable(QGuiApplication::platformName()));
     print("boot", QStringLiteral("-"), boot);
 
+    // El reposo se cuenta despues de asentarse el arranque (plan 4.3: "despues del chequeo de
+    // updates"): en los primeros segundos trabajan hilos del pool de Windows que se retiran solos.
+    bool okSettle = false;
+    int settle = argAfter(arguments, QStringLiteral("--measure-idle"), 2).toInt(&okSettle);
+    if (!okSettle || settle < 0) {
+        settle = 60;
+    }
+
     AppController::Options options;
     options.measurement = true;
     AppController app(options);
-    // Lo que tarda en asentarse el arranque (pintado inicial, cargas perezosas de Qt).
     pump(3000);
-    const ProcessStats start = ProcessStats::current();
-    print("start", QStringLiteral("-"), start);
-    std::printf("measure private-all-off KB=%lld tools-on=%d\n", static_cast<long long>(start.privateBytes / 1024),
+    const ProcessStats early = ProcessStats::current();
+    print("early", QStringLiteral("-"), early);
+    std::printf("measure private-all-off KB=%lld tools-on=%d\n", static_cast<long long>(early.privateBytes / 1024),
                 app.host()->runningCount());
     std::fflush(stdout);
+    if (settle > 3) {
+        pump((settle - 3) * 1000);
+    }
+    const ProcessStats start = ProcessStats::current();
+    print("start", QStringLiteral("-"), start);
+    // Todo lo que tiene un timer registrado en el despachador (QTimer, QBasicTimer, animaciones de
+    // estilo): lo unico que puede despertar al hilo principal con todo apagado.
+    {
+        QSet<QObject *> objects;
+        for (QWidget *widget : QApplication::allWidgets()) {
+            objects.insert(widget);
+            for (QObject *child : widget->findChildren<QObject *>()) {
+                objects.insert(child);
+            }
+        }
+        for (QObject *child : qApp->findChildren<QObject *>()) {
+            objects.insert(child);
+        }
+        for (QObject *child : app.findChildren<QObject *>()) {
+            objects.insert(child);
+        }
+        objects.insert(&app);
+        objects.insert(qApp);
+        int timers = 0;
+        for (QObject *object : objects) {
+            for (const QAbstractEventDispatcher::TimerInfo &timer :
+                 QAbstractEventDispatcher::instance()->registeredTimers(object)) {
+                ++timers;
+                std::printf("measure timer class=%s name=%s interval=%dms\n", object->metaObject()->className(),
+                            qPrintable(object->objectName()), timer.interval);
+            }
+        }
+        std::printf("measure timers-registered=%d\n", timers);
+        std::fflush(stdout);
+    }
+    // El reposo se mide con la lectura barata del CPU: la foto completa (ProcessStats::current)
+    // recorre los hilos de todo el sistema y su costo entraria en la medicion.
+    const qint64 startCpu = ProcessStats::cpuMsNow();
 
-    QEventLoop loop;
-    QTimer::singleShot(seconds * 1000, &loop, &QEventLoop::quit);
-    loop.exec();
+    // Una muestra por minuto: la curva dice si hay un consumo continuo o solo el arranque.
+    for (int elapsed = 0; elapsed < seconds;) {
+        const int step = qMin(60, seconds - elapsed);
+        QEventLoop loop;
+        QTimer::singleShot(step * 1000, &loop, &QEventLoop::quit);
+        loop.exec();
+        elapsed += step;
+        std::printf("measure sample t=%ds cpu_since_start=%lldms\n", elapsed,
+                    static_cast<long long>(ProcessStats::cpuMsNow() - startCpu));
+        std::fflush(stdout);
+    }
+    const qint64 endCpu = ProcessStats::cpuMsNow();
     const ProcessStats end = ProcessStats::current();
     print("end", QStringLiteral("-"), end);
-    const qint64 cpu = end.cpuMs - start.cpuMs;
-    std::printf("measure result idle seconds=%d cpu_ms=%lld private_delta_KB=%lld %s\n", seconds, static_cast<long long>(cpu),
+    const qint64 cpu = endCpu - startCpu;
+    std::printf("measure result idle seconds=%d settle=%d cpu_ms=%lld cpu_total_ms=%lld private_delta_KB=%lld %s\n",
+                seconds, settle, static_cast<long long>(cpu), static_cast<long long>(endCpu - early.cpuMs),
                 static_cast<long long>((end.privateBytes - start.privateBytes) / 1024), cpu < 50 ? "ok" : "FALLO");
     std::fflush(stdout);
     return cpu < 50 ? 0 : 1;

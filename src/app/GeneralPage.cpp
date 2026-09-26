@@ -101,6 +101,9 @@ void GeneralPage::buildWelcome()
         auto *row = new QHBoxLayout();
         row->setContentsMargins(0, 0, 0, 0);
         row->setSpacing(8);
+        auto *rowStrut = new QWidget(mini); // `.row` de 22 de alto
+        rowStrut->setFixedSize(0, 22);
+        row->addWidget(rowStrut);
         auto *icon = new ToolIcon(d.paintIcon, 16, mini);
         icon->setColor(Theme::color(Theme::kTextMuted));
         row->addWidget(icon, 0, Qt::AlignVCenter);
@@ -199,7 +202,11 @@ QFrame *GeneralPage::buildToolsCard()
         dotBox->addStretch(1);
         row->addLayout(dotBox);
         text->setWordWrap(true);
-        row->addWidget(text, 1);
+        row->addWidget(text, 1, Qt::AlignTop);
+        // `.row` de 22 de alto del canvas, con el texto arriba.
+        auto *strut = new QWidget(card);
+        strut->setFixedSize(0, 22);
+        row->addWidget(strut);
         layout->addLayout(row);
     };
     m_running = Ui::label(QString(), "runningText", card);

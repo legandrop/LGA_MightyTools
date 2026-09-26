@@ -1,4 +1,4 @@
-#include "ui/CalibrationDialog.h"
+#include "modules/nukeshortcuts/CalibrationDialog.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 

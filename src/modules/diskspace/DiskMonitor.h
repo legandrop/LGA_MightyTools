@@ -1,7 +1,7 @@
 #ifndef MIGHTYTOOLS_DISKMONITOR_H
 #define MIGHTYTOOLS_DISKMONITOR_H
 
-#include "core/DiskSpace.h"
+#include "modules/diskspace/DiskSpace.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -9,14 +9,14 @@
 
 #include <functional>
 
-class AppState;
+class DiskState;
 class QTimer;
 
-// Chequeo periodico del espacio libre. Cada AppState::diskCheckMinutes lee los discos vigilados,
-// deja la lectura en AppState (la tarjeta y el menu de la bandeja la muestran) y emite lowSpace()
+// Chequeo periodico del espacio libre. Cada DiskState::diskCheckMinutes lee los discos vigilados,
+// deja la lectura en DiskState (la tarjeta y el menu de la bandeja la muestran) y emite lowSpace()
 // cuando corresponde avisar (DiskSpace::shouldNotify).
 //
-// No lee el sistema por su cuenta: recibe las funciones de lectura. TrayController le pasa las de
+// No lee el sistema por su cuenta: recibe las funciones de lectura. DiskSpaceModule le pasa las de
 // platform/LocalDrives; el self-test, discos falsos y un reloj propio. Asi la logica del aviso se
 // prueba entera sin tocar un disco.
 class DiskMonitor : public QObject
@@ -34,7 +34,7 @@ public:
         std::function<QDateTime()> now;
     };
 
-    DiskMonitor(AppState *state, Sources sources, QObject *parent = nullptr);
+    DiskMonitor(DiskState *state, Sources sources, QObject *parent = nullptr);
 
     // Arranca el timer. El primer chequeo que puede avisar llega a los `firstCheckDelayMs`: al
     // iniciar con la sesion no se suma un aviso al arranque de Windows.
@@ -53,7 +53,7 @@ private:
     void onStateChanged();
     QDateTime now() const;
 
-    AppState *m_state = nullptr;
+    DiskState *m_state = nullptr;
     Sources m_sources;
     QTimer *m_timer = nullptr;
     int m_timerMinutes = 0;

@@ -12,8 +12,10 @@ namespace Measure {
 // GDI/USER y los QTimer/QThread de qApp antes y despues. Sale 0 si todo quedo en +-2.
 int cycles(const QStringList &arguments);
 
-// --measure-idle [segundos]: puntos 3 y 4. La app entera (AppController en modo medicion) con todo
-// apagado y la ventana cerrada; mide la memoria privada al arrancar y el CPU que gasta en reposo.
+// --measure-idle [segundos] [asentamiento]: puntos 3 y 4. La app entera (AppController en modo
+// medicion) con todo apagado y la ventana cerrada; mide la memoria privada al arrancar y el CPU que
+// gasta en reposo, contado despues de `asentamiento` segundos (60 por defecto), con una muestra por
+// minuto.
 int idle(const QStringList &arguments);
 
 } // namespace Measure

@@ -1,19 +1,24 @@
-#include "core/DiskMonitor.h"
-#include "core/AppState.h"
+#include "modules/diskspace/DiskMonitor.h"
+#include "modules/diskspace/DiskState.h"
 
 #include <QDebug>
 #include <QSet>
 #include <QStringList>
 #include <QTimer>
 
-DiskMonitor::DiskMonitor(AppState *state, Sources sources, QObject *parent)
+DiskMonitor::DiskMonitor(DiskState *state, Sources sources, QObject *parent)
     : QObject(parent)
     , m_state(state)
     , m_sources(std::move(sources))
 {
     m_timer = new QTimer(this);
+    // Preciso y no grueso (el tipo por defecto): en Qt 6.5 sobre Windows, un timer grueso de
+    // intervalo largo (el de 15 min) deja un objeto USER del sistema cada vez que se registra y se
+    // suelta. Medido con 20 ciclos de prender y apagar Disk Space: +20 USER con el grueso, +0 con
+    // este. El costo de un timer preciso cada 15 min es nulo.
+    m_timer->setTimerType(Qt::PreciseTimer);
     connect(m_timer, &QTimer::timeout, this, [this]() { checkNow(true); });
-    connect(m_state, &AppState::changed, this, &DiskMonitor::onStateChanged);
+    connect(m_state, &DiskState::changed, this, &DiskMonitor::onStateChanged);
 }
 
 QDateTime DiskMonitor::now() const
@@ -26,7 +31,16 @@ void DiskMonitor::start(int firstCheckDelayMs)
     m_timerMinutes = m_state->diskCheckMinutes();
     m_timer->start(m_timerMinutes * 60 * 1000);
     checkNow(false);
-    QTimer::singleShot(firstCheckDelayMs, this, [this]() { checkNow(true); });
+    // Un QTimer hijo del monitor y no QTimer::singleShot: muere con el monitor al apagar Disk Space,
+    // aunque todavia no haya vencido. Preciso por lo mismo que m_timer.
+    auto *first = new QTimer(this);
+    first->setSingleShot(true);
+    first->setTimerType(Qt::PreciseTimer);
+    connect(first, &QTimer::timeout, this, [this, first]() {
+        first->deleteLater();
+        checkNow(true);
+    });
+    first->start(firstCheckDelayMs);
 }
 
 void DiskMonitor::onStateChanged()

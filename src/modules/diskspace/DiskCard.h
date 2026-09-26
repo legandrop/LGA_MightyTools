@@ -1,13 +1,13 @@
 #ifndef MIGHTYTOOLS_DISKCARD_H
 #define MIGHTYTOOLS_DISKCARD_H
 
-#include "core/DiskSpace.h"
+#include "modules/diskspace/DiskSpace.h"
 
 #include <QFrame>
 #include <QMap>
 #include <QWidget>
 
-class AppState;
+class DiskState;
 class Chip;
 class ElidedLabel;
 class QLabel;
@@ -75,25 +75,27 @@ private:
     QLabel *m_threshold = nullptr;
 };
 
-// Tarjeta "Disk space" de Settings (opcion A del diseno, D-07): el intervalo, una fila por disco
-// vigilado y "Add drive...". Crece con cada disco; la ventana ajusta su alto sola (fitHeight).
-// Lee todo de AppState y escribe en AppState. Con interactive = false (captura de QA) no conecta
+// Tarjeta "Watched drives" del panel de Disk Space (D-07 de Nuke Shortcuts): el intervalo, una fila por disco
+// vigilado y "Add drive...". Crece con cada disco; el panel de la ventana tiene scroll.
+// Lee todo de DiskState y escribe en DiskState. Con interactive = false (captura de QA) no conecta
 // nada.
 class DiskCard : public QFrame
 {
     Q_OBJECT
 
 public:
-    DiskCard(AppState *state, bool interactive, QWidget *parent = nullptr);
+    DiskCard(DiskState *state, bool interactive, QWidget *parent = nullptr);
 
     void refresh();
 
     // Arma el menu de "Add drive..." con los discos locales sin vigilar. Publico para la captura.
     void fillAddMenu(QMenu *menu) const;
+    // El menu del intervalo ("15 min" tildado). Publico para la captura.
+    void fillIntervalMenu(QMenu *menu) const;
     QPushButton *addButton() const { return m_addButton; }
 
 signals:
-    // Antes de abrir el menu de discos: quien tiene el sistema (TrayController) lista los discos.
+    // Antes de abrir el menu de discos: el modulo (que tiene el sistema) lista los discos.
     void drivesRefreshRequested();
 
 protected:
@@ -104,7 +106,7 @@ private:
     void showAddMenu();
     void showIntervalMenu();
 
-    AppState *m_state = nullptr;
+    DiskState *m_state = nullptr;
     bool m_interactive = false;
 
     Chip *m_chip = nullptr;

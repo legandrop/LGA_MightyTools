@@ -2,10 +2,23 @@
 
 #include <libproc.h>
 #include <mach/mach.h>
+#include <mach/mach_time.h>
 #include <sys/proc_info.h>
 #include <unistd.h>
 
 // macOS: sin GDI ni USER (quedan en -1). Los "handles" son los descriptores de archivo abiertos.
+
+qint64 ProcessStats::cpuMsNow()
+{
+    proc_taskinfo task{};
+    if (proc_pidinfo(getpid(), PROC_PIDTASKINFO, 0, &task, sizeof(task)) != int(sizeof(task))) {
+        return -1;
+    }
+    mach_timebase_info_data_t timebase{};
+    mach_timebase_info(&timebase);
+    const double ns = double(task.pti_total_user + task.pti_total_system) * timebase.numer / timebase.denom;
+    return qint64(ns / 1e6);
+}
 
 ProcessStats ProcessStats::current()
 {

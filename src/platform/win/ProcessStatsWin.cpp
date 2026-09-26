@@ -37,9 +37,20 @@ qint64 fileTimeMs(const FILETIME &time)
 
 } // namespace
 
+qint64 ProcessStats::cpuMsNow()
+{
+    FILETIME created{}, exited{}, kernel{}, user{};
+    if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) {
+        return -1;
+    }
+    return fileTimeMs(kernel) + fileTimeMs(user);
+}
+
 ProcessStats ProcessStats::current()
 {
     ProcessStats stats;
+    // El CPU primero: la foto de hilos de abajo cuesta y no tiene que entrar en esta lectura.
+    stats.cpuMs = cpuMsNow();
     HANDLE process = GetCurrentProcess();
     DWORD handles = 0;
     if (GetProcessHandleCount(process, &handles)) {
@@ -52,10 +63,6 @@ ProcessStats ProcessStats::current()
     memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(process, reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&memory), sizeof(memory))) {
         stats.privateBytes = qint64(memory.PrivateUsage);
-    }
-    FILETIME created{}, exited{}, kernel{}, user{};
-    if (GetProcessTimes(process, &created, &exited, &kernel, &user)) {
-        stats.cpuMs = fileTimeMs(kernel) + fileTimeMs(user);
     }
     return stats;
 }

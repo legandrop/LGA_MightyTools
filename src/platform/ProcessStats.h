@@ -19,7 +19,11 @@ struct ProcessStats
     qint64 privateBytes = -1;
     qint64 cpuMs = -1; ///< usuario + kernel desde que arranco el proceso
 
+    // Foto completa. Cuidado: contar hilos recorre los de TODO el sistema y le cuesta al proceso
+    // decenas de ms de CPU; para seguir el CPU en el tiempo, cpuMsNow().
     static ProcessStats current();
+    // Solo el CPU del proceso (usuario + kernel), barato.
+    static qint64 cpuMsNow();
     QString toString() const;
 };
 

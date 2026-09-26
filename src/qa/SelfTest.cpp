@@ -9,6 +9,7 @@
 #include "app/SettingsStore.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "platform/ProcessStats.h"
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -356,6 +357,52 @@ void testExternal(const Check &check)
     check(!notMine.handled, QStringLiteral("modo corto: NotMine sigue a la instancia unica"));
 }
 
+// Cada herramienta registrada, de verdad (en corrida automatizada: atajos contados, inyector en
+// solo loguear): prender y apagar 20 veces no deja objeto, timers, hilos, atajos ni inyector.
+void testRealModules(const Check &check)
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.automatedRun = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    const int timers0 = qAppTimers();
+    const int threads0 = qAppThreads();
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        // Un ciclo de calentamiento: lo que Qt carga una sola vez por proceso no es del modulo.
+        host.setEnabled(d.id, true);
+        host.setEnabled(d.id, false);
+        flushDeletes();
+        const ProcessStats before = ProcessStats::current();
+        bool alwaysBuilt = true;
+        for (int i = 0; i < 20; ++i) {
+            host.setEnabled(d.id, true);
+            alwaysBuilt = alwaysBuilt && host.isRunning(d.id);
+            host.setEnabled(d.id, false);
+        }
+        flushDeletes();
+        check(alwaysBuilt && host.module(d.id) == nullptr && host.runningCount() == 0,
+              QStringLiteral("[%1] 20 ciclos: se construye al prender y queda nulo al apagar").arg(d.id));
+        check(host.hotkeyHub()->registeredCount() == 0 && host.hotkeyHub()->declaredCount() == 0
+                  && host.hotkeyHub()->clientCount() == 0 && !host.injectorAlive(),
+              QStringLiteral("[%1] apagada: 0 atajos registrados o declarados, sin inyector").arg(d.id));
+        check(qAppTimers() == timers0 && qAppThreads() == threads0,
+              QStringLiteral("[%1] QTimer y QThread de qApp vuelven a los iniciales (%2/%3 -> %4/%5)")
+                  .arg(d.id).arg(timers0).arg(threads0).arg(qAppTimers()).arg(qAppThreads()));
+        // Lo que Qt no ve: handles, hilos y objetos GDI/USER del sistema (un timer del sistema que
+        // queda vivo es un objeto USER).
+        const ProcessStats after = ProcessStats::current();
+        const auto near = [](qint64 a, qint64 b) { return a < 0 || b < 0 || qAbs(a - b) <= 2; };
+        check(near(before.handles, after.handles) && near(before.threads, after.threads)
+                  && near(before.gdiObjects, after.gdiObjects) && near(before.userObjects, after.userObjects),
+              QStringLiteral("[%1] 20 ciclos: handles %2, hilos %3, GDI %4, USER %5 (tolerancia 2)")
+                  .arg(d.id)
+                  .arg(after.handles - before.handles)
+                  .arg(after.threads - before.threads)
+                  .arg(after.gdiObjects - before.gdiObjects)
+                  .arg(after.userObjects - before.userObjects));
+    }
+}
+
 } // namespace
 
 namespace SelfTest {
@@ -375,6 +422,7 @@ int run()
     testCapture(check);
     testPersistentRegistration(check);
     testExternal(check);
+    testRealModules(check);
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {

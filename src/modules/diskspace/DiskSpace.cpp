@@ -1,4 +1,4 @@
-#include "core/DiskSpace.h"
+#include "modules/diskspace/DiskSpace.h"
 
 #include <QtGlobal>
 
