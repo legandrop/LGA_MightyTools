@@ -9,8 +9,8 @@ namespace {
 const QString kRunKey = QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 const QString kValueName = QStringLiteral("LGA_MightyTools");
 
-// Donde Task Manager > Startup guarda lo que el usuario deshabilito. Solo se lee, para el
-// diagnostico del log: un valor de Run con marca impar existe pero Windows no lo lanza.
+// Donde Task Manager > Startup guarda lo que el usuario deshabilito: un valor de Run con marca impar
+// existe pero Windows no lo lanza. Se lee para el log y se borra junto con el valor de Run.
 const QString kStartupApprovedKey =
     QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run");
 
@@ -70,16 +70,35 @@ bool setEnabled(bool enabled)
         }
         return ok;
     }
-    // Desactivar = borrar puntualmente ESTE valor, sin tocar el resto de la clave Run.
-    const std::wstring sub = kRunKey.toStdWString();
-    HKEY hKey = nullptr;
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, sub.c_str(), 0, KEY_SET_VALUE, &hKey) != ERROR_SUCCESS) {
-        return true; // no existe la clave: nada que borrar
+    // Desactivar = borrar puntualmente ESTE valor (y su marca de Task Manager), sin tocar el resto
+    // de las claves.
+    const bool runOk = RegistryHelper::deleteValue(HKEY_CURRENT_USER, kRunKey, kValueName);
+    const bool approvedOk = RegistryHelper::deleteValue(HKEY_CURRENT_USER, kStartupApprovedKey, kValueName);
+    return runOk && approvedOk;
+}
+
+bool removeIfOwned(QString *detail)
+{
+    const QString stored = storedCommand();
+    if (stored.isEmpty()) {
+        if (detail) {
+            *detail = QStringLiteral("Run: sin valor");
+        }
+        return true;
     }
-    const std::wstring val = kValueName.toStdWString();
-    const LONG rc = RegDeleteValueW(hKey, val.c_str());
-    RegCloseKey(hKey);
-    return rc == ERROR_SUCCESS || rc == ERROR_FILE_NOT_FOUND;
+    if (!RegistryHelper::commandPointsTo(stored, RegistryHelper::ownExePath())) {
+        // De otra copia: ni el valor ni su marca de Task Manager son de este exe.
+        if (detail) {
+            *detail = QStringLiteral("Run: apunta a otra copia, no se toca (%1)").arg(stored);
+        }
+        return true;
+    }
+    const bool ok = setEnabled(false);
+    if (detail) {
+        *detail = ok ? QStringLiteral("Run: borrado (%1)").arg(stored)
+                     : QStringLiteral("Run: no se pudo borrar (%1)").arg(stored);
+    }
+    return ok;
 }
 
 Availability availability()

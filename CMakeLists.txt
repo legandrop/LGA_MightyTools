@@ -75,6 +75,7 @@ set(SOURCES
     src/app/ModuleRegistry.cpp
     src/app/SettingsStore.cpp
     src/app/SingleInstance.cpp
+    src/app/UninstallCleanup.cpp
     src/app/TrayMenu.cpp
     src/app/WindowParts.cpp
     src/core/AppPaths.cpp
@@ -138,6 +139,7 @@ set(HEADERS
     src/app/ModuleRegistry.h
     src/app/SettingsStore.h
     src/app/SingleInstance.h
+    src/app/UninstallCleanup.h
     src/app/TrayMenu.h
     src/app/WindowParts.h
     src/core/AppPaths.h

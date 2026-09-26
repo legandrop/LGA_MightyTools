@@ -126,9 +126,10 @@ struct ModuleDescriptor
     // Aviso del panel de apagado. `captureState` vacio = leer el sistema; si no, el estado de prueba
     // de la captura (sin leer nada).
     std::function<ModuleOffNotice(const QString &captureState)> offNotice;
-    // Suelta lo que la herramienta dejo en el sistema (asociacion .nk, registro como navegador). La
-    // usan el boton del aviso de apagado y --uninstall-cleanup. Nunca corre en una corrida
-    // automatizada.
+    // Suelta lo que la herramienta dejo en el sistema (asociacion .nk, registro como navegador) y es
+    // de ESTE exe por contenido (el comando apunta a este exe); lo de otra copia o de otra app queda.
+    // La usan el boton del aviso de apagado y --uninstall-cleanup. Nunca corre en una corrida
+    // automatizada, salvo el self-test sobre un hive privado (qa/RegistryHiveTest).
     std::function<bool(QString *error)> releaseSystem;
 
     // Decide, SIN efectos, si una entrada del sistema es de esta herramienta. Con esto main elige

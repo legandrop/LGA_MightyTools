@@ -9,6 +9,11 @@
 #define MyAppPublisher "LGA"
 #define MyAppExeName "LGA_MightyTools.exe"
 #define MyAppOutputDir "installer"
+; Primera version del exe que conoce --uninstall-cleanup (FILEVERSION "mayor,menor,0,0" del recurso
+; de Windows: 0.06 -> 0,6). Un exe anterior no conoce el flag, arrancaria como app de bandeja y el
+; desinstalador quedaria esperando: con uno viejo no se llama.
+#define CleanupMinMajor 0
+#define CleanupMinMinor 6
 
 [Setup]
 AppId={{37F7C31A-CD84-418E-8282-E30C584E0A5A}
@@ -47,7 +52,9 @@ Source: "tools\close_by_path.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 ;    el registro compartido de apps LGA de esta app (LgaRegistry). La carpeta LGA solo se borra si
 ;    queda vacia (la usan otras apps LGA).
 ;  - Los instaladores bajados por el auto-update, en %TEMP%\LGA_MightyTools_updates.
-; La entrada de inicio con Windows se borra en CurUninstallStepChanged, abajo.
+; Lo que la app escribe en el REGISTRO (asociacion .nk, navegador, Run) lo borra el propio exe con
+; --uninstall-cleanup, y la entrada de inicio con Windows ademas en Pascal: CurUninstallStepChanged,
+; abajo.
 [UninstallDelete]
 Type: files; Name: "{app}\debug.log"
 Type: filesandordirs; Name: "{userappdata}\LGA\LGA_MightyTools"
@@ -121,13 +128,53 @@ begin
     Log('No esta ' + ScriptPath + ': no se cierra nada');
 end;
 
-// Despues de borrar los archivos: el valor LGA_MightyTools de HKCU\...\Run (inicio con Windows),
-// SOLO si apunta a ESTA instalacion. Si apunta a otra copia (build\ de desarrollo) es de esa copia y
-// no se toca.
+// ANTES de borrar los archivos (usUninstall): el exe instalado borra lo que escribio en HKCU y es
+// SUYO por contenido (asociacion .nk, registro como navegador, RegisteredApplications, Run): modo
+// --uninstall-cleanup, sin ventana ni dialogos. Solo si el exe esta y su version ya conoce el flag
+// (CleanupMinMajor/Minor, arriba); si no, no se llama y quedan solo las limpiezas de Pascal.
+procedure RunUninstallCleanup();
+var
+  ExePath, VersionText: String;
+  VersionMS, VersionLS: Cardinal;
+  ResultCode: Integer;
+begin
+  ExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  if not FileExists(ExePath) then
+  begin
+    Log('--uninstall-cleanup: no esta ' + ExePath + ', no se limpia el registro');
+    exit;
+  end;
+  if not GetVersionNumbersString(ExePath, VersionText) then
+    VersionText := '?';
+  if not GetVersionNumbers(ExePath, VersionMS, VersionLS) then
+  begin
+    Log('--uninstall-cleanup: no se pudo leer la version de ' + ExePath + ', no se llama');
+    exit;
+  end;
+  if VersionMS < (({#CleanupMinMajor} shl 16) or {#CleanupMinMinor}) then
+  begin
+    Log('--uninstall-cleanup: el exe es ' + VersionText + ', anterior a la que conoce el flag; no se llama');
+    exit;
+  end;
+  if Exec(ExePath, '--uninstall-cleanup', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('--uninstall-cleanup (exe ' + VersionText + '): codigo ' + IntToStr(ResultCode))
+  else
+    Log('--uninstall-cleanup no se pudo ejecutar (exe ' + VersionText + '): error ' + IntToStr(ResultCode));
+end;
+
+// usUninstall: la limpieza del exe (arriba). usPostUninstall, despues de borrar los archivos: el
+// valor LGA_MightyTools de HKCU\...\Run (inicio con Windows), SOLO si apunta a ESTA instalacion,
+// como respaldo por si el exe no pudo correr. Si apunta a otra copia (build\ de desarrollo) es de esa
+// copia y no se toca.
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   RunValue: String;
 begin
+  if CurUninstallStep = usUninstall then
+  begin
+    RunUninstallCleanup();
+    exit;
+  end;
   if CurUninstallStep <> usPostUninstall then
     exit;
   if RegQueryStringValue(HKCU, 'Software\Microsoft\Windows\CurrentVersion\Run', 'LGA_MightyTools', RunValue) then

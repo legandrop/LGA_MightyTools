@@ -45,6 +45,16 @@ bool setEnabled(bool enabled)
     return false;
 }
 
+bool removeIfOwned(QString *detail)
+{
+    // El item de SMAppService.mainApp es del propio .app: se va con el bundle al tirarlo a la
+    // papelera. No hay desinstalador en mac.
+    if (detail) {
+        *detail = QStringLiteral("Login item: nada que limpiar en macOS");
+    }
+    return true;
+}
+
 Availability availability()
 {
     if (@available(macOS 13.0, *)) {

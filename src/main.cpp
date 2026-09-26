@@ -3,6 +3,7 @@
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
 #include "app/SingleInstance.h"
+#include "app/UninstallCleanup.h"
 #include "core/AppPaths.h"
 #include "core/AppSettings.h"
 #include "core/BuildTree.h"
@@ -149,6 +150,19 @@ int main(int argc, char *argv[])
     AppPaths::init(argc > 0 ? argv[0] : nullptr);
     // COM en modo apartment, una vez, antes de cualquier modulo (plan 4.4).
     const ComApartment com;
+
+    // --uninstall-cleanup (lo llama el desinstalador): ANTES de todo lo demas (modo corto, registro
+    // LGA, instancia unica, ventanas). QCoreApplication, sin dialogos; el detalle va a stdout y, con
+    // log=true, al debug.log. Sale 0 si borro todo lo propio, 1 si algo fallo.
+    if (hasArg(argc, argv, "--uninstall-cleanup")) {
+        QCoreApplication app(argc, argv);
+        setNames();
+        AppSettings::useMemoryOnly();
+        if (DebugFlags::isOn(QStringLiteral("log"))) {
+            qInstallMessageHandler(fileMessageHandler);
+        }
+        return UninstallCleanup::runFromCommandLine();
+    }
 
     // Arneses sin pantalla: QCoreApplication, sin plugin de plataforma, sin log a archivo.
     if (hasArg(argc, argv, "--self-test")) {

@@ -19,8 +19,15 @@ namespace AutoStart {
 // apuntar al ejecutable ACTUAL. Siempre pregunta al sistema en vivo, no cachea nada.
 bool isEnabled();
 
-// Activa o desactiva el inicio automatico para el ejecutable actual.
+// Activa o desactiva el inicio automatico para el ejecutable actual. En Windows, desactivar borra el
+// valor de Run y la marca de Task Manager (StartupApproved\Run) con el mismo nombre.
 bool setEnabled(bool enabled);
+
+// --uninstall-cleanup: borra la entrada de inicio SOLO si apunta a ESTE exe (propiedad por
+// contenido); la de otra copia (un build, otra carpeta) no se toca. `detail` dice que hizo.
+// true si no quedo nada propio sin borrar. En macOS no hay nada que limpiar (el item de inicio de
+// SMAppService se va con el .app).
+bool removeIfOwned(QString *detail = nullptr);
 
 // Por que NO se puede activar desde este binario (ver availability()).
 enum class Unavailability {
