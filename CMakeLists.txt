@@ -136,6 +136,7 @@ set(HEADERS
     src/modules/linkredirector/LinkRedirectorPanel.h
     src/modules/linkredirector/LinkRedirectorRouting.h
     src/modules/linkredirector/LinkRedirectorTypes.h
+    src/modules/linkredirector/ProcessLatency.h
     src/modules/openinnukex/NukeBridge.h
     src/modules/openinnukex/NukeOpener.h
     src/modules/openinnukex/NukeScanner.h
@@ -170,6 +171,7 @@ if(WIN32)
     list(APPEND SOURCES
         src/modules/linkredirector/win/BrowserDetectionWin.cpp
         src/modules/linkredirector/win/BrowserRegistrationWin.cpp
+        src/modules/linkredirector/win/ProcessLatencyWin.cpp
         src/modules/openinnukex/win/UserChoiceLatest.cpp
         src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
@@ -215,6 +217,7 @@ elseif(APPLE)
     list(APPEND SOURCES
         src/modules/linkredirector/mac/BrowserDetectionMac.cpp
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
+        src/modules/linkredirector/mac/ProcessLatencyMac.cpp
         src/modules/openinnukex/mac/MacFileAssociation.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp

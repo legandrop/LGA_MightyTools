@@ -1,6 +1,7 @@
 #include "modules/linkredirector/LinkRedirectorExternal.h"
 #include "modules/linkredirector/LinkRedirectorRouting.h"
 #include "modules/linkredirector/BrowserDetection.h"
+#include "modules/linkredirector/ProcessLatency.h"
 #include "app/ModuleContext.h"
 
 #include <QDebug>
@@ -8,6 +9,8 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QProcess>
+
+#include <cstdio>
 
 namespace {
 
@@ -123,12 +126,22 @@ ExternalResult handle(const ExternalRequest &request, ModuleContext *context)
         showBrowserWarning(warningTitle(), warningCaption(reason, chosenExe), request.dryRun, context);
     }
 
+    // Plan, fase 5: latencia del modo corto, medida desde que el sistema operativo creo ESTE proceso
+    // (no un timer arrancado a mitad de main: ver ProcessLatency.h) hasta justo antes de abrir el
+    // navegador. Se mide siempre que hay un navegador elegido, real o en dry-run.
+    const qint64 latencyMs = LinkRedirectorProcessLatency::elapsedMsSinceStart();
+    const QString chosenName = QFileInfo(chosenExe).fileName();
+
     if (request.dryRun) {
-        qInfo() << "[linkRedirector] (dry-run)" << logHost << "->" << QFileInfo(chosenExe).fileName();
+        qInfo() << "[linkRedirector] (dry-run)" << logHost << "->" << chosenName;
+        // --simulate-action route (dryRun) es el unico llamador que corre en corrida automatizada:
+        // el runner de la medicion de latencia lee esto de stdout, no del log (que no se instala ahi).
+        std::printf("[latencia] link %lld ms\n", static_cast<long long>(latencyMs));
         return ExternalResult::Done;
     }
 
-    qInfo() << "[linkRedirector]" << logHost << "->" << QFileInfo(chosenExe).fileName();
+    qInfo() << "[linkRedirector]" << logHost << "->" << chosenName;
+    qInfo() << "[latencia] link" << logHost << "->" << chosenName << latencyMs << "ms";
     launchBrowser(chosenExe, request.argument);
     return ExternalResult::Done;
 }

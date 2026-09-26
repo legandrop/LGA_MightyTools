@@ -231,6 +231,12 @@ QMenu::item { color: #cccccc; padding: 5px 16px 5px 14px; background: transparen
 QMenu::item:selected { background-color: #443a91; color: #ffffff; }
 QMenu::item:disabled { color: #6a6a6a; }
 QMenu::separator { height: 1px; background: #3a3a3a; margin: 5px 8px; }
+/* Item marcable (el combo de Link Redirector, el intervalo de Disk Space): la marca es un tilde
+   violeta (canvas ".dd div.cur::before", color @link), no el cuadrado/tilde nativo de Fusion. Sin
+   marca en el desmarcado: ni caja ni circulo, como el diseno. */
+QMenu::indicator { width: 14px; height: 14px; }
+QMenu::indicator:unchecked { image: none; }
+QMenu::indicator:checked { image: url(:/icons/check_link.png); }
 
 /* Dialogos: el de update, los QMessageBox y el progreso de descarga */
 QDialog#updateDialog, QMessageBox, QProgressDialog { background-color: @dialog; }

@@ -6,6 +6,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFileDialog>
+#include <QFontMetrics>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -13,6 +14,7 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -70,6 +72,42 @@ protected:
 private:
     ElidedLabel *m_value = nullptr;
     IconWidget *m_chevron = nullptr;
+};
+
+// Editor de Match words con el fondo rayado del canvas (`.textarea`, medido con getComputedStyle):
+// "background-image: repeating-linear-gradient(transparent 0 20px, #222 20px 21px); background-
+// position: 0 6px" -- un renglon de 1 px cada 21 px (20 px transparentes + 1 px de linea), corrido
+// 6 px hacia abajo (el padding-top del campo). QSS no tiene repeating-linear-gradient, asi que se
+// pinta a mano en el viewport, ANTES de que QPlainTextEdit dibuje el texto encima.
+//
+// El periodo real que se usa es QFontMetrics::lineSpacing() de la fuente del editor, no el 21 px fijo
+// del canvas: asi el renglon queda SIEMPRE debajo de cada linea de texto de este widget (el pedido
+// del encargo), aunque la metrica exacta de Inter en Qt/Fusion no sea identica a la del navegador
+// donde se midio el canvas. offset = 6 px, igual al padding-top del QSS de mas abajo.
+class LinkRedirectorMatchWordsEdit : public QPlainTextEdit
+{
+public:
+    using QPlainTextEdit::QPlainTextEdit;
+
+protected:
+    void paintEvent(QPaintEvent *event) override
+    {
+        {
+            QPainter painter(viewport());
+            painter.setRenderHint(QPainter::Antialiasing, false);
+            painter.setPen(Theme::color(Theme::kTextareaRuleLine));
+            const int period = qMax(1, QFontMetrics(font()).lineSpacing());
+            constexpr int kOffsetTop = 6; // canvas: background-position 0 6px (= padding-top)
+            const int width = viewport()->width();
+            const int height = viewport()->height();
+            // El primer renglon cae al final del primer periodo (el tramo #222 es 20-21px del
+            // patron, es decir el ULTIMO pixel de cada periodo), corrido por el offset.
+            for (int y = kOffsetTop + period - 1; y < height; y += period) {
+                painter.drawLine(0, y, width, y);
+            }
+        }
+        QPlainTextEdit::paintEvent(event);
+    }
 };
 
 using LinkRedirectorRouting::ComboItem;
@@ -164,7 +202,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     wordsCaption->setContentsMargins(0, 0, 0, 8);
     wordsLayout->addWidget(wordsCaption);
 
-    m_matchWords = new QPlainTextEdit(wordsCard);
+    m_matchWords = new LinkRedirectorMatchWordsEdit(wordsCard);
     m_matchWords->setObjectName(QStringLiteral("linkRedirectorMatchWords"));
     m_matchWords->setPlaceholderText(QStringLiteral("netflixstudios"));
     // Solo por click (regla de foco de la app): con StrongFocus (el default de QPlainTextEdit),
@@ -283,18 +321,16 @@ LinkRedirectorComboField *LinkRedirectorPanel::buildBrowserField(const QString &
     return field;
 }
 
-void LinkRedirectorPanel::showBrowserMenu(const QString &settingsKey, LinkRedirectorComboField *field)
+QMenu *LinkRedirectorPanel::buildMenu(const QList<ComboItem> &items, QWidget *parent)
 {
-    const QString configured = m_context.value(settingsKey, QString()).toString();
-    const QList<DetectedBrowser> detected = m_sources.detectedBrowsers ? m_sources.detectedBrowsers() : QList<DetectedBrowser>();
-    const QList<ComboItem> items = LinkRedirectorRouting::buildBrowserComboItems(configured, detected);
-
-    QMenu menu(this);
+    auto *menu = new QMenu(parent);
     for (const ComboItem &item : items) {
         if (item.kind == ComboItem::Kind::Browse) {
-            menu.addSeparator();
+            menu->addSeparator();
         }
-        QAction *action = menu.addAction(item.label);
+        QAction *action = menu->addAction(item.label);
+        // Checkable para que Theme.cpp (QMenu::indicator) dibuje el tilde violeta del elegido y nada
+        // en los demas (canvas ".dd div.cur::before"); "Browse..." nunca es checkable.
         const bool checkable = item.kind != ComboItem::Kind::Browse;
         action->setCheckable(checkable);
         if (checkable) {
@@ -303,15 +339,29 @@ void LinkRedirectorPanel::showBrowserMenu(const QString &settingsKey, LinkRedire
         action->setData(int(item.kind));
         action->setProperty("exePath", item.exePath);
     }
-    QAction *chosen = menu.exec(field->mapToGlobal(QPoint(0, field->height() + 2)));
+    return menu;
+}
+
+void LinkRedirectorPanel::showBrowserMenu(const QString &settingsKey, LinkRedirectorComboField *field)
+{
+    const QString configured = m_context.value(settingsKey, QString()).toString();
+    const QList<DetectedBrowser> detected = m_sources.detectedBrowsers ? m_sources.detectedBrowsers() : QList<DetectedBrowser>();
+    const QList<ComboItem> items = LinkRedirectorRouting::buildBrowserComboItems(configured, detected);
+
+    QMenu *menu = buildMenu(items, this);
+    QAction *chosen = menu->exec(field->mapToGlobal(QPoint(0, field->height() + 2)));
     if (!chosen) {
+        menu->deleteLater();
         return;
     }
-    if (static_cast<ComboItem::Kind>(chosen->data().toInt()) == ComboItem::Kind::Browse) {
+    const auto kind = static_cast<ComboItem::Kind>(chosen->data().toInt());
+    const QString exePath = chosen->property("exePath").toString();
+    menu->deleteLater();
+    if (kind == ComboItem::Kind::Browse) {
         openBrowseDialog(settingsKey, field);
         return;
     }
-    chooseBrowser(settingsKey, field, chosen->property("exePath").toString());
+    chooseBrowser(settingsKey, field, exePath);
 }
 
 void LinkRedirectorPanel::chooseBrowser(const QString &settingsKey, LinkRedirectorComboField *field, const QString &exePath)
@@ -365,49 +415,16 @@ void LinkRedirectorPanel::saveMatchWordsNow()
 
 QWidget *LinkRedirectorPanel::buildDropdownPreview(const QList<ComboItem> &items, QWidget *parent)
 {
-    // Reconstruccion PARA LA CAPTURA de la lista que abre showBrowserMenu(): no es el mismo QMenu (un
-    // QMenu real se muestra con exec(), prohibido en captura), pero muestra los mismos datos (mismo
-    // buildBrowserComboItems), con el mismo look oscuro que QMenu en Theme.cpp.
-    // objectName + selector CON ese nombre: QLabel hereda de QFrame en Qt, asi que un "QFrame { ... }"
-    // sin ambito tambien pinta borde y fondo en los QLabel de mas abajo (mark, text).
-    auto *frame = new QFrame(parent);
-    frame->setObjectName(QStringLiteral("lrDropdownPreview"));
-    frame->setStyleSheet(QStringLiteral("QFrame#lrDropdownPreview { background-color:#262626; border:1px solid #3a3a3a; border-radius:4px; }"));
-    auto *column = new QVBoxLayout(frame);
-    column->setContentsMargins(0, 5, 0, 5);
-    column->setSpacing(0);
-
-    const QPixmap check(QStringLiteral(":/icons/check.png"));
-    for (const ComboItem &item : items) {
-        if (item.kind == ComboItem::Kind::Browse) {
-            auto *separator = new QFrame(frame);
-            separator->setObjectName(QStringLiteral("lrDropdownSeparator"));
-            separator->setFixedHeight(1);
-            separator->setStyleSheet(QStringLiteral("QFrame#lrDropdownSeparator { background-color:#3a3a3a; border:none; border-radius:0px; }"));
-            column->addSpacing(4);
-            column->addWidget(separator);
-            column->addSpacing(4);
-        }
-        auto *row = new QWidget(frame);
-        auto *rowLayout = new QHBoxLayout(row);
-        rowLayout->setContentsMargins(14, 5, 16, 5);
-        rowLayout->setSpacing(8);
-        auto *mark = new QLabel(row);
-        mark->setObjectName(QStringLiteral("lrDropdownMark"));
-        mark->setFixedSize(12, 12);
-        mark->setStyleSheet(QStringLiteral("QLabel#lrDropdownMark { background:transparent; border:none; }"));
-        if (item.selected && !check.isNull()) {
-            mark->setPixmap(check.scaled(12, 12, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-        }
-        rowLayout->addWidget(mark, 0, Qt::AlignVCenter);
-        auto *text = new QLabel(item.label, row);
-        text->setObjectName(QStringLiteral("lrDropdownText"));
-        text->setStyleSheet(QStringLiteral("QLabel#lrDropdownText { background:transparent; border:none; font-size:13px; color:%1; }")
-                                .arg(item.selected ? QLatin1String(Theme::kTextBright) : QStringLiteral("#cccccc")));
-        rowLayout->addWidget(text, 1);
-        column->addWidget(row);
-    }
-    return frame;
+    // Auditoria (item 3): capturar el QMenu REAL de showBrowserMenu(), no una reconstruccion aparte.
+    // Un QMenu no se puede exec()/show() en una corrida automatizada; en cambio, WA_DontShowOnScreen
+    // deja que el arnes de --ui-shot lo mida y lo renderice (UiShot.cpp ya hace
+    // widget->setWindowFlags(Qt::Widget) sobre lo que devuelve esta funcion, asi que el Qt::Popup del
+    // menu se reemplaza por un widget hijo comun antes de agregarlo al layout de la captura).
+    QMenu *menu = buildMenu(items, parent);
+    menu->setAttribute(Qt::WA_DontShowOnScreen, true);
+    menu->ensurePolished();
+    menu->adjustSize();
+    return menu;
 }
 
 #include "LinkRedirectorPanel.moc"
