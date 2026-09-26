@@ -6,28 +6,27 @@
 
 #include <memory>
 
-// Observador de "que ventana esta al frente", pensado para terminar siendo un SERVICIO COMPARTIDO
-// del host (plan 4.4): un solo hook de sistema para todos los modulos que lo necesiten (hoy Folder
-// Switch; mas adelante Nuke Shortcuts, que hoy tiene el suyo propio en NukeWatcherWin.cpp con un
-// `g_instance` sin tocar). Mientras no exista ese servicio, cada modulo crea y destruye su propia
-// instancia en start()/stop().
+// Servicio compartido "que app o ventana esta al frente" (plan 4.4): UN solo observador del
+// sistema para todos los modulos que lo necesitan (Folder Switch y Nuke Shortcuts). Lo crea el host
+// con el primer modulo que lo pide (ModuleContext::foreground(), refcount en
+// ModuleHost::acquireForeground/releaseForeground) y lo destruye cuando lo suelta el ultimo: con los
+// dos prendidos hay un solo hook; con los dos apagados, ninguno.
 //
-// A diferencia de NukeWatcherWin (un `g_instance` global que se pisa si se instancia dos veces), esta
-// clase admite VARIAS instancias vivas a la vez sin punteros estaticos por instancia: el callback de
-// Windows resuelve la instancia dueña por el handle del hook en un registro compartido (ver
-// ForegroundWatcherWin.cpp). Asi el dia de mañana el host puede tener una sola instancia repartida
-// entre modulos, o (como ahora) cada modulo la suya, sin que se pisen entre si.
+// Sin punteros estaticos por instancia: el callback de Windows resuelve la instancia duena por el
+// handle de SU hook en un registro compartido (ForegroundWatcherWin.cpp), y en mac el observador de
+// NSWorkspace captura su instancia en el bloque. installedHooks() cuenta los observadores del sistema
+// instalados en el proceso (lo usan el self-test y la medicion).
 //
-// `active = false` (usado en toda corrida automatizada: --self-test, --ui-shot, --simulate-action, la
-// medicion de consumo) crea el objeto pero NO instala ningun hook ni consulta el sistema: sirve para
-// ejercitar el ciclo de vida (crear en start(), destruir en stop()) sin tocar nada real, igual que
-// InputInjector(dryRun).
+// `active = false` (corridas automatizadas: --self-test, --ui-shot, --simulate-action) crea el objeto
+// pero NO instala nada ni consulta el sistema, igual que InputInjector(dryRun). La medicion de
+// consumo y el conteo de hooks del self-test lo crean activo (solo observa, no actua).
 //
-// Coordenadas y HWND en formato NATIVO (ver NukeWatcher.h): el hwnd se entrega como quintptr, listo
-// para reinterpret_cast<HWND>. Una implementacion por plataforma:
-//  - Windows (platform/win/ForegroundWatcherWin.cpp): SetWinEventHook(EVENT_SYSTEM_FOREGROUND).
-//  - macOS: sin implementar todavia (Folder Switch es solo Windows). El header queda listo para
-//    cuando Nuke Shortcuts en mac lo necesite (NSWorkspace, app activa).
+// Una implementacion por plataforma:
+//  - Windows (platform/win/ForegroundWatcherWin.cpp): SetWinEventHook(EVENT_SYSTEM_FOREGROUND). hwnd
+//    es el HWND nativo como quintptr, listo para reinterpret_cast<HWND>; exeName, "Nuke15.1.exe".
+//  - macOS (platform/mac/ForegroundWatcherMac.mm): NSWorkspaceDidActivateApplicationNotification (la
+//    app activa). hwnd va en 0 (mac no expone la ventana); pid y exeName ("Nuke15.1") son los de la
+//    app activa.
 class ForegroundWatcher : public QObject
 {
     Q_OBJECT
@@ -41,6 +40,10 @@ public:
     quintptr foregroundHwnd() const { return m_hwnd; }
     quint32 foregroundPid() const { return m_pid; }
     QString foregroundExeName() const { return m_exeName; }
+
+    // Observadores del sistema instalados ahora en todo el proceso (hooks de Windows, observadores
+    // de NSWorkspace en mac).
+    static int installedHooks();
 
 signals:
     // hwnd: HWND nativo como quintptr. pid: PID del proceso dueño de esa ventana. exeName: nombre del

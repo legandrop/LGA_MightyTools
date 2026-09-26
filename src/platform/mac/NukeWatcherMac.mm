@@ -56,36 +56,6 @@ QRect mainWindowFrame(pid_t pid)
 
 } // namespace
 
-struct NukeWatcher::Private
-{
-    id observer = nil;
-};
-
-NukeWatcher::NukeWatcher(QObject *parent)
-    : QObject(parent)
-    , d(std::make_unique<Private>())
-{
-    NukeWatcher *watcher = this;
-    NSNotificationCenter *center = [[NSWorkspace sharedWorkspace] notificationCenter];
-    d->observer = [center addObserverForName:NSWorkspaceDidActivateApplicationNotification
-                                      object:nil
-                                       queue:[NSOperationQueue mainQueue]
-                                  usingBlock:^(NSNotification *note) {
-                                      NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
-                                      watcher->setNukeInFront(isNukeApp(app));
-                                  }];
-    m_nukeInFront = isNukeApp([[NSWorkspace sharedWorkspace] frontmostApplication]);
-    qInfo() << "[NukeWatcher] Nuke al frente al arrancar:" << m_nukeInFront;
-}
-
-NukeWatcher::~NukeWatcher()
-{
-    if (d->observer) {
-        [[[NSWorkspace sharedWorkspace] notificationCenter] removeObserver:d->observer];
-        d->observer = nil;
-    }
-}
-
 bool NukeWatcher::isNukeInFrontNow() const
 {
     return isNukeApp([[NSWorkspace sharedWorkspace] frontmostApplication]);

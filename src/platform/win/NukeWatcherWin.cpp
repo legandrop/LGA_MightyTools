@@ -2,7 +2,6 @@
 
 #include <QDebug>
 #include <QFileInfo>
-#include <QMetaObject>
 
 #include <iterator>
 
@@ -10,8 +9,6 @@
 #include <dwmapi.h>
 
 namespace {
-
-NukeWatcher *g_instance = nullptr;
 
 QString processFileName(HWND hwnd)
 {
@@ -59,45 +56,6 @@ bool isNukeWindow(HWND hwnd)
 }
 
 } // namespace
-
-struct NukeWatcher::Private
-{
-    HWINEVENTHOOK hook = nullptr;
-
-    static void CALLBACK onForeground(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject, LONG, DWORD, DWORD)
-    {
-        if (event != EVENT_SYSTEM_FOREGROUND || idObject != OBJID_WINDOW || !g_instance) {
-            return;
-        }
-        const bool nuke = isNukeWindow(hwnd);
-        NukeWatcher *watcher = g_instance;
-        QMetaObject::invokeMethod(watcher, [watcher, nuke]() { watcher->setNukeInFront(nuke); }, Qt::QueuedConnection);
-    }
-};
-
-NukeWatcher::NukeWatcher(QObject *parent)
-    : QObject(parent)
-    , d(std::make_unique<Private>())
-{
-    g_instance = this;
-    d->hook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, nullptr, &Private::onForeground, 0, 0,
-                              WINEVENT_OUTOFCONTEXT);
-    if (!d->hook) {
-        qWarning() << "[NukeWatcher] SetWinEventHook fallo:" << GetLastError();
-    }
-    m_nukeInFront = isNukeWindow(GetForegroundWindow());
-    qInfo() << "[NukeWatcher] Nuke al frente al arrancar:" << m_nukeInFront;
-}
-
-NukeWatcher::~NukeWatcher()
-{
-    if (d->hook) {
-        UnhookWinEvent(d->hook);
-    }
-    if (g_instance == this) {
-        g_instance = nullptr;
-    }
-}
 
 bool NukeWatcher::isNukeInFrontNow() const
 {

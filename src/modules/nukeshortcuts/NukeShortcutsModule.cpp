@@ -250,7 +250,8 @@ void NukeShortcutsModule::start()
         return;
     }
     m_started = true;
-    m_watcher = new NukeWatcher(this);
+    // Nuke al frente sale del servicio compartido del host: un solo hook con Folder Switch.
+    m_watcher = new NukeWatcher(context().foreground(), this);
     m_runner = new ActionRunner(context().injector(), this);
     connect(context().hotkeys(), &ModuleHotkeys::activated, this, &NukeShortcutsModule::onHotkey);
     connect(m_watcher, &NukeWatcher::nukeInFrontChanged, m_state, &NukeShortcutsState::setNukeInFront);

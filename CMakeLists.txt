@@ -243,7 +243,7 @@ elseif(APPLE)
         src/modules/openinnukex/mac/MacFileAssociation.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
-        src/platform/mac/ForegroundWatcherMac.cpp
+        src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp
         src/platform/mac/LocalDrivesMac.cpp
@@ -294,6 +294,7 @@ elseif(APPLE)
     set_source_files_properties(
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AutoStartMac.mm
+        src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
