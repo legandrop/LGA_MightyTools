@@ -1,6 +1,11 @@
 #include "modules/folderswitch/WindowUtils.h"
 
+#include "modules/folderswitch/FolderSwitchLogic.h"
+#include "modules/folderswitch/UiaTimeouts.h"
+
+#include <QDateTime>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QStringList>
 
@@ -8,7 +13,9 @@
 #include <uiautomation.h>
 #include <objbase.h>
 
-// Copia de LGA_FolderSwitch (src/core/WindowUtils.cpp), sin cambios de logica.
+// Copia de LGA_FolderSwitch (src/core/WindowUtils.cpp). Unico cambio de logica respecto del origen:
+// el cache de isQtFileDialog ahora vence (FolderSwitchLogic::QtDialogCache) y uiaLooksLikeFileDialog
+// se mide y se acota (plan, seccion 11 y auditoria de la etapa 2).
 
 namespace {
 
@@ -119,11 +126,13 @@ bool isFileDialogWindow(HWND hwnd)
 
 namespace {
 
-// Cache de resultados de isQtFileDialog por HWND: el recorrido UIA no es gratis y no queremos
-// repetirlo en cada cambio de foco.
-QHash<HWND, bool> &qtFileDialogCache()
+// TTL corto (ver FolderSwitchLogic::QtDialogCache): alcanza para no repetir el FindAll descendente
+// en la misma rafaga de alt-tab, sin pretender que un HWND nunca cambia de naturaleza.
+constexpr qint64 kQtDialogCacheTtlMs = 3000;
+
+FolderSwitchLogic::QtDialogCache &qtFileDialogCache()
 {
-    static QHash<HWND, bool> cache;
+    static FolderSwitchLogic::QtDialogCache cache(kQtDialogCacheTtlMs);
     return cache;
 }
 
@@ -147,12 +156,23 @@ QString bstrToQString(BSTR bstr)
 // Recorrido UIA real: hwnd ya paso el prefiltro barato (clase "Qt..." + owner).
 bool uiaLooksLikeFileDialog(HWND hwnd)
 {
+    QElapsedTimer timer;
+    timer.start();
+    // Guarda de un solo punto de salida: cualquier `return` de abajo pasa antes por aca y deja la
+    // medicion en el log (plan, seccion 11 y auditoria de la etapa 2: esta llamada corre en el hilo
+    // de UI compartido con las otras cuatro herramientas).
+    struct TimingGuard {
+        QElapsedTimer &timer;
+        ~TimingGuard() { FolderSwitchLogic::logCallTiming("uiaLooksLikeFileDialog", timer.elapsed()); }
+    } guard{timer};
+
     IUIAutomation *automation = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
                                    IID_IUIAutomation, reinterpret_cast<void **>(&automation));
     if (FAILED(hr) || !automation) {
         return false;
     }
+    UiaTimeouts::apply(automation);
 
     IUIAutomationElement *element = nullptr;
     hr = automation->ElementFromHandle(hwnd, &element);
@@ -229,33 +249,41 @@ bool isQtFileDialog(HWND hwnd)
         return false;
     }
 
-    QHash<HWND, bool> &cache = qtFileDialogCache();
-    auto it = cache.find(hwnd);
-    if (it != cache.end()) {
-        // Windows recicla HWNDs: si la ventana cacheada ya murio, la entrada puede pertenecer a otra
-        // ventana distinta. Se reevalua.
-        if (IsWindow(hwnd)) {
-            return it.value();
+    FolderSwitchLogic::QtDialogCache &cache = qtFileDialogCache();
+    const quintptr key = reinterpret_cast<quintptr>(hwnd);
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+
+    // Windows recicla HWNDs: si la ventana cacheada ya murio, la entrada puede pertenecer a otra
+    // ventana distinta. Se invalida sin importar el TTL.
+    if (!IsWindow(hwnd)) {
+        cache.invalidate(key);
+    } else {
+        bool cached = false;
+        if (cache.lookup(key, now, &cached)) {
+            // Se evita otro FindAll descendente: uiaLooksLikeFileDialog mide unos pocos ms a decenas
+            // de ms segun la ventana (ver el log "[folderSwitch] uiaLooksLikeFileDialog <ms> ms");
+            // esta linea es lo que se ahorra CADA VEZ que el mismo HWND vuelve a preguntarse dentro
+            // del TTL (alt-tab de ida y vuelta al mismo dialogo).
+            qDebug().noquote() << QStringLiteral("[folderSwitch] isQtFileDialog cache hit hwnd=0x%1 (evita otro "
+                                                 "uiaLooksLikeFileDialog)")
+                                       .arg(key, 0, 16);
+            return cached;
         }
-        cache.erase(it);
-    }
-    if (cache.size() > 64) {
-        cache.clear();
     }
 
     // Prefiltro barato: class name "Qt..." y tiene owner (los dialogos tienen owner, la ventana
     // principal de la app no).
     if (!classNameOf(hwnd).startsWith(QStringLiteral("Qt"))) {
-        cache.insert(hwnd, false);
+        cache.store(key, false, now);
         return false;
     }
     if (GetWindow(hwnd, GW_OWNER) == nullptr) {
-        cache.insert(hwnd, false);
+        cache.store(key, false, now);
         return false;
     }
 
     const bool result = uiaLooksLikeFileDialog(hwnd);
-    cache.insert(hwnd, result);
+    cache.store(key, result, now);
     return result;
 }
 

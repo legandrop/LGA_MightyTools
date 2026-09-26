@@ -71,6 +71,9 @@ inline constexpr const char *kSwitchOff = "#2d2d33";
 inline constexpr const char *kSwitchOffBorder = "#3a3a44";
 inline constexpr const char *kSwitchKnobOff = "#7a7a80";
 inline constexpr const char *kSwitchKnobOn = "#DDDBEE";
+// Hover de fila generico (fuera de la barra lateral, que tiene el suyo, kSideHover): la fila
+// resaltada del popup de carpetas recientes de Folder Switch.
+inline constexpr const char *kRowHover = "#2a2a2a";
 
 inline QColor color(const char *hex) { return QColor(QLatin1String(hex)); }
 

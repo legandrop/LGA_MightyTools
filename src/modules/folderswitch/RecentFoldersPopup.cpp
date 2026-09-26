@@ -13,9 +13,8 @@
 #include <windows.h>
 
 // Copia de LGA_FolderSwitch (src/ui/RecentFoldersPopup.cpp): misma geometria y el mismo dibujo a
-// mano, con los colores que ya tenian equivalente exacto en el Theme de Mighty Tools reemplazados
-// por su token (tarjeta y badges). El hover de fila no tiene token propio todavia: queda como
-// literal, igual que en el origen.
+// mano, con los colores reemplazados por su token de Theme (tarjeta, badges y el hover de fila,
+// Theme::kRowHover).
 
 namespace {
 
@@ -62,12 +61,9 @@ int emptyBodyHeight()
     return kEmptyPad + title.height() + 3 + wrapped.height() + kEmptyPad;
 }
 
-// Hover de fila: sin token propio en Theme todavia (el resto de la tarjeta si tiene el suyo: ver
-// abajo kCard()/kCardBorder()/kBadgeColor()/kBadgeHover()).
-const QColor kRowHover(0x2a, 0x2a, 0x2a);
-
 QColor cardColor() { return Theme::color(Theme::kCard); }
 QColor cardBorderColor() { return Theme::color(Theme::kBorder); }
+QColor rowHoverColor() { return Theme::color(Theme::kRowHover); }
 QColor badgeColor() { return Theme::color(Theme::kPrimary); }
 QColor badgeHoverColor() { return Theme::color(Theme::kPrimaryBorder); }
 
@@ -333,7 +329,7 @@ void RecentFoldersPopup::paintEvent(QPaintEvent *)
         const bool hot = i == m_current;
         if (hot) {
             painter.setPen(Qt::NoPen);
-            painter.setBrush(kRowHover);
+            painter.setBrush(rowHoverColor());
             painter.drawRoundedRect(QRectF(row), 5, 5);
         }
 

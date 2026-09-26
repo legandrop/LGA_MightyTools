@@ -5,6 +5,7 @@
 #include "modules/folderswitch/FolderResolver.h"
 #include "modules/folderswitch/FolderSwitchLogic.h"
 #include "modules/folderswitch/RecentFoldersPopup.h"
+#include "modules/folderswitch/UiaTimeouts.h"
 #include "modules/folderswitch/WindowUtils.h"
 #include "platform/ForegroundWatcher.h"
 #include "ui/ShortcutRow.h"
@@ -23,6 +24,9 @@
 #include <QPointer>
 #include <QSet>
 #include <QTimer>
+
+#include <objbase.h>
+#include <uiautomation.h>
 
 namespace {
 constexpr int kManualHotkeyId = 1;
@@ -823,6 +827,74 @@ void windowClassificationSelfTest(const std::function<void(bool, const QString &
           QStringLiteral("los clasificadores devuelven false con hwnd nulo"));
 }
 
+// Logica pura del cache de isQtFileDialog (auditoria etapa 2, punto 3): vence, y distingue una clave
+// de otra. Claves sinteticas (no HWNDs reales) y reloj inyectado: no toca ninguna ventana.
+void qtDialogCacheSelfTest(const std::function<void(bool, const QString &)> &check)
+{
+    using FolderSwitchLogic::QtDialogCache;
+
+    QtDialogCache cache(1000); // TTL de prueba: 1000 ms
+    bool value = false;
+
+    check(!cache.lookup(0x1000, 0, &value), QStringLiteral("QtDialogCache: sin nada guardado, no hay hit (negativo)"));
+
+    cache.store(0x1000, true, 0);
+    check(cache.lookup(0x1000, 0, &value) && value, QStringLiteral("QtDialogCache: hit inmediato con el valor guardado"));
+    check(cache.lookup(0x1000, 999, &value) && value, QStringLiteral("QtDialogCache: sigue vigente justo antes del TTL"));
+    check(!cache.lookup(0x1000, 1000, &value),
+          QStringLiteral("QtDialogCache: vencio justo al llegar al TTL (negativo)"));
+
+    // Distingue HWND: una clave no pisa ni contamina a otra.
+    cache.store(0x2000, false, 0);
+    check(cache.lookup(0x1000, 500, &value) && value, QStringLiteral("QtDialogCache: la clave 0x1000 conserva su valor"));
+    check(cache.lookup(0x2000, 500, &value) && !value,
+          QStringLiteral("QtDialogCache: la clave 0x2000 tiene el suyo propio, distinto (negativo de mezcla)"));
+
+    cache.invalidate(0x1000);
+    check(!cache.lookup(0x1000, 500, &value), QStringLiteral("QtDialogCache: invalidate() saca esa entrada (negativo)"));
+    check(cache.lookup(0x2000, 500, &value), QStringLiteral("QtDialogCache: invalidar una clave no afecta a otra"));
+
+    cache.clear();
+    check(!cache.lookup(0x2000, 500, &value), QStringLiteral("QtDialogCache: clear() vacia todo (negativo)"));
+    check(cache.size() == 0, QStringLiteral("QtDialogCache: size() en 0 despues de clear()"));
+
+    QtDialogCache capCache(1000);
+    for (quintptr i = 0; i < 130; ++i) {
+        capCache.store(i, true, 0);
+    }
+    check(capCache.size() <= 128, QStringLiteral("QtDialogCache: no crece sin limite (se poda pasado un tope)"));
+}
+
+// Que UiaTimeouts::apply() de verdad haya fijado los timeouts (auditoria etapa 2, punto 3): crea una
+// instancia real de IUIAutomation (COM ya esta inicializado por ComApartment en main) sin tocar
+// ninguna ventana, y lee los valores de vuelta por IUIAutomation2.
+void uiaTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
+{
+    IUIAutomation *automation = nullptr;
+    const HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation,
+                                        reinterpret_cast<void **>(&automation));
+    if (FAILED(hr) || !automation) {
+        check(false, QStringLiteral("UiaTimeouts: no se pudo crear IUIAutomation para probar (hr=%1)").arg(hr));
+        return;
+    }
+    UiaTimeouts::apply(automation);
+
+    IUIAutomation2 *automation2 = nullptr;
+    if (SUCCEEDED(automation->QueryInterface(IID_IUIAutomation2, reinterpret_cast<void **>(&automation2)))
+        && automation2) {
+        DWORD connectionMs = 0;
+        DWORD transactionMs = 0;
+        automation2->get_ConnectionTimeout(&connectionMs);
+        automation2->get_TransactionTimeout(&transactionMs);
+        check(connectionMs == 500, QStringLiteral("UiaTimeouts: ConnectionTimeout queda leible en 500 ms"));
+        check(transactionMs == 1000, QStringLiteral("UiaTimeouts: TransactionTimeout queda leible en 1000 ms"));
+        automation2->Release();
+    } else {
+        qWarning() << "[folderSwitch] IUIAutomation2 no disponible en esta maquina: self-test de timeouts omitido";
+    }
+    automation->Release();
+}
+
 void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &check)
 {
     // ---- Deduplicado y orden de recientes (sin ModuleContext: todo en memoria) ----
@@ -984,6 +1056,8 @@ void folderSwitchSelfTest(const std::function<void(bool, const QString &)> &chec
     }
 
     windowClassificationSelfTest(check);
+    qtDialogCacheSelfTest(check);
+    uiaTimeoutSelfTest(check);
     // El popup de recientes (RecentFoldersPopup) es un QWidget: --self-test corre bajo
     // QCoreApplication (sin QApplication), asi que no se puede construir aca -- "si se puede" del
     // encargo no se da. Su navegacion por teclado (orden, wrap, Esc) se verifica con las capturas
