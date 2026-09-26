@@ -195,6 +195,10 @@ QPushButton[variant="ghost"]:hover { background-color: #2a2a2a; color: @textStro
 QPushButton[btnSize="sm"] { min-height: 26px; max-height: 26px; font-size: @fs12_5; padding: 0px 10px; }
 QPushButton[btnSize="icon"] { min-height: 26px; max-height: 26px; min-width: 26px; max-width: 26px; padding: 0px; }
 QPushButton#closeButton { border: 1px solid #3B316A; }
+/* "Elegido" entre varios botones del mismo tipo (canvas: --chk-bg/--chk-border), sin ser la accion
+   principal: el keycap de version de Nuke elegida en Open in NukeX. */
+QPushButton[chosen="true"] { background-color: @chosenBg; border: 1px solid @chosenBorder; color: @chosenText; }
+QPushButton[chosen="true"]:hover { background-color: @chosenBorder; }
 
 /* Campo de solo lectura */
 QFrame#field { background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; min-height: 28px; max-height: 28px; }
@@ -290,6 +294,7 @@ QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 
         {"@statusOk", kStatusOk}, {"@sideSelected", kSideSelected}, {"@side", kSide},
         {"@modIconBg", kModIconBg}, {"@modIconBorder", kModIconBorder}, {"@platBorder", kPlatBorder},
         {"@miniCard", kMiniCard}, {"@aboutName", kAboutName}, {"@dotPaused", kDotPaused},
+        {"@chosenBg", kChosenBg}, {"@chosenBorder", kChosenBorder}, {"@chosenText", kChosenText},
         {"@window", kWindow}, {"@card", kCard}, {"@tile", kTile}, {"@fieldBorder", kFieldBorder},
         {"@field", kField}, {"@border", kBorder}, {"@divider", kDivider}, {"@dialog", kDialog},
         {"@textStrong", kTextStrong}, {"@textBright", kTextBright}, {"@textMuted", kTextMuted},

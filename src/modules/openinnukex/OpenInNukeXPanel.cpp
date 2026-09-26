@@ -53,12 +53,15 @@ class ApplyWorker : public QObject
 {
     Q_OBJECT
 public:
-    explicit ApplyWorker(bool reapply) : m_reapply(reapply) {}
+    // `parentHwnd`: la ventana dueña del selector nativo "Abrir con" si el hash silencioso no
+    // alcanza. HWND es visible aca por el `#include ".../WinFileAssociation.h"` de mas arriba
+    // (que lo declara sin windows.h, ver ese header): esta unidad tampoco incluye Win32.
+    ApplyWorker(bool reapply, HWND parentHwnd) : m_reapply(reapply), m_parentHwnd(parentHwnd) {}
 
 public slots:
     void run()
     {
-        const WinFileAssociation::ApplyOutcome outcome = WinFileAssociation::apply(m_reapply);
+        const WinFileAssociation::ApplyOutcome outcome = WinFileAssociation::apply(m_reapply, m_parentHwnd);
         emit finished(outcome.result == WinFileAssociation::ApplyResult::Success,
                       outcome.result == WinFileAssociation::ApplyResult::NeedsUserConfirmation, outcome.errors);
     }
@@ -68,6 +71,7 @@ signals:
 
 private:
     bool m_reapply;
+    HWND m_parentHwnd;
 };
 #endif
 
@@ -246,11 +250,19 @@ void OpenInNukeXPanel::onApplyClicked()
     m_applyButton->setEnabled(false);
 
 #ifdef Q_OS_WIN
+    // El HWND se captura ACA, en el hilo de UI (winId() no es seguro desde otro hilo), y se le
+    // pasa al worker para que el selector nativo "Abrir con" salga con LGA Mighty Tools como
+    // dueño (auditoria: v1.83 pasaba winId(), la version anterior de este modulo no pasaba nada).
+    // window() puede ser nullptr en teoria (contrato de ModuleContext no lo garantiza fuera de
+    // captura); con ventana real esto nunca pasa.
+    QWidget *topLevel = m_context.window();
+    const HWND parentHwnd = topLevel ? reinterpret_cast<HWND>(topLevel->winId()) : nullptr;
+
     // Sin padre Qt: si el panel se destruye con Apply corriendo (~1.5 s: los msleep de reintento
     // mas el hash de UserChoiceLatest), el destructor lo desconecta y lo espera en vez de dejar
     // que QThread se destruya con el hilo todavia vivo. Se guarda en m_applyThread para eso.
     auto *thread = new QThread();
-    auto *worker = new ApplyWorker(reapply);
+    auto *worker = new ApplyWorker(reapply, parentHwnd);
     worker->moveToThread(thread);
     connect(thread, &QThread::started, worker, &ApplyWorker::run);
     connect(worker, &ApplyWorker::finished, this, &OpenInNukeXPanel::onApplyFinished);
@@ -358,7 +370,7 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
 
 void OpenInNukeXPanel::loadSavedNukePath()
 {
-    m_pathField->setText(NukeXPath::read(m_nukeXPathFile));
+    m_pathField->setText(QDir::toNativeSeparators(NukeXPath::read(m_nukeXPathFile)));
 }
 
 void OpenInNukeXPanel::startScan()
@@ -384,8 +396,9 @@ void OpenInNukeXPanel::startScan()
         // healStalePath SOLO con la ruta real (nunca en captura: startScan() no corre ahi).
         const QString healed = NukeXPath::healStalePath(m_nukeXPathFile, m_pathField->text().trimmed(), versions);
         if (!healed.isEmpty() && healed != m_pathField->text()) {
-            m_pathField->setText(healed);
+            m_pathField->setText(QDir::toNativeSeparators(healed));
         }
+        updateChosenVersionHighlight();
     });
     m_scanner->startScan();
 }
@@ -399,16 +412,41 @@ void OpenInNukeXPanel::rebuildVersionButtons()
     }
     for (const NukeVersion &version : m_foundVersions) {
         auto *button = Ui::button(version.displayName, QString(), QStringLiteral("sm"), m_versionButtonsRow);
+        // Ruta nativa guardada como propiedad: updateChosenVersionHighlight() compara contra ella
+        // sin importar / o \ ni mayusculas (auditoria, punto 3).
+        button->setProperty("versionPath", QDir::toNativeSeparators(version.path));
         connect(button, &QPushButton::clicked, this, [this, version]() { onVersionButtonClicked(version); });
         versionsLayout->addWidget(button);
     }
     versionsLayout->addStretch(1);
+    updateChosenVersionHighlight();
+}
+
+void OpenInNukeXPanel::updateChosenVersionHighlight()
+{
+    // Canvas "Preferred Nuke version": el boton de la version cuya ruta coincide con la cargada
+    // queda resaltado (--chk-bg/--chk-border, ver Theme::kChosenBg/kChosenBorder/kChosenText).
+    // Insensible a mayusculas y a / vs \: la ruta puede venir del escaneo (QFileInfo, con /) o de
+    // lo que el usuario escribio o eligio con Browse (nativa, con \ en Windows).
+    const QString current = QDir::toNativeSeparators(m_pathField->text().trimmed());
+    auto *versionsLayout = qobject_cast<QHBoxLayout *>(m_versionButtonsRow->layout());
+    for (int i = 0; i < versionsLayout->count(); ++i) {
+        QLayoutItem *item = versionsLayout->itemAt(i);
+        auto *button = item ? qobject_cast<QPushButton *>(item->widget()) : nullptr;
+        if (!button) {
+            continue;
+        }
+        const QString buttonPath = button->property("versionPath").toString();
+        const bool chosen = !current.isEmpty() && !buttonPath.isEmpty() && buttonPath.compare(current, Qt::CaseInsensitive) == 0;
+        Ui::setStyleProperty(button, "chosen", chosen);
+    }
 }
 
 void OpenInNukeXPanel::onVersionButtonClicked(const NukeVersion &version)
 {
     // Solo carga el path en el campo (inventario): SAVE es un paso aparte, a proposito.
-    m_pathField->setText(version.path);
+    m_pathField->setText(QDir::toNativeSeparators(version.path));
+    updateChosenVersionHighlight();
 }
 
 void OpenInNukeXPanel::onBrowseNukeXClicked()
@@ -419,6 +457,7 @@ void OpenInNukeXPanel::onBrowseNukeXClicked()
         QFileDialog::getOpenFileName(this, QStringLiteral("Path to NukeX executable"), start, QStringLiteral("Executable (*.exe)"));
     if (!picked.isEmpty()) {
         m_pathField->setText(QDir::toNativeSeparators(picked));
+        updateChosenVersionHighlight();
     }
 }
 
@@ -437,6 +476,7 @@ void OpenInNukeXPanel::onSaveNukeXClicked()
         // Inventario: "Saving it anyway" — el aviso no bloquea el guardado.
         report(OpenInNukeXMessages::notANukeExecutable());
     }
+    updateChosenVersionHighlight();
     if (m_context.automatedRun()) {
         qInfo("[openInNukeX] (automatedRun) Save: no se escribe nukeXpath.txt");
         return;
@@ -609,6 +649,12 @@ void OpenInNukeXPanel::onInstallClicked()
         qInfo("[openInNukeX] (automatedRun) Install/Reinstall: no se instala el bridge de verdad");
         return;
     }
+    // A proposito, SIN el guard de AppPaths::isBuildTree() que tiene onApplyClicked(): instalar el
+    // bridge desde un arbol de build es legitimo (es como Lega prueba el modulo antes de un
+    // release) y no rompe nada si el build se borra despues — el bridge instalado en `.nuke` sigue
+    // andando solo, no depende del exe. Asociar `.nk` desde un build si es delicado (el ProgID
+    // apuntaria a un exe que desaparece en el proximo `limpiar`), por eso ese guard esta solo en
+    // Apply/Re-apply. Confirmado en la auditoria (revision de la etapa 2): asimetria intencional.
     const QString dir = m_nukeDirField->text().trimmed();
     QString detail;
     const NukeBridge::Error err = NukeBridge::install(dir, &detail, /*automatedRun=*/false);
@@ -680,12 +726,16 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     }
     m_fixtureState = state;
 
-    // Nada de esto lee el sistema: son datos de prueba fijos, como en el canvas.
-    const NukeVersion v151{QStringLiteral("Nuke15.1v6"), QStringLiteral("C:/Program Files/Nuke15.1v6/Nuke15.1.exe"),
+    // Nada de esto lee el sistema: son datos de prueba fijos, como en el canvas. Rutas con
+    // separador nativo (\ en Windows), como las que de verdad carga el campo (auditoria, punto 3).
+    const NukeVersion v151{QStringLiteral("Nuke15.1v6"),
+                          QDir::toNativeSeparators(QStringLiteral("C:/Program Files/Nuke15.1v6/Nuke15.1.exe")),
                           QStringLiteral("15.1v6"), QStringLiteral("Nuke 15.1v6")};
-    const NukeVersion v160{QStringLiteral("Nuke16.0v4"), QStringLiteral("C:/Program Files/Nuke16.0v4/Nuke16.0.exe"),
+    const NukeVersion v160{QStringLiteral("Nuke16.0v4"),
+                          QDir::toNativeSeparators(QStringLiteral("C:/Program Files/Nuke16.0v4/Nuke16.0.exe")),
                           QStringLiteral("16.0v4"), QStringLiteral("Nuke 16.0v4")};
-    const NukeVersion v170{QStringLiteral("Nuke17.0v4"), QStringLiteral("C:/Program Files/Nuke17.0v4/Nuke17.0.exe"),
+    const NukeVersion v170{QStringLiteral("Nuke17.0v4"),
+                          QDir::toNativeSeparators(QStringLiteral("C:/Program Files/Nuke17.0v4/Nuke17.0.exe")),
                           QStringLiteral("17.0v4"), QStringLiteral("Nuke 17.0v4")};
 
     const bool isOldClient = state == QStringLiteral("old-client");
@@ -721,6 +771,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     rebuildVersionButtons();
     const bool noVersionsFound = state == QStringLiteral("scan-none") || state == QStringLiteral("no-nuke-manual-open");
     m_pathField->setText((assocOk && !noVersionsFound) ? v170.path : QString());
+    updateChosenVersionHighlight();
 
     // "Nuke Bridge"
     QString chipTone = QStringLiteral("ok");
