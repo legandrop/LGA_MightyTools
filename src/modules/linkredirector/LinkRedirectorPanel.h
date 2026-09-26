@@ -12,7 +12,7 @@
 #include <functional>
 
 class QMenu;
-class QPlainTextEdit;
+class QTextEdit;
 class QTimer;
 class StatusCard;
 class LinkRedirectorComboField; ///< definida en LinkRedirectorPanel.cpp: campo "combo" (valor + flecha)
@@ -78,7 +78,7 @@ private:
     StatusCard *m_statusCard = nullptr;
     LinkRedirectorComboField *m_defaultField = nullptr;
     LinkRedirectorComboField *m_alternativeField = nullptr;
-    QPlainTextEdit *m_matchWords = nullptr;
+    QTextEdit *m_matchWords = nullptr;
     QTimer *m_autosaveTimer = nullptr;
 
     // Sincronizacion "el que era default pasa a Default browser" (mainwindow.cpp:1562-1601 del

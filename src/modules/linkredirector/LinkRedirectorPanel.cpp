@@ -16,7 +16,10 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>
-#include <QPlainTextEdit>
+#include <QTextEdit>
+#include <QTextDocument>
+#include <QTextCursor>
+#include <QTextBlockFormat>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QTimer>
@@ -78,16 +81,38 @@ private:
 // "background-image: repeating-linear-gradient(transparent 0 20px, #222 20px 21px); background-
 // position: 0 6px" -- un renglon de 1 px cada 21 px (20 px transparentes + 1 px de linea), corrido
 // 6 px hacia abajo (el padding-top del campo). QSS no tiene repeating-linear-gradient, asi que se
-// pinta a mano en el viewport, ANTES de que QPlainTextEdit dibuje el texto encima.
+// pinta a mano en el viewport, ANTES de que el editor dibuje el texto encima.
 //
-// El periodo real que se usa es QFontMetrics::lineSpacing() de la fuente del editor, no el 21 px fijo
-// del canvas: asi el renglon queda SIEMPRE debajo de cada linea de texto de este widget (el pedido
-// del encargo), aunque la metrica exacta de Inter en Qt/Fusion no sea identica a la del navegador
-// donde se midio el canvas. offset = 6 px, igual al padding-top del QSS de mas abajo.
-class LinkRedirectorMatchWordsEdit : public QPlainTextEdit
+// Canvas: `.textarea{line-height:21px}` con el rayado de periodo 21 px: el texto y las rayas comparten
+// el mismo interlineado a proposito. Se fija el interlineado de cada bloque en 21 px (el QTextDocument
+// lo respeta) y el rayado usa el mismo numero, asi cada palabra queda apoyada en su raya. offset = 6 px,
+// igual al padding-top del QSS de mas abajo.
+class LinkRedirectorMatchWordsEdit : public QTextEdit
 {
 public:
-    using QPlainTextEdit::QPlainTextEdit;
+    static constexpr int kLineHeight = 21; // canvas .textarea line-height
+
+    explicit LinkRedirectorMatchWordsEdit(QWidget *parent = nullptr)
+        : QTextEdit(parent)
+    {
+        // QTextEdit y no QPlainTextEdit: el layout de QPlainTextEdit ignora el interlineado fijo del
+        // bloque (medido: el texto seguia a 17 px con el rayado a 21). Solo texto plano.
+        setAcceptRichText(false);
+        // Los bloques nuevos (Enter) heredan el formato del anterior; setPlainText lo resetea, por
+        // eso se reaplica cada vez que cambia la cantidad de bloques.
+        connect(document(), &QTextDocument::blockCountChanged, this, [this]() { applyLineHeight(); });
+    }
+
+    void applyLineHeight()
+    {
+        QTextBlockFormat format;
+        format.setLineHeight(kLineHeight, QTextBlockFormat::FixedHeight);
+        QTextCursor cursor(document());
+        cursor.select(QTextCursor::Document);
+        const bool modified = document()->isModified();
+        cursor.mergeBlockFormat(format);
+        document()->setModified(modified);
+    }
 
 protected:
     void paintEvent(QPaintEvent *event) override
@@ -96,17 +121,15 @@ protected:
             QPainter painter(viewport());
             painter.setRenderHint(QPainter::Antialiasing, false);
             painter.setPen(Theme::color(Theme::kTextareaRuleLine));
-            const int period = qMax(1, QFontMetrics(font()).lineSpacing());
             constexpr int kOffsetTop = 6; // canvas: background-position 0 6px (= padding-top)
             const int width = viewport()->width();
             const int height = viewport()->height();
-            // El primer renglon cae al final del primer periodo (el tramo #222 es 20-21px del
-            // patron, es decir el ULTIMO pixel de cada periodo), corrido por el offset.
-            for (int y = kOffsetTop + period - 1; y < height; y += period) {
+            // El tramo #222 es el ULTIMO pixel de cada periodo del patron, corrido por el offset.
+            for (int y = kOffsetTop + kLineHeight - 1; y < height; y += kLineHeight) {
                 painter.drawLine(0, y, width, y);
             }
         }
-        QPlainTextEdit::paintEvent(event);
+        QTextEdit::paintEvent(event);
     }
 };
 
@@ -205,22 +228,22 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     m_matchWords = new LinkRedirectorMatchWordsEdit(wordsCard);
     m_matchWords->setObjectName(QStringLiteral("linkRedirectorMatchWords"));
     m_matchWords->setPlaceholderText(QStringLiteral("netflixstudios"));
-    // Solo por click (regla de foco de la app): con StrongFocus (el default de QPlainTextEdit),
+    // Solo por click (regla de foco de la app): con StrongFocus (el default de QTextEdit),
     // activar la ventana le daria el foco al primer campo que acepta Tab.
     m_matchWords->setFocusPolicy(Qt::ClickFocus);
     m_matchWords->setTabChangesFocus(false);
-    m_matchWords->setLineWrapMode(QPlainTextEdit::NoWrap);
+    m_matchWords->setLineWrapMode(QTextEdit::NoWrap);
     m_matchWords->setMinimumHeight(110); // canvas .textarea: min-height 110px
-    // Estilo local (esta app no tiene un QPlainTextEdit compartido en Theme.cpp): mismos tokens que
+    // Estilo local (esta app no tiene un QTextEdit compartido en Theme.cpp): mismos tokens que
     // un campo de settings (@field/@fieldBorder) y el mismo border-radius/padding que .textarea del
     // canvas. A proposito SIN "color:" aca: la paleta de la app ya distingue texto (kText) de
     // placeholder (kTextPlaceholder, mas apagado); fijar "color" por QSS pisa esa distincion y el
     // placeholder se ve igual de brillante que una palabra real.
     m_matchWords->setStyleSheet(QStringLiteral(
-                                    "QPlainTextEdit#linkRedirectorMatchWords { background-color:%1; "
+                                    "QTextEdit#linkRedirectorMatchWords { background-color:%1; "
                                     "border:1px solid %2; border-radius:3px; padding:6px 8px; "
                                     "selection-background-color:#393455; selection-color:%3; } "
-                                    "QPlainTextEdit#linkRedirectorMatchWords:focus { border-color:%4; }")
+                                    "QTextEdit#linkRedirectorMatchWords:focus { border-color:%4; }")
                                     .arg(QLatin1String(Theme::kField), QLatin1String(Theme::kFieldBorder),
                                          QLatin1String(Theme::kTextBright), QLatin1String(Theme::kAccent)));
     wordsLayout->addWidget(m_matchWords);
@@ -236,7 +259,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     m_autosaveTimer->setSingleShot(true);
     m_autosaveTimer->setInterval(500);
     connect(m_autosaveTimer, &QTimer::timeout, this, &LinkRedirectorPanel::saveMatchWordsNow);
-    connect(m_matchWords, &QPlainTextEdit::textChanged, this, &LinkRedirectorPanel::scheduleAutosave);
+    connect(m_matchWords, &QTextEdit::textChanged, this, &LinkRedirectorPanel::scheduleAutosave);
 
     refreshMatchWordsFromSettings();
     refreshBrowserFields();
