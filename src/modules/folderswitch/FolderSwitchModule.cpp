@@ -865,14 +865,14 @@ void qtDialogCacheSelfTest(const std::function<void(bool, const QString &)> &che
     check(capCache.size() <= 128, QStringLiteral("QtDialogCache: no crece sin limite (se poda pasado un tope)"));
 }
 
-// Que UiaTimeouts::apply() de verdad haya fijado los timeouts (auditoria etapa 2, punto 3): crea una
-// instancia real de IUIAutomation (COM ya esta inicializado por ComApartment en main) sin tocar
-// ninguna ventana, y lee los valores de vuelta por IUIAutomation2.
+// Que UiaTimeouts::createAutomation()+apply() de verdad hayan fijado los timeouts (auditoria etapa 2,
+// puntos 3 y de la correccion posterior: CLSID_CUIAutomation8 es el que expone IUIAutomation2, el
+// viejo CLSID_CUIAutomation nunca lo hace). Crea una instancia real (COM ya esta inicializado por
+// ComApartment en main) sin tocar ninguna ventana, y lee los valores de vuelta por IUIAutomation2.
 void uiaTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
 {
     IUIAutomation *automation = nullptr;
-    const HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation,
-                                        reinterpret_cast<void **>(&automation));
+    const HRESULT hr = UiaTimeouts::createAutomation(&automation);
     if (FAILED(hr) || !automation) {
         check(false, QStringLiteral("UiaTimeouts: no se pudo crear IUIAutomation para probar (hr=%1)").arg(hr));
         return;
@@ -880,8 +880,13 @@ void uiaTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
     UiaTimeouts::apply(automation);
 
     IUIAutomation2 *automation2 = nullptr;
-    if (SUCCEEDED(automation->QueryInterface(IID_IUIAutomation2, reinterpret_cast<void **>(&automation2)))
-        && automation2) {
+    const bool hasAutomation2 = SUCCEEDED(automation->QueryInterface(IID_IUIAutomation2,
+                                                                     reinterpret_cast<void **>(&automation2)))
+        && automation2;
+    // En Windows 8+ (la maquina de Lega es Windows 11) createAutomation() consigue CLSID_CUIAutomation8,
+    // que SIEMPRE expone IUIAutomation2: si esto no se cumple aca es una regresion real, no un Windows 7.
+    check(hasAutomation2, QStringLiteral("UiaTimeouts: la instancia expone IUIAutomation2 (CLSID_CUIAutomation8)"));
+    if (hasAutomation2) {
         DWORD connectionMs = 0;
         DWORD transactionMs = 0;
         automation2->get_ConnectionTimeout(&connectionMs);
@@ -889,8 +894,6 @@ void uiaTimeoutSelfTest(const std::function<void(bool, const QString &)> &check)
         check(connectionMs == 500, QStringLiteral("UiaTimeouts: ConnectionTimeout queda leible en 500 ms"));
         check(transactionMs == 1000, QStringLiteral("UiaTimeouts: TransactionTimeout queda leible en 1000 ms"));
         automation2->Release();
-    } else {
-        qWarning() << "[folderSwitch] IUIAutomation2 no disponible en esta maquina: self-test de timeouts omitido";
     }
     automation->Release();
 }
