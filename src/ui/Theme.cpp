@@ -15,7 +15,8 @@ namespace {
 // En esta app nada toma foco de teclado: Tab no recorre controles y ningun boton queda marcado al
 // abrir una ventana. Se aplica a TODO widget al pulirse (antes de mostrarse por primera vez), asi
 // tambien cubre los QMessageBox y el progreso del update. La excepcion son los campos donde se
-// escribe texto (WA_InputMethodEnabled): hoy, el umbral de cada disco en la tarjeta "Disk space".
+// escribe texto (WA_InputMethodEnabled): el umbral de cada disco, las rutas de Open in NukeX y Match
+// words de Link Redirector.
 class NoKeyboardFocus : public QObject
 {
 public:
@@ -26,7 +27,9 @@ protected:
     {
         if (event->type() == QEvent::Polish && watched->isWidgetType()) {
             auto *widget = static_cast<QWidget *>(watched);
-            if (!widget->testAttribute(Qt::WA_InputMethodEnabled)) {
+            // Un widget con focus proxy no se toca: Qt le copia la politica a su proxy, y el viewport
+            // de un QTextEdit (proxy = el propio campo) le sacaba el foco a Match words.
+            if (!widget->testAttribute(Qt::WA_InputMethodEnabled) && !widget->focusProxy()) {
                 widget->setFocusPolicy(Qt::NoFocus);
             }
         }

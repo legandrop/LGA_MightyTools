@@ -192,6 +192,8 @@ void MainWindow::selectPage(const QString &id)
         return;
     }
     syncBody(target);
+    // Elegir una herramienta en la barra lateral tambien relee su estado.
+    refreshItem(target);
     m_stack->setCurrentWidget(m_pages.value(target).scroll);
 }
 
@@ -350,6 +352,14 @@ void MainWindow::changeEvent(QEvent *event)
             focused->clearFocus();
         }
     }
+    // Al volver al frente se relee el estado de cada herramienta: el usuario puede venir de Ajustes de
+    // Windows (desinstalo el cliente viejo, eligio el navegador por defecto). Los paneles se
+    // refrescan con el mismo evento.
+    if (event->type() == QEvent::ActivationChange && isActiveWindow() && m_mode == Mode::Normal) {
+        for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
+            refreshItem(it.key());
+        }
+    }
     QMainWindow::changeEvent(event);
 }
 
@@ -359,6 +369,10 @@ void MainWindow::showEvent(QShowEvent *event)
     // La primera vez que se muestra ya existe la ventana nativa. Nunca en la captura: no hay ventana
     // real.
     if (!m_nativeFrameApplied && m_mode == Mode::Normal) {
+        // La bandera va ANTES de apply(): su SetWindowPos(SWP_FRAMECHANGED) manda WM_NCCALCSIZE en el
+        // acto, y si nativeEvent todavia no lo atiende Windows le suma la barra de titulo nativa
+        // (la barra blanca arriba de TitleBar). Como Nuke Shortcuts.
+        m_nativeFrameApplied = true;
         m_nativeFrameApplied = WindowFrame::apply(this);
     }
     if (m_mode == Mode::Normal) {

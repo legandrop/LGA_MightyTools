@@ -283,6 +283,8 @@ add_executable(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
+    # Solo por qpa/qwindowsysteminterface.h: la sonda --ui-probe simula clicks y teclas del sistema.
+    Qt6::GuiPrivate
     Qt6::Widgets
     Qt6::Network
 )

@@ -159,6 +159,10 @@ bool OpenInNukeXPanel::eventFilter(QObject *watched, QEvent *event)
     if (watched == m_context.window() && event->type() == QEvent::ActivationChange) {
         if (auto *window = qobject_cast<QWidget *>(watched); window && window->isActiveWindow()) {
             refreshAssociation();
+#ifdef Q_OS_WIN
+            // Tambien el aviso del cliente viejo: se desinstala desde Ajustes de Windows.
+            m_oldClientCard->setVisible(WinFileAssociation::isOldClientInstalled());
+#endif
         }
         return QWidget::eventFilter(watched, event);
     }

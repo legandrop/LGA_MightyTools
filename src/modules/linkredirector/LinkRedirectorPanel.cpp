@@ -281,6 +281,12 @@ void LinkRedirectorPanel::showEvent(QShowEvent *event)
 
 bool LinkRedirectorPanel::eventFilter(QObject *watched, QEvent *event)
 {
+    // Al volver la ventana al frente (el usuario puede venir de elegir el navegador en Ajustes de
+    // Windows) se relee si esta app es el navegador por defecto. Qt manda ActivationChange a cada
+    // widget de la ventana: solo cuenta el de la ventana misma.
+    if (event->type() == QEvent::ActivationChange && watched == window() && window()->isActiveWindow()) {
+        refreshStatus();
+    }
     if (watched == m_matchWords && event->type() == QEvent::KeyPress) {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
         if (keyEvent->key() == Qt::Key_Escape) {

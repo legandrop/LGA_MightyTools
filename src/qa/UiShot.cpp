@@ -35,7 +35,9 @@
 #include <QPixmap>
 #include <QSaveFile>
 #include <QScopedPointer>
+#include <QTextEdit>
 #include <QVBoxLayout>
+#include <qpa/qwindowsysteminterface.h>
 
 #include <cstdio>
 
@@ -485,6 +487,71 @@ int runUiShot(const QStringList &args)
     return 0;
 }
 
+// Match words de Link Redirector con clicks y teclas que entran por el sistema de ventanas (no un
+// sendEvent): Qt aplica la politica de foco real, la de un click de Lega. Ventana offscreen.
+int runMatchWordsProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!enable(host, QStringLiteral("linkRedirector"), QString())) {
+        fprintf(stderr, "ui-probe: linkRedirector could not be built\n");
+        return 1;
+    }
+    MainWindow mainWindow(&host, MainWindow::Mode::Capture, nullptr);
+    mainWindow.selectPage(QStringLiteral("linkRedirector"));
+    mainWindow.show();
+    mainWindow.activateWindow();
+    settle(mainWindow);
+    auto *edit = mainWindow.findChild<QTextEdit *>(QStringLiteral("linkRedirectorMatchWords"));
+    check(edit != nullptr, QStringLiteral("el panel tiene el campo Match words"));
+    if (!edit) {
+        return 1;
+    }
+    QWindow *window = mainWindow.windowHandle();
+    check(window != nullptr, QStringLiteral("la ventana tiene su QWindow"));
+    if (!window) {
+        return 1;
+    }
+    fprintf(stdout, "info focusPolicy=%d viewportPolicy=%d readOnly=%d enabled=%d visible=%d inputMethod=%d\n", int(edit->focusPolicy()),
+            int(edit->viewport()->focusPolicy()), edit->isReadOnly(), edit->isEnabled(), edit->isVisible(), edit->testAttribute(Qt::WA_InputMethodEnabled));
+    const QPoint local = edit->viewport()->mapTo(&mainWindow, QPoint(20, 10));
+    QWidget *under = mainWindow.childAt(local);
+    fprintf(stdout, "info childAt=%s (%s)\n", under ? under->metaObject()->className() : "null",
+            under ? qPrintable(under->objectName()) : "");
+    const QPointF pos(local);
+    QWindowSystemInterface::handleMouseEvent(window, pos, window->mapToGlobal(pos), Qt::LeftButton, Qt::LeftButton,
+                                             QEvent::MouseButtonPress);
+    QWindowSystemInterface::handleMouseEvent(window, pos, window->mapToGlobal(pos), Qt::NoButton, Qt::LeftButton,
+                                             QEvent::MouseButtonRelease);
+    QWindowSystemInterface::flushWindowSystemEvents();
+    settle(mainWindow);
+    QWidget *focused = QApplication::focusWidget();
+    check(focused == edit || (focused && edit->isAncestorOf(focused)),
+          QStringLiteral("un click en el campo le da el teclado (foco en %1)")
+              .arg(focused ? QString::fromLatin1(focused->metaObject()->className()) + QLatin1Char(' ') + focused->objectName()
+                           : QStringLiteral("nadie")));
+    for (const QChar c : QStringLiteral("abc")) {
+        const int key = Qt::Key_A + (c.unicode() - 'a');
+        QWindowSystemInterface::handleKeyEvent(window, QEvent::KeyPress, key, Qt::NoModifier, QString(c));
+        QWindowSystemInterface::handleKeyEvent(window, QEvent::KeyRelease, key, Qt::NoModifier, QString(c));
+    }
+    QWindowSystemInterface::flushWindowSystemEvents();
+    settle(mainWindow);
+    check(edit->toPlainText().contains(QStringLiteral("abc")),
+          QStringLiteral("lo tipeado entra en el campo (texto: '%1')").arg(edit->toPlainText()));
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "ui-probe ok" : "ui-probe FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -493,6 +560,9 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
+    if (probe == QLatin1String("match-words-typing")) {
+        return runMatchWordsProbe();
+    }
     if (probe != QLatin1String("threshold-focus")) {
         fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));
         return 2;
