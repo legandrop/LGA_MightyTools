@@ -167,8 +167,7 @@ bool uiaLooksLikeFileDialog(HWND hwnd)
     } guard{timer};
 
     IUIAutomation *automation = nullptr;
-    HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
-                                   IID_IUIAutomation, reinterpret_cast<void **>(&automation));
+    HRESULT hr = UiaTimeouts::createAutomation(&automation);
     if (FAILED(hr) || !automation) {
         return false;
     }

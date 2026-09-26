@@ -45,8 +45,7 @@ bool switchQtDialogImpl(HWND dlg, const QString &folder)
     }
 
     IUIAutomation *automation = nullptr;
-    HRESULT hr = CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER,
-                                   IID_IUIAutomation, reinterpret_cast<void **>(&automation));
+    HRESULT hr = UiaTimeouts::createAutomation(&automation);
     if (FAILED(hr) || !automation) {
         qWarning() << "[UiaSwitcher] No se pudo crear IUIAutomation, hr=" << hr;
         return false;

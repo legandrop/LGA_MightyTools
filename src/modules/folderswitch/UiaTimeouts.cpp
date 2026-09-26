@@ -6,6 +6,27 @@
 
 namespace UiaTimeouts {
 
+HRESULT createAutomation(IUIAutomation **outAutomation)
+{
+    if (!outAutomation) {
+        return E_POINTER;
+    }
+    *outAutomation = nullptr;
+
+    // CLSID_CUIAutomation8 es el que expone IUIAutomation2..6 por QueryInterface (Windows 8+); el
+    // viejo CLSID_CUIAutomation nunca los da, sea cual sea la version de Windows.
+    HRESULT hr = CoCreateInstance(CLSID_CUIAutomation8, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation,
+                                  reinterpret_cast<void **>(outAutomation));
+    if (SUCCEEDED(hr) && *outAutomation) {
+        return hr;
+    }
+
+    qWarning() << "[folderSwitch] CLSID_CUIAutomation8 no disponible (hr=" << hr
+               << "), cae a CLSID_CUIAutomation: sin ConnectionTimeout/TransactionTimeout configurables";
+    return CoCreateInstance(CLSID_CUIAutomation, nullptr, CLSCTX_INPROC_SERVER, IID_IUIAutomation,
+                            reinterpret_cast<void **>(outAutomation));
+}
+
 void apply(IUIAutomation *automation)
 {
     if (!automation) {
@@ -14,8 +35,9 @@ void apply(IUIAutomation *automation)
     IUIAutomation2 *automation2 = nullptr;
     if (FAILED(automation->QueryInterface(IID_IUIAutomation2, reinterpret_cast<void **>(&automation2)))
         || !automation2) {
-        // Windows 7: IUIAutomation2 no existe. Queda sin acotar, es el riesgo pendiente documentado
-        // en el informe (no hay forma de fijar esto sin esa interfaz).
+        // La instancia vino de CLSID_CUIAutomation (fallback de createAutomation) o de un Windows
+        // anterior a la 8: IUIAutomation2 no existe. Queda sin acotar, es el riesgo pendiente
+        // documentado en el informe (no hay forma de fijar esto sin esa interfaz).
         qWarning() << "[folderSwitch] IUIAutomation2 no disponible: ConnectionTimeout/TransactionTimeout sin fijar";
         return;
     }
