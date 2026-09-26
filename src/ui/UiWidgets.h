@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QBoxLayout;
+class QTextDocument;
 class QPainter;
 class QPushButton;
 
@@ -76,6 +77,25 @@ protected:
 private:
     int lineCount(int width) const;
     int m_lineHeight = 17;
+};
+
+// Texto enriquecido (spans de color) con interlineado fijo, como `line-height` de CSS: cada linea
+// mide `lineHeight` y el texto queda centrado en ella. Lo usa la ayuda (pasos a 18 px por linea).
+// Fuente y color salen de la hoja de estilo (el objectName que se le ponga).
+class RichLineLabel : public QLabel
+{
+    Q_OBJECT
+public:
+    RichLineLabel(const QString &html, int lineHeight, QWidget *parent = nullptr);
+    QSize sizeHint() const override;
+    QSize minimumSizeHint() const override;
+    bool hasHeightForWidth() const override { return true; }
+    int heightForWidth(int width) const override;
+protected:
+    void paintEvent(QPaintEvent *event) override;
+private:
+    void layoutDocument(QTextDocument &document, int width) const;
+    int m_lineHeight = 18;
 };
 
 // Chip de estado: tono (ok, err, src, key o neutro) + texto.

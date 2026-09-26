@@ -14,6 +14,7 @@ class ModuleHost;
 class QMenu;
 class QSystemTrayIcon;
 class SettingsStore;
+class SystemNotifier;
 class UpdateService;
 
 // La app residente: el host de herramientas, la ventana, el icono de la bandeja (o de la barra de
@@ -73,6 +74,7 @@ private:
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_menu = nullptr;
     UpdateService *m_updates = nullptr;
+    SystemNotifier *m_notifier = nullptr;
     QString m_lastNotifier;
     bool m_buildTree = false;
 };

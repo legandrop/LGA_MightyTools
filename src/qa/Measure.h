@@ -18,6 +18,16 @@ int cycles(const QStringList &arguments);
 // minuto.
 int idle(const QStringList &arguments);
 
+// --measure-fonts: el ancho que le da Qt a textos del canvas (QFontMetricsF::horizontalAdvance con
+// la fuente de la hoja de estilo), al lado del ancho que midio Chrome en el canvas. Sin ventanas.
+// Sirve para comparar la plataforma de Windows contra offscreen.
+int fonts(const QStringList &arguments);
+
+// --notify-preview: arma las notificaciones de la app SIN mostrarlas (SystemNotifier en modo
+// automatizado: ni PowerShell ni hilo) y loguea titulo, texto y el icono elegido (PNG temporal con el
+// frame mas grande del .ico y su tamano).
+int notifyPreview(const QStringList &arguments);
+
 } // namespace Measure
 
 #endif // MIGHTYTOOLS_MEASURE_H

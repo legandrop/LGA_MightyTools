@@ -2,6 +2,7 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>icons/LGA_MightyTools.png</file>
+        <file>icons/LGA_MightyTools.ico</file>
         <file>icons/tray/tray_16.png</file>
         <file>icons/tray/tray_20.png</file>
         <file>icons/tray/tray_24.png</file>

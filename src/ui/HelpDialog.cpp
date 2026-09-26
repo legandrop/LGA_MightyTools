@@ -8,12 +8,27 @@
 #include <QLabel>
 #include <QPainter>
 #include <QPushButton>
+#include <QScreen>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QVBoxLayout>
 
 namespace {
 
-// Medidas del canvas (seccion 6): 520 de ancho, 20 x 24 de relleno, 14 entre bloques.
+// Medidas del canvas (seccion 6): 520 de ancho con el borde, 20 x 24 de relleno, 14 entre bloques.
+// El contenido arranca a 25/21 del borde de afuera (1 de borde + el relleno).
 constexpr int DIALOG_WIDTH = 520;
+constexpr int kPadX = 25;
+constexpr int kPadY = 21;
+// Cada paso es una `.row` de 22 de alto con 6 entre pasos (28 de paso a paso), 18 px por linea, el
+// numero en 20 y 5 de separacion hasta el texto.
+constexpr int kStepRow = 22;
+constexpr int kStepGap = 6;
+constexpr int kStepLine = 18;
+constexpr int kNumberWidth = 20;
+constexpr int kNumberGap = 5;
+// Aire que se deja arriba y abajo cuando el dialogo se acota a la pantalla.
+constexpr int kScreenMargin = 24;
 
 } // namespace
 
@@ -52,7 +67,7 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     setFixedWidth(DIALOG_WIDTH);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(24, 20, 24, 20);
+    layout->setContentsMargins(kPadX, kPadY, kPadX, kPadY);
     layout->setSpacing(14);
 
     // Encabezado igual al Help de las otras apps LGA (HelpTab de FileManager S3): nombre en violeta,
@@ -69,6 +84,9 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     close->setToolTip(QStringLiteral("Close"));
     titleRow->addWidget(close, 0, Qt::AlignVCenter);
     header->addLayout(titleRow);
+    // En el canvas el bloque de abajo sube 8 sobre los 14 de separacion (quedan 6) sobre una fila de
+    // 24; aca la fila mide 26 por el boton de cerrar: 4.
+    header->addSpacing(4);
     header->addWidget(Ui::label(QStringLiteral("Developed by Lega Pugliese"), "helpDeveloped", this));
     auto *link = new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), this);
     link->setObjectName(QStringLiteral("helpLink"));
@@ -79,43 +97,64 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     rule->setObjectName(QStringLiteral("helpRule"));
     layout->addWidget(rule);
 
-    // Una seccion por herramienta, prendida o apagada: la de una apagada dice que hace antes de
-    // prenderla.
+    // Las secciones (una por herramienta, prendida o apagada: la de una apagada dice que hace antes de
+    // prenderla) y la nota del final, en su propio scroll.
+    m_scroll = new QScrollArea(this);
+    m_scroll->setObjectName(QStringLiteral("helpScroll"));
+    m_scroll->setFrameShape(QFrame::NoFrame);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_scroll->viewport()->setObjectName(QStringLiteral("helpViewport"));
+    auto *body = new QWidget(m_scroll);
+    body->setObjectName(QStringLiteral("helpContent"));
+    body->setAutoFillBackground(false);
+    auto *bodyLayout = new QVBoxLayout(body);
+    bodyLayout->setContentsMargins(0, 0, 0, 0);
+    bodyLayout->setSpacing(14);
     for (const HelpSection &section : sections) {
         auto *block = new QVBoxLayout();
-        block->setSpacing(6);
-        block->addWidget(Ui::label(section.title, "helpToolTitle", this));
+        block->setSpacing(kStepGap);
+        QLabel *title = Ui::label(section.title, "helpToolTitle", body);
+        title->setFixedHeight(16); // la linea de 13.5 px del canvas
+        block->addWidget(title);
         for (int i = 0; i < section.steps.size(); ++i) {
             // Numero en su propia columna de ancho fijo: con "1." y "2." en el mismo texto, el ancho
             // distinto de las cifras corria el comienzo de cada paso.
-            auto *row = new QHBoxLayout();
-            row->setSpacing(0);
-            auto *number = Ui::label(QStringLiteral("%1.").arg(i + 1), "helpBody", this);
-            number->setFixedWidth(20);
+            // La fila es un widget de 22 de alto minimo (`.row` del canvas): un puntal dentro del
+            // layout sumaria otra separacion de 5 y le quitaria ancho al texto.
+            auto *rowWidget = new QWidget(body);
+            rowWidget->setMinimumHeight(kStepRow);
+            auto *row = new QHBoxLayout(rowWidget);
+            row->setContentsMargins(0, 0, 0, 0);
+            row->setSpacing(kNumberGap);
+            auto *number = new RichLineLabel(QStringLiteral("%1.").arg(i + 1), kStepLine, body);
+            number->setObjectName(QStringLiteral("helpBody"));
+            number->setFixedWidth(kNumberWidth);
             row->addWidget(number, 0, Qt::AlignTop);
-            auto *step = Ui::label(section.steps.at(i), "helpBody", this);
-            step->setTextFormat(Qt::RichText);
-            step->setWordWrap(true);
-            row->addWidget(step, 1);
-            block->addLayout(row);
+            auto *step = new RichLineLabel(section.steps.at(i), kStepLine, body);
+            step->setObjectName(QStringLiteral("helpBody"));
+            row->addWidget(step, 1); // sin alineacion: con ella el layout no le pregunta el alto por ancho
+            block->addWidget(rowWidget);
         }
         if (!section.note.isEmpty()) {
-            auto *note = Ui::label(section.note, "helpNote", this);
-            note->setWordWrap(true);
+            auto *note = new CaptionLabel(section.note, body, 17);
+            note->setObjectName(QStringLiteral("helpNote"));
             block->addWidget(note);
         }
-        layout->addLayout(block);
+        bodyLayout->addLayout(block);
     }
-
 #ifdef Q_OS_MACOS
     const QString where = QStringLiteral("the menu bar");
 #else
     const QString where = QStringLiteral("the tray");
 #endif
     auto *note = Ui::label(QStringLiteral("Closing the window keeps LGA Mighty Tools running in %1.").arg(where),
-                           "helpNote", this);
+                           "helpNote", body);
     note->setWordWrap(true);
-    layout->addWidget(note);
+    bodyLayout->addWidget(note);
+    bodyLayout->addStretch(1);
+    m_scroll->setWidget(body);
+    layout->addWidget(m_scroll, 1);
 
     auto *buttons = new QHBoxLayout();
     buttons->addStretch(1);
@@ -129,27 +168,52 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     connect(closeButton, &QPushButton::clicked, this, &QDialog::accept);
 }
 
-void HelpDialog::fitHeight()
+void HelpDialog::fitHeight(int maxHeight)
 {
     ensurePolished();
     for (QWidget *child : findChildren<QWidget *>()) {
         child->ensurePolished();
     }
+    // Alto natural: lo fijo (encabezado, regla, "Close", rellenos) mas todo el cuerpo sin scroll.
+    QWidget *body = m_scroll->widget();
+    const int innerWidth = DIALOG_WIDTH - 2 * kPadX;
+    body->layout()->invalidate();
+    body->layout()->activate();
+    const int bodyHeight = body->layout()->hasHeightForWidth() ? body->layout()->totalHeightForWidth(innerWidth)
+                                                               : body->layout()->totalSizeHint().height();
+    m_scroll->setMinimumHeight(0);
+    m_scroll->setFixedHeight(bodyHeight);
     layout()->invalidate();
     layout()->activate();
-    const int needed = layout()->hasHeightForWidth() ? layout()->totalHeightForWidth(DIALOG_WIDTH)
-                                                     : layout()->totalSizeHint().height();
-    setMinimumHeight(needed);
-    resize(DIALOG_WIDTH, needed);
+    const int natural = layout()->totalSizeHint().height();
+    int height = natural;
+    m_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    if (maxHeight > 0 && natural > maxHeight) {
+        // No entra: el cuerpo scrollea y lo demas queda a la vista. La barra tiene su lugar desde el
+        // principio: el texto se parte ya contando su ancho y no queda debajo de ella.
+        height = maxHeight;
+        m_scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+        m_scroll->setFixedHeight(qMax(80, bodyHeight - (natural - maxHeight)));
+        m_scroll->verticalScrollBar()->setValue(0);
+    }
+    setFixedHeight(height);
+    resize(DIALOG_WIDTH, height);
 }
 
 int HelpDialog::execOver(QWidget *window)
 {
     auto *scrim = new Scrim(window);
     scrim->show();
-    fitHeight();
-    const QPoint center = window->mapToGlobal(window->rect().center());
-    move(center - QPoint(width() / 2, height() / 2));
+    // Acotado a la pantalla donde esta la ventana.
+    const QScreen *screen = window->screen();
+    const QRect area = screen ? screen->availableGeometry() : QRect();
+    fitHeight(area.isValid() ? area.height() - 2 * kScreenMargin : 0);
+    QPoint topLeft = window->mapToGlobal(window->rect().center()) - QPoint(width() / 2, height() / 2);
+    if (area.isValid()) {
+        topLeft.setX(qBound(area.left(), topLeft.x(), area.right() - width()));
+        topLeft.setY(qBound(area.top() + kScreenMargin, topLeft.y(), area.bottom() - kScreenMargin - height()));
+    }
+    move(topLeft);
     const int result = exec();
     delete scrim;
     return result;

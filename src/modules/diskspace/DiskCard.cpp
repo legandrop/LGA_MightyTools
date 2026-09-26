@@ -240,7 +240,8 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
     const bool connected = drive != nullptr;
     const bool low = connected && DiskSpace::isLow(watch, *drive);
 
-    m_keycap->set(connected ? QStringLiteral("key") : QStringLiteral("src"),
+    // Desenchufado: el keycap punteado y gris (`.kc.dim` del canvas).
+    m_keycap->set(connected ? QStringLiteral("key") : QStringLiteral("keyDim"),
                   connected ? drive->label : DiskSpace::labelForRoot(watch.root, watch.name));
     const QString name = connected ? drive->name : watch.name;
     m_name->setText(name);

@@ -216,6 +216,8 @@ QFrame#chip[tone="err"] QLabel { color: @error; }
 QFrame#chip[tone="src"] { background-color: transparent; border-color: #333333; }
 QFrame#chip[tone="src"] QLabel { color: @textMuted; font-weight: 500; }
 QFrame#chip[tone="key"] { min-height: 18px; max-height: 18px; }
+QFrame#chip[tone="keyDim"] { min-height: 18px; max-height: 18px; border: 1px dashed #383838; }
+QFrame#chip[tone="keyDim"] QLabel { color: @icon; }
 QFrame#chip[tone="warn"] { background-color: #2d2614; border-color: #4d4020; }
 QFrame#chip[tone="warn"] QLabel { color: @warn; }
 
@@ -260,6 +262,7 @@ QLabel#helpSection { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 QLabel#helpBody { color: #a9a9ae; font-size: @fs13; }
 QLabel#helpNote { color: @textCaption; font-size: @fs12; }
 QFrame#helpRule { background-color: @divider; border: none; min-height: 1px; max-height: 1px; }
+QScrollArea#helpScroll, QWidget#helpViewport, QWidget#helpContent { background: transparent; border: none; }
 QLabel#helpToolTitle { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 
 /* Ventana de herramientas (forma A): barra lateral, encabezado del panel y paginas del host. */

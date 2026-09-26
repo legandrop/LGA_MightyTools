@@ -50,13 +50,33 @@ TrayMenuActions fillTrayMenu(QMenu *menu, ModuleHost *host)
 {
     // Estilo: bloque QMenu de Theme (paleta de LGA_Base_QT_C_Py/docs/Doc_MenuContextual.md).
     menu->clear();
+#ifndef Q_OS_MACOS
+    // El ancho del canvas (`.menu`: 252 con el borde). En mac el menu es nativo.
+    menu->setFixedWidth(252);
+#endif
     TrayMenuActions a;
     QAction *header = menu->addAction(trayHeaderText(host));
     header->setEnabled(false);
     menu->addSeparator();
 
-    // Una seccion por herramienta prendida; una sin entradas no aparece.
+    // Una seccion por herramienta prendida; una sin entradas no aparece. El orden es el del canvas
+    // (seccion 4): primero lo que se aprieta (pausar, calibrar) y al final las lineas de disco bajo.
+    // Una herramienta que no esta en la lista va despues, en el orden del registro.
+    static const QStringList kCanvasOrder = {QStringLiteral("nukeShortcuts"), QStringLiteral("folderSwitch"),
+                                             QStringLiteral("openInNukeX"), QStringLiteral("linkRedirector"),
+                                             QStringLiteral("diskSpace")};
+    QStringList ordered;
+    for (const QString &id : kCanvasOrder) {
+        if (host->isRunning(id)) {
+            ordered.append(id);
+        }
+    }
     for (const QString &id : host->runningIds()) {
+        if (!ordered.contains(id)) {
+            ordered.append(id);
+        }
+    }
+    for (const QString &id : ordered) {
         Module *module = host->module(id);
         QAction *title = sectionTitle(menu, host->descriptor(id)->title);
         const int before = int(menu->actions().size());

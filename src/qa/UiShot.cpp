@@ -58,7 +58,9 @@ const QStringList kHostStates = {
     QStringLiteral("general-latest"),    // "vX is the latest version"
     QStringLiteral("general-available"), // "vX is available" con "Update"
     QStringLiteral("first-run"),         // primer arranque: todo apagado, bienvenida
-    QStringLiteral("help"),              // ayuda unica sobre el velo
+    QStringLiteral("help"),              // ayuda unica entera
+    QStringLiteral("help-capped"),       // ayuda acotada a 480: scroll interno, Close a la vista
+    QStringLiteral("help-over-window"),  // ayuda sobre el velo, acotada a la ventana
     QStringLiteral("hover-help"),
     QStringLiteral("hover-close"),
     QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
@@ -349,14 +351,28 @@ int runUiShot(const QStringList &args)
             }
         }
         settle(mainWindow);
-    } else if (state == QLatin1String("help")) {
+    } else if (state == QLatin1String("help") || state == QLatin1String("help-capped")) {
+        // El dialogo solo, sobre el lienzo oscuro: "help" entero (sin tope), "help-capped" acotado a
+        // 480 como en una pantalla baja (el cuerpo scrollea, encabezado y Close a la vista).
+        canvas.reset(makeCanvas());
+        auto *layout = new QVBoxLayout(canvas.data());
+        layout->setContentsMargins(20, 20, 20, 20);
+        auto *help = new HelpDialog(helpSections(host), canvas.data());
+        help->setWindowFlags(Qt::Widget);
+        help->fitHeight(state == QLatin1String("help-capped") ? 480 : 0);
+        layout->addWidget(help);
+        root = canvas.data();
+        settle(*root);
+        root->adjustSize();
+        settle(*root);
+    } else if (state == QLatin1String("help-over-window")) {
         // Velo y dialogo como hijos comunes de la ventana, no ventanas propias: se dibujan con el
-        // mismo render y no hay nada que mostrar.
+        // mismo render. Acotado al alto de la ventana, como se acota a la pantalla en la app.
         auto *scrim = new Scrim(mainWindow.centralWidget());
         scrim->setVisible(true);
         auto *help = new HelpDialog(helpSections(host), mainWindow.centralWidget());
         help->setWindowFlags(Qt::Widget);
-        help->fitHeight();
+        help->fitHeight(mainWindow.height() - 48);
         help->move((mainWindow.width() - help->width()) / 2, qMax(0, (mainWindow.height() - help->height()) / 2));
         help->setVisible(true);
         settle(mainWindow);

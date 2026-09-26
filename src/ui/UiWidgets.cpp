@@ -13,6 +13,10 @@
 #include <QPainterPath>
 #include <QPushButton>
 #include <QStyle>
+#include <QAbstractTextDocumentLayout>
+#include <QTextBlock>
+#include <QTextCursor>
+#include <QTextDocument>
 #include <QTextLayout>
 #include <QVariant>
 #include <QtMath>
@@ -320,6 +324,72 @@ void CaptionLabel::paintEvent(QPaintEvent *)
     }
     layout.endLayout();
     layout.draw(&painter, area.topLeft());
+}
+
+// ------------------------------------------------------------------ RichLineLabel
+
+RichLineLabel::RichLineLabel(const QString &html, int lineHeight, QWidget *parent)
+    : QLabel(html, parent)
+    , m_lineHeight(lineHeight)
+{
+    setTextFormat(Qt::RichText);
+    setWordWrap(true);
+    // El alto sale del ancho (lineas partidas): el layout lo pregunta por la politica.
+    QSizePolicy policy(QSizePolicy::Preferred, QSizePolicy::Preferred);
+    policy.setHeightForWidth(true);
+    setSizePolicy(policy);
+}
+
+void RichLineLabel::layoutDocument(QTextDocument &document, int width) const
+{
+    document.setDefaultFont(font());
+    document.setDocumentMargin(0);
+    document.setHtml(text());
+    QTextCursor cursor(&document);
+    cursor.select(QTextCursor::Document);
+    QTextBlockFormat format;
+    format.setLineHeight(m_lineHeight, QTextBlockFormat::FixedHeight);
+    cursor.mergeBlockFormat(format);
+    document.setTextWidth(qMax(1, width));
+}
+
+int RichLineLabel::heightForWidth(int width) const
+{
+    QTextDocument document;
+    layoutDocument(document, width);
+    document.size(); // el layout del documento es perezoso: sin esto las lineas todavia no existen
+    int lines = 0;
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        lines += qMax(1, block.layout() ? block.layout()->lineCount() : 1);
+    }
+    return qMax(1, lines) * m_lineHeight;
+}
+
+QSize RichLineLabel::sizeHint() const
+{
+    QTextDocument document;
+    layoutDocument(document, QWIDGETSIZE_MAX / 4);
+    return QSize(int(document.idealWidth()) + 1, m_lineHeight);
+}
+
+QSize RichLineLabel::minimumSizeHint() const
+{
+    return QSize(0, m_lineHeight);
+}
+
+void RichLineLabel::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    QTextDocument document;
+    layoutDocument(document, width());
+    // Con altura fija Qt pone la linea arriba de su caja: se baja la mitad del aire, como CSS.
+    const QFontMetricsF metrics(font());
+    const qreal halfLeading = (m_lineHeight - (metrics.ascent() + metrics.descent())) / 2.0;
+    painter.translate(0, qMax(0.0, halfLeading));
+    QAbstractTextDocumentLayout::PaintContext context;
+    context.palette = palette();
+    context.palette.setColor(QPalette::Text, palette().color(foregroundRole()));
+    document.documentLayout()->draw(&painter, context);
 }
 
 // ------------------------------------------------------------------ Chip

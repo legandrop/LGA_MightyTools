@@ -9,6 +9,7 @@
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
 #include "platform/AutoStart.h"
+#include "platform/SystemNotifier.h"
 #include "ui/HelpDialog.h"
 
 #ifdef Q_OS_WIN
@@ -30,19 +31,6 @@ const QString kFirstRunCompleted = QStringLiteral("app/firstRunCompleted");
 const QString kWelcomeDone = QStringLiteral("app/welcomeDone");
 const QString kAutoStartDecided = QStringLiteral("app/autoStartDecided");
 
-QSystemTrayIcon::MessageIcon trayIconFor(ModuleContext::NoticeIcon icon)
-{
-    switch (icon) {
-    case ModuleContext::NoticeIcon::Warning:
-        return QSystemTrayIcon::Warning;
-    case ModuleContext::NoticeIcon::Critical:
-        return QSystemTrayIcon::Critical;
-    case ModuleContext::NoticeIcon::Info:
-        break;
-    }
-    return QSystemTrayIcon::Information;
-}
-
 } // namespace
 
 AppController::AppController(const Options &options, QObject *parent)
@@ -60,6 +48,8 @@ AppController::AppController(const Options &options, QObject *parent)
     hostOptions.automatedRun = m_options.measurement;
     hostOptions.buildTree = m_buildTree;
     hostOptions.dryRunInput = m_options.dryRunInput;
+    // El objeto es barato: el hilo y PowerShell nacen con la primera notificacion.
+    m_notifier = new SystemNotifier(m_options.measurement, this);
     m_host = new ModuleHost(ModuleRegistry::all(), m_store.get(), hostOptions, this);
     m_host->setHostServices(this);
 
@@ -282,12 +272,14 @@ void AppController::rebuildMenu()
 void AppController::notify(const QString &moduleId, const QString &title, const QString &body,
                            ModuleContext::NoticeIcon icon, int msecs)
 {
-    if (!m_tray) {
-        qInfo().noquote() << QStringLiteral("[Notifier] (sin bandeja) %1: %2 | %3").arg(moduleId, title, body);
-        return;
-    }
+    // Toast del sistema con el icono de la app en grande (SystemNotifier, copia de PipeSync), nunca
+    // los genericos de informacion o advertencia (pedido de Lega): el tipo de aviso ya lo dice el
+    // texto de cada herramienta, asi que NoticeIcon no cambia nada visible. El toast no tiene AUMID:
+    // un click no vuelve a la app (diferencia declarada con el plan 4.4).
+    Q_UNUSED(icon);
+    Q_UNUSED(msecs);
     m_lastNotifier = moduleId;
-    m_tray->showMessage(title, body, trayIconFor(icon), msecs);
+    m_notifier->show(title, body);
 }
 
 void AppController::showPanel(const QString &moduleId)

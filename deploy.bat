@@ -62,6 +62,11 @@ REM desde el arbol de Qt). Lo necesita el chequeo de updates.
 if not exist deploy\tls mkdir deploy\tls
 copy /Y "%QT_DIR%\plugins\tls\qschannelbackend.dll" deploy\tls\ >nul
 
+REM Plugin ICO: las notificaciones sacan la imagen del .ico de la app; sin el, el toast sale sin
+REM icono.
+if not exist deploy\imageformats mkdir deploy\imageformats
+copy /Y "%QT_DIR%\plugins\imageformats\qico.dll" deploy\imageformats\ >nul
+
 set PATH=%PATH%;%QT_DIR%\bin;%MINGW_BIN%
 
 REM windeployqt resuelve la clausura transitiva completa (ICU, ANGLE, etc. si

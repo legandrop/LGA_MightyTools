@@ -70,7 +70,9 @@ inline constexpr const char *kPrimaryBorder = "#5243a8";
 inline constexpr const char *kSwitchOff = "#2d2d33";
 inline constexpr const char *kSwitchOffBorder = "#3a3a44";
 inline constexpr const char *kSwitchKnobOff = "#7a7a80";
-inline constexpr const char *kSwitchKnobOn = "#DDDBEE";
+inline constexpr const char *kTextOnAccent = "#DDDBEE"; ///< texto y trazos sobre el violeta
+inline constexpr const char *kSwitchKnobOn = kTextOnAccent;
+inline constexpr const char *kBorderStrong = "#3a3a3a";  ///< borde del menu y de lo punteado
 // Hover de fila generico (fuera de la barra lateral, que tiene el suyo, kSideHover): la fila
 // resaltada del popup de carpetas recientes de Folder Switch.
 inline constexpr const char *kRowHover = "#2a2a2a";

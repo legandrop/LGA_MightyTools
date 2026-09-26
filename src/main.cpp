@@ -169,7 +169,9 @@ int main(int argc, char *argv[])
     const bool uiProbe = hasArg(argc, argv, "--ui-probe");
     const bool measureCycles = hasArg(argc, argv, "--measure-cycles");
     const bool measureIdle = hasArg(argc, argv, "--measure-idle");
-    const bool automated = uiShot || uiProbe || measureCycles || measureIdle;
+    const bool measureFonts = hasArg(argc, argv, "--measure-fonts");
+    const bool notifyPreview = hasArg(argc, argv, "--notify-preview");
+    const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measureFonts || notifyPreview;
     if (!automated) {
         qInstallMessageHandler(fileMessageHandler);
     }
@@ -194,6 +196,12 @@ int main(int argc, char *argv[])
         }
         if (measureCycles) {
             return Measure::cycles(app.arguments());
+        }
+        if (measureFonts) {
+            return Measure::fonts(app.arguments());
+        }
+        if (notifyPreview) {
+            return Measure::notifyPreview(app.arguments());
         }
         return Measure::idle(app.arguments());
     }

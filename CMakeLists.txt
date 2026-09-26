@@ -49,6 +49,11 @@ set(RESOURCES
 
 if(WIN32)
     set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/LGA_MightyTools.ico")
+    # Version del recurso de Windows en numeros ("0.04" -> 0,4,0,0): sin ceros a la izquierda, que el
+    # compilador de recursos leeria como octal ("08" no existe).
+    string(REGEX REPLACE "^0+([0-9])" "\\1" APP_VERSION_MAJOR_NUM "${PROJECT_VERSION_MAJOR}")
+    string(REGEX REPLACE "^0+([0-9])" "\\1" APP_VERSION_MINOR_NUM "${PROJECT_VERSION_MINOR}")
+    set(APP_VERSION_COMMAS "${APP_VERSION_MAJOR_NUM},${APP_VERSION_MINOR_NUM},0,0")
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/windows_icon.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/windows_icon.rc" @ONLY)
     # El .rc solo NOMBRA al .ico: sin OBJECT_DEPENDS, cambiar el icono no recompila el .rc y el exe
     # se queda con el icono viejo.
@@ -107,6 +112,7 @@ set(SOURCES
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
     src/platform/NukeWatcherCommon.cpp
+    src/platform/SystemNotifierCommon.cpp
     src/qa/Measure.cpp
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
@@ -177,6 +183,7 @@ set(HEADERS
     src/platform/NukeWatcher.h
     src/platform/ProcessStats.h
     src/platform/SystemInput.h
+    src/platform/SystemNotifier.h
     src/platform/WindowActivation.h
     src/platform/WindowFrame.h
     src/qa/Measure.h
@@ -209,6 +216,7 @@ if(WIN32)
         src/platform/win/ProcessStatsWin.cpp
         src/platform/win/RegistryHelper.cpp
         src/platform/win/SystemInputWin.cpp
+        src/platform/win/SystemNotifierWin.cpp
         src/platform/win/WindowActivationWin.cpp
         src/platform/win/WindowFrameWin.cpp
         # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
@@ -257,6 +265,7 @@ elseif(APPLE)
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp
+        src/platform/mac/SystemNotifierMac.cpp
         src/platform/mac/WindowActivationMac.cpp
         src/platform/mac/WindowFrameMac.cpp
     )

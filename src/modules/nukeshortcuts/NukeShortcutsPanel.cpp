@@ -44,13 +44,13 @@ protected:
         painter.setOpacity(m_hasSpot ? 0.85 : 0.35);
         painter.drawPixmap(inner.toRect(), m_image.pixmap(inner.size().toSize(), devicePixelRatioF()));
         painter.setOpacity(1.0);
-        QPen border(QColor(m_hasSpot ? "#2f2f2f" : "#3a3a3a"), 1.0, m_hasSpot ? Qt::SolidLine : Qt::DashLine);
+        QPen border(Theme::color(m_hasSpot ? Theme::kFieldBorder : Theme::kBorderStrong), 1.0, m_hasSpot ? Qt::SolidLine : Qt::DashLine);
         painter.setPen(border);
         painter.setBrush(Qt::NoBrush);
         painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 3, 3);
         if (m_hasSpot) {
             const QPointF center(inner.left() + m_spot.x() * inner.width(), inner.top() + m_spot.y() * inner.height());
-            painter.setPen(QPen(QColor("#DDDBEE"), 1.0));
+            painter.setPen(QPen(Theme::color(Theme::kTextOnAccent), 1.0));
             painter.setBrush(Theme::color(Theme::kAccent));
             painter.drawEllipse(center, 4.0, 4.0);
         }

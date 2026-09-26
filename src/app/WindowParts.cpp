@@ -149,7 +149,10 @@ ModuleHeader::ModuleHeader(const QString &title, const QString &platforms, const
     titleRow->setSpacing(8);
     titleRow->addWidget(Ui::label(title, "modTitle", this), 0, Qt::AlignVCenter);
     if (!platforms.isEmpty()) {
-        titleRow->addWidget(Ui::label(platforms, "platTag", this), 0, Qt::AlignVCenter);
+        QLabel *tag = Ui::label(platforms, "platTag", this);
+        // Un QLabel con borde agrega una sangria automatica (media "x"): sin ella mide lo del canvas.
+        tag->setIndent(0);
+        titleRow->addWidget(tag, 0, Qt::AlignVCenter);
     }
     titleRow->addStretch(1);
     texts->addLayout(titleRow);

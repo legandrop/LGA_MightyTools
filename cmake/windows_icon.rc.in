@@ -1,1 +1,34 @@
+#include <winver.h>
+
 IDI_ICON1 ICON "@APP_ICON_RESOURCE_WINDOWS@"
+
+// Recurso de version: Windows toma de aca el nombre que muestra en el encabezado de las
+// notificaciones, en el Administrador de tareas y en Propiedades del exe. CMake completa la version
+// desde project(VERSION) (sin numeros a mano).
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     @APP_VERSION_COMMAS@
+PRODUCTVERSION  @APP_VERSION_COMMAS@
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0x0L
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_APP
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "LGA\0"
+            VALUE "FileDescription",  "LGA Mighty Tools\0"
+            VALUE "FileVersion",      "@PROJECT_VERSION@\0"
+            VALUE "InternalName",     "LGA_MightyTools\0"
+            VALUE "OriginalFilename", "LGA_MightyTools.exe\0"
+            VALUE "ProductName",      "LGA Mighty Tools\0"
+            VALUE "ProductVersion",   "@PROJECT_VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

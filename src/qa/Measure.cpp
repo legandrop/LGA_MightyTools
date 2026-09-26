@@ -5,15 +5,21 @@
 #include "app/MainWindow.h"
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
+#include "platform/SystemNotifier.h"
 #include "app/SettingsStore.h"
 #include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
+#include "ui/Theme.h"
 
 #include <QAbstractEventDispatcher>
 #include <QApplication>
+#include <QFontInfo>
+#include <QFontMetricsF>
+#include <QScreen>
 #include <QSet>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QDir>
 #include <QThread>
 #include <QTimer>
 
@@ -261,6 +267,65 @@ int idle(const QStringList &arguments)
                 static_cast<long long>((end.privateBytes - start.privateBytes) / 1024), cpu < 50 ? "ok" : "FALLO");
     std::fflush(stdout);
     return cpu < 50 ? 0 : 1;
+}
+
+int notifyPreview(const QStringList &)
+{
+    // El mismo notificador que usa la app, en modo automatizado: prepara el icono y anota lo que
+    // mostraria, sin lanzar PowerShell ni crear el hilo.
+    SystemNotifier notifier(true);
+    const char *const samples[][2] = {
+        {"Frame Dope Sheet", "Calibrate the Dope Sheet first: one click, from the tray menu."},
+        {"D: is running low", "42 GB free of 1.82 TB. You asked to be warned under 100 GB."},
+    };
+    bool ok = true;
+    for (const auto &sample : samples) {
+        notifier.show(QString::fromUtf8(sample[0]), QString::fromUtf8(sample[1]));
+        const SystemNotifier::Last last = notifier.last();
+        std::printf("notify title='%s' body='%s' icon=%s size=%dx%d frames=%d reused=%s launched=%s\n",
+                    qPrintable(last.title), qPrintable(last.body), qPrintable(QDir::toNativeSeparators(last.icon.path)),
+                    last.icon.size.width(), last.icon.size.height(), last.icon.frames, last.icon.reused ? "si" : "no",
+                    last.launched ? "si" : "no");
+        ok = ok && !last.launched && !last.icon.path.isEmpty();
+    }
+    std::printf("notify worker=%s\n", notifier.workerRunning() ? "creado" : "no-creado");
+    std::fflush(stdout);
+    return ok && !notifier.workerRunning() ? 0 : 1;
+}
+
+int fonts(const QStringList &)
+{
+    // Anchos de Chrome medidos en el canvas (render del HTML a DPR 1, Inter local): caja del elemento
+    // menos su relleno y borde.
+    struct Sample
+    {
+        const char *text;
+        qreal px;
+        int weight;
+        qreal chrome;
+    };
+    const Sample samples[] = {
+        {"Ctrl", 11.5, 600, 20.5},       {"Shift", 11.5, 600, 26.2},    {"Alt", 11.5, 600, 15.7},
+        {"Calibrated", 11.5, 600, 57.8}, {"Calibrate...", 12.5, 500, 64.8}, {"Check now", 12.5, 500, 66.5},
+        {"Help", 12.5, 500, 27.5},       {"Add drive...", 13, 500, 70.9}, {"github.com/legandrop", 13, 500, 137.9},
+        {"Put the pointer over a knob in Nuke and press Ctrl+Shift+D to set a key.", 13, 400, 439.3},
+        {"Calibrate the Dope Sheet once: one click on an empty spot.", 13, 400, 364.9},
+    };
+    std::printf("measure mode=fonts platform=%s dpi=%.1f\n", qPrintable(QGuiApplication::platformName()),
+                QGuiApplication::primaryScreen() ? QGuiApplication::primaryScreen()->logicalDotsPerInchY() : 0.0);
+    for (const Sample &s : samples) {
+        const QFont font = Theme::uiFont(s.px, s.weight);
+        QFont noHint = font;
+        noHint.setHintingPreference(QFont::PreferNoHinting);
+        const qreal qt = QFontMetricsF(font).horizontalAdvance(QString::fromLatin1(s.text));
+        const qreal qtNoHint = QFontMetricsF(noHint).horizontalAdvance(QString::fromLatin1(s.text));
+        std::printf("measure font px=%.1f w=%d text='%s' chrome=%.1f qt=%.2f (%+.1f%%) qt_sin_hinting=%.2f (%+.1f%%) "
+                    "pixelSizeResuelto=%d\n",
+                    s.px, s.weight, s.text, s.chrome, qt, (qt / s.chrome - 1) * 100, qtNoHint,
+                    (qtNoHint / s.chrome - 1) * 100, QFontInfo(font).pixelSize());
+    }
+    std::fflush(stdout);
+    return 0;
 }
 
 } // namespace Measure

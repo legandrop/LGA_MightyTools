@@ -11,8 +11,12 @@
 #include "core/BuildTree.h"
 #include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
+#include "platform/SystemNotifier.h"
 
 #include <QCoreApplication>
+#include <QImageReader>
+#include <QImage>
+#include <QFile>
 #include <QEvent>
 #include <QPointer>
 #include <QThread>
@@ -77,6 +81,8 @@ public:
         m_registered = context().hotkeys()->registerHotkey(1, m_shortcut);
         context().injector();
         context().setValue(QStringLiteral("probe/started"), true);
+        // En corrida automatizada una notificacion solo se loguea: nunca llega a la bandeja.
+        context().notify(QStringLiteral("Probe"), QStringLiteral("Automated"), ModuleContext::NoticeIcon::Warning, 1000);
         if (m_hideWindow) {
             // Nunca la devuelve: la red de seguridad del contexto tiene que hacerlo.
             context().hideWindowTemporarily();
@@ -199,6 +205,7 @@ void testHost(const Check &check)
     check(!host.hotkeyHub()->systemServiceAlive(), QStringLiteral("atajos: en corrida automatizada no se crea el servicio del sistema"));
     check(host.injectorAlive(), QStringLiteral("inyector: creado con el primer pedido"));
     check(services.hidden == 1, QStringLiteral("ventana: A la escondio"));
+    check(services.notified == 0, QStringLiteral("notificaciones: en corrida automatizada no llegan a la bandeja"));
 
     host.setEnabled(QStringLiteral("probeB"), true);
     auto *b = static_cast<ProbeModule *>(host.module(QStringLiteral("probeB")));
@@ -449,6 +456,36 @@ void testSharedForeground(const Check &check)
     check(ForegroundWatcher::installedHooks() == 0, QStringLiteral("negativo: al destruirlos vuelve a 0"));
 }
 
+// Notificaciones (SystemNotifier, copia de PipeSync): en corrida automatizada no se lanza nada, y el
+// icono del toast es el frame MAS GRANDE del .ico escrito como PNG (no el primero, que es 16x16).
+void testNotifier(const Check &check)
+{
+    QFile::remove(SystemNotifier::iconTempPath(true));
+    SystemNotifier notifier(true);
+    check(!notifier.workerRunning(), QStringLiteral("notificaciones: sin avisos no hay hilo"));
+    notifier.show(QStringLiteral("Frame Dope Sheet"), QStringLiteral("It's \"quoted\""));
+    const SystemNotifier::Last last = notifier.last();
+    check(!last.launched && !notifier.workerRunning(),
+          QStringLiteral("notificaciones: en corrida automatizada no se lanza PowerShell ni se crea el hilo"));
+    QImageReader reader(QStringLiteral(":/icons/LGA_MightyTools.ico"));
+    int largest = 0;
+    for (int i = 0; i < qMax(1, reader.imageCount()); ++i) {
+        if (i > 0 && !reader.jumpToImage(i)) {
+            break;
+        }
+        largest = qMax(largest, reader.read().width());
+    }
+    const QImage written(last.icon.path);
+    check(largest > 16 && last.icon.size.width() == largest && written.width() == largest,
+          QStringLiteral("notificaciones: el PNG del toast es el frame mas grande del .ico (%1 px de %2 frames; escrito %3)")
+              .arg(largest).arg(last.icon.frames).arg(written.width()));
+    notifier.show(QStringLiteral("Again"), QStringLiteral("Body"));
+    check(notifier.last().icon.reused, QStringLiteral("notificaciones: el PNG reciente se reusa"));
+    check(SystemNotifier::escapeForScript(QStringLiteral("It's")) == QLatin1String("It''s"),
+          QStringLiteral("notificaciones: las comillas simples se duplican para PowerShell"));
+    QFile::remove(SystemNotifier::iconTempPath(true));
+}
+
 } // namespace
 
 namespace SelfTest {
@@ -470,6 +507,7 @@ int run()
     testExternal(check);
     testRealModules(check);
     testSharedForeground(check);
+    testNotifier(check);
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {
