@@ -25,6 +25,10 @@ inline constexpr const char *kDialog = "#1E1E1E";
 inline constexpr const char *kBorder = "#303030";
 inline constexpr const char *kFieldBorder = "#2f2f2f";
 inline constexpr const char *kDivider = "#262626";
+// Renglon de un textarea rayado (canvas ".textarea": repeating-linear-gradient con este color).
+// Ningun token existente coincide con #222222 (kDivider es #262626, kTile #242424): se agrega este
+// para no aproximar el color del diseno aprobado.
+inline constexpr const char *kTextareaRuleLine = "#222222";
 
 // Texto
 inline constexpr const char *kText = "#B2B2B2";

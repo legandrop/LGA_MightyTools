@@ -11,6 +11,7 @@
 
 #include <functional>
 
+class QMenu;
 class QPlainTextEdit;
 class QTimer;
 class StatusCard;
@@ -44,7 +45,9 @@ public:
     LinkRedirectorPanel(ModuleContext &context, LinkRedirectorPanelSources sources, QWidget *parent = nullptr);
     ~LinkRedirectorPanel() override;
 
-    // Widget de captura para "combo-open": la lista de un combo ya desplegada, sin exec() ni show().
+    // Widget de captura para "combo-open": el MISMO QMenu real que abre el combo (buildMenu), con
+    // WA_DontShowOnScreen en vez de exec()/show() (auditoria: capturar el QMenu real, no una
+    // reconstruccion aparte).
     static QWidget *buildDropdownPreview(const QList<LinkRedirectorRouting::ComboItem> &items, QWidget *parent);
 
 protected:
@@ -60,6 +63,10 @@ private:
     // Arma un campo "combo" (valor + flecha, canvas ".combo") y su menu al click ("-", detectados,
     // [custom], separador, "Browse..."). `settingsKey` es "defaultBrowser" o "alternativeBrowser".
     LinkRedirectorComboField *buildBrowserField(const QString &settingsKey, QWidget *parent);
+    // El QMenu de un combo ("-", detectados, [custom], separador, "Browse..."), con el tilde violeta
+    // del canvas (QMenu::indicator, Theme.cpp) en el elegido. Lo usan showBrowserMenu() (exec() real)
+    // y buildDropdownPreview() (captura, sin exec()).
+    static QMenu *buildMenu(const QList<LinkRedirectorRouting::ComboItem> &items, QWidget *parent);
     void showBrowserMenu(const QString &settingsKey, LinkRedirectorComboField *field);
     void chooseBrowser(const QString &settingsKey, LinkRedirectorComboField *field, const QString &exePath);
     void openBrowseDialog(const QString &settingsKey, LinkRedirectorComboField *field);
