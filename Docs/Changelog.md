@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v0.07:
+
+Los usuarios del Open in NukeX viejo no tenían cómo pasar a Mighty Tools sin perder el doble click en
+`.nk`. Ahora la instalación los migra: `--migrate-openinnukex` detecta el cliente viejo por su
+desinstalador o por el ProgID que las dos apps comparten, prende Open in NukeX sin inicio con Windows y
+toma los `.nk` reescribiendo ese ProgID, sin tocar la elección protegida de Windows. Al final, una casilla
+ofrece quitar el cliente viejo (`--remove-old-client`, que espera a que termine y retoma los `.nk`); el
+panel suma el botón «Uninstall old app». A quien nunca lo tuvo no se le cambia nada. La entrada de `.nk`
+en Apps predeterminadas pasa a llamarse «Open in NukeX».
+[ Open in NukeX - Mudanza del cliente viejo desde la instalacion ]
+
 v0.06:
 
 La ventana mostraba la barra de título de Windows (el marco se aplicaba antes de atender WM_NCCALCSIZE),

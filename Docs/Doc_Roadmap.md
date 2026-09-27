@@ -13,8 +13,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      app. Para mostrar «LGA Mighty Tools» y abrir la herramienta que avisó hay que registrar un AUMID,
      con su limpieza en el desinstalador. Solo con pedido de Lega.
    - No hay captura de QA del disco desenchufado (el keycap punteado se verificó por código).
-   - ApplicationName de la entrada de `.nk` en Apps predeterminadas: «LGA Mighty Tools (Nuke scripts)»,
-     provisorio hasta que lo confirme Lega.
+   - El botón «Uninstall old app» del panel de Open in NukeX no está en el canvas: espera el OK de Lega.
    - `--uninstall-cleanup` y el desinstalador no se probaron de punta a punta (solo sobre el hive
      privado): probarlos en Windows Sandbox antes del release.
 3. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9). El lado de Mighty Tools está
