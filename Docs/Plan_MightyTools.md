@@ -253,7 +253,8 @@ Medición (criterio de aceptación desde la fase 2, cada número anotado en el c
   `LGA_Updates/repos.json` y en el catálogo del sitio.
 - Inno Setup sin permisos de administrador (`PrivilegesRequired=lowest`), cierre por ruta con
   `tools/close_by_path.ps1`, AppId nuevo, carpeta `C:\Portable\LGA\MightyTools` (regla de la Base,
-  `Doc_Rutas_Instalacion.md`). Nunca desinstala Open in NukeX por su cuenta (sección 9).
+  `Doc_Rutas_Instalacion.md`). Migra a los usuarios de Open in NukeX y desinstala el cliente viejo solo
+  con el sí del usuario (sección 9).
 - mac: DMG como LGA_VideoDownloader, firma ad-hoc antes de empaquetar, `.zip` con `ditto`.
 
 ## 5. Diseño (fase 1)
@@ -315,11 +316,11 @@ Lega: hoy corren Nuke Shortcuts y Folder Switch desde `build\` y Link Redirector
 atajos o competirían como navegador.
 
 **Trabajo en otros repos, cada uno con pedido de Lega** (este repo no los toca por su cuenta):
-1. `LGA_OpenInNukeX`: sacar la versión del plugin del CMake del cliente y armar el release del plugin sin
-   el instalador del cliente ni el `.app`; README que explique que el cliente pasó a Mighty Tools.
-2. `LGA_PipeSync_2`: detectar el cliente por Mighty Tools, dejar de ofrecer «Install App» con el cliente
-   viejo, y el tooltip «Requiere LGA_OpenInNukeX» (`VersionsWidget.cpp`). Por plataforma: en mac no cambia
-   hasta que exista la fase 8.
+1. `LGA_OpenInNukeX`: README que explique que el cliente y el plugin pasaron a Mighty Tools; después del
+   período de espera pasa a privado (D-21, sección 9).
+2. `LGA_PipeSync_2`: reemplazar la tarjeta de LGA OpenInNukeX por la de LGA Mighty Tools con badge NEW y
+   sacar del catálogo la app y el plugin viejos (D-21), y el tooltip «Requiere LGA_OpenInNukeX»
+   (`VersionsWidget.cpp`). Por plataforma: en mac no cambia hasta que exista la fase 8.
 3. `LGA_Updates` y `LGA_SiteLega`: alta de Mighty Tools y baja de las apps viejas, en la tanda del release.
 4. `LGA_RepoTools`: alta del repo en RepoRules, baja de los repos retirados.
 
@@ -336,9 +337,10 @@ atajos o competirían como navegador.
 
 ## 8. Decisiones
 
-Viven en `Docs/Doc_Decisiones.md`, con la numeración D-01 a D-20. Las tomadas al 2026-09-25: ventana con
+Viven en `Docs/Doc_Decisiones.md`, con la numeración D-01 a D-21. Las tomadas al 2026-09-26: ventana con
 barra lateral (D-01), sin .NET (D-03), el plugin de Nuke dentro de este repo (D-04), nada prendido de
-fábrica (D-06), los repos viejos se archivan (D-10) y Link Redirector se publica (D-11).
+fábrica (D-06), los repos viejos se archivan (D-10), Link Redirector se publica (D-11) y la mudanza de los
+usuarios de Open in NukeX por PipeSync (D-21).
 
 ## 9. Transición de los usuarios de Open in NukeX
 
@@ -349,22 +351,41 @@ Condiciones antes del primer release con el módulo Open in NukeX:
 2. Reescribir el comando del ProgID y verificar la asociación por ProgID más ruta del comando (4.6).
 3. El hash de UserChoiceLatest en C++ verificado contra el helper original (D-03).
 4. El plugin embebido con su propia versión (D-04).
-5. Un PipeSync nuevo sale ANTES que Mighty Tools (en Windows): su catálogo sigue actualizando el plugin,
-   pero detecta el cliente por Mighty Tools y deja de ofrecer «Install App» con el cliente viejo. La entrada
-   del plugin no se saca. En mac, recién con la fase 8 (D-12).
+5. La mudanza pasa por PipeSync (D-21), solo en Windows: su tarjeta de LGA OpenInNukeX se reemplaza por
+   la de LGA Mighty Tools (badge NEW, «reemplaza a OpenInNukeX»), y sale DESPUÉS del release de Mighty
+   Tools con su alta en LGA_Updates (fase 7). PipeSync deja de instalar el cliente y el plugin viejos: el
+   plugin lo instala y actualiza el Nuke Bridge embebido (D-04). En mac, recién con la fase 8 (D-12).
 6. La segunda copia abre la ventana de la residente (4.5).
 7. En mac, sin `quit()` en el camino de la app residente.
-8. Mighty Tools nunca desinstala Open in NukeX solo. El desinstalador viejo corre `assoc .nk=` con
-   permisos de administrador y pisaría la asociación nueva.
+8. La migración la hace la instalación de Mighty Tools (`--migrate-openinnukex` al terminar de copiar):
+   detecta el cliente viejo solo por su clave de desinstalación (HKLM, WOW6432Node o HKCU, con
+   DisplayName) o por el ProgID `LGA.NukeScript.1` apuntando a `LGA_OpenInNukeX.exe`; prende Open in
+   NukeX si el usuario nunca lo decidió, sin inicio con Windows (se activa si prende otra herramienta);
+   toma los `.nk` solo si eran del viejo o de un exe que ya no existe (nunca de otra copia de Mighty Tools
+   ni con una elección de otra app); limpia sus restos solo si ya no está instalado; siempre deja la marca
+   `migration/openInNukeX`. El viejo se quita solo con el sí del usuario: la casilla «Remove the old LGA
+   OpenInNukeX (recommended)» del final del instalador o el botón «Uninstall old app» del panel. Los dos
+   usan `--remove-old-client`, que corre su desinstalador en silencio (pide su propio UAC), espera a que
+   desaparezca y retoma los `.nk`, porque ese desinstalador corre `assoc .nk=` como administrador.
 
-Pasos para cada usuario, que Lega avisa en persona:
+Orden de los pasos:
 
-1. Desinstalar LGA OpenInNukeX desde Configuración de Windows.
-2. Instalar LGA Mighty Tools.
-3. Prender Open in NukeX en la ventana y verificar que la asociación de `.nk` diga «Associated»; apretar
-   «Re-apply» solo si no.
-4. Si usa el Review Panel de Hiero o el Nuke Bridge, reinstala el bridge desde el panel cuando el chip
+1. Release de Mighty Tools con su alta en LGA_Updates; después, el PipeSync nuevo con la tarjeta.
+2. El usuario instala Mighty Tools desde la tarjeta de PipeSync. La instalación migra: Open in NukeX queda
+   prendido con su configuración (`nukeXpath.txt` es el mismo archivo) y tomando los `.nk`.
+3. En la página final deja marcada la casilla y el cliente viejo se desinstala (Windows pide permiso).
+   Si la desmarca o cancela el permiso, el panel de Open in NukeX lo sigue ofreciendo con «Uninstall old
+   app».
+4. Si usa el Review Panel de Hiero o el Nuke Bridge, actualiza el bridge desde el panel cuando el chip
    diga «Update available».
+5. Pasado un período de espera (cuando los usuarios tengan el PipeSync nuevo, que se actualiza solo),
+   `LGA_OpenInNukeX` pasa a privado. Antes hay que resolver lo que todavía lo usa: el DMG de mac de ese
+   repo, `repos.json`/`versions.json` de LGA_Updates, `productos.json` de LGA_SiteLega y los textos de
+   PipeSync que lo nombran.
+
+Pendiente antes del release: probar el flujo real (instalador, desinstalador viejo y `assoc .nk=`) en
+Windows Sandbox, nunca en la máquina de Lega. Lo primero a medir: si con el UserChoice intacto el doble
+click en un `.nk` sigue abriendo después de `assoc .nk=` como administrador.
 
 ## 10. Retiro de los orígenes
 

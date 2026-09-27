@@ -22,6 +22,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   `LGA_OpenInNukeX` dejan de mantenerse; Lega los archiva y los pasa a privados cuando Mighty Tools
   funcione bien.
 - **D-11 · Link Redirector se publica** en este repo (2026-09-25).
+- **D-21 · Mudanza de los usuarios de Open in NukeX por PipeSync** (2026-09-26). PipeSync reemplaza la
+  tarjeta de LGA OpenInNukeX por la de LGA Mighty Tools (badge NEW). La migración la hace la instalación
+  de Mighty Tools: a quien ya tenía el cliente viejo, Open in NukeX le queda prendido y tomando los `.nk`,
+  con su configuración, sin activar el inicio con Windows (se activa si prende otra herramienta). El
+  plugin de Nuke lo instala y actualiza el Nuke Bridge embebido (D-04), no PipeSync. `LGA_OpenInNukeX`
+  pasa a privado después de un período de espera. Detalle en el plan, sección 9.
 
 ## Abiertas
 
