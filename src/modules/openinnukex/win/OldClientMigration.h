@@ -14,21 +14,27 @@ class SettingsStore;
 //    del instalador.
 //  - El boton "Uninstall old app" del panel, en un hilo propio (removeOldClient()).
 //
-// Deteccion (C1): SOLO por el DisplayName de la clave de desinstalacion del cliente viejo
+// Deteccion: SOLO por el DisplayName de la clave de desinstalacion del cliente viejo
 // (`{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1` en HKLM 64, HKLM WOW6432Node o HKCU) o por el ProgID
 // compartido `LGA.NukeScript.1` con el comando apuntando a `LGA_OpenInNukeX.exe`. nukeXpath.txt no
 // cuenta: tambien lo escribe esta app.
 //
 // Con rastro:
-//  a. Prende Open in NukeX en settings.ini solo si `modules/openInNukeX/enabled` todavia no existe.
-//     No toca el inicio con Windows (se activa recien si el usuario prende otra herramienta).
-//  c. Toma los .nk (C2) solo con el modulo prendido, si la eleccion efectiva de .nk es nuestro ProgID
-//     (o no hay ninguna) y el comando del ProgID apunta a `LGA_OpenInNukeX.exe`, a un exe que ya no
-//     existe en una unidad local fija, o ya a ESTE exe. NUNCA si apunta a otra copia de LGA Mighty
-//     Tools. registerClasses() completo, sin UserChoice, y aviso al shell. Desde un arbol de build,
-//     solo se loguea.
-//  e. Limpia los restos del cliente viejo en HKCU (A4) solo si ya no esta instalado.
+//  - Prende Open in NukeX en settings.ini solo si `modules/openInNukeX/enabled` todavia no existe.
+//    No toca el inicio con Windows (se activa recien si el usuario prende otra herramienta).
+//  - Toma los .nk solo con el modulo prendido, si la eleccion efectiva de .nk es nuestro ProgID (o no
+//    hay ninguna) y el comando del ProgID apunta a `LGA_OpenInNukeX.exe`, a un exe que ya no existe
+//    en una unidad local fija, o ya a ESTE exe. NUNCA si apunta a otra copia de LGA Mighty Tools.
+//    registerClasses() completo, sin UserChoice, y aviso al shell. Desde un arbol de build, solo se
+//    loguea.
+//  - Limpia los restos del cliente viejo en HKCU (A4) solo si ya no esta instalado.
 // Siempre (con o sin rastro) guarda la marca `migration/openInNukeX` con el resultado.
+//
+// Despues de desinstalar el viejo ya no queda rastro que detectar: la primera pasada reescribio el
+// ProgID a este exe y el desinstalador borro su clave. Por eso, SOLO para tomar los .nk y limpiar los
+// restos, tambien cuentan como rastro la marca `migrated` (en cualquier pasada: cubre tambien a quien
+// lo desinstalo desde Ajustes de Windows) y, en la pasada de removeOldClient(), lo detectado antes de
+// desinstalar. Prender el modulo sigue exigiendo el rastro de verdad.
 namespace OldClientMigration {
 
 /// Una entrada de desinstalacion del cliente viejo (una por vista del registro).
@@ -70,12 +76,16 @@ struct Report
     bool stillInstalled = false;   ///< removeOldClient(): el cliente viejo sigue instalado al final
 };
 
-/// M1 con C1/C2. `store` nulo: sin pasos de settings (el panel: el modulo ya esta prendido).
-Report migrate(SettingsStore *store, const Options &options);
+/// La migracion (plan seccion 9). `store` nulo: sin pasos de settings (el panel: el modulo ya esta
+/// prendido). `knownOldClient`: el cliente viejo estaba antes de desinstalarlo (la pasada de
+/// removeOldClient()); junto con la marca `migrated`, habilita la toma de .nk y la limpieza de restos
+/// aunque ya no quede rastro. Nunca prende el modulo.
+Report migrate(SettingsStore *store, const Options &options, bool knownOldClient = false);
 
-/// C3: lanza el desinstalador del cliente viejo en silencio (eleva solo), espera el proceso y sondea
-/// hasta que desaparezcan el DisplayName y el exe viejo (tope Options::removeTimeoutMs) y despues
-/// rehace migrate(). Con `launchAllowed` false no lanza nada: loguea lo que haria y rehace migrate().
+/// Quitar el cliente viejo: lanza su desinstalador en silencio (eleva solo), espera el proceso y
+/// sondea hasta que desaparezcan el DisplayName y el exe viejo (tope Options::removeTimeoutMs) y
+/// despues rehace migrate() con lo detectado antes. Con `launchAllowed` false no lanza nada: loguea lo
+/// que haria y rehace migrate().
 Report removeOldClient(SettingsStore *store, const Options &options);
 
 /// El exe y los argumentos de un UninstallString (`"C:\x\unins000.exe" /X` -> exe, "/X"). Vacio si no

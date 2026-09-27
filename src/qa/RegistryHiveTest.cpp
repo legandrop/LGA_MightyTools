@@ -835,7 +835,7 @@ void scenarioOldClientMigration(HiveSession &cuSession, HiveSession &lmSession, 
               && readSz(f.cu(), kNkClass) == kNkProgIdName
               && readSz(f.cu(), kNkCaps, QStringLiteral("ApplicationName")) == QLatin1String("Open in NukeX")
               && readSz(f.cu(), kRegApps, WinFileAssociation::registeredApplicationValue()) == kNkCaps,
-          QStringLiteral("5a C2: registerClasses completo (comando, DefaultIcon, Classes\\.nk, Capabilities, RegisteredApplications)"));
+          QStringLiteral("5a toma de .nk: registerClasses completo (comando, DefaultIcon, Classes\\.nk, Capabilities, RegisteredApplications)"));
     check(readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId")) == kNkProgIdName
               && readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("Hash")) == userChoiceHashBefore,
           QStringLiteral("5a UserChoice intacto (no se escribe hash)"));
@@ -1018,6 +1018,63 @@ void scenarioOldClientMigration(HiveSession &cuSession, HiveSession &lmSession, 
         check(!r.launched && r.failures >= 1 && linesContain(r, QStringLiteral("no utilizable")),
               QStringLiteral("5j UninstallString que no es unins*.exe: rechazado sin lanzar nada"));
     }
+    // 5k. Migrado y despues desinstalado: sin clave de desinstalacion, el ProgID ya es de este exe y
+    //     quedan las Capabilities del viejo (icono a un exe que ya no existe) y su RegisteredApplications.
+    //     La pasada posterior a quitarlo tiene que borrar esos restos y dejar los .nk hacia este exe.
+    const auto seedMigratedThenRemoved = [&]() {
+        bool ok = f.reset();
+        QStringList errors;
+        ok &= WinFileAssociation::registerClasses(&errors); // lo que dejo la primera pasada
+        ok &= putSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId"), kNkProgIdName);
+        ok &= f.seedOldCaps(missingOld);
+        return ok;
+    };
+    {
+        check(seedMigratedThenRemoved(), QStringLiteral("5k siembra: migrado y desinstalado, restos del viejo en HKCU"));
+        check(!detect().hasTrace(), QStringLiteral("5k sin rastro detectable (por eso la pasada necesita la marca o lo de antes)"));
+        const Snapshot before = snapshot(f.cu());
+        FileSettingsStore store;
+        const Report plain = migrate(&store, real);
+        const Snapshot afterPlain = snapshot(f.cu());
+        check(!plain.nkTaken && afterPlain == before,
+              QStringLiteral("5k sin marca ni deteccion previa: la migracion comun no toca nada%1").arg(describeDiff(before, afterPlain)));
+    }
+    // Con la marca migrated (el instalador: --remove-old-client despues de --migrate-openinnukex).
+    {
+        seedMigratedThenRemoved();
+        f.setSetting(enabledKey, true);
+        f.setSetting(markKey, QStringLiteral("migrated"));
+        Options noLaunch;
+        noLaunch.launchAllowed = false;
+        FileSettingsStore store;
+        const Report r = removeOldClient(&store, noLaunch);
+        check(r.failures == 0 && !r.launched && r.nkTaken && !RegistryHelper::keyExists(f.cu(), kOldRoot)
+                  && readSz(f.cu(), kRegApps, QStringLiteral("OpenInNukeX")).isEmpty()
+                  && RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own)
+                  && readSz(f.cu(), kNkClass) == kNkProgIdName
+                  && readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId")) == kNkProgIdName,
+              QStringLiteral("5k con la marca migrated: restos borrados y .nk intactos hacia este exe [%1]")
+                  .arg(r.lines.join(QStringLiteral(" / "))));
+    }
+    // Sin settings, con lo detectado antes de desinstalar (el boton del panel).
+    {
+        seedMigratedThenRemoved();
+        const Report r = migrate(nullptr, real, /*knownOldClient=*/true);
+        check(r.failures == 0 && r.nkTaken && !RegistryHelper::keyExists(f.cu(), kOldRoot)
+                  && readSz(f.cu(), kRegApps, QStringLiteral("OpenInNukeX")).isEmpty()
+                  && RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own),
+              QStringLiteral("5k con lo detectado antes de desinstalar (panel): restos borrados y .nk hacia este exe"));
+    }
+    // La marca sola nunca prende el modulo.
+    {
+        seedMigratedThenRemoved();
+        f.setSetting(markKey, QStringLiteral("migrated"));
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        check(!r.moduleEnabledNow && !f.setting(enabledKey).isValid() && !r.nkTaken,
+              QStringLiteral("5k la marca migrated sin rastro no prende el modulo (y apagado no toma los .nk)"));
+    }
+
     std::printf("info 5: escritorio del arnes de QA detectado: %s\n", runningOnQaDesktop() ? "si" : "no");
     f.reset();
 }

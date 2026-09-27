@@ -91,7 +91,7 @@ QList<OldClientMigration::UninstallEntry> readEntries()
     };
 }
 
-// c (C2): la toma de los .nk. `moduleOn`: Open in NukeX prendido despues del paso a.
+// La toma de los .nk. `moduleOn`: Open in NukeX prendido despues de decidir si se prende.
 void takeNkAssociation(bool moduleOn, const OldClientMigration::Options &options, OldClientMigration::Report &report)
 {
     if (!moduleOn) {
@@ -164,7 +164,7 @@ Detection detect()
     return d;
 }
 
-Report migrate(SettingsStore *store, const Options &options)
+Report migrate(SettingsStore *store, const Options &options, bool knownOldClient)
 {
     Report report;
     const Detection d = detect();
@@ -177,6 +177,16 @@ Report migrate(SettingsStore *store, const Options &options)
     }
     addLine(report, d.hasTrace() ? QStringLiteral("[deteccion] rastro del cliente viejo: %1").arg(where.join(QStringLiteral(", ")))
                                  : QStringLiteral("[deteccion] sin rastro del cliente viejo"));
+    // Despues de desinstalar el viejo (removeOldClient) ya no hay rastro: cuentan lo detectado antes
+    // y la marca `migrated`, solo para los .nk y los restos (nunca para prender el modulo).
+    const bool markedMigrated = store && store->value(kMarkKey).toString() == kMarkMigrated;
+    const bool afterRemoval = knownOldClient || markedMigrated;
+    const bool trace = d.hasTrace() || afterRemoval;
+    if (!d.hasTrace() && afterRemoval) {
+        addLine(report, QStringLiteral("[deteccion] %1: se retoman los .nk y se limpian los restos")
+                            .arg(knownOldClient ? QStringLiteral("estaba antes de desinstalarlo")
+                                                : QStringLiteral("ya migrado (marca migrated)")));
+    }
 
     bool moduleOn = true;
     if (store) {
@@ -197,7 +207,7 @@ Report migrate(SettingsStore *store, const Options &options)
         moduleOn = report.moduleEnabledNow || wouldEnable || store->value(kEnabledKey, false).toBool();
     }
 
-    if (d.hasTrace()) {
+    if (trace) {
         takeNkAssociation(moduleOn, options, report);
         if (d.isInstalled()) {
             addLine(report, QStringLiteral("[restos] el cliente viejo sigue instalado: sus claves quedan"));
@@ -214,7 +224,7 @@ Report migrate(SettingsStore *store, const Options &options)
     // La marca, siempre. Nunca baja de "migrated" a "no-trace": despues de desinstalar el viejo ya
     // no queda rastro, pero la migracion igual paso.
     if (store) {
-        const QString result = d.hasTrace() ? kMarkMigrated : kMarkNoTrace;
+        const QString result = trace ? kMarkMigrated : kMarkNoTrace;
         const QString existing = store->value(kMarkKey).toString();
         if (existing.isEmpty() || (result == kMarkMigrated && existing != kMarkMigrated)) {
             if (options.dryRun) {
@@ -280,6 +290,8 @@ Report removeOldClient(SettingsStore *store, const Options &options)
 {
     Report report;
     const QDeadlineTimer deadline(options.removeTimeoutMs);
+    // Lo que habia ANTES de desinstalar: la pasada final lo usa como rastro (ver migrate()).
+    const bool knownOldClient = detect().hasTrace();
     QStringList tried;
     for (int round = 0; round < 3; ++round) {
         const Detection d = detect();
@@ -380,7 +392,7 @@ Report removeOldClient(SettingsStore *store, const Options &options)
     }
 
     // Rehacer la toma de los .nk (el desinstalador corre `assoc .nk=`) y los restos.
-    const Report again = migrate(store, options);
+    const Report again = migrate(store, options, knownOldClient);
     report.lines << again.lines;
     report.failures += again.failures;
     report.nkTaken = again.nkTaken;

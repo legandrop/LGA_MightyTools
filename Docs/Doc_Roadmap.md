@@ -17,12 +17,19 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      provisorio hasta que lo confirme Lega.
    - `--uninstall-cleanup` y el desinstalador no se probaron de punta a punta (solo sobre el hive
      privado): probarlos en Windows Sandbox antes del release.
-3. **Mudanza de los usuarios de Open in NukeX** (propuesta auditada, espera decisión de Lega): «update»
-   de `LGA_OpenInNukeX` que instala Mighty Tools por PipeSync, con Mighty Tools anunciándose en
-   `OpenInNukeX.json` y tomando los `.nk` por el ProgID compartido.
+3. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9). El lado de Mighty Tools está
+   hecho (migración en la instalación, casilla y botón para quitar el cliente viejo); falta PipeSync, que
+   espera el release y el alta en LGA_Updates.
+   - **Prueba pendiente en Windows Sandbox**, nunca en la máquina de Lega: instalador de Mighty Tools con
+     el cliente viejo instalado; el UAC de su desinstalador (sin firma); el código de salida de la
+     primera fase de ese desinstalador cuando se cancela el UAC; y si su `assoc .nk=` como administrador
+     toca algo de HKCU (con el UserChoice intacto, ¿el doble click sigue abriendo?).
+   - **Hueco aceptado:** si el UserChoice de `.nk` apunta a `Applications\LGA_OpenInNukeX.exe` (el
+     usuario lo eligió con «Abrir con» buscando el exe), la migración no lo toca porque no es nuestro
+     ProgID; al quitar el viejo, el `.nk` queda sin abrir hasta que el usuario aprieta Apply.
 4. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
    los links contra Link Redirector.
 5. **Fase 7:** instalador, updater, alta en LGA_Updates y en el sitio; release 1.00 de Windows.
 6. **Fase 8:** macOS.
-7. **Otros repos, con pedido de Lega:** PipeSync (dejar de actualizar el plugin desde el release de
-   `LGA_OpenInNukeX` y detectar el cliente por Mighty Tools), LGA_Updates y el sitio.
+7. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+   LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.

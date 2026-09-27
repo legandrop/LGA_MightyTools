@@ -76,8 +76,10 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 ; CurStepChanged(ssPostInstall), abajo. Si el cliente viejo sigue instalado, la pagina final ofrece
 ; quitarlo (casilla marcada): el exe corre su desinstalador en silencio (pide el UAC el mismo), espera a
 ; que termine y retoma los .nk (su desinstalador corre `assoc .nk=`). Recien despues se lanza la app.
+; Con Open in NukeX apagado la casilla no aparece: quitar el viejo dejaria los .nk sin nadie que los
+; abra. Se puede desinstalar igual desde Ajustes de Windows.
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-old-client"; Description: "Remove the old LGA OpenInNukeX (recommended)"; StatusMsg: "Removing the old LGA OpenInNukeX..."; Flags: postinstall waituntilterminated skipifsilent; Check: OldClientInstalled
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-old-client"; Description: "Remove the old LGA OpenInNukeX (recommended)"; StatusMsg: "Removing the old LGA OpenInNukeX..."; Flags: postinstall waituntilterminated skipifsilent; Check: OfferOldClientRemoval
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
@@ -132,13 +134,32 @@ begin
             RegQueryStringValue(RootKey, OldClientUninstallKey, 'UninstallString', UninstallString) and (Trim(UninstallString) <> '');
 end;
 
-// Check de la casilla "Remove the old LGA OpenInNukeX" de la pagina final.
 function OldClientInstalled(): Boolean;
 begin
   Result := OldClientListed(HKLM) or OldClientListed(HKCU);
   if (not Result) and IsWin64 then
     Result := OldClientListed(HKLM64);
   Log('Cliente viejo de Open in NukeX instalado: ' + IntToStr(Ord(Result)));
+end;
+
+// Open in NukeX prendido en el settings.ini de la app (QSettings: seccion [modules], clave
+// openInNukeX\enabled). Se lee en la pagina final, despues de --migrate-openinnukex, que lo prende a
+// los migrados.
+function OpenInNukeXEnabled(): Boolean;
+var
+  Value: String;
+begin
+  Value := GetIniString('modules', 'openInNukeX\enabled', '',
+                        ExpandConstant('{userappdata}\LGA\LGA_MightyTools\settings.ini'));
+  Result := Lowercase(Trim(Value)) = 'true';
+  Log('Open in NukeX prendido: ' + IntToStr(Ord(Result)));
+end;
+
+// Check de la casilla "Remove the old LGA OpenInNukeX" de la pagina final: solo con el viejo instalado
+// y Open in NukeX prendido (si no, los .nk quedarian sin nadie que los abra).
+function OfferOldClientRemoval(): Boolean;
+begin
+  Result := OldClientInstalled() and OpenInNukeXEnabled();
 end;
 
 // Despues de copiar los archivos: el exe instalado detecta el cliente viejo, prende Open in NukeX si
