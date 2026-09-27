@@ -96,6 +96,13 @@ bool isOldClientInstalled();
 /// (tambien queda en el log). La llama apply() (boton Apply) con isOldClientInstalled().
 QStringList removeOldClientLeftovers(bool oldClientInstalled);
 
+/// `shell\open\command` de `Classes\LGA.NukeScript.1` en HKCU, tal cual (vacio si no existe).
+QString progIdCommandLine();
+
+/// True si `exePath` es un .exe con ruta absoluta de una unidad LOCAL FIJA presente y el archivo no
+/// esta. Red, unidad ausente o removible, ruta relativa o que no es un exe: false (no se puede saber).
+bool exeMissingOnPresentLocalDrive(const QString &exePath);
+
 /// Costura de D-03 (ver comentario de arriba del archivo). Devuelve false con `*reason` en
 /// "no disponible todavia" hasta que el supervisor conecte `win/UserChoiceLatest.{h,cpp}`.
 bool writeUserChoice(const QString &extension, const QString &progId, QString *reason);

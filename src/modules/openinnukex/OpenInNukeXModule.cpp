@@ -83,6 +83,7 @@ QWidget *OpenInNukeXModule::createPanel(QWidget *parent)
         panel->applyCaptureState(m_pendingCaptureState);
     }
     m_panel = panel;
+    connect(panel, &OpenInNukeXPanel::oldClientStateChanged, this, &Module::statusChanged);
     return panel;
 }
 

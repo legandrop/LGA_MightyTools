@@ -340,6 +340,16 @@ bool writeUserChoice(const QString &extension, const QString &progIdValue, QStri
     return r.ok;
 }
 
+QString progIdCommandLine()
+{
+    return progIdCommand();
+}
+
+bool exeMissingOnPresentLocalDrive(const QString &exePath)
+{
+    return missingOnPresentLocalDrive(exePath);
+}
+
 bool isOldClientInstalled()
 {
     // Instalado = la entrada de desinstalacion tiene nombre, como la lista de Apps de Windows. El

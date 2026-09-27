@@ -206,6 +206,7 @@ if(WIN32)
         src/modules/linkredirector/win/BrowserDetectionWin.cpp
         src/modules/linkredirector/win/BrowserRegistrationWin.cpp
         src/modules/linkredirector/win/ProcessLatencyWin.cpp
+        src/modules/openinnukex/win/OldClientMigration.cpp
         src/modules/openinnukex/win/UserChoiceLatest.cpp
         src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
@@ -239,6 +240,7 @@ if(WIN32)
         src/modules/folderswitch/WindowUtils.cpp
     )
     list(APPEND HEADERS
+        src/modules/openinnukex/win/OldClientMigration.h
         src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
         src/qa/RegistryHiveTest.h

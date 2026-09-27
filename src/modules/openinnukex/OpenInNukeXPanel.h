@@ -18,6 +18,7 @@ class QLabel;
 class QLineEdit;
 class QPushButton;
 class QVBoxLayout;
+class StatusCard;
 
 // El panel de "Open in NukeX" (canvas, seccion 2 "Open in NukeX"): tres tarjetas — ".nk files",
 // "Preferred Nuke version" y "Nuke Bridge" — mas el aviso ambar del cliente viejo instalado.
@@ -41,6 +42,10 @@ public:
     // False si `state` no es uno de captureStates(): el arnes lo reporta como error (Module.h).
     bool applyCaptureState(const QString &state);
 
+signals:
+    // El boton "Uninstall old app" termino: el modulo vuelve a leer su estado (la fila de la barra).
+    void oldClientStateChanged();
+
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -50,6 +55,8 @@ private:
     QWidget *buildVersionCard();
     QWidget *buildBridgeCard();
     QWidget *buildOldClientNotice();
+    void onUninstallOldClicked();
+    void onUninstallOldFinished(bool stillInstalled, bool launched);
 
     // ---- ".nk files" ----
     void refreshAssociation();
@@ -114,6 +121,9 @@ private:
     bool m_manualOpen = false;
 
     QWidget *m_oldClientCard = nullptr;
+    StatusCard *m_oldClientStatus = nullptr; ///< la misma tarjeta, para cambiarle el texto
+    QPushButton *m_uninstallOldButton = nullptr;
+    bool m_uninstallRunning = false;
     QWidget *m_associationCard = nullptr;
     QWidget *m_versionCard = nullptr;
     QWidget *m_bridgeCard = nullptr;

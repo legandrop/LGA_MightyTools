@@ -9,6 +9,9 @@
 #include "core/BuildTree.h"
 #include "core/DebugFlags.h"
 #include "core/LgaRegistry.h"
+#ifdef Q_OS_WIN
+#include "modules/openinnukex/win/OldClientMigration.h"
+#endif
 #include "platform/AutoStart.h"
 #include "platform/ComApartment.h"
 #include "platform/WindowActivation.h"
@@ -162,6 +165,26 @@ int main(int argc, char *argv[])
             qInstallMessageHandler(fileMessageHandler);
         }
         return UninstallCleanup::runFromCommandLine();
+    }
+
+    // Mudanza del cliente viejo de Open in NukeX (plan seccion 9). Los llama el instalador: mismo modo
+    // corto que --uninstall-cleanup (sin ventanas, sin instancia unica, sin registro LGA), pero con el
+    // settings.ini de verdad. Solo Windows.
+    const bool migrateOld = hasArg(argc, argv, "--migrate-openinnukex");
+    const bool removeOld = hasArg(argc, argv, "--remove-old-client");
+    if (migrateOld || removeOld) {
+        QCoreApplication app(argc, argv);
+        setNames();
+        if (DebugFlags::isOn(QStringLiteral("log"))) {
+            qInstallMessageHandler(fileMessageHandler);
+        }
+#ifdef Q_OS_WIN
+        return removeOld ? OldClientMigration::runRemoveFromCommandLine(app.arguments())
+                         : OldClientMigration::runMigrateFromCommandLine(app.arguments());
+#else
+        std::printf("--migrate-openinnukex / --remove-old-client: solo Windows\n");
+        return 0;
+#endif
     }
 
     // Arneses sin pantalla: QCoreApplication, sin plugin de plataforma, sin log a archivo.

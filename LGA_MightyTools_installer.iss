@@ -72,7 +72,12 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilen
 ; app, pisaba la entrada de otra copia y la borraba al desinstalar. Ver
 ; LGA_Base_QT_C_Py/docs/Doc_Autostart_Windows.md.
 
+; Mudanza del cliente viejo (LGA OpenInNukeX, plan seccion 9). La migracion corre sola en
+; CurStepChanged(ssPostInstall), abajo. Si el cliente viejo sigue instalado, la pagina final ofrece
+; quitarlo (casilla marcada): el exe corre su desinstalador en silencio (pide el UAC el mismo), espera a
+; que termine y retoma los .nk (su desinstalador corre `assoc .nk=`). Recien despues se lanza la app.
 [Run]
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--remove-old-client"; Description: "Remove the old LGA OpenInNukeX (recommended)"; StatusMsg: "Removing the old LGA OpenInNukeX..."; Flags: postinstall waituntilterminated skipifsilent; Check: OldClientInstalled
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
@@ -109,6 +114,52 @@ begin
   // Stop-Process es asincronico: se le da tiempo al proceso a soltar sus archivos antes de copiar
   // encima.
   Sleep(1500);
+end;
+
+// ---- Mudanza del cliente viejo de Open in NukeX (LGA OpenInNukeX v1.83, Inno per-machine)
+
+const
+  OldClientUninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1';
+
+// Instalado = su entrada de desinstalacion tiene DisplayName y UninstallString (el desinstalador de
+// Inno puede dejar la clave vacia). Este instalador es de 32 bits: HKLM es la vista WOW6432Node, y la
+// de 64 bits se lee aparte con HKLM64.
+function OldClientListed(const RootKey: Integer): Boolean;
+var
+  DisplayName, UninstallString: String;
+begin
+  Result := RegQueryStringValue(RootKey, OldClientUninstallKey, 'DisplayName', DisplayName) and (Trim(DisplayName) <> '') and
+            RegQueryStringValue(RootKey, OldClientUninstallKey, 'UninstallString', UninstallString) and (Trim(UninstallString) <> '');
+end;
+
+// Check de la casilla "Remove the old LGA OpenInNukeX" de la pagina final.
+function OldClientInstalled(): Boolean;
+begin
+  Result := OldClientListed(HKLM) or OldClientListed(HKCU);
+  if (not Result) and IsWin64 then
+    Result := OldClientListed(HKLM64);
+  Log('Cliente viejo de Open in NukeX instalado: ' + IntToStr(Ord(Result)));
+end;
+
+// Despues de copiar los archivos: el exe instalado detecta el cliente viejo, prende Open in NukeX si
+// hace falta (sin inicio con Windows) y toma los .nk si eran del viejo. Sin ventana; se espera.
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ExePath: String;
+  ResultCode: Integer;
+begin
+  if CurStep <> ssPostInstall then
+    exit;
+  ExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  if not FileExists(ExePath) then
+  begin
+    Log('--migrate-openinnukex: no esta ' + ExePath);
+    exit;
+  end;
+  if Exec(ExePath, '--migrate-openinnukex', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+    Log('--migrate-openinnukex: codigo ' + IntToStr(ResultCode))
+  else
+    Log('--migrate-openinnukex no se pudo ejecutar: error ' + IntToStr(ResultCode));
 end;
 
 // Al desinstalar {app} ya es la carpeta instalada; el script es la copia de {app}\tools. Si no

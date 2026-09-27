@@ -8,6 +8,7 @@
 #include "ui/UiWidgets.h"
 
 #ifdef Q_OS_WIN
+#include "modules/openinnukex/win/OldClientMigration.h"
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/openinnukex/mac/MacFileAssociation.h"
@@ -73,7 +74,36 @@ private:
     bool m_reapply;
     HWND m_parentHwnd;
 };
+
+// "Uninstall old app": la misma funcion que usa el instalador (--remove-old-client). Lanza el
+// desinstalador del cliente viejo (pide su propio UAC), espera hasta ~2 min a que desaparezca y
+// retoma los .nk. En un hilo propio: la ventana sigue viva mientras tanto.
+class RemoveOldClientWorker : public QObject
+{
+    Q_OBJECT
+public:
+    explicit RemoveOldClientWorker(const OldClientMigration::Options &options) : m_options(options) {}
+
+public slots:
+    void run()
+    {
+        // Sin settings: con el panel abierto el modulo ya esta prendido.
+        const OldClientMigration::Report report = OldClientMigration::removeOldClient(nullptr, m_options);
+        for (const QString &line : report.lines) {
+            qInfo().noquote() << "[openInNukeX] quitar cliente viejo:" << line;
+        }
+        emit finished(report.stillInstalled, report.launched);
+    }
+
+signals:
+    void finished(bool stillInstalled, bool launched);
+
+private:
+    OldClientMigration::Options m_options;
+};
 #endif
+
+const char kOldClientCaption[] = "Uninstall it so both apps don't fight over .nk files.";
 
 // Campo de ruta con foco solo por click (regla de la app): Enter guarda y suelta, Escape descarta
 // y suelta, un click afuera lo suelta guardando (editingFinished tambien dispara ahi). Copia el
@@ -160,8 +190,11 @@ bool OpenInNukeXPanel::eventFilter(QObject *watched, QEvent *event)
         if (auto *window = qobject_cast<QWidget *>(watched); window && window->isActiveWindow()) {
             refreshAssociation();
 #ifdef Q_OS_WIN
-            // Tambien el aviso del cliente viejo: se desinstala desde Ajustes de Windows.
-            m_oldClientCard->setVisible(WinFileAssociation::isOldClientInstalled());
+            // Tambien el aviso del cliente viejo: se desinstala desde Ajustes de Windows. Con el
+            // desinstalador corriendo (boton "Uninstall old app") lo decide su final.
+            if (!m_uninstallRunning) {
+                m_oldClientCard->setVisible(WinFileAssociation::isOldClientInstalled());
+            }
 #endif
         }
         return QWidget::eventFilter(watched, event);
@@ -713,13 +746,81 @@ QWidget *OpenInNukeXPanel::buildOldClientNotice()
 {
     auto *card = new StatusCard(this);
     card->set(QStringLiteral("warn"), QStringLiteral("The old LGA OpenInNukeX is still installed"),
-              QStringLiteral("Uninstall it so both apps don't fight over .nk files."), QStringLiteral("Open Apps settings"),
-              QString(), QStringLiteral("warn"), QStringLiteral("sm"));
+              QString::fromLatin1(kOldClientCaption), QStringLiteral("Open Apps settings"), QString(), QStringLiteral("warn"),
+              QStringLiteral("sm"));
+    m_oldClientStatus = card;
+    // "Uninstall old app", arriba de "Open Apps settings" y con su mismo aspecto (boton chico de
+    // la tarjeta: objectName statusButton, btnSize sm). En columna y del mismo ancho: uno al lado
+    // del otro ensanchaban la tarjeta mas que la pagina.
+    m_uninstallOldButton = Ui::button(QStringLiteral("Uninstall old app"), QString(), QStringLiteral("sm"), card);
+    m_uninstallOldButton->setObjectName(QStringLiteral("statusButton"));
+    if (auto *row = qobject_cast<QHBoxLayout *>(card->layout())) {
+        const int index = row->indexOf(card->button());
+        row->removeWidget(card->button());
+        auto *buttons = new QVBoxLayout();
+        buttons->setSpacing(6);
+        buttons->addWidget(m_uninstallOldButton);
+        buttons->addWidget(card->button());
+        row->insertLayout(index, buttons);
+        row->setAlignment(buttons, Qt::AlignVCenter);
+    }
+#ifndef Q_OS_WIN
+    m_uninstallOldButton->setVisible(false);
+#endif
     if (m_interactive) {
         connect(card->button(), &QPushButton::clicked, this,
                 [this]() { QDesktopServices::openUrl(QUrl(QStringLiteral("ms-settings:appsfeatures"))); });
+        connect(m_uninstallOldButton, &QPushButton::clicked, this, &OpenInNukeXPanel::onUninstallOldClicked);
     }
     return card;
+}
+
+void OpenInNukeXPanel::onUninstallOldClicked()
+{
+    if (!m_interactive || m_uninstallRunning) {
+        return;
+    }
+#ifdef Q_OS_WIN
+    OldClientMigration::Options options;
+    options.buildTree = AppPaths::isBuildTree();
+    // Corrida automatizada: nunca se lanza el desinstalador ni se escribe nada (solo se loguea).
+    options.launchAllowed = !m_context.automatedRun();
+    options.dryRun = m_context.automatedRun();
+
+    m_uninstallRunning = true;
+    m_uninstallOldButton->setEnabled(false);
+    m_uninstallOldButton->setText(QStringLiteral("Uninstalling..."));
+    m_oldClientStatus->set(QStringLiteral("warn"), m_oldClientStatus->title(),
+                           QStringLiteral("Follow the uninstaller. Windows may ask for permission."),
+                           m_oldClientStatus->button()->text(), QString(), QStringLiteral("warn"), QStringLiteral("sm"));
+
+    // Sin padre Qt y sin esperarlo en el destructor (puede tardar hasta ~2 min): el hilo se borra
+    // solo al terminar, y la conexion con `this` se corta sola si el panel ya no existe.
+    auto *thread = new QThread();
+    auto *worker = new RemoveOldClientWorker(options);
+    worker->moveToThread(thread);
+    connect(thread, &QThread::started, worker, &RemoveOldClientWorker::run);
+    connect(worker, &RemoveOldClientWorker::finished, this, &OpenInNukeXPanel::onUninstallOldFinished);
+    connect(worker, &RemoveOldClientWorker::finished, thread, &QThread::quit);
+    connect(worker, &RemoveOldClientWorker::finished, worker, &QObject::deleteLater);
+    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
+    thread->start();
+#endif
+}
+
+void OpenInNukeXPanel::onUninstallOldFinished(bool stillInstalled, bool launched)
+{
+    m_uninstallRunning = false;
+    m_uninstallOldButton->setEnabled(true);
+    m_uninstallOldButton->setText(QStringLiteral("Uninstall old app"));
+    const QString caption = !stillInstalled ? QString::fromLatin1(kOldClientCaption)
+                            : launched      ? QStringLiteral("It's still installed. Try again, or remove it from Apps settings.")
+                                            : QStringLiteral("Couldn't start its uninstaller. Remove it from Apps settings.");
+    m_oldClientStatus->set(QStringLiteral("warn"), m_oldClientStatus->title(), caption, m_oldClientStatus->button()->text(),
+                           QString(), QStringLiteral("warn"), QStringLiteral("sm"));
+    m_oldClientCard->setVisible(stillInstalled);
+    refreshAssociation();
+    emit oldClientStateChanged();
 }
 
 // ================================================================== Captura (fixtures)

@@ -1,8 +1,11 @@
 #include "qa/RegistryHiveTest.h"
 
 #include "app/ModuleRegistry.h"
+#include "app/SettingsStore.h"
 #include "app/UninstallCleanup.h"
+#include "core/AppSettings.h"
 #include "modules/linkredirector/BrowserRegistration.h"
+#include "modules/openinnukex/win/OldClientMigration.h"
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #include "platform/AutoStart.h"
 #include "platform/win/RegistryHelper.h"
@@ -12,7 +15,10 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QCryptographicHash>
 #include <QMap>
+#include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QThread>
 
 #include <cstdio>
@@ -26,6 +32,8 @@ using Check = std::function<void(bool ok, const QString &what)>;
 using Snapshot = QMap<QString, QByteArray>;
 
 const QString kHivePrefix = QStringLiteral("LGA_MightyTools_selftest_hive_");
+// El hive que hace de HKLM: otro prefijo, asi abrir uno nunca intenta borrar los archivos del otro.
+const QString kHklmHivePrefix = QStringLiteral("LGA_MightyTools_selftest_hklm_");
 
 // Rutas relativas a la raiz del hive (lo que la app ve como HKCU).
 const QString kRun = QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Run");
@@ -43,6 +51,11 @@ const QString kMailtoChoice = QStringLiteral("Software\\Microsoft\\Windows\\Shel
 const QString kOldCaps = QStringLiteral("Software\\OpenInNukeX\\Capabilities");
 const QString kOldRoot = QStringLiteral("Software\\OpenInNukeX");
 const QString kNkProgIdName = QStringLiteral("LGA.NukeScript.1");
+// Cliente viejo (LGA OpenInNukeX v1.83): su clave de desinstalacion en cada vista.
+const QString kOldUninstallTail =
+    QStringLiteral("Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1");
+const QString kOldUninstall64 = QStringLiteral("Software\\") + kOldUninstallTail;
+const QString kOldUninstallWow = QStringLiteral("Software\\WOW6432Node\\") + kOldUninstallTail;
 
 std::wstring ws(const QString &s)
 {
@@ -286,10 +299,18 @@ void removeFilesStartingWith(const QString &baseName)
 }
 
 // La sesion del hive: carga, aislamiento, redireccion y su deshecho con guarda de alcance.
+// `predef` es la clave que se redirige: HKEY_CURRENT_USER (hive = raiz del HKCU) o HKEY_LOCAL_MACHINE
+// (hive = raiz del HKLM). La prueba de aislamiento del HKLM usa `Software` como ancla: el HKLM real
+// se abre ANTES de redirigir (un handle abierto no sigue la redireccion) y la marca y la sonda van
+// como valores de `Software` (en el real, escribir ahi pide administrador).
 class HiveSession
 {
 public:
-    HiveSession() = default;
+    explicit HiveSession(HKEY predef = HKEY_CURRENT_USER)
+        : m_predef(predef)
+        , m_isMachine(predef == HKEY_LOCAL_MACHINE)
+    {
+    }
     HiveSession(const HiveSession &) = delete;
     HiveSession &operator=(const HiveSession &) = delete;
 
@@ -312,88 +333,103 @@ public:
 
     bool open(const Check &check)
     {
+        const QString name = m_isMachine ? QStringLiteral("HKLM") : QStringLiteral("HKCU");
+        const QString prefix = m_isMachine ? kHklmHivePrefix : kHivePrefix;
         // Los de corridas anteriores que hayan quedado (un corte a mitad de prueba).
-        removeFilesStartingWith(kHivePrefix);
+        removeFilesStartingWith(prefix);
 
         const QString unique = QStringLiteral("%1_%2").arg(QCoreApplication::applicationPid()).arg(QDateTime::currentMSecsSinceEpoch());
-        m_baseName = kHivePrefix + unique;
+        m_baseName = prefix + unique;
         m_path = QDir::toNativeSeparators(QDir(QDir::tempPath()).filePath(m_baseName + QStringLiteral(".dat")));
         m_marker = QStringLiteral("LGA_MightyTools_HiveMarker_") + unique;
 
         LONG rc = RegLoadAppKeyW(ws(m_path).c_str(), &m_hive, KEY_ALL_ACCESS, REG_PROCESS_APPKEY, 0);
         if (rc != ERROR_SUCCESS) {
             m_hive = nullptr;
-            check(false, QStringLiteral("hive: RegLoadAppKey no cargo %1 (rc=%2): la prueba se corta").arg(m_path).arg(rc));
+            check(false, QStringLiteral("hive %1: RegLoadAppKey no cargo %2 (rc=%3): la prueba se corta").arg(name, m_path).arg(rc));
             return false;
         }
-        rc = RegOpenCurrentUser(KEY_READ, &m_real);
+        // El real, abierto ANTES de redirigir.
+        rc = m_isMachine ? RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE", 0, KEY_READ, &m_real) : RegOpenCurrentUser(KEY_READ, &m_real);
         if (rc != ERROR_SUCCESS) {
             m_real = nullptr;
-            check(false, QStringLiteral("hive: RegOpenCurrentUser fallo (rc=%1): sin forma de probar el aislamiento, la prueba se corta").arg(rc));
+            check(false, QStringLiteral("hive %1: no se pudo abrir el %1 real (rc=%2): sin forma de probar el aislamiento, la prueba se "
+                                        "corta")
+                             .arg(name)
+                             .arg(rc));
             return false;
         }
-        // Marca escrita por el handle del hive (nunca por HKEY_CURRENT_USER).
-        if (!putSz(m_hive, QString(), m_marker, QStringLiteral("hive")) || valueExists(m_real, QString(), m_marker)) {
-            check(false, QStringLiteral("hive: la marca no se pudo escribir en el hive o ya estaba en el HKCU real: la prueba se corta"));
+        // Marca escrita por el handle del hive (nunca por la clave predefinida).
+        if (!putSz(m_hive, anchor(), m_marker, QStringLiteral("hive")) || valueExists(m_real, QString(), m_marker)) {
+            check(false, QStringLiteral("hive %1: la marca no se pudo escribir en el hive o ya estaba en el %1 real: la prueba se corta")
+                             .arg(name));
             return false;
         }
 
-        rc = RegOverridePredefKey(HKEY_CURRENT_USER, m_hive);
+        rc = RegOverridePredefKey(m_predef, m_hive);
         if (rc != ERROR_SUCCESS) {
-            check(false, QStringLiteral("hive: RegOverridePredefKey no acepta el handle de RegLoadAppKey (rc=%1): no se escribe "
-                                        "nada por HKEY_CURRENT_USER, la prueba se corta")
+            check(false, QStringLiteral("hive %1: RegOverridePredefKey no acepta el handle de RegLoadAppKey (rc=%2): no se escribe "
+                                        "nada por la clave predefinida, la prueba se corta")
+                             .arg(name)
                              .arg(rc));
             return false;
         }
         m_overridden = true;
 
-        // 1) Lectura (sin riesgo): HKEY_CURRENT_USER tiene que ver la marca del hive.
-        if (readSz(HKEY_CURRENT_USER, QString(), m_marker) != QLatin1String("hive")) {
-            check(false, QStringLiteral("aislamiento: HKEY_CURRENT_USER no ve el hive despues de RegOverridePredefKey: la prueba se corta "
-                                        "sin escribir nada"));
+        // 1) Lectura (sin riesgo): la clave predefinida tiene que ver la marca del hive.
+        if (readSz(m_predef, anchor(), m_marker) != QLatin1String("hive")) {
+            check(false, QStringLiteral("aislamiento %1: la clave predefinida no ve el hive despues de RegOverridePredefKey: la prueba "
+                                        "se corta sin escribir nada")
+                             .arg(name));
             return false;
         }
-        // 2) Escritura por HKEY_CURRENT_USER: tiene que aparecer en el hive y NO en el HKCU real.
+        // 2) Escritura por la clave predefinida: tiene que aparecer en el hive y NO en el real.
         const QString probe = QStringLiteral("LGA_MightyTools_IsolationProbe_") + unique;
-        const bool written = putSz(HKEY_CURRENT_USER, QString(), probe, QStringLiteral("probe"));
-        const bool inHive = valueExists(m_hive, QString(), probe);
+        const bool written = putSz(m_predef, anchor(), probe, QStringLiteral("probe"));
+        const bool inHive = valueExists(m_hive, anchor(), probe);
         const bool inReal = valueExists(m_real, QString(), probe);
         if (inReal) {
             // No deberia pasar nunca (la lectura de arriba ya lo descarto): se borra lo que se filtro.
             HKEY realWrite = nullptr;
-            if (RegOpenCurrentUser(KEY_SET_VALUE, &realWrite) == ERROR_SUCCESS) {
+            const LONG openRc = m_isMachine ? RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE", 0, KEY_SET_VALUE, &realWrite)
+                                            : RegOpenCurrentUser(KEY_SET_VALUE, &realWrite);
+            if (openRc == ERROR_SUCCESS) {
                 deleteRootValue(realWrite, probe);
                 RegCloseKey(realWrite);
             }
         }
         check(written && inHive && !inReal,
-              QStringLiteral("aislamiento: un valor escrito por HKEY_CURRENT_USER aparece en el hive (%1) y NO en el HKCU real (%2)")
-                  .arg(inHive ? QStringLiteral("si") : QStringLiteral("no"), inReal ? QStringLiteral("si") : QStringLiteral("no")));
+              QStringLiteral("aislamiento %1: un valor escrito por la clave predefinida aparece en el hive (%2) y NO en el %1 real (%3)")
+                  .arg(name, inHive ? QStringLiteral("si") : QStringLiteral("no"), inReal ? QStringLiteral("si") : QStringLiteral("no")));
         if (!written || !inHive || inReal) {
             return false;
         }
-        deleteRootValue(m_hive, probe);
+        RegistryHelper::deleteValue(m_hive, anchor(), probe);
         return true;
     }
 
-    // Deshace la redireccion. true si HKEY_CURRENT_USER ya no ve la marca del hive.
+    // Deshace la redireccion. true si la clave predefinida ya no ve la marca del hive.
     bool restore()
     {
         if (!m_overridden) {
             return true;
         }
-        RegOverridePredefKey(HKEY_CURRENT_USER, nullptr);
+        RegOverridePredefKey(m_predef, nullptr);
         m_overridden = false;
-        return !valueExists(HKEY_CURRENT_USER, QString(), m_marker);
+        return !valueExists(m_predef, anchor(), m_marker);
     }
 
     // Deja el hive como recien abierto (solo la marca).
     bool reset()
     {
-        return wipe(m_hive) && putSz(m_hive, QString(), m_marker, QStringLiteral("hive"));
+        return wipe(m_hive) && putSz(m_hive, anchor(), m_marker, QStringLiteral("hive"));
     }
 
 private:
+    QString anchor() const { return m_isMachine ? QStringLiteral("Software") : QString(); }
+
+    HKEY m_predef = HKEY_CURRENT_USER;
+    bool m_isMachine = false;
     QString m_path;
     QString m_baseName;
     QString m_marker;
@@ -646,6 +682,346 @@ void scenarioOldClientLeftovers(HiveSession &session, const Check &check)
     check(end == base, QStringLiteral("4 el hive vuelve a lo sembrado%1").arg(describeDiff(base, end)));
 }
 
+// ---- 5. Mudanza del cliente viejo (--migrate-openinnukex / --remove-old-client), con HKCU y HKLM
+//         redirigidos a hives privados y el settings.ini en una carpeta temporal.
+
+QByteArray fileDigest(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QByteArrayLiteral("<no existe>");
+    }
+    return QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256).toHex();
+}
+
+class MigrationFixture
+{
+public:
+    MigrationFixture(HiveSession &cu, HiveSession &lm, const QString &settingsFile)
+        : m_cu(cu)
+        , m_lm(lm)
+        , m_settingsFile(settingsFile)
+    {
+    }
+
+    HKEY cu() const { return m_cu.hive(); }
+    HKEY lm() const { return m_lm.hive(); }
+    QString settingsFile() const { return m_settingsFile; }
+
+    // Hives como recien abiertos, con lo ajeno alrededor, y sin settings.ini.
+    bool reset()
+    {
+        QFile::remove(m_settingsFile);
+        bool ok = m_cu.reset() && seedForeign(cu()) && m_lm.reset();
+        ok &= putSz(lm(), QStringLiteral("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ForeignApp"),
+                    QStringLiteral("DisplayName"), QStringLiteral("Foreign App"));
+        ok &= putSz(lm(), QStringLiteral("Software\\Classes\\.nk"), QString(), QStringLiteral("Foreign.Machine.Nk"));
+        return ok;
+    }
+
+    // La clave de desinstalacion del cliente viejo en la vista `where` ("HKLM", "WOW", "HKCU").
+    bool seedInstalled(const QString &where, const QString &displayName = QStringLiteral("LGA OpenInNukeX version 1.83"),
+                       const QString &uninstallString = QStringLiteral("\"C:\\Program Files\\LGA\\OpenInNukeX\\unins000.exe\""))
+    {
+        const HKEY root = where == QLatin1String("HKCU") ? cu() : lm();
+        const QString key = where == QLatin1String("WOW") ? kOldUninstallWow : kOldUninstall64;
+        bool ok = putSz(root, key, QStringLiteral("DisplayName"), displayName);
+        ok &= putSz(root, key, QStringLiteral("UninstallString"), uninstallString);
+        ok &= putSz(root, key, QStringLiteral("DisplayIcon"), QStringLiteral("C:\\Program Files\\LGA\\OpenInNukeX\\LGA_OpenInNukeX.exe"));
+        ok &= putSz(root, key, QStringLiteral("InstallLocation"), QStringLiteral("C:\\Program Files\\LGA\\OpenInNukeX\\"));
+        return ok;
+    }
+
+    // Lo que dejaba el cliente viejo en HKCU al asociar: el ProgID compartido con SU comando, la
+    // clase de .nk y la eleccion del usuario (UserChoice) apuntando al ProgID.
+    bool seedProgId(const QString &exe, const QString &userChoiceProgId = kNkProgIdName)
+    {
+        bool ok = putSz(cu(), kNkProgId, QString(), QStringLiteral("Nuke Script File"));
+        ok &= putSz(cu(), kNkProgId + QStringLiteral("\\shell\\open\\command"), QString(), quoted(exe) + QStringLiteral(" \"%1\""));
+        ok &= putSz(cu(), kNkProgId + QStringLiteral("\\DefaultIcon"), QString(),
+                    QStringLiteral("\"C:\\Program Files\\LGA\\OpenInNukeX\\app_icon.ico\",0"));
+        ok &= putSz(cu(), kNkClass, QString(), kNkProgIdName);
+        ok &= putSz(cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId"), userChoiceProgId);
+        ok &= putSz(cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("Hash"), QStringLiteral("legacy="));
+        return ok;
+    }
+
+    // Restos del cliente viejo en HKCU (sus Capabilities con el icono al exe `exe`).
+    bool seedOldCaps(const QString &exe)
+    {
+        bool ok = putSz(cu(), kOldCaps, QStringLiteral("ApplicationName"), QStringLiteral("LGA OpenInNukeX"));
+        ok &= putSz(cu(), kOldCaps, QStringLiteral("ApplicationIcon"), quoted(exe) + QStringLiteral(",0"));
+        ok &= putSz(cu(), kRegApps, QStringLiteral("OpenInNukeX"), kOldCaps);
+        return ok;
+    }
+
+    QVariant setting(const QString &key) const
+    {
+        FileSettingsStore store;
+        return store.value(key);
+    }
+
+    void setSetting(const QString &key, const QVariant &value)
+    {
+        FileSettingsStore store;
+        store.setValue(key, value);
+    }
+
+private:
+    HiveSession &m_cu;
+    HiveSession &m_lm;
+    QString m_settingsFile;
+};
+
+bool linesContain(const OldClientMigration::Report &report, const QString &text)
+{
+    for (const QString &line : report.lines) {
+        if (line.contains(text)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void scenarioOldClientMigration(HiveSession &cuSession, HiveSession &lmSession, const QString &settingsFile, const Check &check)
+{
+    using namespace OldClientMigration;
+    MigrationFixture f(cuSession, lmSession, settingsFile);
+    const QString own = RegistryHelper::ownExePath();
+    const QString oldExe = QStringLiteral("C:\\Program Files\\LGA\\OpenInNukeX\\LGA_OpenInNukeX.exe");
+    const QString missingOld = QDir::toNativeSeparators(
+        QDir::tempPath() + QStringLiteral("/LGA_MightyTools_selftest_missing_%1/LGA_OpenInNukeX.exe").arg(QCoreApplication::applicationPid()));
+    const QString otherCopy =
+        QDir::toNativeSeparators(QFileInfo(own).absolutePath() + QStringLiteral("/other_copy/LGA_MightyTools.exe"));
+    const QString enabledKey = QStringLiteral("modules/openInNukeX/enabled");
+    const QString markKey = QStringLiteral("migration/openInNukeX");
+    const QString nkCommand = kNkProgId + QStringLiteral("\\shell\\open\\command");
+    const Options real; // registro y settings de verdad (en los hives y la carpeta temporal)
+
+    // Pura: el UninstallString.
+    QString exe;
+    QString args;
+    check(splitUninstallString(QStringLiteral("\"C:\\Program Files\\LGA\\OpenInNukeX\\unins000.exe\" /LOG"), &exe, &args)
+              && exe == QLatin1String("C:\\Program Files\\LGA\\OpenInNukeX\\unins000.exe") && args == QLatin1String("/LOG"),
+          QStringLiteral("5 UninstallString con comillas: exe y argumentos"));
+    check(splitUninstallString(QStringLiteral("C:\\Program Files\\LGA\\OpenInNukeX\\unins000.exe"), &exe, &args)
+              && exe == QLatin1String("C:\\Program Files\\LGA\\OpenInNukeX\\unins000.exe") && args.isEmpty(),
+          QStringLiteral("5 UninstallString sin comillas y con espacios: se corta en el .exe"));
+    check(!splitUninstallString(QStringLiteral("unins000.exe"), &exe, &args) && !splitUninstallString(QStringLiteral("\"C:\\x\\a.bat\""), &exe, &args)
+              && !splitUninstallString(QString(), &exe, &args),
+          QStringLiteral("5 UninstallString relativo, que no es .exe o vacio: no se usa"));
+
+    // 5a. Instalado en HKLM 64 + ProgID del viejo + UserChoice al ProgID. Instalado: sus restos quedan.
+    check(f.reset() && f.seedInstalled(QStringLiteral("HKLM")) && f.seedProgId(oldExe) && f.seedOldCaps(missingOld),
+          QStringLiteral("5a siembra: cliente viejo instalado (HKLM), ProgID a su exe, UserChoice y sus Capabilities"));
+    const Detection d = detect();
+    check(d.isInstalled() && d.installed.first().where == QLatin1String("HKLM") && d.progIdPointsToOldExe
+              && d.installed.first().oldExe == oldExe,
+          QStringLiteral("5a deteccion: HKLM, ProgID al exe viejo y su exe por DisplayIcon"));
+    const QString userChoiceHashBefore = readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("Hash"));
+    const Snapshot lmBefore = snapshot(f.lm());
+    {
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        check(r.failures == 0 && r.moduleEnabledNow && r.nkTaken, QStringLiteral("5a migracion: 0 fallas, modulo prendido y .nk tomados [%1]")
+                                                                      .arg(r.lines.join(QStringLiteral(" / "))));
+    }
+    check(f.setting(enabledKey).toBool() && f.setting(markKey).toString() == QLatin1String("migrated"),
+          QStringLiteral("5a settings: modules/openInNukeX/enabled=true y la marca migration/openInNukeX=migrated"));
+    check(!f.setting(QStringLiteral("app/autoStartDecided")).isValid() && readSz(f.cu(), kRun, QStringLiteral("LGA_MightyTools")).isEmpty(),
+          QStringLiteral("5a sin tocar el inicio con Windows (ni Run ni app/autoStartDecided)"));
+    check(RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own)
+              && readSz(f.cu(), kNkProgId + QStringLiteral("\\DefaultIcon")) == quoted(own) + QStringLiteral(",0")
+              && readSz(f.cu(), kNkClass) == kNkProgIdName
+              && readSz(f.cu(), kNkCaps, QStringLiteral("ApplicationName")) == QLatin1String("Open in NukeX")
+              && readSz(f.cu(), kRegApps, WinFileAssociation::registeredApplicationValue()) == kNkCaps,
+          QStringLiteral("5a C2: registerClasses completo (comando, DefaultIcon, Classes\\.nk, Capabilities, RegisteredApplications)"));
+    check(readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId")) == kNkProgIdName
+              && readSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("Hash")) == userChoiceHashBefore,
+          QStringLiteral("5a UserChoice intacto (no se escribe hash)"));
+    check(RegistryHelper::keyExists(f.cu(), kOldCaps) && readSz(f.cu(), kRegApps, QStringLiteral("OpenInNukeX")) == kOldCaps,
+          QStringLiteral("5a con el cliente viejo instalado sus Capabilities quedan"));
+    const Snapshot lmAfter = snapshot(f.lm());
+    check(lmAfter == lmBefore, QStringLiteral("5a el HKLM no se toca%1").arg(describeDiff(lmBefore, lmAfter)));
+
+    // Idempotencia: segunda corrida, nada cambia (registro ni settings.ini).
+    {
+        const Snapshot cuFirst = snapshot(f.cu());
+        const QByteArray settingsFirst = fileDigest(f.settingsFile());
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot cuSecond = snapshot(f.cu());
+        check(r.failures == 0 && !r.moduleEnabledNow && cuSecond == cuFirst && fileDigest(f.settingsFile()) == settingsFirst,
+              QStringLiteral("5a idempotente: la segunda corrida no cambia el registro ni el settings.ini%1")
+                  .arg(describeDiff(cuFirst, cuSecond)));
+    }
+
+    // 5b. Deteccion en cada vista (sin ProgID: se prende el modulo y el registro no cambia).
+    const QStringList views = {QStringLiteral("HKLM"), QStringLiteral("WOW"), QStringLiteral("HKCU")};
+    for (const QString &view : views) {
+        f.reset();
+        f.seedInstalled(view);
+        const Snapshot cuBefore = snapshot(f.cu());
+        const Snapshot lmB = snapshot(f.lm());
+        const Detection dv = detect();
+        const QString expected = view == QLatin1String("WOW") ? QStringLiteral("HKLM WOW6432Node") : view;
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot cuAfter = snapshot(f.cu());
+        const Snapshot lmA = snapshot(f.lm());
+        check(dv.installed.size() == 1 && dv.installed.first().where == expected && f.setting(enabledKey).toBool() && !r.nkTaken
+                  && cuAfter == cuBefore && lmA == lmB,
+              QStringLiteral("5b instalado en %1: detectado, modulo prendido, sin ProgID no se toca el registro%2")
+                  .arg(expected, describeDiff(cuBefore, cuAfter) + describeDiff(lmB, lmA)));
+    }
+    // DisplayName vacio (Inno puede dejar la clave vacia): no cuenta.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"), QString());
+    check(!detect().hasTrace(), QStringLiteral("5b clave de desinstalacion sin DisplayName: sin rastro"));
+
+    // 5c. Ya desinstalado: ProgID al exe viejo que no existe y sus restos -> se toman los .nk y se
+    //     borran los restos.
+    f.reset();
+    f.seedProgId(missingOld);
+    f.seedOldCaps(missingOld);
+    {
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        check(r.failures == 0 && r.nkTaken && f.setting(enabledKey).toBool() && RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own)
+                  && !RegistryHelper::keyExists(f.cu(), kOldRoot) && readSz(f.cu(), kRegApps, QStringLiteral("OpenInNukeX")).isEmpty(),
+              QStringLiteral("5c desinstalado (ProgID al exe viejo ausente): .nk tomados y restos borrados [%1]")
+                  .arg(r.lines.join(QStringLiteral(" / "))));
+    }
+
+    // 5d. ProgID de OTRA copia de LGA Mighty Tools (aunque no exista): nunca se toca.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"));
+    f.seedProgId(otherCopy);
+    {
+        const Snapshot before = snapshot(f.cu());
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot after = snapshot(f.cu());
+        check(!r.nkTaken && after == before && f.setting(enabledKey).toBool(),
+              QStringLiteral("5d ProgID de otra copia de LGA Mighty Tools: intacto (el modulo igual se prende)%1").arg(describeDiff(before, after)));
+    }
+
+    // 5e. Usuario nuevo sin rastro: nada cambia y el modulo no se prende; la marca queda.
+    for (const QString &command : {QString(), QStringLiteral("C:\\Program Files\\SomethingElse_selftest\\Other.exe")}) {
+        f.reset();
+        if (!command.isEmpty()) {
+            f.seedProgId(command); // otro programa (ausente) con nuestro ProgID: no es rastro del viejo
+        }
+        const Snapshot cuBefore = snapshot(f.cu());
+        const Snapshot lmB = snapshot(f.lm());
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot cuAfter = snapshot(f.cu());
+        const Snapshot lmA = snapshot(f.lm());
+        check(r.failures == 0 && !r.moduleEnabledNow && !f.setting(enabledKey).isValid()
+                  && f.setting(markKey).toString() == QLatin1String("no-trace") && cuAfter == cuBefore && lmA == lmB,
+              QStringLiteral("5e sin rastro%1: nada cambia, modulo sin prender, marca no-trace%2")
+                  .arg(command.isEmpty() ? QString() : QStringLiteral(" (ProgID a otro programa)"),
+                       describeDiff(cuBefore, cuAfter) + describeDiff(lmB, lmA)));
+    }
+
+    // 5f. El usuario apago Open in NukeX: no se vuelve a prender y los .nk no se tocan.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"));
+    f.seedProgId(oldExe);
+    f.setSetting(enabledKey, false);
+    {
+        const Snapshot before = snapshot(f.cu());
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot after = snapshot(f.cu());
+        check(!r.moduleEnabledNow && f.setting(enabledKey).isValid() && !f.setting(enabledKey).toBool() && !r.nkTaken && after == before
+                  && f.setting(markKey).toString() == QLatin1String("migrated"),
+              QStringLiteral("5f Open in NukeX apagado por el usuario: sigue apagado y el registro no cambia%1").arg(describeDiff(before, after)));
+    }
+
+    // 5g. Eleccion de .nk AJENA (UserChoice o UserChoiceLatest de otra app): no se toca nada.
+    for (int latest = 0; latest < 2; ++latest) {
+        f.reset();
+        f.seedInstalled(QStringLiteral("HKLM"));
+        f.seedProgId(oldExe, latest ? kNkProgIdName : QStringLiteral("Foreign.Nk.1"));
+        if (latest) {
+            putSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoiceLatest\\ProgId"), QStringLiteral("ProgId"), QStringLiteral("Foreign.Nk.1"));
+            putSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoiceLatest"), QStringLiteral("Hash"), QStringLiteral("latest="));
+        }
+        const Snapshot before = snapshot(f.cu());
+        FileSettingsStore store;
+        const Report r = migrate(&store, real);
+        const Snapshot after = snapshot(f.cu());
+        check(!r.nkTaken && after == before && f.setting(enabledKey).toBool(),
+              QStringLiteral("5g %1 de otra app: intacto, ProgID y Classes\\.nk sin tocar (queda Apply)%2")
+                  .arg(latest ? QStringLiteral("UserChoiceLatest") : QStringLiteral("UserChoice"), describeDiff(before, after)));
+    }
+
+    // 5h. Arbol de build: el registro solo se loguea.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"));
+    f.seedProgId(missingOld);
+    f.seedOldCaps(missingOld);
+    {
+        Options build;
+        build.buildTree = true;
+        const Snapshot before = snapshot(f.cu());
+        const Snapshot lmB = snapshot(f.lm());
+        FileSettingsStore store;
+        const Report r = migrate(&store, build);
+        const Snapshot after = snapshot(f.cu());
+        check(!r.nkTaken && after == before && snapshot(f.lm()) == lmB && linesContain(r, QStringLiteral("arbol de build")),
+              QStringLiteral("5h arbol de build: el registro no cambia, solo se loguea%1").arg(describeDiff(before, after)));
+    }
+
+    // 5i. Solo log (--dry-run o el escritorio de QA): nada se escribe, tampoco el settings.ini.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"));
+    f.seedProgId(oldExe);
+    {
+        Options dry;
+        dry.dryRun = true;
+        const Snapshot before = snapshot(f.cu());
+        FileSettingsStore store;
+        const Report r = migrate(&store, dry);
+        const Snapshot after = snapshot(f.cu());
+        check(!r.nkTaken && !r.moduleEnabledNow && after == before && !QFile::exists(f.settingsFile()),
+              QStringLiteral("5i solo log: ni registro ni settings.ini%1").arg(describeDiff(before, after)));
+    }
+
+    // 5j. --remove-old-client sin permiso para lanzar (como en toda corrida automatizada): no lanza
+    //     nada, deja la clave de desinstalacion y rehace la toma de .nk.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"));
+    f.seedProgId(oldExe);
+    {
+        Options noLaunch;
+        noLaunch.launchAllowed = false;
+        const Snapshot lmB = snapshot(f.lm());
+        FileSettingsStore store;
+        const Report r = removeOldClient(&store, noLaunch);
+        check(!r.launched && r.stillInstalled && snapshot(f.lm()) == lmB && r.nkTaken && linesContain(r, QStringLiteral("(solo log) lanzaria"))
+                  && RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own),
+              QStringLiteral("5j remove-old-client sin lanzar: no lanza, el HKLM queda y los .nk se retoman [%1]")
+                  .arg(r.lines.join(QStringLiteral(" / "))));
+    }
+    // Un UninstallString que no es un desinstalador de Inno: nunca se usa.
+    f.reset();
+    f.seedInstalled(QStringLiteral("HKLM"), QStringLiteral("LGA OpenInNukeX version 1.83"),
+                    QStringLiteral("\"C:\\Windows\\System32\\cmd.exe\" /c echo"));
+    {
+        Options noLaunch;
+        noLaunch.launchAllowed = false;
+        FileSettingsStore store;
+        const Report r = removeOldClient(&store, noLaunch);
+        check(!r.launched && r.failures >= 1 && linesContain(r, QStringLiteral("no utilizable")),
+              QStringLiteral("5j UninstallString que no es unins*.exe: rechazado sin lanzar nada"));
+    }
+    std::printf("info 5: escritorio del arnes de QA detectado: %s\n", runningOnQaDesktop() ? "si" : "no");
+    f.reset();
+}
+
 } // namespace
 
 namespace RegistryHiveTest {
@@ -656,6 +1032,7 @@ void run(const Check &check)
     const RegistryHelper::ShellNotifySuppression quiet;
     const int suppressed0 = RegistryHelper::ShellNotifySuppression::suppressedCount();
     QString path;
+    QString machinePath;
     bool isolated = false;
     {
         HiveSession session;
@@ -666,12 +1043,45 @@ void run(const Check &check)
             scenarioOthersOwnOurNames(session, check);
             scenarioMigrationAndCoexistence(session, check);
             scenarioOldClientLeftovers(session, check);
+
+            // 5. La mudanza lee el HKLM (clave de desinstalacion del cliente viejo) y escribe el
+            // settings.ini: HKLM a otro hive privado y settings.ini (y %APPDATA%) a una carpeta
+            // temporal. El settings.ini real se compara byte a byte antes y despues.
+            const QString realSettings =
+                QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("settings.ini"));
+            const QByteArray realSettingsBefore = fileDigest(realSettings);
+            QTemporaryDir appData;
+            const QByteArray oldAppData = qgetenv("APPDATA");
+            if (appData.isValid()) {
+                qputenv("APPDATA", QDir::toNativeSeparators(appData.path()).toLocal8Bit());
+                const QString tempSettings = QDir(appData.path()).filePath(QStringLiteral("LGA/LGA_MightyTools/settings.ini"));
+                AppSettings::useFile(tempSettings);
+                {
+                    HiveSession machine(HKEY_LOCAL_MACHINE);
+                    const bool machineIsolated = machine.open(check);
+                    machinePath = machine.path();
+                    if (machineIsolated) {
+                        scenarioOldClientMigration(session, machine, tempSettings, check);
+                        check(machine.restore(), QStringLiteral("hive HKLM: redireccion deshecha (HKEY_LOCAL_MACHINE ya no ve el hive)"));
+                    }
+                } // la guarda del HKLM deshace su redireccion, cierra el hive y borra sus archivos
+                AppSettings::useMemoryOnly();
+                qputenv("APPDATA", oldAppData);
+            } else {
+                check(false, QStringLiteral("5 carpeta temporal para %APPDATA%: no se pudo crear"));
+            }
+            check(fileDigest(realSettings) == realSettingsBefore,
+                  QStringLiteral("5 el settings.ini real no cambio (%1)").arg(realSettings));
             check(session.restore(), QStringLiteral("hive: redireccion deshecha (HKEY_CURRENT_USER ya no ve el hive)"));
         }
     } // la guarda deshace la redireccion (si quedo), cierra el hive y borra sus archivos
-    if (!path.isEmpty()) {
-        check(!QFile::exists(path) && !QFile::exists(path + QStringLiteral(".LOG1")) && !QFile::exists(path + QStringLiteral(".LOG2")),
-              QStringLiteral("hive: el archivo y sus .LOG1/.LOG2 se borraron (%1)").arg(path));
+    for (const QString &hivePath : {path, machinePath}) {
+        if (hivePath.isEmpty()) {
+            continue;
+        }
+        check(!QFile::exists(hivePath) && !QFile::exists(hivePath + QStringLiteral(".LOG1"))
+                  && !QFile::exists(hivePath + QStringLiteral(".LOG2")),
+              QStringLiteral("hive: el archivo y sus .LOG1/.LOG2 se borraron (%1)").arg(hivePath));
     }
     if (!isolated) {
         return; // la falla ya quedo reportada; no se probo nada mas
