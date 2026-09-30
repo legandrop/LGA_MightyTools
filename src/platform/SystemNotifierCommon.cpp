@@ -1,6 +1,7 @@
 #include "platform/SystemNotifier.h"
 
 #include "core/AppSettings.h"
+#include "core/I18n.h"
 
 #include <QDateTime>
 #include <QDebug>
@@ -48,7 +49,8 @@ QString SystemNotifier::toastXml(const Notice &notice, const QString &imagePath)
         }
         xml += QStringLiteral("</input><action content=\"%1\" arguments=\"%2\" activationType=\"foreground\"/>")
                    .arg(esc(notice.button), esc(notice.buttonArguments));
-        xml += QStringLiteral("<action content=\"Dismiss\" arguments=\"dismiss\" activationType=\"system\"/></actions>");
+        xml += QStringLiteral("<action content=\"%1\" arguments=\"dismiss\" activationType=\"system\"/></actions>")
+                   .arg(esc(I18n::tr("Dismiss")));
     }
     xml += QStringLiteral("</toast>");
     return xml;

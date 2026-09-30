@@ -1,6 +1,8 @@
 #ifndef MIGHTYTOOLS_OPENINNUKEX_WINFILEASSOCIATION_H
 #define MIGHTYTOOLS_OPENINNUKEX_WINFILEASSOCIATION_H
 
+#include "modules/openinnukex/ApplyIssue.h"
+
 #include <QString>
 #include <QStringList>
 
@@ -46,7 +48,7 @@ enum class ApplyResult { Success, NeedsUserConfirmation, Failed };
 struct ApplyOutcome
 {
     ApplyResult result = ApplyResult::Failed;
-    QStringList errors;
+    QList<ApplyIssue> issues; ///< codigos, no texto (ver ApplyIssue.h)
 };
 
 /// El ProgID que reutilizamos. Estable para siempre: cambiar de ProgID perderia la eleccion de
@@ -81,8 +83,8 @@ QString registeredApplicationValue();
 
 /// ProgID + Capabilities + RegisteredApplications + `Classes\.nk`, sin UserChoice, sin aviso al
 /// shell y sin selector. Migra el valor `LGA_MightyTools` de versiones anteriores si todavia apunta
-/// a estas Capabilities. Lo usan apply() y el self-test con hive privado. `errors` en ingles (UI).
-bool registerClasses(QStringList *errors);
+/// a estas Capabilities. Lo usan apply() y el self-test con hive privado. `issues`: codigos (ApplyIssue.h).
+bool registerClasses(QList<ApplyIssue> *issues);
 
 /// True si el cliente viejo (LGA OpenInNukeX, instalador Inno con permisos de administrador)
 /// sigue instalado, detectado por su clave de desinstalacion

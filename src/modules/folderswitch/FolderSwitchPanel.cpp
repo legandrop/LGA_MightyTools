@@ -1,4 +1,5 @@
 #include "modules/folderswitch/FolderSwitchPanel.h"
+#include "core/I18n.h"
 
 #include "ui/ShortcutRow.h"
 #include "ui/Theme.h"
@@ -32,6 +33,12 @@ QHBoxLayout *addHead(QVBoxLayout *layout, const QString &title, QWidget *parent)
     return head;
 }
 
+// El origen de la ultima carpeta se guarda en ingles ("Recent", "Explorer", "XYplorer"); aca se traduce al mostrarlo.
+QString sourceLabel(const QString &source)
+{
+    return source == QLatin1String("Recent") ? I18n::tr("Recent") : source;
+}
+
 } // namespace
 
 FolderSwitchPanel::FolderSwitchPanel(QWidget *parent)
@@ -62,9 +69,9 @@ QFrame *FolderSwitchPanel::buildShortcutsCard()
     layout->setSpacing(0);
 
     // "Switch automatically" (canvas: chk(true,'Switch automatically') + caption indentada).
-    m_autoSwitch = new QCheckBox(QStringLiteral("Switch automatically"), card);
+    m_autoSwitch = new QCheckBox(I18n::tr("Switch automatically"), card);
     layout->addWidget(m_autoSwitch);
-    QLabel *autoCaption = Ui::caption(QStringLiteral("When you return to a dialog from the file manager."), card);
+    QLabel *autoCaption = Ui::caption(I18n::tr("When you return to a dialog from the file manager."), card);
     autoCaption->setContentsMargins(kCheckIndent, 3, 0, 0);
     layout->addWidget(autoCaption);
     connect(m_autoSwitch, &QCheckBox::clicked, this, &FolderSwitchPanel::autoSwitchToggled);
@@ -72,15 +79,15 @@ QFrame *FolderSwitchPanel::buildShortcutsCard()
     Ui::addDivider(layout, card);
 
     // Los dos atajos, editables con el lapiz (D-16): mismo componente que Nuke Shortcuts.
-    m_manualRow = new ShortcutRow(QStringLiteral("Manual shortcut"),
-                                  QStringLiteral("Press it inside a file dialog to jump right away."), card);
+    m_manualRow = new ShortcutRow(I18n::tr("Manual shortcut"),
+                                  I18n::tr("Press it inside a file dialog to jump right away."), card);
     layout->addWidget(m_manualRow);
     connect(m_manualRow, &ShortcutRow::shortcutRecorded, this, &FolderSwitchPanel::manualShortcutRecorded);
 
     Ui::addDivider(layout, card);
 
-    m_recentRow = new ShortcutRow(QStringLiteral("Recent folders"),
-                                  QStringLiteral("Press it inside a file dialog to pick a recent folder."), card);
+    m_recentRow = new ShortcutRow(I18n::tr("Recent folders"),
+                                  I18n::tr("Press it inside a file dialog to pick a recent folder."), card);
     layout->addWidget(m_recentRow);
     connect(m_recentRow, &ShortcutRow::shortcutRecorded, this, &FolderSwitchPanel::recentShortcutRecorded);
 
@@ -94,7 +101,7 @@ QFrame *FolderSwitchPanel::buildLastFolderCard()
     layout->setContentsMargins(14, 12, 14, 12);
     layout->setSpacing(0);
 
-    QHBoxLayout *head = addHead(layout, QStringLiteral("Last folder"), card);
+    QHBoxLayout *head = addHead(layout, I18n::tr("Last folder"), card);
     m_lastSourceChip = new Chip(card);
     head->addWidget(m_lastSourceChip, 0, Qt::AlignVCenter);
     m_lastResultChip = new Chip(card);
@@ -131,15 +138,15 @@ void FolderSwitchPanel::setState(const ViewState &state)
     // Tarjeta de estado: solo dos formas (on / paused), sin variante de error -- el atajo tomado se
     // ve en su propia fila, mas abajo (canvas, "Folder Switch · estados").
     if (state.enabled) {
-        m_status->set(QStringLiteral("on"), QStringLiteral("Switching is on"),
-                      QStringLiteral("Dialogs jump to the last folder you used."), QStringLiteral("Pause"),
+        m_status->set(QStringLiteral("on"), I18n::tr("Switching is on"),
+                      I18n::tr("Dialogs jump to the last folder you used."), I18n::tr("Pause"),
                       QString(), QString());
     } else {
         const bool anyShortcutAlive = state.manualRegistered || state.recentRegistered;
-        m_status->set(QStringLiteral("paused"), QStringLiteral("Switching is paused"),
-                      anyShortcutAlive ? QStringLiteral("Only the shortcuts work while paused.")
-                                       : QStringLiteral("Dialogs keep their own folder."),
-                      QStringLiteral("Resume"), QStringLiteral("primary"), QString());
+        m_status->set(QStringLiteral("paused"), I18n::tr("Switching is paused"),
+                      anyShortcutAlive ? I18n::tr("Only the shortcuts work while paused.")
+                                       : I18n::tr("Dialogs keep their own folder."),
+                      I18n::tr("Resume"), QStringLiteral("primary"), QString());
     }
 
     m_autoSwitch->blockSignals(true);
@@ -148,15 +155,15 @@ void FolderSwitchPanel::setState(const ViewState &state)
 
     if (!m_manualRow->isRecording()) {
         m_manualRow->setShortcut(state.manualShortcut);
-        m_manualRow->setExtraChip(state.manualRegistered ? QString() : QStringLiteral("err"), QStringLiteral("In use"));
+        m_manualRow->setExtraChip(state.manualRegistered ? QString() : QStringLiteral("err"), I18n::tr("In use"));
         m_manualRow->setError(state.manualRegistered ? QString()
-                                                     : QStringLiteral("Another app took it. Automatic switching isn't affected."));
+                                                     : I18n::tr("Another app took it. Automatic switching isn't affected."));
     }
     if (!m_recentRow->isRecording()) {
         m_recentRow->setShortcut(state.recentShortcut);
-        m_recentRow->setExtraChip(state.recentRegistered ? QString() : QStringLiteral("err"), QStringLiteral("In use"));
+        m_recentRow->setExtraChip(state.recentRegistered ? QString() : QStringLiteral("err"), I18n::tr("In use"));
         m_recentRow->setError(state.recentRegistered ? QString()
-                                                     : QStringLiteral("Another app took it. The other shortcut isn't affected."));
+                                                     : I18n::tr("Another app took it. The other shortcut isn't affected."));
     }
 
     updateLastFolderCard();
@@ -170,9 +177,9 @@ void FolderSwitchPanel::updateLastFolderCard()
     m_lastTimeLabel->setVisible(valid);
 
     if (valid) {
-        m_lastSourceChip->set(QStringLiteral("src"), m_state.lastSwitch.source);
+        m_lastSourceChip->set(QStringLiteral("src"), sourceLabel(m_state.lastSwitch.source));
         m_lastResultChip->set(m_state.lastSwitch.applied ? QStringLiteral("ok") : QStringLiteral("err"),
-                              m_state.lastSwitch.applied ? QStringLiteral("Applied") : QStringLiteral("Not applied"));
+                              m_state.lastSwitch.applied ? I18n::tr("Applied") : I18n::tr("Not applied"));
         m_lastTimeLabel->setText(m_state.lastSwitch.when.toString(QStringLiteral("HH:mm")));
         const QString nativePath = QDir::toNativeSeparators(m_state.lastSwitch.path);
         Ui::setStyleProperty(m_lastFieldValue, "empty", false);
@@ -180,17 +187,18 @@ void FolderSwitchPanel::updateLastFolderCard()
         m_lastFieldValue->setToolTip(nativePath);
     } else {
         Ui::setStyleProperty(m_lastFieldValue, "empty", true);
-        m_lastFieldValue->setText(QStringLiteral("No folder yet"));
+        m_lastFieldValue->setText(I18n::tr("No folder yet"));
         m_lastFieldValue->setToolTip(QString());
     }
 
     QString caption;
     QString tone;
     if (!valid) {
-        caption = QStringLiteral("Open a folder in Explorer, then go to a file dialog.");
+        caption = I18n::tr("Open a folder in Explorer, then go to a file dialog.");
     } else if (!m_state.lastSwitch.applied) {
-        caption = m_state.manualRegistered ? QStringLiteral("The dialog didn't take it. Retry with Ctrl+Alt+O.")
-                                           : QStringLiteral("The dialog didn't take it. Pick the folder by hand.");
+        caption = m_state.manualRegistered
+                      ? I18n::tr("The dialog didn't take it. Retry with %1.").arg(m_state.manualShortcut.displayText())
+                                           : I18n::tr("The dialog didn't take it. Pick the folder by hand.");
         tone = QStringLiteral("err");
     }
     m_lastCaption->setText(caption);

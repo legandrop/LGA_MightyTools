@@ -1,4 +1,5 @@
 #include "modules/openinnukex/NukeOpener.h"
+#include "core/I18n.h"
 
 #include "modules/openinnukex/NukeXPath.h"
 #include "modules/openinnukex/OpenInNukeXMessages.h"
@@ -147,7 +148,7 @@ bool NukeOpener::launchNukeXProcess(const QString &nukeExecutablePath, const QSt
         return true;
     }
     if (errorOut) {
-        *errorOut = QStringLiteral("Windows error %1").arg(GetLastError());
+        *errorOut = I18n::tr("Windows error %1").arg(GetLastError());
     }
     return false;
 #else

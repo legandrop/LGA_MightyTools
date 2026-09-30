@@ -1,4 +1,5 @@
 #include "app/TrayMenu.h"
+#include "core/I18n.h"
 
 #include "app/ModuleHost.h"
 
@@ -36,7 +37,7 @@ QAction *sectionTitle(QMenu *menu, const QString &title)
 
 QString trayHeaderText(const ModuleHost *host)
 {
-    return QStringLiteral("Mighty Tools · %1 of %2 on").arg(host->runningCount()).arg(host->descriptors().size());
+    return I18n::tr("Mighty Tools · %1 of %2 on").arg(host->runningCount()).arg(host->descriptors().size());
 }
 
 QString trayTooltip(const ModuleHost *host)
@@ -90,13 +91,13 @@ TrayMenuActions fillTrayMenu(QMenu *menu, ModuleHost *host)
         menu->addSeparator();
     }
 
-    a.settings = menu->addAction(QStringLiteral("Settings..."));
-    a.updates = menu->addAction(QStringLiteral("Check for Updates..."));
+    a.settings = menu->addAction(I18n::tr("Settings..."));
+    a.updates = menu->addAction(I18n::tr("Check for Updates..."));
 #ifndef Q_OS_WIN
     a.updates->setVisible(false);
 #endif
     menu->addSeparator();
-    a.quit = menu->addAction(QStringLiteral("Quit"));
+    a.quit = menu->addAction(I18n::tr("Quit"));
     return a;
 }
 

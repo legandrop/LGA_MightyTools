@@ -78,6 +78,16 @@ public:
     // Comillas simples duplicadas, como PipeSync, para el script de PowerShell.
     static QString escapeForScript(const QString &text);
 
+#ifdef Q_OS_WIN
+    // Solo Windows: el script de PowerShell del toast (con la app anotada y sin anotar) y su forma
+    // -EncodedCommand (UTF-16LE en base64). Expuestos para que el self-test compruebe, sin mostrar
+    // nada, que acentos, enes y comillas llegan enteros.
+    static QString registeredToastScript(const Notice &notice, const QString &imagePath, const QString &exePath);
+    static QString plainToastScript(const QString &title, const QString &body, const QString &imagePath,
+                                    const QString &exePath);
+    static QString encodeCommand(const QString &script);
+#endif
+
     // Lo ultimo que se pidio mostrar (para el log y el self-test).
     struct Last
     {

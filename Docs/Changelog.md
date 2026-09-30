@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.01:
+
+La app estaba solo en inglés. Ahora General > App > Language permite elegir español y la interfaz cambia
+en el acto, sin reiniciar: la ventana se rearma y el menú de la bandeja, la ayuda y los avisos salen en el
+idioma elegido. Cada texto visible pasa por `I18n::tr`, con la tabla en `src/core/I18nSpanish.cpp`; lo que
+falta queda en inglés, y `tools\qa\check_i18n.ps1` y el self-test lo controlan. Los controles propios de
+Qt usan su traducción oficial. De paso se corrigió lo que traducir dejaba a la vista: Apply decidía
+comparando el texto de un chip, había plurales rotos («1 Nuke versions found»), atajos escritos a mano en
+los mensajes y etiquetas en castellano en un error del updater. Apply y la desinstalación del cliente viejo
+siguen en curso aunque se cambie el idioma.
+[ Idioma - Interfaz en español opcional, elegible desde General ]
+
 v1.00:
 
 Primera versión publicada. Disk Space avisaba según un intervalo de chequeo configurable, así que un disco

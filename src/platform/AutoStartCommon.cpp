@@ -1,5 +1,7 @@
 #include "platform/AutoStart.h"
 
+#include "core/I18n.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -55,9 +57,9 @@ bool runsFromDevelopmentTree()
 QString checkboxText()
 {
 #ifdef Q_OS_MACOS
-    return QStringLiteral("Open at login");
+    return I18n::tr("Open at login");
 #else
-    return QStringLiteral("Start with Windows");
+    return I18n::tr("Start with Windows");
 #endif
 }
 

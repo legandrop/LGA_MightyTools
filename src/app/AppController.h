@@ -68,6 +68,9 @@ private:
     // Click en un aviso (ToastActivation): abre el panel de la herramienta, o le pasa el boton.
     void onNoticeClicked(const QString &arguments, const QString &choice);
     void onAutoStartToggled(bool enabled);
+    // Conecta la pagina General (la de hoy: rebuildUi() arma otra) y le carga sus valores.
+    void wireGeneralPage();
+    void onLanguageChangeRequested(const QString &code);
     bool firstRunView() const;
     void quit();
 

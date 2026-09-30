@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.00 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.01 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -82,6 +82,8 @@ set(SOURCES
     src/core/AppSettings.cpp
     src/core/BuildTree.cpp
     src/core/DebugFlags.cpp
+    src/core/I18n.cpp
+    src/core/I18nSpanish.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
     src/modules/diskspace/DiskCard.cpp
@@ -108,6 +110,7 @@ set(SOURCES
     src/modules/openinnukex/OpenInNukeXDescriptor.cpp
     src/modules/openinnukex/OpenInNukeXMessages.cpp
     src/modules/openinnukex/OpenInNukeXModule.cpp
+    src/modules/openinnukex/OpenInNukeXOperations.cpp
     src/modules/openinnukex/OpenInNukeXPanel.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
@@ -173,9 +176,11 @@ set(HEADERS
     src/modules/openinnukex/NukeOpener.h
     src/modules/openinnukex/NukeScanner.h
     src/modules/openinnukex/NukeXPath.h
+    src/modules/openinnukex/ApplyIssue.h
     src/modules/openinnukex/OpenInNukeXDescriptor.h
     src/modules/openinnukex/OpenInNukeXMessages.h
     src/modules/openinnukex/OpenInNukeXModule.h
+    src/modules/openinnukex/OpenInNukeXOperations.h
     src/modules/openinnukex/OpenInNukeXPanel.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h

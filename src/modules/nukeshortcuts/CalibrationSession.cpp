@@ -1,4 +1,5 @@
 #include "modules/nukeshortcuts/CalibrationSession.h"
+#include "core/I18n.h"
 
 #include "modules/nukeshortcuts/ActionRunner.h"
 #include "platform/InputInjector.h"
@@ -50,17 +51,17 @@ CalibrationBubble::CalibrationBubble(QWidget *parent)
 
 void CalibrationBubble::showOverNuke(const QPointF &spot)
 {
-    m_title->setText(QStringLiteral("Click inside the Dope Sheet"));
+    m_title->setText(I18n::tr("Click inside the Dope Sheet"));
     Ui::setStyleProperty(m_title, "tone", QString());
-    m_meta->setText(QStringLiteral("%1% · %2% of Nuke    Esc cancels").arg(qRound(spot.x() * 100)).arg(qRound(spot.y() * 100)));
+    m_meta->setText(I18n::tr("%1% · %2% of Nuke    Esc cancels").arg(qRound(spot.x() * 100)).arg(qRound(spot.y() * 100)));
     adjustSize();
 }
 
 void CalibrationBubble::showOutside(bool rejected)
 {
-    m_title->setText(rejected ? QStringLiteral("That's not Nuke. Try again.") : QStringLiteral("Move over the Nuke window"));
+    m_title->setText(rejected ? I18n::tr("That's not Nuke. Try again.") : I18n::tr("Move over the Nuke window"));
     Ui::setStyleProperty(m_title, "tone", rejected ? QStringLiteral("err") : QString());
-    m_meta->setText(QStringLiteral("Esc cancels"));
+    m_meta->setText(I18n::tr("Esc cancels"));
     adjustSize();
 }
 

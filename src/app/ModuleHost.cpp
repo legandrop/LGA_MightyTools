@@ -3,6 +3,7 @@
 #include "app/HotkeyHub.h"
 #include "app/ModuleContextImpl.h"
 #include "app/SettingsStore.h"
+#include "core/I18n.h"
 #include "platform/ForegroundWatcher.h"
 #include "platform/InputInjector.h"
 
@@ -75,6 +76,20 @@ int ModuleHost::indexOf(const QString &id) const
         }
     }
     return -1;
+}
+
+void ModuleHost::refreshDescriptorTexts(const QList<ModuleDescriptor> &fresh)
+{
+    for (const ModuleDescriptor &update : fresh) {
+        const int index = indexOf(update.id);
+        if (index < 0) {
+            continue;
+        }
+        ModuleDescriptor &d = m_descriptors[index];
+        d.title = update.title;
+        d.description = update.description;
+        d.offBullets = update.offBullets;
+    }
 }
 
 bool ModuleHost::isEnabled(const QString &id) const
@@ -227,7 +242,7 @@ ModuleStatus ModuleHost::status(const QString &id) const
     }
     ModuleStatus off;
     off.tone = ModuleTone::Off;
-    off.text = QStringLiteral("Off");
+    off.text = I18n::trc("tool", "Off");
     return off;
 }
 

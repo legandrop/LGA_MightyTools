@@ -48,6 +48,10 @@ public:
 
     void setFirstRun(bool firstRun);
     void setUpdateState(const UpdateRowState &state);
+    // Vuelve a armar todo el contenido (otro idioma) en la misma pagina. Los paneles de las
+    // herramientas se borran en el acto y se piden de nuevo al verse. La pagina General es otra:
+    // quien la escuchaba se reconecta con rebuilt().
+    void rebuildUi();
     // Captura: estado de prueba del aviso de apagado de una herramienta (offNotice del descriptor).
     void setOffNoticeCaptureState(const QString &id, const QString &state);
 
@@ -56,6 +60,8 @@ signals:
     // El usuario prendio o apago una herramienta (fila, encabezado, "Turn on" o la bienvenida).
     void toggleRequested(const QString &id, bool on);
     void releaseRequested(const QString &id);
+    // rebuildUi() termino: generalPage() es un objeto nuevo.
+    void rebuilt();
 
 protected:
     void closeEvent(QCloseEvent *event) override;

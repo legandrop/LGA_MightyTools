@@ -1,4 +1,5 @@
 #include "modules/nukeshortcuts/NukeShortcutsState.h"
+#include "core/I18n.h"
 
 #include "app/ModuleContext.h"
 
@@ -76,7 +77,7 @@ QString NukeShortcutsState::conflictWith(ShortcutAction action) const
 
 QString NukeShortcutsState::actionTitle(ShortcutAction action)
 {
-    return action == ShortcutAction::AddKeyframe ? QStringLiteral("Add keyframe") : QStringLiteral("Frame Dope Sheet");
+    return action == ShortcutAction::AddKeyframe ? I18n::tr("Add keyframe") : I18n::tr("Frame Dope Sheet");
 }
 
 void NukeShortcutsState::writeValue(const QString &key, const QVariant &value)

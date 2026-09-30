@@ -1,10 +1,12 @@
 #include "qa/UiShot.h"
 
+#include "app/GeneralPage.h"
 #include "app/MainWindow.h"
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
 #include "app/TrayMenu.h"
+#include "core/I18n.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskState.h"
 #include "ui/HelpDialog.h"
@@ -32,10 +34,12 @@
 #include <QSpinBox>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPixmap>
 #include <QSaveFile>
 #include <QScopedPointer>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <qpa/qwindowsysteminterface.h>
 
@@ -464,6 +468,15 @@ int runUiShot(const QStringList &args)
         if (auto *label = qobject_cast<QLabel *>(widget)) {
             entry.insert(QStringLiteral("text"), label->text().left(80));
             entry.insert(QStringLiteral("font"), fontOf(widget));
+            // Para detectar textos cortados (un idioma mas largo): el ancho del texto en una linea contra el
+            // ancho del label. Solo sin ajuste de linea y sin texto enriquecido.
+            if (!label->wordWrap() && label->textFormat() != Qt::RichText && !label->text().contains(QLatin1Char('<'))) {
+                const int textWidth = label->fontMetrics().horizontalAdvance(label->text());
+                const QMargins margins = label->contentsMargins();
+                const int room = label->width() - margins.left() - margins.right();
+                entry.insert(QStringLiteral("textWidth"), textWidth);
+                entry.insert(QStringLiteral("clipped"), textWidth > room);
+            }
         } else if (auto *button = qobject_cast<QAbstractButton *>(widget)) {
             entry.insert(QStringLiteral("text"), button->text().left(80));
             entry.insert(QStringLiteral("checked"), button->isChecked());
@@ -552,6 +565,125 @@ int runMatchWordsProbe()
     return failures == 0 ? 0 : 1;
 }
 
+int runRebuildProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    QStringList ids;
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        ids << d.id;
+        if (d.id != QLatin1String("linkRedirector") && !enable(host, d.id, QString())) {
+            fprintf(stderr, "no se pudo construir %s\n", qPrintable(d.id));
+            return 1;
+        }
+    }
+    MainWindow w(&host, MainWindow::Mode::Capture, nullptr);
+    w.setAttribute(Qt::WA_DontShowOnScreen, true);
+    int rebuilt = 0;
+    QObject::connect(&w, &MainWindow::rebuilt, [&rebuilt]() { ++rebuilt; });
+    w.show();
+    settle(w);
+    const auto labelTexts = [&w]() {
+        QStringList out;
+        for (QLabel *l : w.findChildren<QLabel *>()) {
+            out << l->text();
+        }
+        return out;
+    };
+    for (int round = 0; round < 6; ++round) {
+        const bool es = round % 2 == 0;
+        I18n::setLanguage(es ? I18n::Language::Spanish : I18n::Language::English);
+        host.refreshDescriptorTexts(ModuleRegistry::all());
+        // Como AppController: fuera de la senal, por un timer.
+        QTimer::singleShot(0, &w, [&w]() { w.rebuildUi(); });
+        for (int i = 0; i < 5; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+        settle(w);
+        check(rebuilt == round + 1, QStringLiteral("ronda %1: rebuilt emitido (%2)").arg(round).arg(rebuilt));
+        check(w.generalPage() != nullptr, QStringLiteral("ronda %1: hay pagina General nueva").arg(round));
+        const QStringList texts = labelTexts();
+        check(texts.contains(es ? QStringLiteral("Idioma") : QStringLiteral("Language")),
+              QStringLiteral("ronda %1: rotulo del idioma en %2").arg(round).arg(es ? "es" : "en"));
+        check(!texts.contains(es ? QStringLiteral("Language") : QStringLiteral("Idioma")),
+              QStringLiteral("ronda %1: sin restos del otro idioma").arg(round));
+        for (const QString &id : ids) {
+            w.selectPage(id);
+            settle(w);
+            check(w.currentPage() == id, QStringLiteral("ronda %1: pagina %2").arg(round).arg(id));
+            QPixmap pm = w.grab();
+            check(!pm.isNull(), QStringLiteral("ronda %1: %2 se pinta").arg(round).arg(id));
+        }
+        w.selectPage(QStringLiteral("general"));
+        settle(w);
+        w.grab();
+    }
+    // Con una pagina de herramienta elegida, con estado de update y con el primer arranque.
+    I18n::setLanguage(I18n::Language::English);
+    host.refreshDescriptorTexts(ModuleRegistry::all());
+    w.rebuildUi();
+    w.selectPage(QStringLiteral("nukeShortcuts"));
+    w.setUpdateState(UpdateRowState{UpdateRowState::Kind::Available, QStringLiteral("1.01")});
+    settle(w);
+    I18n::setLanguage(I18n::Language::Spanish);
+    host.refreshDescriptorTexts(ModuleRegistry::all());
+    w.rebuildUi();
+    settle(w);
+    check(w.currentPage() == QLatin1String("nukeShortcuts"), QStringLiteral("la pagina elegida sobrevive al rearmado"));
+    check(labelTexts().contains(QStringLiteral("Atajos")), QStringLiteral("el panel de la herramienta sale en espanol (%1)").arg(labelTexts().join(QStringLiteral("|")).left(200)));
+    w.selectPage(QStringLiteral("general"));
+    settle(w);
+    check(labelTexts().contains(QStringLiteral("v1.01 disponible")) , QStringLiteral("el estado de update sobrevive (%1)").arg(labelTexts().filter(QStringLiteral("v1.0")).join(QStringLiteral("|"))));
+    w.setFirstRun(true);
+    w.rebuildUi();
+    settle(w);
+    check(w.generalPage()->firstRun(), QStringLiteral("el primer arranque sobrevive"));
+    check(labelTexts().contains(QStringLiteral("LGA Mighty Tools")), QStringLiteral("la bienvenida sale"));
+    // Apagar y prender una herramienta despues de rearmar (el host y la ventana siguen de la mano).
+    host.setEnabled(QStringLiteral("diskSpace"), false);
+    settle(w);
+    w.selectPage(QStringLiteral("diskSpace"));
+    settle(w);
+    check(labelTexts().contains(QStringLiteral("Disk Space está apagada")), QStringLiteral("apagar despues de rearmar no rompe"));
+    // La traduccion de Qt (qtbase_es.qm, instalada con el idioma): botones estandar y menu contextual de los
+    // campos salen en espanol, y vuelven a ingles con el idioma.
+    const auto qtTexts = []() {
+        QMessageBox box;
+        box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+        QLineEdit edit;
+        QStringList menuTexts;
+        QMenu *menu = edit.createStandardContextMenu();
+        for (QAction *action : menu->actions()) {
+            menuTexts << action->text();
+        }
+        delete menu;
+        return QStringList{box.button(QMessageBox::Ok)->text(), box.button(QMessageBox::Cancel)->text(),
+                           menuTexts.join(QLatin1Char('|'))};
+    };
+    I18n::setLanguage(I18n::Language::Spanish);
+    const QStringList es = qtTexts();
+    check(es.at(0) == QStringLiteral("Aceptar") && es.at(1) == QStringLiteral("Cancelar")
+              && es.at(2).contains(QStringLiteral("Deshacer")) && es.at(2).contains(QStringLiteral("Pegar")),
+          QStringLiteral("Qt en espanol: botones y menu contextual (%1)").arg(es.join(QStringLiteral(" / "))));
+    I18n::setLanguage(I18n::Language::English);
+    const QStringList en = qtTexts();
+    check(en.at(0) == QStringLiteral("OK") && en.at(1) == QStringLiteral("Cancel")
+              && en.at(2).contains(QStringLiteral("Undo")),
+          QStringLiteral("Qt de vuelta en ingles (%1)").arg(en.join(QStringLiteral(" / "))));
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "rebuild-probe ok" : "rebuild-probe FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -560,6 +692,9 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
+    if (probe == QLatin1String("rebuild-lang")) {
+        return runRebuildProbe();
+    }
     if (probe == QLatin1String("match-words-typing")) {
         return runMatchWordsProbe();
     }

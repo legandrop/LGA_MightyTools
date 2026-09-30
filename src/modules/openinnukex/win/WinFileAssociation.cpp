@@ -1,5 +1,6 @@
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #include "modules/openinnukex/win/UserChoiceLatest.h"
+#include "core/I18n.h"
 
 #include "platform/win/RegistryHelper.h"
 
@@ -299,25 +300,25 @@ bool isNkAssociatedWithUs()
     return RegistryHelper::commandPointsTo(progIdCommand(), RegistryHelper::ownExePath());
 }
 
-bool registerClasses(QStringList *errors)
+bool registerClasses(QList<ApplyIssue> *issues)
 {
     bool ok = true;
     if (!registerProgId()) {
         ok = false;
-        if (errors) {
-            *errors << QStringLiteral("Could not register the ProgID.");
+        if (issues) {
+            *issues << ApplyIssue::RegisterProgId;
         }
     }
     if (!registerDefaultAppCapabilities()) {
         ok = false;
-        if (errors) {
-            *errors << QStringLiteral("Could not register the app in Default apps.");
+        if (issues) {
+            *issues << ApplyIssue::RegisterDefaultApps;
         }
     }
     if (!registerExtensionClass(w(kExtensionW), progId())) {
         ok = false;
-        if (errors) {
-            *errors << QStringLiteral("Could not register the .nk extension.");
+        if (issues) {
+            *issues << ApplyIssue::RegisterExtension;
         }
     }
     return ok;
@@ -413,25 +414,25 @@ ApplyOutcome apply(bool reapply, HWND parentHwnd)
     // A4: restos del cliente viejo de Open in NukeX, solo aca (el usuario apreto Apply).
     removeOldClientLeftovers(isOldClientInstalled());
 
-    // outcome.errors es lo que el usuario ve en "Association finished with warnings"
-    // (OpenInNukeXMessages::associationFinishedWithWarnings): va en INGLES. El detalle tecnico en
+    // outcome.issues son CODIGOS: el texto que el usuario ve en "Association finished with warnings"
+    // (OpenInNukeXMessages::applyIssueText) se arma en el hilo de la UI, no aca. El detalle tecnico en
     // castellano (rc de la API, el motivo exacto de UserChoiceLatest) queda solo en el log, via
     // qWarning/qInfo de mas abajo y de writeUserChoice().
     if (reapply) {
         if (!cleanConflictingKeys()) {
-            outcome.errors << QStringLiteral("Could not clean up the registry.");
+            outcome.issues << ApplyIssue::CleanRegistry;
         }
         QThread::msleep(500);
     }
 
-    registerClasses(&outcome.errors);
+    registerClasses(&outcome.issues);
 
     QString reason;
     const bool associationWritten = writeUserChoice(w(kExtensionW), progId(), &reason);
     if (!associationWritten) {
         // `reason` (el motivo tecnico de UserChoiceLatest, en castellano) ya quedo en el log
         // dentro de writeUserChoice(): no se le agrega crudo al mensaje que ve el usuario.
-        outcome.errors << QStringLiteral("Could not write the .nk association.");
+        outcome.issues << ApplyIssue::WriteAssociation;
     }
 
     RegistryHelper::notifyAssociationsChanged();
@@ -451,10 +452,10 @@ ApplyOutcome apply(bool reapply, HWND parentHwnd)
     }
 
     if (!openDefaultAppsSettings()) {
-        outcome.errors << QStringLiteral("Could not open Windows Default apps.");
+        outcome.issues << ApplyIssue::OpenDefaultApps;
     }
 
-    outcome.result = (!outcome.errors.isEmpty() && !pickerLaunched) ? ApplyResult::Failed
+    outcome.result = (!outcome.issues.isEmpty() && !pickerLaunched) ? ApplyResult::Failed
                                                                      : ApplyResult::NeedsUserConfirmation;
     return outcome;
 }
@@ -503,7 +504,7 @@ bool releaseAssociation(QString *error)
             << "| RegisteredApplications:" << o.registeredOwned << "/" << o.legacyRegisteredOwned << "| ok:" << ok;
 
     if (!ok && error) {
-        *error = QStringLiteral("Could not remove all the association keys.");
+        *error = I18n::tr("Could not remove all the association keys.");
     }
     return ok;
 }

@@ -1,6 +1,7 @@
 #include "ui/HelpDialog.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
+#include "core/I18n.h"
 
 #include <QEvent>
 #include <QFrame>
@@ -61,7 +62,7 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     : QDialog(parent)
 {
     setObjectName(QStringLiteral("helpDialog"));
-    setWindowTitle(QStringLiteral("Help"));
+    setWindowTitle(I18n::tr("Help"));
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setFixedWidth(DIALOG_WIDTH);
@@ -81,13 +82,13 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     titleRow->addStretch(1);
     auto *close = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     Ui::setIcon(close, Icon::X, Theme::color(Theme::kIcon));
-    close->setToolTip(QStringLiteral("Close"));
+    close->setToolTip(I18n::tr("Close"));
     titleRow->addWidget(close, 0, Qt::AlignVCenter);
     header->addLayout(titleRow);
     // En el canvas el bloque de abajo sube 8 sobre los 14 de separacion (quedan 6) sobre una fila de
     // 24; aca la fila mide 26 por el boton de cerrar: 4.
     header->addSpacing(4);
-    header->addWidget(Ui::label(QStringLiteral("Developed by Lega Pugliese"), "helpDeveloped", this));
+    header->addWidget(Ui::label(I18n::tr("Developed by Lega Pugliese"), "helpDeveloped", this));
     auto *link = new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), this);
     link->setObjectName(QStringLiteral("helpLink"));
     header->addWidget(link);
@@ -144,12 +145,11 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
         bodyLayout->addLayout(block);
     }
 #ifdef Q_OS_MACOS
-    const QString where = QStringLiteral("the menu bar");
+    const QString closeNote = I18n::tr("Closing the window keeps LGA Mighty Tools running in the menu bar.");
 #else
-    const QString where = QStringLiteral("the tray");
+    const QString closeNote = I18n::tr("Closing the window keeps LGA Mighty Tools running in the tray.");
 #endif
-    auto *note = Ui::label(QStringLiteral("Closing the window keeps LGA Mighty Tools running in %1.").arg(where),
-                           "helpNote", body);
+    auto *note = Ui::label(closeNote, "helpNote", body);
     note->setWordWrap(true);
     bodyLayout->addWidget(note);
     bodyLayout->addStretch(1);
@@ -158,7 +158,7 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
 
     auto *buttons = new QHBoxLayout();
     buttons->addStretch(1);
-    auto *closeButton = Ui::button(QStringLiteral("Close"), QString(), QString(), this);
+    auto *closeButton = Ui::button(I18n::tr("Close"), QString(), QString(), this);
     closeButton->setObjectName(QStringLiteral("closeButton"));
     buttons->addWidget(closeButton);
     layout->addLayout(buttons);

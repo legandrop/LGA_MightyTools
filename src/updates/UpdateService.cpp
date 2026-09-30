@@ -2,6 +2,8 @@
 #include "updates/VersionCompare.h"
 #include "updates/UpdateDialog.h"
 
+#include "core/I18n.h"
+
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDebug>
@@ -204,8 +206,8 @@ void UpdateService::checkForUpdates(bool manual)
     const Mode mode = manual ? Mode::Manual : Mode::Automatic;
     if (m_busy) {
         if (manual) {
-            QMessageBox::information(parentWindow(), tr("Updates"),
-                                     tr("An update operation is already in progress."));
+            QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+                I18n::tr("An update operation is already in progress."));
         }
         return;
     }
@@ -220,7 +222,8 @@ void UpdateService::checkInline()
         return;
     }
     if (m_busy) {
-        QMessageBox::information(parentWindow(), tr("Updates"), tr("An update operation is already in progress."));
+        QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+            I18n::tr("An update operation is already in progress."));
         return;
     }
     m_busy = true;
@@ -233,7 +236,8 @@ void UpdateService::installAvailable()
         return;
     }
     if (m_busy) {
-        QMessageBox::information(parentWindow(), tr("Updates"), tr("An update operation is already in progress."));
+        QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+            I18n::tr("An update operation is already in progress."));
         return;
     }
     m_busy = true;
@@ -293,12 +297,12 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         emit checkFailed();
         if (manual) {
-            QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
-                                 tr("Could not check for updates. Please try again later.\n\n"
-                                    "httpStatus=%1\nurl=%2\nnetworkError=%3\nbody=%4")
-                                     .arg(QString::number(httpStatus), kManifestUrl,
-                                          QString::number(static_cast<int>(error)),
-                                          QString::fromUtf8(payload.left(2048))));
+            QMessageBox::warning(parentWindow(), I18n::tr("Update Check Failed"),
+                I18n::tr("Could not check for updates. Please try again later.\n\n"
+                   "httpStatus=%1\nurl=%2\nnetworkError=%3\nbody=%4")
+                    .arg(QString::number(httpStatus), kManifestUrl,
+                         QString::number(static_cast<int>(error)),
+                         QString::fromUtf8(payload.left(2048))));
         }
         return;
     }
@@ -312,11 +316,11 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         emit checkFailed();
         if (manual) {
-            QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
-                                 tr("Could not check for updates. Please try again later.\n\n"
-                                    "httpStatus=%1\nurl=%2\nbody=%3")
-                                     .arg(QString::number(httpStatus), kManifestUrl,
-                                          QString::fromUtf8(payload.left(2048))));
+            QMessageBox::warning(parentWindow(), I18n::tr("Update Check Failed"),
+                I18n::tr("Could not check for updates. Please try again later.\n\n"
+                   "httpStatus=%1\nurl=%2\nbody=%3")
+                    .arg(QString::number(httpStatus), kManifestUrl,
+                         QString::fromUtf8(payload.left(2048))));
         }
         return;
     }
@@ -327,8 +331,8 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         emit checkFailed();
         if (manual) {
-            QMessageBox::information(parentWindow(), tr("Updates"),
-                                     tr("No installable update was found."));
+            QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+                I18n::tr("No installable update was found."));
         }
         return;
     }
@@ -338,9 +342,9 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         emit checkFailed();
         if (manual) {
-            QMessageBox::information(parentWindow(), tr("Updates"),
-                                     tr("Release %1 does not contain an installable asset.")
-                                         .arg(info.version));
+            QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+                I18n::tr("Release %1 does not contain an installable asset.")
+                    .arg(info.version));
         }
         return;
     }
@@ -352,8 +356,8 @@ void UpdateService::onCheckFinished(Mode mode)
         // La fila de General lo dice sin cartel (D-13); el menu de la bandeja sigue con su cartel.
         emit upToDate(QApplication::applicationVersion());
         if (mode == Mode::Manual) {
-            QMessageBox::information(parentWindow(), tr("Updates"),
-                                     tr("You are running the latest version."));
+            QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+                I18n::tr("You are running the latest version."));
         }
         return;
     }
@@ -368,10 +372,10 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         emit checkFailed();
         if (manual) {
-            QMessageBox::warning(parentWindow(), tr("Update Check Failed"),
-                                 tr("Release %1 does not include a valid integrity digest. "
-                                    "Refusing to download an unverifiable installer.")
-                                     .arg(info.version));
+            QMessageBox::warning(parentWindow(), I18n::tr("Update Check Failed"),
+                I18n::tr("Release %1 does not include a valid integrity digest. "
+                   "Refusing to download an unverifiable installer.")
+                    .arg(info.version));
         }
         return;
     }
@@ -426,8 +430,8 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
         QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
             .filePath(QStringLiteral("LGA_MightyTools_updates"));
     if (!QDir().mkpath(updateDir)) {
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The update cache directory could not be created."));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update cache directory could not be created."));
         // Salida real del flujo: no hay descarga que vaya a liberar m_busy despues.
         m_busy = false;
         return;
@@ -443,8 +447,8 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
     if (!m_downloadFile->open(QIODevice::WriteOnly)) {
         const QString detail = m_downloadFile->errorString();
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The update installer could not be saved.\n%1").arg(detail));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update installer could not be saved.\n%1").arg(detail));
         // Idem: salida real, sin descarga en vuelo que libere m_busy mas adelante.
         m_busy = false;
         return;
@@ -452,8 +456,8 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
     m_downloadHash = new QCryptographicHash(QCryptographicHash::Sha256);
 
     m_progressDialog = new QProgressDialog(
-        tr("Downloading %1 %2...").arg(kDisplayName, version), tr("Cancel"), 0, 0, parentWindow());
-    m_progressDialog->setWindowTitle(tr("Downloading Update"));
+        I18n::tr("Downloading %1 %2...").arg(kDisplayName, version), I18n::tr("Cancel"), 0, 0, parentWindow());
+    m_progressDialog->setWindowTitle(I18n::tr("Downloading Update"));
     m_progressDialog->setWindowModality(Qt::WindowModal);
     m_progressDialog->setMinimumDuration(0);
     m_progressDialog->setAutoClose(false);
@@ -582,8 +586,8 @@ void UpdateService::onDownloadFinished()
     if (m_downloadWriteFailed) {
         qDebug() << "[UpdateService] Escritura del instalador a disco fallo (write() corto).";
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The update installer could not be written to disk."));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update installer could not be written to disk."));
         return;
     }
 
@@ -599,8 +603,8 @@ void UpdateService::onDownloadFinished()
                                    .arg(QString::number(httpStatus),
                                         QString::number(static_cast<int>(error)), errorString);
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The update installer could not be downloaded.\n\n%1").arg(detail));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update installer could not be downloaded.\n\n%1").arg(detail));
         return;
     }
 
@@ -611,19 +615,19 @@ void UpdateService::onDownloadFinished()
     Q_ASSERT(!m_pendingSha256Digest.isEmpty());
     if (m_pendingSha256Digest.isEmpty()) {
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("Internal error: missing integrity digest for the downloaded update."));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("Internal error: missing integrity digest for the downloaded update."));
         return;
     }
 
     const QString downloadedDigest = QString::fromLatin1(m_downloadHash->result().toHex());
     if (downloadedDigest.compare(m_pendingSha256Digest, Qt::CaseInsensitive) != 0) {
-        const QString detail = QStringLiteral("esperado=%1\nobtenido=%2")
+        const QString detail = QStringLiteral("expected=%1\ngot=%2")
                                    .arg(m_pendingSha256Digest, downloadedDigest);
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The downloaded update failed integrity verification.\n\n%1")
-                                 .arg(detail));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The downloaded update failed integrity verification.\n\n%1")
+                .arg(detail));
         return;
     }
 
@@ -631,8 +635,8 @@ void UpdateService::onDownloadFinished()
     if (!m_downloadFile->commit()) {
         const QString detail = m_downloadFile->errorString();
         discardPartialDownload();
-        QMessageBox::warning(parentWindow(), tr("Update Failed"),
-                             tr("The update installer could not be saved.\n\n%1").arg(detail));
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update installer could not be saved.\n\n%1").arg(detail));
         return;
     }
 

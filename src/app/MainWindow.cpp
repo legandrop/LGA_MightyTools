@@ -3,6 +3,7 @@
 #include "app/ModuleHost.h"
 #include "app/SettingsStore.h"
 #include "app/WindowParts.h"
+#include "core/I18n.h"
 #include "platform/WindowFrame.h"
 #include "ui/Theme.h"
 #include "ui/TitleBar.h"
@@ -179,6 +180,30 @@ void MainWindow::buildUi()
     setCentralWidget(central);
 }
 
+void MainWindow::rebuildUi()
+{
+    const QString current = m_current.isEmpty() ? kGeneral : m_current;
+    const bool firstRun = m_general && m_general->firstRun();
+    if (QWidget *focused = focusWidget()) {
+        focused->clearFocus();
+    }
+    // En el acto y no con deleteLater: el host guarda cada panel en un QPointer, y recien en nulo
+    // selectPage() le pide uno nuevo, armado en el idioma nuevo.
+    m_items.clear();
+    m_pages.clear();
+    m_generalItem = nullptr;
+    m_general = nullptr;
+    m_generalScroll = nullptr;
+    m_stack = nullptr;
+    m_titleBar = nullptr;
+    delete takeCentralWidget();
+    buildUi();
+    m_general->setFirstRun(firstRun);
+    m_general->setUpdateState(m_updateState);
+    selectPage(current);
+    emit rebuilt();
+}
+
 void MainWindow::selectPage(const QString &id)
 {
     const QString target = (id == kGeneral || m_pages.contains(id)) ? id : kGeneral;
@@ -230,7 +255,12 @@ void MainWindow::syncBody(const QString &id)
         if (d->offNotice) {
             notice = d->offNotice(m_offNoticeStates.value(id, m_mode == Mode::Capture ? QStringLiteral("none") : QString()));
         }
-        auto *off = new OffPanel(*d, notice, page.body);
+        // Las vinetas con datos vivos (un atajo configurado) se piden ahora: no son las del descriptor estatico.
+        ModuleDescriptor shown = *d;
+        if (d->offBulletsFor) {
+            shown.offBullets = d->offBulletsFor(m_host->reader(id));
+        }
+        auto *off = new OffPanel(shown, notice, page.body);
         connect(off, &OffPanel::turnOnRequested, this, [this, id]() { emit toggleRequested(id, true); });
         connect(off, &OffPanel::releaseRequested, this, [this, id]() { emit releaseRequested(id); });
         page.bodyLayout->addWidget(off);
@@ -278,7 +308,7 @@ void MainWindow::refreshItem(const QString &id)
     }
     const bool running = m_host->isRunning(id);
     const ModuleStatus status = m_host->status(id);
-    item->setState(running, running ? status.text : QStringLiteral("Off"), running ? toneName(status.tone) : QString());
+    item->setState(running, running ? status.text : I18n::trc("tool", "Off"), running ? toneName(status.tone) : QString());
 }
 
 void MainWindow::refreshGeneralItem()
@@ -286,9 +316,9 @@ void MainWindow::refreshGeneralItem()
     QString text = QStringLiteral("v" MIGHTYTOOLS_VERSION);
     QString tone;
     if (m_updateState.kind == UpdateRowState::Kind::Latest) {
-        text += QStringLiteral(" · up to date");
+        text = I18n::tr("v%1 · up to date").arg(QStringLiteral(MIGHTYTOOLS_VERSION));
     } else if (m_updateState.kind == UpdateRowState::Kind::Available) {
-        text = QStringLiteral("v%1 is available").arg(m_updateState.version);
+        text = I18n::tr("v%1 is available").arg(m_updateState.version);
         tone = QStringLiteral("warn");
     }
     m_generalItem->setState(true, text, tone);

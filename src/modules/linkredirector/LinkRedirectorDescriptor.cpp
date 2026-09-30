@@ -5,6 +5,7 @@
 #include "modules/linkredirector/BrowserDetection.h"
 #include "modules/linkredirector/BrowserRegistration.h"
 #include "core/AppSettings.h"
+#include "core/I18n.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -100,10 +101,10 @@ ModuleOffNotice linkRedirectorOffNotice(const QString &captureState)
     if (!stillSendingLinksHere) {
         return notice;
     }
-    notice.title = QStringLiteral("Windows still sends links here");
-    notice.caption = QStringLiteral("They open in %1, your default browser in this tool.")
-        .arg(browserName.isEmpty() ? QStringLiteral("your default browser") : browserName);
-    notice.actionText = QStringLiteral("Remove as browser");
+    notice.title = I18n::tr("Windows still sends links here");
+    notice.caption = browserName.isEmpty() ? I18n::tr("They open in your default browser in this tool.")
+                                           : I18n::tr("They open in %1, your default browser in this tool.").arg(browserName);
+    notice.actionText = I18n::tr("Remove as browser");
     return notice;
 }
 
@@ -300,12 +301,12 @@ ModuleDescriptor linkRedirectorDescriptor()
     ModuleDescriptor d;
     d.id = QStringLiteral("linkRedirector");
     d.title = QStringLiteral("Link Redirector");
-    d.description = QStringLiteral(
+    d.description = I18n::tr(
         "Opens each link in the right browser: links with your keywords go to the alternative browser.");
     d.offBullets = {
-        QStringLiteral("Becomes the system default browser"),
-        QStringLiteral("Routes each link by keyword"),
-        QStringLiteral("Everything else opens in your default browser"),
+        I18n::tr("Becomes the system default browser"),
+        I18n::tr("Routes each link by keyword"),
+        I18n::tr("Everything else opens in your default browser"),
     };
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = paintForkIcon;
@@ -333,11 +334,11 @@ HelpSection linkRedirectorHelp(const SettingsReader &value)
     HelpSection section;
     section.title = QStringLiteral("Link Redirector");
     section.steps = {
-        QStringLiteral("Press %1 so links come to Mighty Tools.").arg(HelpSection::strong(QStringLiteral("Make Default"))),
-        QStringLiteral("Add keywords, one per line. A link that contains any of them opens in the alternative "
+        I18n::tr("Press %1 so links come to Mighty Tools.").arg(HelpSection::strong(I18n::tr("Make Default"))),
+        I18n::tr("Add keywords, one per line. A link that contains any of them opens in the alternative "
                        "browser; everything else opens in the default browser."),
     };
-    section.note = QStringLiteral(
+    section.note = I18n::tr(
         "If a selected browser is unavailable, Mighty Tools warns you and uses the other one for that link. "
         "Use «-» to leave a browser role empty.");
     return section;

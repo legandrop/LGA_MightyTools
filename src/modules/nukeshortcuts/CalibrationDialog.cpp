@@ -1,6 +1,7 @@
 #include "modules/nukeshortcuts/CalibrationDialog.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
+#include "core/I18n.h"
 
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -39,7 +40,7 @@ public:
         , m_image(QStringLiteral(":/images/DopeSheetPos.png"))
     {
         setFixedSize(kImageWidth, kImageHeight);
-        setAccessibleName(QStringLiteral("Nuke layout with a circle on an empty spot of the Dope Sheet"));
+        setAccessibleName(I18n::tr("Nuke layout with a circle on an empty spot of the Dope Sheet"));
     }
 
 protected:
@@ -63,7 +64,7 @@ CalibrationDialog::CalibrationDialog(QWidget *parent)
     : QDialog(parent)
 {
     setObjectName(QStringLiteral("calibrationDialog"));
-    setWindowTitle(QStringLiteral("Calibrate Dope Sheet"));
+    setWindowTitle(I18n::tr("Calibrate Dope Sheet"));
     setWindowFlags(Qt::Dialog | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
     setAttribute(Qt::WA_TranslucentBackground);
     setFixedWidth(kDialogWidth);
@@ -71,13 +72,13 @@ CalibrationDialog::CalibrationDialog(QWidget *parent)
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(24, 20, 24, 20);
     layout->setSpacing(0);
-    layout->addWidget(label(QStringLiteral("Calibrate Dope Sheet"), "dialogTitle", this));
+    layout->addWidget(label(I18n::tr("Calibrate Dope Sheet"), "dialogTitle", this));
     layout->addSpacing(12);
 
     const QStringList steps = {
-        QStringLiteral("Open Nuke with the %1 visible.").arg(strong(QStringLiteral("Dope Sheet"))),
-        QStringLiteral("Click Start, then click an %1 inside it.").arg(strong(QStringLiteral("empty spot"))),
-        QStringLiteral("The spot is saved relative to the Nuke window."),
+        I18n::tr("Open Nuke with the %1 visible.").arg(strong(QStringLiteral("Dope Sheet"))),
+        I18n::tr("Click Start, then click an %1 inside it.").arg(strong(I18n::tr("empty spot"))),
+        I18n::tr("The spot is saved relative to the Nuke window."),
     };
     for (int i = 0; i < steps.size(); ++i) {
         auto *row = new QHBoxLayout();
@@ -87,6 +88,8 @@ CalibrationDialog::CalibrationDialog(QWidget *parent)
         row->addWidget(badge, 0, Qt::AlignVCenter);
         auto *text = label(steps.at(i), "stepText", this);
         text->setTextFormat(Qt::RichText);
+        // Con ajuste de linea: un paso mas largo en otro idioma baja a una segunda linea en vez de cortarse.
+        text->setWordWrap(true);
         row->addWidget(text, 1, Qt::AlignVCenter);
         layout->addLayout(row);
         if (i + 1 < steps.size()) {
@@ -99,11 +102,11 @@ CalibrationDialog::CalibrationDialog(QWidget *parent)
 
     auto *buttons = new QHBoxLayout();
     buttons->setSpacing(8);
-    auto *hint = label(QStringLiteral("Esc cancels at any time."), "meta", this);
+    auto *hint = label(I18n::tr("Esc cancels at any time."), "meta", this);
     buttons->addWidget(hint, 1, Qt::AlignVCenter);
-    auto *cancel = Ui::button(QStringLiteral("Cancel"), QString(), QString(), this);
+    auto *cancel = Ui::button(I18n::tr("Cancel"), QString(), QString(), this);
     cancel->setMinimumWidth(80);
-    auto *start = Ui::button(QStringLiteral("Start"), QStringLiteral("primary"), QString(), this);
+    auto *start = Ui::button(I18n::tr("Start"), QStringLiteral("primary"), QString(), this);
     start->setObjectName(QStringLiteral("startButton"));
     start->setMinimumWidth(80);
     // El boton que acepta va ultimo, a la derecha, y es el unico marcado (regla de Dialogs de la Base).

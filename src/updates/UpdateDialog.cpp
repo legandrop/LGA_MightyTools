@@ -1,4 +1,5 @@
 #include "updates/UpdateDialog.h"
+#include "core/I18n.h"
 
 #include "ui/UiWidgets.h"
 
@@ -13,19 +14,19 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
 {
     auto *dialog = new QDialog(parent);
     dialog->setObjectName(QStringLiteral("updateDialog"));
-    dialog->setWindowTitle(QStringLiteral("Update Available"));
+    dialog->setWindowTitle(I18n::tr("Update Available"));
     dialog->setModal(true);
 
     auto *layout = new QVBoxLayout(dialog);
     layout->setContentsMargins(20, 18, 20, 18);
     layout->setSpacing(6);
 
-    auto *title = new QLabel(QStringLiteral("%1 %2 is available.").arg(displayName, version), dialog);
+    auto *title = new QLabel(I18n::tr("%1 %2 is available.").arg(displayName, version), dialog);
     title->setObjectName(QStringLiteral("dialogTitle"));
     title->setWordWrap(true);
     layout->addWidget(title);
 
-    auto *message = new QLabel(QStringLiteral("You are running version %1. Updating closes Mighty Tools "
+    auto *message = new QLabel(I18n::tr("You are running version %1. Updating closes Mighty Tools "
                                               "and opens the installer.")
                                    .arg(currentVersion),
                                dialog);
@@ -37,8 +38,8 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
     buttons->setContentsMargins(0, 12, 0, 0);
     buttons->setSpacing(8);
     buttons->addStretch(1);
-    auto *later = Ui::button(QStringLiteral("Later"), QString(), QString(), dialog);
-    auto *update = Ui::button(QStringLiteral("Update now"), QStringLiteral("primary"), QString(), dialog);
+    auto *later = Ui::button(I18n::tr("Later"), QString(), QString(), dialog);
+    auto *update = Ui::button(I18n::tr("Update now"), QStringLiteral("primary"), QString(), dialog);
     update->setDefault(true);
     buttons->addWidget(later);
     buttons->addWidget(update);

@@ -9,8 +9,6 @@
 #include <QString>
 #include <QWidget>
 
-class QThread;
-
 class ModuleContext;
 class Chip;
 class QCheckBox;
@@ -56,12 +54,15 @@ private:
     QWidget *buildBridgeCard();
     QWidget *buildOldClientNotice();
     void onUninstallOldClicked();
+    void showUninstalling();
+    void updateBusyButtons();
+    void attachToOperations();
     void onUninstallOldFinished(bool stillInstalled, bool launched);
 
     // ---- ".nk files" ----
     void refreshAssociation();
     void onApplyClicked();
-    void onApplyFinished(bool success, bool needsConfirmation, const QStringList &errors);
+    void onApplyFinished(bool success, bool needsConfirmation, const QList<int> &issues);
 
     // ---- "Preferred Nuke version" ----
     void startScan();
@@ -95,9 +96,10 @@ private:
 
     // ".nk files"
     Chip *m_assocChip = nullptr;
+    // El estado de la asociacion: lo que decide Apply o Re-apply (nunca el texto del chip, que se traduce).
+    bool m_associated = false;
     QPushButton *m_applyButton = nullptr;
     bool m_applyRunning = false;
-    QPointer<QThread> m_applyThread; ///< el hilo de Apply/Re-apply en curso, si hay uno (Windows)
 
     // "Preferred Nuke version"
     QLabel *m_scanStatusLabel = nullptr;
@@ -123,7 +125,6 @@ private:
     QWidget *m_oldClientCard = nullptr;
     StatusCard *m_oldClientStatus = nullptr; ///< la misma tarjeta, para cambiarle el texto
     QPushButton *m_uninstallOldButton = nullptr;
-    bool m_uninstallRunning = false;
     QWidget *m_associationCard = nullptr;
     QWidget *m_versionCard = nullptr;
     QWidget *m_bridgeCard = nullptr;

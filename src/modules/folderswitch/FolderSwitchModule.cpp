@@ -1,4 +1,5 @@
 #include "modules/folderswitch/FolderSwitchModule.h"
+#include "core/I18n.h"
 
 #include "app/ModuleContext.h"
 #include "modules/folderswitch/DialogSwitcher.h"
@@ -115,21 +116,23 @@ ModuleStatus FolderSwitchModule::status() const
     ModuleStatus s;
     if (!m_manualRegistered || !m_recentRegistered) {
         s.tone = ModuleTone::Error;
+        // En ingles en los dos idiomas (decision de Lega): la fila de la barra lateral tiene ~125 px y
+        // "Ctrl+Alt+Shift+O off" es lo unico que entra. El detalle traducido esta en el panel.
         if (!m_manualRegistered && !m_recentRegistered) {
-            s.text = QStringLiteral("Both shortcuts are off");
+            s.text = QStringLiteral("Shortcuts off");
         } else {
             const Shortcut bad = m_manualRegistered ? m_state.recentShortcut() : m_state.manualShortcut();
-            s.text = QStringLiteral("%1 is off").arg(bad.displayText());
+            s.text = QStringLiteral("%1 off").arg(bad.displayText());
         }
         return s;
     }
     if (!m_state.enabled()) {
         s.tone = ModuleTone::Paused;
-        s.text = QStringLiteral("Paused");
+        s.text = I18n::tr("Paused");
         return s;
     }
     s.tone = ModuleTone::Active;
-    s.text = QStringLiteral("On");
+    s.text = I18n::tr("On");
     return s;
 }
 
@@ -178,9 +181,9 @@ QWidget *FolderSwitchModule::createPanel(QWidget *parent)
         Shortcut rejected;
         rejected.modifiers = Qt::ControlModifier | Qt::AltModifier;
         rejected.key = Qt::Key_K;
-        panel->manualRow()->setError(
-            QStringLiteral("%1 is taken by another app. Kept %2.")
-                .arg(rejected.displayText(), m_state.manualShortcut().displayText()));
+        panel->manualRow()->setError(I18n::tr("%1 Kept %2.")
+                                         .arg(I18n::tr("%1 is taken by another app.").arg(rejected.displayText()),
+                                              m_state.manualShortcut().displayText()));
     }
 
     return panel;
@@ -188,7 +191,7 @@ QWidget *FolderSwitchModule::createPanel(QWidget *parent)
 
 void FolderSwitchModule::fillTrayMenu(QMenu *menu)
 {
-    QAction *toggle = menu->addAction(m_state.enabled() ? QStringLiteral("Pause switching") : QStringLiteral("Resume switching"));
+    QAction *toggle = menu->addAction(m_state.enabled() ? I18n::tr("Pause switching") : I18n::tr("Resume switching"));
     connect(toggle, &QAction::triggered, this, [this]() { setEnabled(!m_state.enabled()); });
 }
 
@@ -219,10 +222,10 @@ QString FolderSwitchModule::validateShortcut(const Shortcut &candidate) const
     ModuleHotkeys *hk = context().hotkeys();
     const QString other = hk->declaredByOtherModule(candidate);
     if (!other.isEmpty()) {
-        return QStringLiteral("Already used by %1.").arg(other);
+        return I18n::tr("Already used by %1.").arg(other);
     }
     if (!hk->probe(candidate)) {
-        return QStringLiteral("%1 is taken by another app.").arg(candidate.displayText());
+        return I18n::tr("%1 is taken by another app.").arg(candidate.displayText());
     }
     return QString();
 }
@@ -622,6 +625,21 @@ void paintFolderSwitchIcon(QPainter &painter, const QRectF &rect, const QColor &
     painter.drawPath(arrow);
 
     painter.restore();
+}
+
+QStringList folderSwitchOffBullets(const SettingsReader &value)
+{
+    const auto shortcutOf = [&value](const QString &key, const Shortcut &fallback) {
+        const Shortcut configured = Shortcut::fromPortableString(value(key, fallback.toPortableString()).toString());
+        return configured.isValid() ? configured : fallback;
+    };
+    const Shortcut manual = shortcutOf(QStringLiteral("shortcuts/manual"), FolderSwitchState::defaultManualShortcut());
+    const Shortcut recent = shortcutOf(QStringLiteral("shortcuts/recent"), FolderSwitchState::defaultRecentShortcut());
+    return {
+        I18n::tr("Watches which window is in front"),
+        I18n::tr("Two shortcuts: %1 and %2").arg(manual.displayText(), recent.displayText()),
+        I18n::tr("Remembers your last 5 folders"),
+    };
 }
 
 QList<Shortcut> folderSwitchConfiguredShortcuts(const SettingsReader &value)
@@ -1148,12 +1166,10 @@ ModuleDescriptor folderSwitchDescriptor()
     d.id = QStringLiteral("folderSwitch");
     d.title = QStringLiteral("Folder Switch");
     // Texto exacto del canvas de diseno (MODS, id 'fs').
-    d.description = QStringLiteral("Open and Save dialogs jump to the folder you have open in Explorer or XYplorer.");
-    d.offBullets = {
-        QStringLiteral("Watches which window is in front"),
-        QStringLiteral("Two shortcuts: Ctrl+Alt+O and Ctrl+Alt+Shift+O"),
-        QStringLiteral("Remembers your last 5 folders"),
-    };
+    d.description = I18n::tr("Open and Save dialogs jump to the folder you have open in Explorer or XYplorer.");
+    d.offBullets = folderSwitchOffBullets([](const QString &, const QVariant &fallback) { return fallback; });
+    // Los atajos de la vineta son los CONFIGURADOS (settings.ini), no los de fabrica.
+    d.offBulletsFor = &folderSwitchOffBullets;
     d.platforms = PlatformWindows;
     d.paintIcon = paintFolderSwitchIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
@@ -1170,12 +1186,12 @@ HelpSection folderSwitchHelp(const SettingsReader &)
     HelpSection section;
     section.title = QStringLiteral("Folder Switch");
     section.steps = {
-        QStringLiteral("Open a folder in %1 or %2.")
+        I18n::tr("Open a folder in %1 or %2.")
             .arg(HelpSection::strong(QStringLiteral("Explorer")), HelpSection::strong(QStringLiteral("XYplorer"))),
-        QStringLiteral("Go to the %1 or %2 dialog of any app.")
-            .arg(HelpSection::strong(QStringLiteral("Open")), HelpSection::strong(QStringLiteral("Save"))),
-        QStringLiteral("The dialog jumps to that folder."),
+        I18n::tr("Go to the %1 or %2 dialog of any app.")
+            .arg(HelpSection::strong(I18n::tr("Open")), HelpSection::strong(I18n::tr("Save"))),
+        I18n::tr("The dialog jumps to that folder."),
     };
-    section.note = QStringLiteral("Works with Windows file dialogs and Qt ones, like Nuke's.");
+    section.note = I18n::tr("Works with Windows file dialogs and Qt ones, like Nuke's.");
     return section;
 }

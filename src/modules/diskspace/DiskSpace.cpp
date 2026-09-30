@@ -1,4 +1,5 @@
 #include "modules/diskspace/DiskSpace.h"
+#include "core/I18n.h"
 
 #include <QtGlobal>
 
@@ -35,7 +36,7 @@ QString intervalText(int minutes)
 {
     if (minutes >= 60 && minutes % 60 == 0) {
         const int hours = minutes / 60;
-        return hours == 1 ? QStringLiteral("1 hour") : QStringLiteral("%1 hours").arg(hours);
+        return hours == 1 ? I18n::tr("1 hour") : I18n::tr("%1 hours").arg(hours);
     }
     return QStringLiteral("%1 min").arg(minutes);
 }
@@ -99,6 +100,11 @@ QString thresholdText(const DiskWatch &watch)
 {
     const int value = clampValue(watch.value, watch.unit);
     return watch.unit == DiskWatch::Unit::Percent ? QStringLiteral("%1%").arg(value) : QStringLiteral("%1 GB").arg(value);
+}
+
+QString displayName(const QString &storedName)
+{
+    return storedName == QLatin1String("Local Disk") ? I18n::tr("Local Disk") : storedName;
 }
 
 QString labelForRoot(const QString &root, const QString &storedName)

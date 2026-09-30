@@ -54,6 +54,9 @@ public:
     const QList<ModuleDescriptor> &descriptors() const { return m_descriptors; }
     const ModuleDescriptor *descriptor(const QString &id) const;
     int indexOf(const QString &id) const;
+    // Cambio de idioma: toma de `fresh` (los descriptores armados de nuevo) solo los textos visibles
+    // (titulo, descripcion, vinetas). Lo demas del descriptor no cambia.
+    void refreshDescriptorTexts(const QList<ModuleDescriptor> &fresh);
 
     // Lo que dice settings.ini (lo que el usuario eligio).
     bool isEnabled(const QString &id) const;

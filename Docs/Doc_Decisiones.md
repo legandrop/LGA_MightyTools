@@ -37,6 +37,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   activador COM de HKCU los escribe el primer aviso, también en una copia de `build\`. Es la única
   excepción a «desde un build no se escribe nada solo». `--uninstall-cleanup` los borra si apuntan a
   este exe o a un `LGA_MightyTools.exe` que ya no existe.
+- **D-08 · Idioma: inglés por defecto, español opcional** (2026-09-30). Se elige en General > App >
+  Language y la interfaz cambia en el acto. El español va en infinitivo o impersonal, nunca vos ni tú.
+  Quedan en inglés los nombres de las herramientas y de la app, Tools, App, About, knob, key, keyframe,
+  Dope Sheet y Explorer; las pantallas de Windows y macOS se citan con su nombre real en español. Los
+  tamaños siguen con punto decimal. El título de la bienvenida es «LGA Mighty Tools» en los dos idiomas.
+  El instalador, lo que se escribe en el registro y el plugin de Nuke quedan en inglés.
 
 ## Abiertas
 
@@ -45,7 +51,6 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-05 · Open in NukeX y Link Redirector apagados** con entradas del sistema. Mientras tanto: paso
   directo del host, sin cargar el módulo; nunca se pierde lo que el usuario abrió.
 - **D-07 · Identidad en mac.** Mientras tanto: bundle id nuevo `com.lga.mightytools`.
-- **D-08 · Idioma.** Mientras tanto: solo inglés.
 - **D-09 · Soltar los registros al apagar.** Mientras tanto: se ofrece «Release .nk association» y
   «Remove as browser», con el paso directo como red de seguridad.
 - **D-12 · Transición en mac de los usuarios de Open in NukeX.** Mientras tanto: siguen con el cliente

@@ -1,4 +1,5 @@
 #include "modules/diskspace/DiskCard.h"
+#include "core/I18n.h"
 
 #include "modules/diskspace/DiskState.h"
 #include "ui/Theme.h"
@@ -118,7 +119,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_name->setObjectName(QStringLiteral("driveName"));
     m_name->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     top->addWidget(m_name, 0, Qt::AlignVCenter);
-    m_missing = label(QStringLiteral("Not connected"), "meta", this);
+    m_missing = label(I18n::tr("Not connected"), "meta", this);
     top->addWidget(m_missing, 0, Qt::AlignVCenter);
     top->addStretch(1);
     // Fila de 26 de alto como la del canvas (`.row` con min-height 26).
@@ -138,7 +139,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_value->setKeyboardTracking(false);
     m_value->setFixedSize(52, 24);
-    m_value->setToolTip(QStringLiteral("Warn when free space is under this"));
+    m_value->setToolTip(I18n::tr("Warn when free space is under this"));
     controls->addWidget(m_value, 0, Qt::AlignVCenter);
 
     auto *segment = new QHBoxLayout();
@@ -153,15 +154,15 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     }
     m_gb->setProperty("pos", QStringLiteral("left"));
     m_percent->setProperty("pos", QStringLiteral("right"));
-    m_gb->setToolTip(QStringLiteral("Warn under an amount of free space"));
-    m_percent->setToolTip(QStringLiteral("Warn under a share of the drive"));
+    m_gb->setToolTip(I18n::tr("Warn under an amount of free space"));
+    m_percent->setToolTip(I18n::tr("Warn under a share of the drive"));
     controls->addLayout(segment);
 
     m_remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_remove->setObjectName(QStringLiteral("removeDrive"));
     Ui::setIcon(m_remove, Icon::X, Theme::color(Theme::kIcon), 12);
-    m_remove->setToolTip(QStringLiteral("Stop watching"));
-    m_remove->setAccessibleName(QStringLiteral("Stop watching"));
+    m_remove->setToolTip(I18n::tr("Stop watching"));
+    m_remove->setAccessibleName(I18n::tr("Stop watching"));
     controls->addWidget(m_remove, 0, Qt::AlignVCenter);
     top->addLayout(controls);
     column->addLayout(top);
@@ -244,7 +245,7 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
     m_keycap->set(connected ? QStringLiteral("key") : QStringLiteral("keyDim"),
                   connected ? drive->label : DiskSpace::labelForRoot(watch.root, watch.name));
     const QString name = connected ? drive->name : watch.name;
-    m_name->setText(name);
+    m_name->setText(DiskSpace::displayName(name));
     Ui::setStyleProperty(m_name, "dim", !connected);
     m_missing->setVisible(!connected);
 
@@ -259,23 +260,24 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
 
     if (!connected) {
         m_bar->set(false, 0, 0, false);
-        m_free->setText(QStringLiteral("Skipped until it is plugged in."));
+        m_free->setText(I18n::tr("Skipped until it is plugged in."));
         Ui::setStyleProperty(m_free, "tone", QString());
-        m_threshold->setText(QStringLiteral("warn under %1").arg(DiskSpace::thresholdText(watch)));
+        m_threshold->setText(I18n::tr("warn under %1").arg(DiskSpace::thresholdText(watch)));
         m_threshold->setVisible(true);
         return;
     }
     const qint64 threshold = DiskSpace::thresholdBytes(watch, drive->totalBytes);
     m_bar->set(true, fraction(drive->totalBytes - drive->freeBytes, drive->totalBytes),
                fraction(drive->totalBytes - threshold, drive->totalBytes), low);
-    QString freeText = QStringLiteral("%1 free of %2")
-                           .arg(DiskSpace::formatBytes(drive->freeBytes), DiskSpace::formatBytes(drive->totalBytes));
-    if (low) {
-        freeText += QStringLiteral(" · under %1").arg(DiskSpace::thresholdText(watch));
-    }
+    // Dos claves completas (no una frase pegada): el espanol puede mover el umbral.
+    const QString freeBytes = DiskSpace::formatBytes(drive->freeBytes);
+    const QString totalBytes = DiskSpace::formatBytes(drive->totalBytes);
+    const QString freeText = low ? I18n::tr("%1 free of %2 · under %3")
+                                       .arg(freeBytes, totalBytes, DiskSpace::thresholdText(watch))
+                                 : I18n::tr("%1 free of %2").arg(freeBytes, totalBytes);
     m_free->setText(freeText);
     Ui::setStyleProperty(m_free, "tone", low ? QStringLiteral("warn") : QString());
-    m_threshold->setText(QStringLiteral("warn under %1").arg(DiskSpace::thresholdText(watch)));
+    m_threshold->setText(I18n::tr("warn under %1").arg(DiskSpace::thresholdText(watch)));
     m_threshold->setVisible(!low);
 }
 
@@ -294,7 +296,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     auto *head = new QHBoxLayout();
     head->setSpacing(6);
     // `.head` del canvas: el titulo ocupa 22 de alto.
-    QLabel *title = label(QStringLiteral("Watched drives"), "cardTitle", this);
+    QLabel *title = label(I18n::tr("Watched drives"), "cardTitle", this);
     title->setMinimumHeight(22);
     head->addWidget(title, 1);
     m_chip = new Chip(this);
@@ -303,7 +305,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     layout->addSpacing(8);
 
     // Sin discos: una linea que explica para que sirve, y "Add drive...".
-    m_emptyCaption = label(QStringLiteral("Get a notification when a drive runs low. Nothing is watched yet."), "caption", this);
+    m_emptyCaption = label(I18n::tr("Get a notification when a drive runs low. Nothing is watched yet."), "caption", this);
     m_emptyCaption->setWordWrap(true);
     m_emptyCaption->setContentsMargins(0, 0, 0, 8);
     layout->addWidget(m_emptyCaption);
@@ -318,13 +320,13 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     auto *remind = new QHBoxLayout(m_remindRow);
     remind->setContentsMargins(0, 0, 0, 0);
     remind->setSpacing(8);
-    remind->addWidget(label(QStringLiteral("Remind me every"), "optionLabel", m_remindRow), 0, Qt::AlignVCenter);
+    remind->addWidget(label(I18n::tr("Remind me every"), "optionLabel", m_remindRow), 0, Qt::AlignVCenter);
     m_remindButton = Ui::button(QString(), QString(), QString(), m_remindRow);
     m_remindButton->setObjectName(QStringLiteral("fieldButton"));
     // El icono a la derecha del texto, como la flecha de un desplegable.
     m_remindButton->setLayoutDirection(Qt::RightToLeft);
     Ui::setIcon(m_remindButton, Icon::ChevronDown, Theme::color(Theme::kTextMuted), 8);
-    m_remindButton->setToolTip(QStringLiteral("While a drive stays low. Drives are checked every %1 min.")
+    m_remindButton->setToolTip(I18n::tr("While a drive stays low. Drives are checked every %1 min.")
                                    .arg(DiskSpace::kCheckMinutes));
     remind->addWidget(m_remindButton, 0, Qt::AlignVCenter);
     remind->addStretch(1);
@@ -340,7 +342,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     addDivider(list, m_listBlock);
     layout->addWidget(m_listBlock);
 
-    m_addButton = Ui::button(QStringLiteral("Add drive..."), QString(), QString(), this);
+    m_addButton = Ui::button(I18n::tr("Add drive..."), QString(), QString(), this);
     m_addButton->setObjectName(QStringLiteral("linkButton"));
     Ui::setIcon(m_addButton, Icon::Plus, Theme::color(Theme::kLink), 10);
     auto *addRow = new QHBoxLayout();
@@ -446,24 +448,24 @@ void DiskCard::refresh()
 
     m_remindButton->setText(DiskSpace::intervalText(m_state->remindMinutes()));
     const QDateTime last = m_state->lastDiskCheck();
-    m_lastCheck->setText(last.isValid() ? QStringLiteral("Last check %1").arg(last.toString(QStringLiteral("HH:mm")))
+    m_lastCheck->setText(last.isValid() ? I18n::tr("Last check %1").arg(last.toString(QStringLiteral("HH:mm")))
                                         : QString());
 
     // Chip y borde de la tarjeta: ambar si algun disco enchufado esta bajo su umbral.
     const QList<DiskWatch> low = m_state->lowWatches();
     QString tone;
     if (empty) {
-        m_chip->set(QStringLiteral("src"), QStringLiteral("Off"));
+        m_chip->set(QStringLiteral("src"), I18n::trc("chip", "Off"));
     } else if (low.isEmpty()) {
-        m_chip->set(QStringLiteral("ok"), QStringLiteral("All good"));
+        m_chip->set(QStringLiteral("ok"), I18n::tr("All good"));
     } else {
         tone = QStringLiteral("warn");
         if (low.size() == 1) {
             DriveInfo drive;
             m_state->driveReading(low.first().root, &drive);
-            m_chip->set(tone, QStringLiteral("%1 is low").arg(drive.label));
+            m_chip->set(tone, I18n::tr("%1 is low").arg(drive.label));
         } else {
-            m_chip->set(tone, QStringLiteral("%1 drives are low").arg(low.size()));
+            m_chip->set(tone, I18n::tr("%1 drives are low").arg(low.size()));
         }
     }
     Ui::setStyleProperty(this, "tone", tone);
@@ -471,7 +473,7 @@ void DiskCard::refresh()
 
 void DiskCard::fillAddMenu(QMenu *menu) const
 {
-    auto *header = menu->addAction(QStringLiteral("Local drives"));
+    auto *header = menu->addAction(I18n::tr("Local drives"));
     header->setEnabled(false);
     int added = 0;
     for (const DriveInfo &drive : m_state->drives()) {
@@ -480,16 +482,16 @@ void DiskCard::fillAddMenu(QMenu *menu) const
         }
         QString text = drive.label;
         if (!drive.name.isEmpty()) {
-            text += QStringLiteral("  ") + drive.name;
+            text += QStringLiteral("  ") + DiskSpace::displayName(drive.name);
         }
-        text += QStringLiteral("  ·  %1 free").arg(DiskSpace::formatBytes(drive.freeBytes));
+        text += QStringLiteral("  ·  ") + I18n::tr("%1 free").arg(DiskSpace::formatBytes(drive.freeBytes));
         QAction *action = menu->addAction(text);
         action->setData(drive.root);
         action->setProperty("driveName", drive.name.isEmpty() ? drive.label : drive.name);
         ++added;
     }
     if (added == 0) {
-        header->setText(QStringLiteral("Every local drive is already watched"));
+        header->setText(I18n::tr("Every local drive is already watched"));
     }
 }
 

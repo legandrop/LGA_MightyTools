@@ -219,6 +219,10 @@ public slots:
         const QStringList paths = commonNukePaths();
         QList<NukeVersion> all;
         for (const QString &path : paths) {
+            // El panel se borro (cambio de idioma): se corta entre carpeta y carpeta, sin hacerlo esperar el resto.
+            if (QThread::currentThread()->isInterruptionRequested()) {
+                break;
+            }
             emit progress(path);
             const QList<NukeVersion> found = executablesIn(path);
             for (const NukeVersion &version : found) {
@@ -246,6 +250,7 @@ NukeScanner::NukeScanner(QObject *parent)
 NukeScanner::~NukeScanner()
 {
     if (m_thread) {
+        m_thread->requestInterruption();
         m_thread->quit();
         m_thread->wait();
     }

@@ -2,6 +2,7 @@
 #define MIGHTYTOOLS_OPENINNUKEX_MESSAGES_H
 
 #include "modules/openinnukex/NukeBridge.h"
+#include "modules/openinnukex/ApplyIssue.h"
 
 #include <QString>
 
@@ -37,6 +38,8 @@ OpenInNukeXMessage notANukeExecutable();                    // el nombre no cont
 OpenInNukeXMessage nukeVersionSaved(const QString &path);   // Save exitoso
 OpenInNukeXMessage associationCompleted();                  // Apply exitoso, Windows o mac
 OpenInNukeXMessage oneMoreStepInWindows();                  // Apply que necesita confirmar en Windows
+// El texto de una causa de fallo del Apply, en el idioma de ESTE momento (hilo de la UI).
+QString applyIssueText(ApplyIssue issue);
 OpenInNukeXMessage associationFinishedWithWarnings(const QString &technicalDetails); // Apply con errores
 OpenInNukeXMessage associationError(const QString &errorText);       // excepcion no controlada en Apply
 OpenInNukeXMessage almostDoneMac();                         // mac rechazo el cambio de asociacion

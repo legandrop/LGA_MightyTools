@@ -1,4 +1,5 @@
 #include "modules/nukeshortcuts/NukeShortcutsPanel.h"
+#include "core/I18n.h"
 
 #include "ui/ShortcutRow.h"
 #include "ui/Theme.h"
@@ -81,16 +82,16 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     auto *shortcuts = new QVBoxLayout(shortcutsCard);
     shortcuts->setContentsMargins(14, 12, 14, 12);
     shortcuts->setSpacing(0);
-    QLabel *shortcutsTitle = Ui::label(QStringLiteral("Shortcuts"), "cardTitle", shortcutsCard);
+    QLabel *shortcutsTitle = Ui::label(I18n::tr("Shortcuts"), "cardTitle", shortcutsCard);
     shortcutsTitle->setMinimumHeight(22);
     shortcuts->addWidget(shortcutsTitle);
     shortcuts->addSpacing(8);
     m_addKeyframeRow = new ShortcutRow(NukeShortcutsState::actionTitle(ShortcutAction::AddKeyframe),
-                                       QStringLiteral("Sets a key on the knob under the pointer."), shortcutsCard);
+                                       I18n::tr("Sets a key on the knob under the pointer."), shortcutsCard);
     shortcuts->addWidget(m_addKeyframeRow);
     Ui::addDivider(shortcuts, shortcutsCard);
     m_frameRow = new ShortcutRow(NukeShortcutsState::actionTitle(ShortcutAction::FrameDopeSheet),
-                                 QStringLiteral("Selects every key in the Dope Sheet and frames them."), shortcutsCard);
+                                 I18n::tr("Selects every key in the Dope Sheet and frames them."), shortcutsCard);
     shortcuts->addWidget(m_frameRow);
     layout->addWidget(shortcutsCard);
 
@@ -101,7 +102,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     spot->setSpacing(8);
     auto *spotHead = new QHBoxLayout();
     spotHead->setSpacing(6);
-    QLabel *spotTitle = Ui::label(QStringLiteral("Dope Sheet position"), "cardTitle", spotCard);
+    QLabel *spotTitle = Ui::label(I18n::tr("Dope Sheet position"), "cardTitle", spotCard);
     spotTitle->setMinimumHeight(22);
     spotHead->addWidget(spotTitle, 1);
     m_spotChip = new Chip(spotCard);
@@ -118,7 +119,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     spotTexts->addWidget(m_spotValue);
     spotTexts->addWidget(m_spotCaption);
     spotRow->addLayout(spotTexts, 1);
-    m_calibrateButton = Ui::button(QStringLiteral("Calibrate..."), QString(), QStringLiteral("sm"), spotCard);
+    m_calibrateButton = Ui::button(I18n::tr("Calibrate..."), QString(), QStringLiteral("sm"), spotCard);
     m_calibrateButton->setObjectName(QStringLiteral("calibrateButton"));
     spotRow->addWidget(m_calibrateButton, 0, Qt::AlignVCenter);
     spot->addLayout(spotRow);
@@ -197,13 +198,13 @@ void NukeShortcutsPanel::refresh()
 {
     switch (currentStatus()) {
     case Status::On:
-        m_statusCard->set(QStringLiteral("on"), QStringLiteral("Shortcuts are on"),
-                          QStringLiteral("Only in Nuke. Other apps keep these keys."), QStringLiteral("Pause"), QString(),
+        m_statusCard->set(QStringLiteral("on"), I18n::tr("Shortcuts are on"),
+                          I18n::tr("Only in Nuke. Other apps keep these keys."), I18n::tr("Pause"), QString(),
                           QString());
         break;
     case Status::Paused:
-        m_statusCard->set(QStringLiteral("paused"), QStringLiteral("Shortcuts are paused"),
-                          QStringLiteral("Nuke gets these keys as usual."), QStringLiteral("Resume"),
+        m_statusCard->set(QStringLiteral("paused"), I18n::tr("Shortcuts are paused"),
+                          I18n::tr("Nuke gets these keys as usual."), I18n::tr("Resume"),
                           QStringLiteral("primary"), QString());
         break;
     case Status::ShortcutTaken: {
@@ -213,22 +214,22 @@ void NukeShortcutsPanel::refresh()
         const ShortcutAction failed = addFailed ? ShortcutAction::AddKeyframe : ShortcutAction::FrameDopeSheet;
         QString text;
         if (addFailed && frameFailed) {
-            text = QStringLiteral("Another app uses them.");
+            text = I18n::tr("Another app uses them.");
         } else if (!m_state->conflictWith(failed).isEmpty()) {
             // La tomo otra herramienta de Mighty Tools, no otra app.
-            text = QStringLiteral("Already used by %1.").arg(m_state->conflictWith(failed));
+            text = I18n::tr("Already used by %1.").arg(m_state->conflictWith(failed));
         } else {
-            text = QStringLiteral("Another app uses %1.").arg(m_state->shortcut(failed).displayText());
+            text = I18n::tr("Another app uses %1.").arg(m_state->shortcut(failed).displayText());
         }
         m_statusCard->set(QStringLiteral("error"),
-                          addFailed && frameFailed ? QStringLiteral("Both shortcuts are off")
-                                                   : QStringLiteral("%1 is off").arg(NukeShortcutsState::actionTitle(failed)),
-                          text, QStringLiteral("Change"), QString(), QStringLiteral("err"));
+                          addFailed && frameFailed ? I18n::tr("Both shortcuts are off")
+                                                   : I18n::trc("shortcut", "%1 is off").arg(NukeShortcutsState::actionTitle(failed)),
+                          text, I18n::tr("Change"), QString(), QStringLiteral("err"));
         break;
     }
     case Status::NeedsPermission:
-        m_statusCard->set(QStringLiteral("warn"), QStringLiteral("Accessibility access needed"),
-                          QStringLiteral("Needed to click and type in Nuke."), QStringLiteral("Open Settings"),
+        m_statusCard->set(QStringLiteral("warn"), I18n::tr("Accessibility access needed"),
+                          I18n::tr("Needed to click and type in Nuke."), I18n::tr("Open Settings"),
                           QStringLiteral("primary"), QStringLiteral("warn"));
         break;
     }
@@ -243,13 +244,13 @@ void NukeShortcutsPanel::refresh()
 
     if (m_state->hasDopeSheetSpot()) {
         const QPointF spot = m_state->dopeSheetSpot();
-        m_spotChip->set(QStringLiteral("ok"), QStringLiteral("Calibrated"));
-        m_spotValue->setText(QStringLiteral("%1% across · %2% down").arg(qRound(spot.x() * 100)).arg(qRound(spot.y() * 100)));
-        m_spotCaption->setText(QStringLiteral("Of the Nuke window, so it follows moves and resizes."));
+        m_spotChip->set(QStringLiteral("ok"), I18n::tr("Calibrated"));
+        m_spotValue->setText(I18n::tr("%1% across · %2% down").arg(qRound(spot.x() * 100)).arg(qRound(spot.y() * 100)));
+        m_spotCaption->setText(I18n::tr("Of the Nuke window, so it follows moves and resizes."));
     } else {
-        m_spotChip->set(QStringLiteral("warn"), QStringLiteral("Not calibrated"));
-        m_spotValue->setText(QStringLiteral("No spot saved yet"));
-        m_spotCaption->setText(QStringLiteral("Frame Dope Sheet needs it. Takes one click."));
+        m_spotChip->set(QStringLiteral("warn"), I18n::tr("Not calibrated"));
+        m_spotValue->setText(I18n::tr("No spot saved yet"));
+        m_spotCaption->setText(I18n::tr("Frame Dope Sheet needs it. Takes one click."));
     }
     m_spotThumb->setSpot(m_state->hasDopeSheetSpot(), m_state->dopeSheetSpot());
 }

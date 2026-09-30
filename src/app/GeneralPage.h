@@ -53,6 +53,8 @@ signals:
     void updateRequested();
     void helpRequested();
     void toolToggleRequested(const QString &id, bool on);
+    // El usuario eligio otro idioma ("en" / "es").
+    void languageChangeRequested(const QString &code);
 
 private:
     void buildWelcome();
@@ -74,6 +76,7 @@ private:
     QCheckBox *m_checkUpdates = nullptr;
     QLabel *m_updateResult = nullptr;
     QPushButton *m_updateButton = nullptr;
+    QPushButton *m_languageButton = nullptr;
     UpdateRowState m_updateState;
 
     Chip *m_toolsChip = nullptr;

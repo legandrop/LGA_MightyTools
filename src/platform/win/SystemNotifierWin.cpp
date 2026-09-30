@@ -257,6 +257,22 @@ private:
 
 } // namespace
 
+QString SystemNotifier::registeredToastScript(const Notice &notice, const QString &imagePath, const QString &exePath)
+{
+    return genericToastScript(notice, imagePath, exePath);
+}
+
+QString SystemNotifier::plainToastScript(const QString &title, const QString &body, const QString &imagePath,
+                                         const QString &exePath)
+{
+    return toastScript(title, body, imagePath, exePath);
+}
+
+QString SystemNotifier::encodeCommand(const QString &script)
+{
+    return encodedCommand(script);
+}
+
 struct SystemNotifier::Private
 {
     QThread *thread = nullptr;

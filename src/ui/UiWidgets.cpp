@@ -545,6 +545,9 @@ StatusCard::StatusCard(QWidget *parent)
     auto *texts = new QVBoxLayout();
     texts->setSpacing(2);
     m_title = Ui::label(QString(), "cardTitle", this);
+    // Con ajuste de linea: un titulo largo (otro idioma) baja a una segunda linea en vez de ensanchar la
+    // tarjeta y empujar el boton fuera de la pagina.
+    m_title->setWordWrap(true);
     m_text = Ui::caption(QString(), this);
     texts->addWidget(m_title);
     texts->addWidget(m_text);

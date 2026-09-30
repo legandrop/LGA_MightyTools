@@ -1,9 +1,11 @@
 #include "modules/openinnukex/OpenInNukeXPanel.h"
+#include "core/I18n.h"
 
 #include "app/ModuleContext.h"
 #include "core/AppPaths.h"
 #include "modules/openinnukex/NukeXPath.h"
 #include "modules/openinnukex/OpenInNukeXMessages.h"
+#include "modules/openinnukex/OpenInNukeXOperations.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -28,7 +30,6 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QThread>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -46,64 +47,11 @@ const QStringList kFixtureStates = {
     QStringLiteral("bridge-unknown"),     QStringLiteral("bridge-installed"),
 };
 
-#ifdef Q_OS_WIN
-// Corre WinFileAssociation::apply() (que puede tardar hasta ~1.5 s entre los msleep de reintento y
-// el hash de UserChoiceLatest) en un QThread propio, para no congelar la ventana con el boton
-// Apply/Re-apply apretado.
-class ApplyWorker : public QObject
+
+QString oldClientCaption()
 {
-    Q_OBJECT
-public:
-    // `parentHwnd`: la ventana dueña del selector nativo "Abrir con" si el hash silencioso no
-    // alcanza. HWND es visible aca por el `#include ".../WinFileAssociation.h"` de mas arriba
-    // (que lo declara sin windows.h, ver ese header): esta unidad tampoco incluye Win32.
-    ApplyWorker(bool reapply, HWND parentHwnd) : m_reapply(reapply), m_parentHwnd(parentHwnd) {}
-
-public slots:
-    void run()
-    {
-        const WinFileAssociation::ApplyOutcome outcome = WinFileAssociation::apply(m_reapply, m_parentHwnd);
-        emit finished(outcome.result == WinFileAssociation::ApplyResult::Success,
-                      outcome.result == WinFileAssociation::ApplyResult::NeedsUserConfirmation, outcome.errors);
-    }
-
-signals:
-    void finished(bool success, bool needsConfirmation, QStringList errors);
-
-private:
-    bool m_reapply;
-    HWND m_parentHwnd;
-};
-
-// "Uninstall old app": la misma funcion que usa el instalador (--remove-old-client). Lanza el
-// desinstalador del cliente viejo (pide su propio UAC), espera hasta ~2 min a que desaparezca y
-// retoma los .nk. En un hilo propio: la ventana sigue viva mientras tanto.
-class RemoveOldClientWorker : public QObject
-{
-    Q_OBJECT
-public:
-    explicit RemoveOldClientWorker(const OldClientMigration::Options &options) : m_options(options) {}
-
-public slots:
-    void run()
-    {
-        // Sin settings: con el panel abierto el modulo ya esta prendido.
-        const OldClientMigration::Report report = OldClientMigration::removeOldClient(nullptr, m_options);
-        for (const QString &line : report.lines) {
-            qInfo().noquote() << "[openInNukeX] quitar cliente viejo:" << line;
-        }
-        emit finished(report.stillInstalled, report.launched);
-    }
-
-signals:
-    void finished(bool stillInstalled, bool launched);
-
-private:
-    OldClientMigration::Options m_options;
-};
-#endif
-
-const char kOldClientCaption[] = "Uninstall it so both apps don't fight over .nk files.";
+    return I18n::tr("Uninstall it so both apps don't fight over .nk files.");
+}
 
 // Campo de ruta con foco solo por click (regla de la app): Enter guarda y suelta, Escape descarta
 // y suelta, un click afuera lo suelta guardando (editingFinished tambien dispara ahi). Copia el
@@ -154,21 +102,14 @@ OpenInNukeXPanel::OpenInNukeXPanel(ModuleContext &context, QWidget *parent)
 #ifdef Q_OS_WIN
         m_oldClientCard->setVisible(WinFileAssociation::isOldClientInstalled());
 #endif
+        attachToOperations();
     }
 }
 
 OpenInNukeXPanel::~OpenInNukeXPanel()
 {
-    // Red de seguridad: si el usuario cierra el panel (apaga el modulo, cambia de herramienta) con
-    // Apply/Re-apply todavia corriendo, no se puede dejar que QThread se destruya con el hilo vivo
-    // (QThread avisa por consola y el proceso puede terminar mal). quit()+wait() son seguros de
-    // llamar desde este hilo aunque el otro siga ejecutando WinFileAssociation::apply(); el
-    // callback en cola hacia onApplyFinished() no llega a correr sobre un panel ya destruido: Qt
-    // descarta los eventos en cola de un QObject al borrarlo.
-    if (m_applyThread && m_applyThread->isRunning()) {
-        m_applyThread->quit();
-        m_applyThread->wait();
-    }
+    // Nada que esperar: el Apply y la desinstalacion en curso viven en OpenInNukeXOperations y siguen su camino
+    // aunque este panel se borre (cambio de idioma, otra herramienta). Un panel nuevo los retoma.
 }
 
 QStringList OpenInNukeXPanel::captureStates()
@@ -192,7 +133,8 @@ bool OpenInNukeXPanel::eventFilter(QObject *watched, QEvent *event)
 #ifdef Q_OS_WIN
             // Tambien el aviso del cliente viejo: se desinstala desde Ajustes de Windows. Con el
             // desinstalador corriendo (boton "Uninstall old app") lo decide su final.
-            if (!m_uninstallRunning) {
+            const OpenInNukeXOperations *operations = OpenInNukeXOperations::existing();
+            if (!operations || !operations->uninstallRunning()) {
                 m_oldClientCard->setVisible(WinFileAssociation::isOldClientInstalled());
             }
 #endif
@@ -226,7 +168,7 @@ QWidget *OpenInNukeXPanel::buildAssociationCard()
     layout->setSpacing(8);
 
     auto *head = new QHBoxLayout();
-    head->addWidget(Ui::label(QStringLiteral(".nk files"), "cardTitle", card), 1);
+    head->addWidget(Ui::label(I18n::tr(".nk files"), "cardTitle", card), 1);
     m_assocChip = new Chip(card);
     head->addWidget(m_assocChip, 0, Qt::AlignVCenter);
     layout->addLayout(head);
@@ -234,11 +176,11 @@ QWidget *OpenInNukeXPanel::buildAssociationCard()
     auto *row = new QHBoxLayout();
     row->setSpacing(12);
     auto *description = Ui::caption(
-        QStringLiteral("Associate .nk files with LGA Mighty Tools to open them directly in your preferred NukeX version."),
+        I18n::tr("Associate .nk files with LGA Mighty Tools to open them directly in your preferred NukeX version."),
         card);
     description->setWordWrap(true);
     row->addWidget(description, 1);
-    m_applyButton = Ui::button(QStringLiteral("Apply"), QStringLiteral("primary"), QString(), card);
+    m_applyButton = Ui::button(I18n::tr("Apply"), QStringLiteral("primary"), QString(), card);
     row->addWidget(m_applyButton, 0, Qt::AlignTop);
     layout->addLayout(row);
 
@@ -260,15 +202,17 @@ void OpenInNukeXPanel::refreshAssociation()
 #else
     const bool associated = false;
 #endif
+    m_associated = associated;
     m_assocChip->set(associated ? QStringLiteral("ok") : QStringLiteral("warn"),
-                     associated ? QStringLiteral("Associated") : QStringLiteral("Not associated"));
-    m_applyButton->setText(associated ? QStringLiteral("Re-apply") : QStringLiteral("Apply"));
+                     associated ? I18n::tr("Associated") : I18n::tr("Not associated"));
+    m_applyButton->setText(associated ? I18n::tr("Re-apply") : I18n::tr("Apply"));
     Ui::setStyleProperty(m_applyButton, "variant", associated ? QString() : QStringLiteral("primary"));
 }
 
 void OpenInNukeXPanel::onApplyClicked()
 {
-    if (!m_interactive || m_applyRunning) {
+    // Una operacion a la vez (Apply y desinstalacion escriben la misma asociacion).
+    if (!m_interactive || m_applyRunning || OpenInNukeXOperations::busy()) {
         return;
     }
     if (m_context.automatedRun()) {
@@ -285,63 +229,42 @@ void OpenInNukeXPanel::onApplyClicked()
     }
 #endif
 
-    const bool reapply = m_assocChip->text() == QStringLiteral("Associated");
     m_applyRunning = true;
-    m_applyButton->setEnabled(false);
-
-#ifdef Q_OS_WIN
-    // El HWND se captura ACA, en el hilo de UI (winId() no es seguro desde otro hilo), y se le
-    // pasa al worker para que el selector nativo "Abrir con" salga con LGA Mighty Tools como
-    // dueño (auditoria: v1.83 pasaba winId(), la version anterior de este modulo no pasaba nada).
-    // window() puede ser nullptr en teoria (contrato de ModuleContext no lo garantiza fuera de
-    // captura); con ventana real esto nunca pasa.
+    // El HWND se captura ACA, en el hilo de UI (winId() no es seguro desde otro hilo): es el dueño del selector
+    // nativo "Abrir con" si el hash silencioso no alcanza. window() puede ser nullptr fuera de captura solo en
+    // teoria; con ventana real esto nunca pasa.
     QWidget *topLevel = m_context.window();
-    const HWND parentHwnd = topLevel ? reinterpret_cast<HWND>(topLevel->winId()) : nullptr;
-
-    // Sin padre Qt: si el panel se destruye con Apply corriendo (~1.5 s: los msleep de reintento
-    // mas el hash de UserChoiceLatest), el destructor lo desconecta y lo espera en vez de dejar
-    // que QThread se destruya con el hilo todavia vivo. Se guarda en m_applyThread para eso.
-    auto *thread = new QThread();
-    auto *worker = new ApplyWorker(reapply, parentHwnd);
-    worker->moveToThread(thread);
-    connect(thread, &QThread::started, worker, &ApplyWorker::run);
-    connect(worker, &ApplyWorker::finished, this, &OpenInNukeXPanel::onApplyFinished);
-    connect(worker, &ApplyWorker::finished, thread, &QThread::quit);
-    connect(worker, &ApplyWorker::finished, worker, &QObject::deleteLater);
-    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-    m_applyThread = thread;
-    thread->start();
-#elif defined(Q_OS_MACOS)
-    Q_UNUSED(reapply);
-    MacFileAssociation::setAsDefaultNkHandler([this](bool ok, const QString &error) {
-        onApplyFinished(ok, false, ok ? QStringList() : QStringList{error});
-    });
-#else
-    onApplyFinished(false, false, {});
-#endif
+    void *parentWindow = topLevel ? reinterpret_cast<void *>(topLevel->winId()) : nullptr;
+    OpenInNukeXOperations::instance()->startApply(m_associated, parentWindow);
+    updateBusyButtons();
 }
 
-void OpenInNukeXPanel::onApplyFinished(bool success, bool needsConfirmation, const QStringList &errors)
+void OpenInNukeXPanel::onApplyFinished(bool success, bool needsConfirmation, const QList<int> &issues)
 {
     m_applyRunning = false;
-    m_applyButton->setEnabled(true);
+    updateBusyButtons();
     refreshAssociation();
 
     if (success) {
         report(OpenInNukeXMessages::associationCompleted());
     } else if (needsConfirmation) {
         report(OpenInNukeXMessages::oneMoreStepInWindows());
-    } else if (!errors.isEmpty()) {
+    } else if (!issues.isEmpty()) {
 #ifdef Q_OS_MACOS
         // En mac el unico camino de fallo real es que Launch Services no haya entregado los .nk
         // (inventario: "Almost done"), con el detalle crudo solo en el log.
-        Q_UNUSED(errors);
         report(OpenInNukeXMessages::almostDoneMac());
 #else
-        report(OpenInNukeXMessages::associationFinishedWithWarnings(errors.join(QStringLiteral("<br>"))));
+        // El texto se arma ACA, en el hilo de la UI y en el idioma de este momento (el hilo de trabajo solo
+        // devolvio codigos).
+        QStringList lines;
+        for (const int issue : issues) {
+            lines << OpenInNukeXMessages::applyIssueText(static_cast<ApplyIssue>(issue));
+        }
+        report(OpenInNukeXMessages::associationFinishedWithWarnings(lines.join(QStringLiteral("<br>"))));
 #endif
     } else {
-        report(OpenInNukeXMessages::associationError(QStringLiteral("Unknown error.")));
+        report(OpenInNukeXMessages::associationError(I18n::tr("Unknown error.")));
     }
 }
 
@@ -354,16 +277,16 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
     layout->setContentsMargins(14, 12, 14, 12);
     layout->setSpacing(8);
 
-    layout->addWidget(Ui::label(QStringLiteral("Preferred Nuke version"), "cardTitle", card));
+    layout->addWidget(Ui::label(I18n::tr("Preferred Nuke version"), "cardTitle", card));
     auto *description = Ui::caption(
-        QStringLiteral("When no NukeX session is running, .nk files open with this NukeX version."), card);
+        I18n::tr("When no NukeX session is running, .nk files open with this NukeX version."), card);
     description->setWordWrap(true);
     layout->addWidget(description);
 
     m_scanStatusLabel = Ui::label(QString(), "caption", card);
     m_scanStatusLabel->setWordWrap(true);
     layout->addWidget(m_scanStatusLabel);
-    m_scanChooseLabel = Ui::caption(QStringLiteral("Choose one of the found versions or browse your own:"), card);
+    m_scanChooseLabel = Ui::caption(I18n::tr("Choose one of the found versions or browse your own:"), card);
     m_scanChooseLabel->setVisible(false);
     layout->addWidget(m_scanChooseLabel);
 
@@ -377,17 +300,17 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
     auto *pathRow = new QHBoxLayout();
     pathRow->setSpacing(6);
     m_pathField = makePathField(card);
-    m_pathField->setPlaceholderText(QStringLiteral("Path to NukeX executable"));
+    m_pathField->setPlaceholderText(I18n::tr("Path to NukeX executable"));
     pathRow->addWidget(m_pathField, 1);
-    m_browseButton = Ui::button(QStringLiteral("Browse..."), QString(), QString(), card);
+    m_browseButton = Ui::button(I18n::tr("Browse..."), QString(), QString(), card);
     pathRow->addWidget(m_browseButton);
-    m_saveButton = Ui::button(QStringLiteral("Save"), QStringLiteral("primary"), QString(), card);
+    m_saveButton = Ui::button(I18n::tr("Save"), QStringLiteral("primary"), QString(), card);
     pathRow->addWidget(m_saveButton);
     layout->addLayout(pathRow);
 
-    m_showNoticeCheck = new QCheckBox(QStringLiteral("Show a notice while a new NukeX opens"), card);
+    m_showNoticeCheck = new QCheckBox(I18n::tr("Show a notice while a new NukeX opens"), card);
     layout->addWidget(m_showNoticeCheck);
-    auto *noticeCaption = Ui::caption(QStringLiteral("A small window that closes itself after 3 seconds."), card);
+    auto *noticeCaption = Ui::caption(I18n::tr("A small window that closes itself after 3 seconds."), card);
     layout->addWidget(noticeCaption);
 
     if (m_interactive) {
@@ -415,20 +338,21 @@ void OpenInNukeXPanel::loadSavedNukePath()
 
 void OpenInNukeXPanel::startScan()
 {
-    m_scanStatusLabel->setText(QStringLiteral("Scanning for installed Nuke versions…"));
+    m_scanStatusLabel->setText(I18n::tr("Scanning for installed Nuke versions…"));
     m_scanner = new NukeScanner(this);
     connect(m_scanner, &NukeScanner::scanProgress, this, [this](const QString &path) {
         // Inventario: path truncado a 50 caracteres con "..." adelante.
         const QString shown = path.size() > 50 ? QStringLiteral("...") + path.right(47) : path;
-        m_scanStatusLabel->setText(QStringLiteral("Scanning: %1").arg(shown));
+        m_scanStatusLabel->setText(I18n::tr("Scanning: %1").arg(shown));
     });
     connect(m_scanner, &NukeScanner::scanFinished, this, [this](const QList<NukeVersion> &versions) {
         m_foundVersions = versions;
         if (versions.isEmpty()) {
-            m_scanStatusLabel->setText(QStringLiteral("No Nuke installations found in common locations"));
+            m_scanStatusLabel->setText(I18n::tr("No Nuke installations found in common locations"));
             Ui::setStyleProperty(m_scanStatusLabel, "tone", QStringLiteral("err"));
         } else {
-            m_scanStatusLabel->setText(QStringLiteral("%1 Nuke versions found:").arg(versions.size()));
+            m_scanStatusLabel->setText(versions.size() == 1 ? I18n::tr("%1 Nuke version found:").arg(versions.size())
+                                                      : I18n::tr("%1 Nuke versions found:").arg(versions.size()));
             Ui::setStyleProperty(m_scanStatusLabel, "tone", QString());
         }
         m_scanChooseLabel->setVisible(!versions.isEmpty());
@@ -494,7 +418,7 @@ void OpenInNukeXPanel::onBrowseNukeXClicked()
     const QString start = m_pathField->text().trimmed().isEmpty() ? QStringLiteral("C:/Program Files")
                                                                    : QFileInfo(m_pathField->text()).absolutePath();
     const QString picked =
-        QFileDialog::getOpenFileName(this, QStringLiteral("Path to NukeX executable"), start, QStringLiteral("Executable (*.exe)"));
+        QFileDialog::getOpenFileName(this, I18n::tr("Path to NukeX executable"), start, I18n::tr("Executable (*.exe)"));
     if (!picked.isEmpty()) {
         m_pathField->setText(QDir::toNativeSeparators(picked));
         updateChosenVersionHighlight();
@@ -549,47 +473,50 @@ QWidget *OpenInNukeXPanel::buildBridgeCard()
     layout->addLayout(head);
 
     auto *description = Ui::caption(
-        QStringLiteral("Lets LGA Mighty Tools find a running NukeX session and open .nk files directly in it."), card);
+        I18n::tr("Lets LGA Mighty Tools find a running NukeX session and open .nk files directly in it."), card);
     description->setWordWrap(true);
     layout->addWidget(description);
 
     auto *dirRow = new QHBoxLayout();
     dirRow->setSpacing(6);
     m_nukeDirField = makePathField(card);
-    m_nukeDirField->setPlaceholderText(QStringLiteral("Path to your .nuke folder"));
+    m_nukeDirField->setPlaceholderText(I18n::tr("Path to your .nuke folder"));
     dirRow->addWidget(m_nukeDirField, 1);
-    m_bridgeBrowseButton = Ui::button(QStringLiteral("Browse..."), QString(), QString(), card);
+    m_bridgeBrowseButton = Ui::button(I18n::tr("Browse..."), QString(), QString(), card);
     dirRow->addWidget(m_bridgeBrowseButton);
-    m_installButton = Ui::button(QStringLiteral("Install"), QStringLiteral("primary"), QString(), card);
+    m_installButton = Ui::button(I18n::tr("Install"), QStringLiteral("primary"), QString(), card);
     dirRow->addWidget(m_installButton);
     layout->addLayout(dirRow);
 
-    m_bridgeHint = Ui::caption(QString(), card);
+    // Texto enriquecido (el camino va en negrita): Ui::caption dibuja texto plano y mostraba las etiquetas
+    // <b> tal cual. Mismo objectName que el caption, asi toma sus colores de Theme.
+    m_bridgeHint = new RichLineLabel(QString(), 17, card);
+    m_bridgeHint->setObjectName(QStringLiteral("caption"));
     m_bridgeHint->setWordWrap(true);
     m_bridgeHint->setVisible(false);
     layout->addWidget(m_bridgeHint);
 
-    m_manualToggle = Ui::button(QStringLiteral("Install manually instead..."), QStringLiteral("ghost"), QString(), card);
+    m_manualToggle = Ui::button(I18n::tr("Install manually instead..."), QStringLiteral("ghost"), QString(), card);
     layout->addWidget(m_manualToggle, 0, Qt::AlignLeft);
 
     m_manualPanel = new QWidget(card);
     auto *manualLayout = new QVBoxLayout(m_manualPanel);
     manualLayout->setContentsMargins(10, 10, 10, 10);
     manualLayout->setSpacing(8);
-    manualLayout->addWidget(Ui::caption(QStringLiteral("1. Export the bridge files with the button below."), m_manualPanel));
+    manualLayout->addWidget(Ui::caption(I18n::tr("1. Export the bridge files with the button below."), m_manualPanel));
     manualLayout->addWidget(
-        Ui::caption(QStringLiteral("2. Copy the LGA_OpenInNukeX folder into your .nuke folder."), m_manualPanel));
+        Ui::caption(I18n::tr("2. Copy the LGA_OpenInNukeX folder into your .nuke folder."), m_manualPanel));
     manualLayout->addWidget(
-        Ui::caption(QStringLiteral("3. Add this line to the init.py inside .nuke:"), m_manualPanel));
+        Ui::caption(I18n::tr("3. Add this line to the init.py inside .nuke:"), m_manualPanel));
     auto *codeRow = new QHBoxLayout();
     auto *codeLabel = new QLabel(NukeBridge::pluginAddPathLine(), m_manualPanel);
     codeLabel->setObjectName(QStringLiteral("codeLine"));
     codeLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     codeRow->addWidget(codeLabel, 1);
-    m_copyLineButton = Ui::button(QStringLiteral("Copy line"), QString(), QStringLiteral("sm"), m_manualPanel);
+    m_copyLineButton = Ui::button(I18n::tr("Copy line"), QString(), QStringLiteral("sm"), m_manualPanel);
     codeRow->addWidget(m_copyLineButton);
     manualLayout->addLayout(codeRow);
-    m_exportButton = Ui::button(QStringLiteral("Export bridge files..."), QStringLiteral("primary"), QString(), m_manualPanel);
+    m_exportButton = Ui::button(I18n::tr("Export bridge files..."), QStringLiteral("primary"), QString(), m_manualPanel);
     manualLayout->addWidget(m_exportButton, 0, Qt::AlignLeft);
     m_manualPanel->setVisible(false);
     layout->addWidget(m_manualPanel);
@@ -628,30 +555,30 @@ void OpenInNukeXPanel::refreshBridgeStatus()
 
     QString chipTone;
     QString chipText;
-    QString buttonText = QStringLiteral("Install");
+    QString buttonText = I18n::tr("Install");
     QString buttonVariant;
     switch (chip) {
     case NukeBridge::ChipState::NotInstalled:
         chipTone = QStringLiteral("src");
-        chipText = QStringLiteral("Not installed");
+        chipText = I18n::tr("Not installed");
         buttonVariant = QStringLiteral("primary");
         break;
     case NukeBridge::ChipState::Installed:
         chipTone = QStringLiteral("ok");
         // La instalada: igual a la embebida, o MAS NUEVA (otra copia de la app mas reciente).
-        chipText = QStringLiteral("Installed · v%1").arg(status.installedVersion);
-        buttonText = QStringLiteral("Reinstall");
+        chipText = I18n::tr("Installed · v%1").arg(status.installedVersion);
+        buttonText = I18n::tr("Reinstall");
         break;
     case NukeBridge::ChipState::UpdateAvailable:
         chipTone = QStringLiteral("warn");
-        chipText = QStringLiteral("Update available · v%1").arg(NukeBridge::bundledVersion());
-        buttonText = QStringLiteral("Reinstall");
+        chipText = I18n::tr("Update available · v%1").arg(NukeBridge::bundledVersion());
+        buttonText = I18n::tr("Reinstall");
         buttonVariant = QStringLiteral("primary");
         break;
     case NukeBridge::ChipState::InstalledUnknownVersion:
         chipTone = QStringLiteral("warn");
-        chipText = QStringLiteral("Installed · unknown version");
-        buttonText = QStringLiteral("Reinstall");
+        chipText = I18n::tr("Installed · unknown version");
+        buttonText = I18n::tr("Reinstall");
         buttonVariant = QStringLiteral("primary");
         break;
     }
@@ -660,11 +587,11 @@ void OpenInNukeXPanel::refreshBridgeStatus()
     Ui::setStyleProperty(m_installButton, "variant", buttonVariant);
 
     if (nukeDir.isEmpty()) {
-        m_bridgeHint->setText(QStringLiteral("No Nuke folder found. Pick the one you use before installing."));
+        m_bridgeHint->setText(I18n::tr("No Nuke folder found. Pick the one you use before installing."));
         Ui::setStyleProperty(m_bridgeHint, "tone", QStringLiteral("warn"));
         m_bridgeHint->setVisible(true);
     } else if (chip == NukeBridge::ChipState::NotInstalled) {
-        m_bridgeHint->setText(QStringLiteral("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.").arg(nukeDir));
+        m_bridgeHint->setText(I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.").arg(nukeDir.toHtmlEscaped()));
         Ui::setStyleProperty(m_bridgeHint, "tone", QString());
         m_bridgeHint->setVisible(true);
     } else {
@@ -675,7 +602,7 @@ void OpenInNukeXPanel::refreshBridgeStatus()
 void OpenInNukeXPanel::onBrowseNukeDirClicked()
 {
     const QString start = m_nukeDirField->text().trimmed().isEmpty() ? QDir::homePath() : m_nukeDirField->text();
-    QFileDialog dialog(this, QStringLiteral("Path to your .nuke folder"), start);
+    QFileDialog dialog(this, I18n::tr("Path to your .nuke folder"), start);
     dialog.setFileMode(QFileDialog::Directory);
     dialog.setOption(QFileDialog::ShowDirsOnly, false); // inventario: "incluye ocultas"
     if (dialog.exec() == QDialog::Accepted && !dialog.selectedFiles().isEmpty()) {
@@ -706,7 +633,7 @@ void OpenInNukeXPanel::onInstallClicked()
 
 void OpenInNukeXPanel::onExportClicked()
 {
-    const QString dest = QFileDialog::getExistingDirectory(this, QStringLiteral("Export bridge files"), QDir::homePath());
+    const QString dest = QFileDialog::getExistingDirectory(this, I18n::tr("Export bridge files"), QDir::homePath());
     if (dest.isEmpty()) {
         return;
     }
@@ -726,10 +653,10 @@ void OpenInNukeXPanel::onExportClicked()
 void OpenInNukeXPanel::onCopyLineClicked()
 {
     QGuiApplication::clipboard()->setText(NukeBridge::pluginAddPathLine());
-    m_copyLineButton->setText(QStringLiteral("Copied"));
+    m_copyLineButton->setText(I18n::tr("Copied"));
     QTimer::singleShot(1500, this, [this]() {
         if (m_copyLineButton) {
-            m_copyLineButton->setText(QStringLiteral("Copy line"));
+            m_copyLineButton->setText(I18n::tr("Copy line"));
         }
     });
 }
@@ -738,21 +665,21 @@ void OpenInNukeXPanel::onToggleManualClicked()
 {
     m_manualOpen = !m_manualOpen;
     m_manualPanel->setVisible(m_manualOpen);
-    m_manualToggle->setText(m_manualOpen ? QStringLiteral("Hide manual instructions")
-                                        : QStringLiteral("Install manually instead..."));
+    m_manualToggle->setText(m_manualOpen ? I18n::tr("Hide manual instructions")
+                                        : I18n::tr("Install manually instead..."));
 }
 
 QWidget *OpenInNukeXPanel::buildOldClientNotice()
 {
     auto *card = new StatusCard(this);
-    card->set(QStringLiteral("warn"), QStringLiteral("The old LGA OpenInNukeX is still installed"),
-              QString::fromLatin1(kOldClientCaption), QStringLiteral("Open Apps settings"), QString(), QStringLiteral("warn"),
+    card->set(QStringLiteral("warn"), I18n::tr("The old LGA OpenInNukeX is still installed"),
+              oldClientCaption(), I18n::tr("Open Apps settings"), QString(), QStringLiteral("warn"),
               QStringLiteral("sm"));
     m_oldClientStatus = card;
     // "Uninstall old app", arriba de "Open Apps settings" y con su mismo aspecto (boton chico de
     // la tarjeta: objectName statusButton, btnSize sm). En columna y del mismo ancho: uno al lado
     // del otro ensanchaban la tarjeta mas que la pagina.
-    m_uninstallOldButton = Ui::button(QStringLiteral("Uninstall old app"), QString(), QStringLiteral("sm"), card);
+    m_uninstallOldButton = Ui::button(I18n::tr("Uninstall old app"), QString(), QStringLiteral("sm"), card);
     m_uninstallOldButton->setObjectName(QStringLiteral("statusButton"));
     if (auto *row = qobject_cast<QHBoxLayout *>(card->layout())) {
         const int index = row->indexOf(card->button());
@@ -777,45 +704,74 @@ QWidget *OpenInNukeXPanel::buildOldClientNotice()
 
 void OpenInNukeXPanel::onUninstallOldClicked()
 {
-    if (!m_interactive || m_uninstallRunning) {
+    auto *operations = OpenInNukeXOperations::instance();
+    if (!m_interactive || OpenInNukeXOperations::busy()) {
         return;
     }
 #ifdef Q_OS_WIN
-    OldClientMigration::Options options;
-    options.buildTree = AppPaths::isBuildTree();
-    // Corrida automatizada: nunca se lanza el desinstalador ni se escribe nada (solo se loguea).
-    options.launchAllowed = !m_context.automatedRun();
-    options.dryRun = m_context.automatedRun();
-
-    m_uninstallRunning = true;
-    m_uninstallOldButton->setEnabled(false);
-    m_uninstallOldButton->setText(QStringLiteral("Uninstalling..."));
-    m_oldClientStatus->set(QStringLiteral("warn"), m_oldClientStatus->title(),
-                           QStringLiteral("Follow the uninstaller. Windows may ask for permission."),
-                           m_oldClientStatus->button()->text(), QString(), QStringLiteral("warn"), QStringLiteral("sm"));
-
-    // Sin padre Qt y sin esperarlo en el destructor (puede tardar hasta ~2 min): el hilo se borra
-    // solo al terminar, y la conexion con `this` se corta sola si el panel ya no existe.
-    auto *thread = new QThread();
-    auto *worker = new RemoveOldClientWorker(options);
-    worker->moveToThread(thread);
-    connect(thread, &QThread::started, worker, &RemoveOldClientWorker::run);
-    connect(worker, &RemoveOldClientWorker::finished, this, &OpenInNukeXPanel::onUninstallOldFinished);
-    connect(worker, &RemoveOldClientWorker::finished, thread, &QThread::quit);
-    connect(worker, &RemoveOldClientWorker::finished, worker, &QObject::deleteLater);
-    connect(thread, &QThread::finished, thread, &QObject::deleteLater);
-    thread->start();
+    showUninstalling();
+    operations->startUninstall(AppPaths::isBuildTree(), m_context.automatedRun());
+    updateBusyButtons();
 #endif
+}
+
+// El estado "desinstalando": el boton deshabilitado y la leyenda que dice que se siga al desinstalador. Tambien lo
+// pone un panel nuevo si la desinstalacion ya estaba en curso cuando se armo.
+void OpenInNukeXPanel::showUninstalling()
+{
+    m_uninstallOldButton->setText(I18n::tr("Uninstalling..."));
+    m_oldClientStatus->set(QStringLiteral("warn"), m_oldClientStatus->title(),
+                           I18n::tr("Follow the uninstaller. Windows may ask for permission."),
+                           m_oldClientStatus->button()->text(), QString(), QStringLiteral("warn"), QStringLiteral("sm"));
+}
+
+// Retoma lo que este en curso (Apply, desinstalacion) si el panel anterior se borro con eso corriendo, y recibe sus
+// resultados: tambien uno que llego mientras no habia panel.
+void OpenInNukeXPanel::attachToOperations()
+{
+    auto *operations = OpenInNukeXOperations::instance();
+    connect(operations, &OpenInNukeXOperations::applyFinished, this, &OpenInNukeXPanel::onApplyFinished);
+    connect(operations, &OpenInNukeXOperations::uninstallFinished, this, &OpenInNukeXPanel::onUninstallOldFinished);
+    m_applyRunning = operations->applyRunning();
+#ifdef Q_OS_WIN
+    if (operations->uninstallRunning()) {
+        m_oldClientCard->setVisible(true);
+        showUninstalling();
+    }
+#endif
+    updateBusyButtons();
+    // Un resultado que llego sin panel se toma RECIEN al mostrarlo, y fuera del constructor (el de Apply abre un
+    // cuadro modal): si este panel se borra antes (otro cambio de idioma), el resultado sigue esperando en
+    // OpenInNukeXOperations y lo muestra el panel que lo reemplace.
+    QTimer::singleShot(0, this, [this]() {
+        auto *pending = OpenInNukeXOperations::instance();
+        const auto apply = pending->takePendingApply();
+        const auto uninstall = pending->takePendingUninstall();
+        if (apply.valid) {
+            onApplyFinished(apply.success, apply.needsConfirmation, apply.issues);
+        }
+        if (uninstall.valid) {
+            onUninstallOldFinished(uninstall.stillInstalled, uninstall.launched);
+        }
+    });
+}
+
+// Los botones que escriben la asociacion (Apply y Uninstall old app) quedan deshabilitados mientras cualquiera de
+// las dos operaciones este en curso.
+void OpenInNukeXPanel::updateBusyButtons()
+{
+    const bool busy = OpenInNukeXOperations::busy();
+    m_applyButton->setEnabled(!busy);
+    m_uninstallOldButton->setEnabled(!busy);
 }
 
 void OpenInNukeXPanel::onUninstallOldFinished(bool stillInstalled, bool launched)
 {
-    m_uninstallRunning = false;
-    m_uninstallOldButton->setEnabled(true);
-    m_uninstallOldButton->setText(QStringLiteral("Uninstall old app"));
-    const QString caption = !stillInstalled ? QString::fromLatin1(kOldClientCaption)
-                            : launched      ? QStringLiteral("It's still installed. Try again, or remove it from Apps settings.")
-                                            : QStringLiteral("Couldn't start its uninstaller. Remove it from Apps settings.");
+    updateBusyButtons();
+    m_uninstallOldButton->setText(I18n::tr("Uninstall old app"));
+    const QString caption = !stillInstalled ? oldClientCaption()
+                            : launched      ? I18n::tr("It's still installed. Try again, or remove it from Apps settings.")
+                                            : I18n::tr("Couldn't start its uninstaller. Remove it from Apps settings.");
     m_oldClientStatus->set(QStringLiteral("warn"), m_oldClientStatus->title(), caption, m_oldClientStatus->button()->text(),
                            QString(), QStringLiteral("warn"), QStringLiteral("sm"));
     m_oldClientCard->setVisible(stillInstalled);
@@ -855,22 +811,23 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     }
 
     const bool assocOk = state != QStringLiteral("first-time");
+    m_associated = assocOk;
     m_assocChip->set(assocOk ? QStringLiteral("ok") : QStringLiteral("warn"),
-                     assocOk ? QStringLiteral("Associated") : QStringLiteral("Not associated"));
-    m_applyButton->setText(assocOk ? QStringLiteral("Re-apply") : QStringLiteral("Apply"));
+                     assocOk ? I18n::tr("Associated") : I18n::tr("Not associated"));
+    m_applyButton->setText(assocOk ? I18n::tr("Re-apply") : I18n::tr("Apply"));
     Ui::setStyleProperty(m_applyButton, "variant", assocOk ? QString() : QStringLiteral("primary"));
 
     m_foundVersions.clear();
     if (state == QStringLiteral("scan-starting")) {
-        m_scanStatusLabel->setText(QStringLiteral("Scanning for installed Nuke versions…"));
+        m_scanStatusLabel->setText(I18n::tr("Scanning for installed Nuke versions…"));
     } else if (state == QStringLiteral("scan-walking") || state == QStringLiteral("first-time")) {
-        m_scanStatusLabel->setText(QStringLiteral("Scanning: ...\\Program Files\\Nuke16.0v4"));
+        m_scanStatusLabel->setText(I18n::tr("Scanning: %1").arg(QStringLiteral("...\\Program Files\\Nuke16.0v4")));
     } else if (state == QStringLiteral("scan-none") || state == QStringLiteral("no-nuke-manual-open")) {
-        m_scanStatusLabel->setText(QStringLiteral("No Nuke installations found in common locations"));
+        m_scanStatusLabel->setText(I18n::tr("No Nuke installations found in common locations"));
         Ui::setStyleProperty(m_scanStatusLabel, "tone", QStringLiteral("err"));
     } else {
         m_foundVersions = {v151, v160, v170};
-        m_scanStatusLabel->setText(QStringLiteral("3 Nuke versions found:"));
+        m_scanStatusLabel->setText(I18n::tr("%1 Nuke versions found:").arg(3));
         Ui::setStyleProperty(m_scanStatusLabel, "tone", QString());
     }
     m_scanChooseLabel->setVisible(!m_foundVersions.isEmpty());
@@ -881,8 +838,8 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
 
     // "Nuke Bridge"
     QString chipTone = QStringLiteral("ok");
-    QString chipText = QStringLiteral("Installed · v%1").arg(NukeBridge::bundledVersion());
-    QString buttonText = QStringLiteral("Reinstall");
+    QString chipText = I18n::tr("Installed · v%1").arg(NukeBridge::bundledVersion());
+    QString buttonText = I18n::tr("Reinstall");
     QString buttonVariant;
     bool hintVisible = false;
     QString hintText;
@@ -890,26 +847,27 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
 
     if (state == QStringLiteral("bridge-update")) {
         chipTone = QStringLiteral("warn");
-        chipText = QStringLiteral("Update available · v%1").arg(NukeBridge::bundledVersion());
+        chipText = I18n::tr("Update available · v%1").arg(NukeBridge::bundledVersion());
         buttonVariant = QStringLiteral("primary");
     } else if (state == QStringLiteral("bridge-unknown")) {
         chipTone = QStringLiteral("warn");
-        chipText = QStringLiteral("Installed · unknown version");
+        chipText = I18n::tr("Installed · unknown version");
         buttonVariant = QStringLiteral("primary");
     } else if (state == QStringLiteral("first-time") || state == QStringLiteral("scan-none")) {
         chipTone = QStringLiteral("src");
-        chipText = QStringLiteral("Not installed");
-        buttonText = QStringLiteral("Install");
+        chipText = I18n::tr("Not installed");
+        buttonText = I18n::tr("Install");
         buttonVariant = QStringLiteral("primary");
         hintVisible = true;
-        hintText = QStringLiteral("Found your Nuke folder at <b>C:\\Users\\lega\\.nuke</b>. Change it if you use a different one.");
+        hintText = I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.")
+                       .arg(QStringLiteral("C:\\Users\\lega\\.nuke"));
     } else if (state == QStringLiteral("no-nuke-manual-open")) {
         chipTone = QStringLiteral("src");
-        chipText = QStringLiteral("Not installed");
-        buttonText = QStringLiteral("Install");
+        chipText = I18n::tr("Not installed");
+        buttonText = I18n::tr("Install");
         buttonVariant = QStringLiteral("primary");
         hintVisible = true;
-        hintText = QStringLiteral("No Nuke folder found. Pick the one you use before installing.");
+        hintText = I18n::tr("No Nuke folder found. Pick the one you use before installing.");
         hintTone = QStringLiteral("warn");
     }
     m_bridgeChip->set(chipTone, chipText);
@@ -924,8 +882,8 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
 
     m_manualOpen = state == QStringLiteral("no-nuke-manual-open");
     m_manualPanel->setVisible(m_manualOpen);
-    m_manualToggle->setText(m_manualOpen ? QStringLiteral("Hide manual instructions")
-                                        : QStringLiteral("Install manually instead..."));
+    m_manualToggle->setText(m_manualOpen ? I18n::tr("Hide manual instructions")
+                                        : I18n::tr("Install manually instead..."));
     return true;
 }
 

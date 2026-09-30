@@ -1,6 +1,7 @@
 #include "modules/linkredirector/LinkRedirectorPanel.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
+#include "core/I18n.h"
 
 #include <QAction>
 #include <QApplication>
@@ -170,7 +171,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     auto *browsersLayout = new QVBoxLayout(browsersCard);
     browsersLayout->setContentsMargins(14, 12, 14, 12);
     browsersLayout->setSpacing(0);
-    QLabel *browsersTitle = Ui::label(QStringLiteral("Browsers"), "cardTitle", browsersCard);
+    QLabel *browsersTitle = Ui::label(I18n::tr("Browsers"), "cardTitle", browsersCard);
     browsersTitle->setMinimumHeight(22); // canvas .head: min-height 22px
     browsersLayout->addWidget(browsersTitle);
     browsersLayout->addSpacing(8);
@@ -195,9 +196,9 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
         box->addWidget(outField);
         grid->addLayout(box, 0, col);
     };
-    addBrowserColumn(0, QStringLiteral("Default browser"), QStringLiteral("For non-matching links"),
+    addBrowserColumn(0, I18n::tr("Default browser"), I18n::tr("For non-matching links"),
                      QStringLiteral("defaultBrowser"), m_defaultField);
-    addBrowserColumn(1, QStringLiteral("Alternative browser"), QStringLiteral("For matching links"),
+    addBrowserColumn(1, I18n::tr("Alternative browser"), I18n::tr("For matching links"),
                      QStringLiteral("alternativeBrowser"), m_alternativeField);
     browsersLayout->addLayout(grid);
     column->addWidget(browsersCard);
@@ -210,16 +211,16 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     auto *wordsHead = new QHBoxLayout();
     wordsHead->setContentsMargins(0, 0, 0, 0);
     wordsHead->setSpacing(6);
-    QLabel *wordsTitle = Ui::label(QStringLiteral("Match words"), "cardTitle", wordsCard);
+    QLabel *wordsTitle = Ui::label(I18n::tr("Match words"), "cardTitle", wordsCard);
     wordsTitle->setMinimumHeight(22); // canvas .head: min-height 22px
     wordsHead->addWidget(wordsTitle, 1);
     auto *autosavedChip = new Chip(wordsCard);
-    autosavedChip->set(QStringLiteral("src"), QStringLiteral("Autosaved"));
+    autosavedChip->set(QStringLiteral("src"), I18n::tr("Autosaved"));
     wordsHead->addWidget(autosavedChip, 0, Qt::AlignVCenter);
     wordsLayout->addLayout(wordsHead);
     wordsLayout->addSpacing(8);
     QLabel *wordsCaption = Ui::caption(
-        QStringLiteral("Links containing any of these open in the alternative browser. One keyword per line."),
+        I18n::tr("Links containing any of these open in the alternative browser. One keyword per line."),
         wordsCard);
     wordsCaption->setWordWrap(true);
     wordsCaption->setContentsMargins(0, 0, 0, 8);
@@ -268,6 +269,12 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
 
 LinkRedirectorPanel::~LinkRedirectorPanel()
 {
+    // Lo tipeado en los ultimos 500 ms todavia esta sin guardar: el panel se borra al cambiar de idioma (y al
+    // apagar la herramienta), asi que se guarda ahora.
+    if (m_autosaveTimer && m_autosaveTimer->isActive()) {
+        m_autosaveTimer->stop();
+        saveMatchWordsNow();
+    }
     qApp->removeEventFilter(this);
 }
 
@@ -318,13 +325,13 @@ void LinkRedirectorPanel::refreshStatus()
         m_makeDefaultRequested = false;
     }
     if (isDefault) {
-        m_statusCard->set(QStringLiteral("on"), QStringLiteral("Link Redirector is routing your links"),
-                          QStringLiteral("Default browser is active · matching links use your alternative browser"),
+        m_statusCard->set(QStringLiteral("on"), I18n::tr("Link Redirector is routing your links"),
+                          I18n::tr("Default browser is active · matching links use your alternative browser"),
                           QString(), QString(), QString());
     } else {
-        m_statusCard->set(QStringLiteral("warn"), QStringLiteral("Make LGA Mighty Tools your default browser"),
-                          QStringLiteral("Choose Make Default to start routing links automatically"),
-                          QStringLiteral("Make Default"), QStringLiteral("primary"), QStringLiteral("warn"));
+        m_statusCard->set(QStringLiteral("warn"), I18n::tr("Make LGA Mighty Tools your default browser"),
+                          I18n::tr("Choose Make Default to start routing links automatically"),
+                          I18n::tr("Make Default"), QStringLiteral("primary"), QStringLiteral("warn"));
     }
 }
 
@@ -340,7 +347,7 @@ void LinkRedirectorPanel::refreshBrowserField(LinkRedirectorComboField *field, c
     const QList<DetectedBrowser> detected = m_sources.detectedBrowsers ? m_sources.detectedBrowsers() : QList<DetectedBrowser>();
     const QList<ComboItem> items = LinkRedirectorRouting::buildBrowserComboItems(configured, detected);
     const QString label = LinkRedirectorRouting::selectedComboLabel(items);
-    field->setValueText(label, label == QLatin1String("-"));
+    field->setValueText(label, LinkRedirectorRouting::selectedComboIsNone(items));
 }
 
 LinkRedirectorComboField *LinkRedirectorPanel::buildBrowserField(const QString &settingsKey, QWidget *parent)
@@ -403,12 +410,12 @@ void LinkRedirectorPanel::chooseBrowser(const QString &settingsKey, LinkRedirect
 void LinkRedirectorPanel::openBrowseDialog(const QString &settingsKey, LinkRedirectorComboField *field)
 {
 #if defined(Q_OS_MACOS)
-    const QString title = QStringLiteral("Select browser app or executable");
-    const QString filter = QStringLiteral("Applications (*.app);;All files (*)");
+    const QString title = I18n::tr("Select browser app or executable");
+    const QString filter = I18n::tr("Applications (*.app);;All files (*)");
     const QString startDir = QStringLiteral("/Applications");
 #else
-    const QString title = QStringLiteral("Select browser executable");
-    const QString filter = QStringLiteral("Executables (*.exe)");
+    const QString title = I18n::tr("Select browser executable");
+    const QString filter = I18n::tr("Executables (*.exe)");
     const QString startDir = QStringLiteral("C:/Program Files");
 #endif
     const QString chosen = QFileDialog::getOpenFileName(this, title, startDir, filter);

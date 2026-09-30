@@ -1,6 +1,7 @@
 #include "modules/folderswitch/RecentFoldersPopup.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
+#include "core/I18n.h"
 
 #include <QEventLoop>
 #include <QGuiApplication>
@@ -42,8 +43,16 @@ constexpr int kShadowOffsetY = 8;
 // La tarjeta aparece corrida del puntero, como un menu contextual.
 const QPoint kCursorOffset(4, 6);
 
-const QString kEmptyTitle = QStringLiteral("No folders yet");
-const QString kEmptyText = QStringLiteral("Open a folder in Explorer or XYplorer, then come back to this dialog.");
+// Funciones y no constantes: el texto depende del idioma elegido al momento de dibujar.
+QString emptyTitle()
+{
+    return I18n::tr("No folders yet");
+}
+
+QString emptyText()
+{
+    return I18n::tr("Open a folder in Explorer or XYplorer, then come back to this dialog.");
+}
 
 // Ancho del texto del estado vacio: la tarjeta menos su relleno, el icono y los aires.
 int emptyTextWidth()
@@ -57,7 +66,7 @@ int emptyBodyHeight()
 {
     const QFontMetrics title(Theme::uiFont(13.5, QFont::Medium));
     const QFontMetrics text(Theme::uiFont(12.5));
-    const QRect wrapped = text.boundingRect(QRect(0, 0, emptyTextWidth(), 1000), Qt::TextWordWrap, kEmptyText);
+    const QRect wrapped = text.boundingRect(QRect(0, 0, emptyTextWidth(), 1000), Qt::TextWordWrap, emptyText());
     return kEmptyPad + title.height() + 3 + wrapped.height() + kEmptyPad;
 }
 
@@ -271,14 +280,15 @@ void RecentFoldersPopup::paintEvent(QPaintEvent *)
     const QRect header(card.left() + kPad + 10, card.top() + kPad, card.width() - 2 * kPad - 18, kHeaderHeight);
     painter.setFont(Theme::uiFont(12, QFont::DemiBold));
     painter.setPen(Theme::color(Theme::kTextMuted));
-    painter.drawText(header, Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("Recent folders"));
+    painter.drawText(header, Qt::AlignLeft | Qt::AlignVCenter, I18n::tr("Recent folders"));
     if (!m_folders.isEmpty()) {
         // "Press 1-N" con los numeros en el violeta de acento.
         const QString last = QString::number(qMin<int>(m_folders.size(), 9));
+        const QString press = I18n::tr("Press") + QLatin1Char(' ');
         const QList<QPair<QString, bool>> parts = m_folders.size() > 1
-            ? QList<QPair<QString, bool>>{{QStringLiteral("Press "), false}, {QStringLiteral("1"), true},
+            ? QList<QPair<QString, bool>>{{press, false}, {QStringLiteral("1"), true},
                                           {QStringLiteral("\u2013"), false}, {last, true}}
-            : QList<QPair<QString, bool>>{{QStringLiteral("Press "), false}, {QStringLiteral("1"), true}};
+            : QList<QPair<QString, bool>>{{press, false}, {QStringLiteral("1"), true}};
         const QFont plain = Theme::uiFont(11.5);
         const QFont strong = Theme::uiFont(11.5, QFont::Bold);
         int width = 0;
@@ -311,11 +321,11 @@ void RecentFoldersPopup::paintEvent(QPaintEvent *)
         painter.setPen(Theme::color(Theme::kText));
         const int titleHeight = QFontMetrics(painter.font()).height();
         painter.drawText(QRect(textLeft, top + kEmptyPad, emptyTextWidth(), titleHeight), Qt::AlignLeft | Qt::AlignVCenter,
-                         kEmptyTitle);
+                         emptyTitle());
         painter.setFont(Theme::uiFont(12.5));
         painter.setPen(Theme::color(Theme::kTextFaint));
         painter.drawText(QRect(textLeft, top + kEmptyPad + titleHeight + 3, emptyTextWidth(), 1000), Qt::TextWordWrap,
-                         kEmptyText);
+                         emptyText());
         return;
     }
 

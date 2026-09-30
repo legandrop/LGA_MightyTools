@@ -1,6 +1,7 @@
 #include "modules/linkredirector/BrowserRegistration.h"
 #include "modules/linkredirector/BrowserDetection.h"
 #include "platform/win/RegistryHelper.h"
+#include "core/I18n.h"
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -150,7 +151,7 @@ bool unregisterAsBrowser(QString *error)
             << "| RegisteredApplications:" << (registeredOwned ? "borrado" : "no era de este exe")
             << "| ok:" << ok;
     if (!ok && error) {
-        *error = QStringLiteral("Could not remove all the browser registration keys.");
+        *error = I18n::tr("Could not remove all the browser registration keys.");
     }
     return ok;
 }

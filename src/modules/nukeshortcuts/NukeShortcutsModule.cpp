@@ -1,4 +1,5 @@
 #include "modules/nukeshortcuts/NukeShortcutsModule.h"
+#include "core/I18n.h"
 
 #include "app/HotkeyHub.h"
 #include "app/ModuleContext.h"
@@ -369,16 +370,16 @@ QString NukeShortcutsModule::validateShortcut(ShortcutAction action, const Short
     const ShortcutAction other =
         action == ShortcutAction::AddKeyframe ? ShortcutAction::FrameDopeSheet : ShortcutAction::AddKeyframe;
     if (m_state->shortcut(other) == shortcut) {
-        return QStringLiteral("Already used by %1.").arg(NukeShortcutsState::actionTitle(other));
+        return I18n::tr("Already used by %1.").arg(NukeShortcutsState::actionTitle(other));
     }
     // Otra herramienta (prendida o apagada) antes que otra app: RegisterHotKey tambien rechaza los
     // duplicados del mismo proceso y el mensaje diria "another app".
     const QString tool = context().hotkeys()->declaredByOtherModule(shortcut);
     if (!tool.isEmpty()) {
-        return QStringLiteral("Already used by %1.").arg(tool);
+        return I18n::tr("Already used by %1.").arg(tool);
     }
     if (!context().hotkeys()->probe(shortcut)) {
-        return QStringLiteral("%1 is taken by another app.").arg(shortcut.displayText());
+        return I18n::tr("%1 is taken by another app.").arg(shortcut.displayText());
     }
     return QString();
 }
@@ -412,8 +413,8 @@ void NukeShortcutsModule::onHotkey(int localId)
     }
     if (!m_state->hasDopeSheetSpot()) {
         qInfo() << "[NukeShortcuts] Frame Dope Sheet sin calibrar";
-        context().notify(QStringLiteral("Frame Dope Sheet"),
-                         QStringLiteral("Calibrate the Dope Sheet first: one click, from the tray menu."),
+        context().notify(I18n::tr("Frame Dope Sheet"),
+                         I18n::tr("Calibrate the Dope Sheet first: one click, from the tray menu."),
                          ModuleContext::NoticeIcon::Info, 6000);
         return;
     }
@@ -480,19 +481,19 @@ void NukeShortcutsModule::openAccessibilitySettings()
 ModuleStatus NukeShortcutsModule::status() const
 {
     if (needsPermission() && !m_state->accessibilityGranted()) {
-        return {ModuleTone::Attention, QStringLiteral("Accessibility needed")};
+        return {ModuleTone::Attention, I18n::tr("Accessibility needed")};
     }
     if (m_state->paused()) {
-        return {ModuleTone::Paused, QStringLiteral("Paused")};
+        return {ModuleTone::Paused, I18n::tr("Paused")};
     }
     if (m_state->registration(ShortcutAction::AddKeyframe) == NukeShortcutsState::Registration::Failed
         || m_state->registration(ShortcutAction::FrameDopeSheet) == NukeShortcutsState::Registration::Failed) {
-        return {ModuleTone::Error, QStringLiteral("Shortcut taken")};
+        return {ModuleTone::Error, I18n::tr("Shortcut taken")};
     }
     if (!m_state->hasDopeSheetSpot()) {
-        return {ModuleTone::Attention, QStringLiteral("Not calibrated")};
+        return {ModuleTone::Attention, I18n::tr("Not calibrated")};
     }
-    return {ModuleTone::Active, m_state->nukeInFront() ? QStringLiteral("On · Nuke in front") : QStringLiteral("On")};
+    return {ModuleTone::Active, m_state->nukeInFront() ? I18n::tr("On · Nuke in front") : I18n::tr("On")};
 }
 
 bool NukeShortcutsModule::isPaused() const
@@ -512,7 +513,9 @@ QWidget *NukeShortcutsModule::createPanel(QWidget *parent)
         panel->shortcutRow(ShortcutAction::AddKeyframe)->showRecordingFixture(QStringLiteral("Ctrl + Shift + ..."));
     } else if (m_captureState == QLatin1String("rejected")) {
         panel->shortcutRow(ShortcutAction::AddKeyframe)
-            ->setError(QStringLiteral("Ctrl+Alt+K is taken by another app. Kept Ctrl+Shift+D."));
+            ->setError(I18n::tr("%1 Kept %2.")
+                            .arg(I18n::tr("%1 is taken by another app.").arg(QStringLiteral("Ctrl+Alt+K")),
+                                 QStringLiteral("Ctrl+Shift+D")));
     }
     m_panel = panel;
     return panel;
@@ -520,9 +523,9 @@ QWidget *NukeShortcutsModule::createPanel(QWidget *parent)
 
 void NukeShortcutsModule::fillTrayMenu(QMenu *menu)
 {
-    QAction *toggle = menu->addAction(m_state->paused() ? QStringLiteral("Resume shortcuts") : QStringLiteral("Pause shortcuts"));
+    QAction *toggle = menu->addAction(m_state->paused() ? I18n::tr("Resume shortcuts") : I18n::tr("Pause shortcuts"));
     connect(toggle, &QAction::triggered, this, [this]() { m_state->setPaused(!m_state->paused()); });
-    QAction *calibrate = menu->addAction(QStringLiteral("Calibrate Dope Sheet..."));
+    QAction *calibrate = menu->addAction(I18n::tr("Calibrate Dope Sheet..."));
     connect(calibrate, &QAction::triggered, this, &NukeShortcutsModule::startCalibration);
 }
 
@@ -607,11 +610,11 @@ ModuleDescriptor nukeShortcutsDescriptor()
     ModuleDescriptor d;
     d.id = kId;
     d.title = QStringLiteral("Nuke Shortcuts");
-    d.description = QStringLiteral(
+    d.description = I18n::tr(
         "Two shortcuts for Nuke: set a key on the knob under the pointer, and frame every key in the Dope Sheet.");
-    d.offBullets = {QStringLiteral("Registers two shortcuts, only while Nuke is in front"),
-                    QStringLiteral("Clicks and types in Nuke for you"),
-                    QStringLiteral("Needs one calibration click on the Dope Sheet")};
+    d.offBullets = {I18n::tr("Registers two shortcuts, only while Nuke is in front"),
+                    I18n::tr("Clicks and types in Nuke for you"),
+                    I18n::tr("Needs one calibration click on the Dope Sheet")};
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintNukeIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> { return std::make_unique<NukeShortcutsModule>(context); };
@@ -628,12 +631,12 @@ HelpSection nukeShortcutsHelp(const SettingsReader &value)
     HelpSection section;
     section.title = QStringLiteral("Nuke Shortcuts");
     section.steps = {
-        QStringLiteral("Put the pointer over a knob in Nuke and press %1 to set a key.")
+        I18n::tr("Put the pointer over a knob in Nuke and press %1 to set a key.")
             .arg(HelpSection::strong(configured(value, ShortcutAction::AddKeyframe).displayText())),
-        QStringLiteral("Calibrate the %1 once: one click on an empty spot.").arg(HelpSection::strong(QStringLiteral("Dope Sheet"))),
-        QStringLiteral("Press %1 to select every key in the Dope Sheet and frame them.")
+        I18n::tr("Calibrate the %1 once: one click on an empty spot.").arg(HelpSection::strong(QStringLiteral("Dope Sheet"))),
+        I18n::tr("Press %1 to select every key in the Dope Sheet and frame them.")
             .arg(HelpSection::strong(configured(value, ShortcutAction::FrameDopeSheet).displayText())),
     };
-    section.note = QStringLiteral("The shortcuts only work while Nuke is in front; other apps keep these keys.");
+    section.note = I18n::tr("The shortcuts only work while Nuke is in front; other apps keep these keys.");
     return section;
 }

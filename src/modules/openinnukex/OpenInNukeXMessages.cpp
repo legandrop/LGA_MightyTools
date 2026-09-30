@@ -1,5 +1,6 @@
 #include "modules/openinnukex/OpenInNukeXMessages.h"
 
+#include "core/I18n.h"
 #include "ui/Theme.h"
 
 #include <QDialog>
@@ -26,62 +27,83 @@ namespace OpenInNukeXMessages {
 
 OpenInNukeXMessage chooseVersionFirst()
 {
-    return {QStringLiteral("Warning"), QStringLiteral("Choose a NukeX version first."),
+    return {I18n::tr("Warning"), I18n::tr("Choose a NukeX version first."),
             OpenInNukeXMessage::Icon::Warning};
 }
 
 OpenInNukeXMessage fileNoLongerExists()
 {
-    return {QStringLiteral("Error"), QStringLiteral("That file no longer exists."),
+    return {QStringLiteral("Error"), I18n::tr("That file no longer exists."),
             OpenInNukeXMessage::Icon::Critical};
 }
 
 OpenInNukeXMessage notANukeExecutable()
 {
-    return {QStringLiteral("Warning"),
-            QStringLiteral("That file does not look like a Nuke executable. Saving it anyway."),
+    return {I18n::tr("Warning"),
+            I18n::tr("That file does not look like a Nuke executable. Saving it anyway."),
             OpenInNukeXMessage::Icon::Warning};
 }
 
 OpenInNukeXMessage nukeVersionSaved(const QString &path)
 {
-    return {QStringLiteral("Nuke version saved"),
-            QStringLiteral(".nk files will open with this NukeX build:") + colorizedPath(path),
+    return {I18n::tr("Nuke version saved"),
+            I18n::tr(".nk files will open with this NukeX build:") + colorizedPath(path),
             OpenInNukeXMessage::Icon::Information};
 }
 
 OpenInNukeXMessage associationCompleted()
 {
-    return {QStringLiteral("Association completed"),
-            QStringLiteral("Double-clicking a .nk file now opens it with LGA Mighty Tools."),
+    return {I18n::tr("Association completed"),
+            I18n::tr("Double-clicking a .nk file now opens it with LGA Mighty Tools."),
             OpenInNukeXMessage::Icon::Information};
 }
 
 OpenInNukeXMessage oneMoreStepInWindows()
 {
-    return {QStringLiteral("One more step in Windows"),
-            QStringLiteral("LGA Mighty Tools is registered. Choose it as the app for .nk files "
+    return {I18n::tr("One more step in Windows"),
+            I18n::tr("LGA Mighty Tools is registered. Choose it as the app for .nk files "
                             "in the Windows dialog or in Default apps, then try a .nk file."),
             OpenInNukeXMessage::Icon::Information};
 }
 
+QString applyIssueText(ApplyIssue issue)
+{
+    switch (issue) {
+    case ApplyIssue::RegisterProgId:
+        return I18n::tr("Could not register the ProgID.");
+    case ApplyIssue::RegisterDefaultApps:
+        return I18n::tr("Could not register the app in Default apps.");
+    case ApplyIssue::RegisterExtension:
+        return I18n::tr("Could not register the .nk extension.");
+    case ApplyIssue::CleanRegistry:
+        return I18n::tr("Could not clean up the registry.");
+    case ApplyIssue::WriteAssociation:
+        return I18n::tr("Could not write the .nk association.");
+    case ApplyIssue::OpenDefaultApps:
+        return I18n::tr("Could not open Windows Default apps.");
+    case ApplyIssue::Unknown:
+        break;
+    }
+    return I18n::tr("Unknown error.");
+}
+
 OpenInNukeXMessage associationFinishedWithWarnings(const QString &technicalDetails)
 {
-    return {QStringLiteral("Association finished with warnings"), technicalDetails,
+    return {I18n::tr("Association finished with warnings"), technicalDetails,
             OpenInNukeXMessage::Icon::Warning};
 }
 
 OpenInNukeXMessage associationError(const QString &errorText)
 {
     return {QStringLiteral("Error"),
-            QStringLiteral("Something went wrong while associating .nk files. %1").arg(errorText),
+            I18n::tr("Something went wrong while associating .nk files. %1").arg(errorText),
             OpenInNukeXMessage::Icon::Critical};
 }
 
 OpenInNukeXMessage almostDoneMac()
 {
-    return {QStringLiteral("Almost done"),
-            QStringLiteral("The app is registered, but macOS did not hand it the .nk files. "
+    return {I18n::tr("Almost done"),
+            I18n::tr("The app is registered, but macOS did not hand it the .nk files. "
                             "Right-click any .nk in Finder, choose Get Info, pick LGA Mighty Tools "
                             "under Open with and click Change All."),
             OpenInNukeXMessage::Icon::Information};
@@ -89,8 +111,8 @@ OpenInNukeXMessage almostDoneMac()
 
 OpenInNukeXMessage runningFromBuildFolder()
 {
-    return {QStringLiteral("Warning"),
-            QStringLiteral("This copy is running from a build folder, so associating .nk files "
+    return {I18n::tr("Warning"),
+            I18n::tr("This copy is running from a build folder, so associating .nk files "
                             "with it would break as soon as that folder is rebuilt. Run the "
                             "installed copy instead."),
             OpenInNukeXMessage::Icon::Warning};
@@ -98,27 +120,27 @@ OpenInNukeXMessage runningFromBuildFolder()
 
 OpenInNukeXMessage bridgeInstalled(const QString &path)
 {
-    return {QStringLiteral("Nuke Bridge installed"),
-            QStringLiteral("The bridge is in place. Restart NukeX for it to start listening.") + colorizedPath(path),
+    return {I18n::tr("Nuke Bridge installed"),
+            I18n::tr("The bridge is in place. Restart NukeX for it to start listening.") + colorizedPath(path),
             OpenInNukeXMessage::Icon::Information};
 }
 
 OpenInNukeXMessage bridgeExported(const QString &path)
 {
-    return {QStringLiteral("Bridge files exported"),
-            QStringLiteral("Follow the three steps with these files:") + colorizedPath(path),
+    return {I18n::tr("Bridge files exported"),
+            I18n::tr("Follow the three steps with these files:") + colorizedPath(path),
             OpenInNukeXMessage::Icon::Information};
 }
 
 OpenInNukeXMessage bridgeError(NukeBridge::Error error)
 {
-    static const QString title = QStringLiteral("Could not install the Nuke Bridge");
+    const QString title = I18n::tr("Could not install the Nuke Bridge");
     switch (error) {
     case NukeBridge::Error::DirMissing:
-        return {title, QStringLiteral("That folder does not exist."), OpenInNukeXMessage::Icon::Critical};
+        return {title, I18n::tr("That folder does not exist."), OpenInNukeXMessage::Icon::Critical};
     case NukeBridge::Error::SourceRepo:
         return {title,
-                QStringLiteral("That folder is the plugin's source repository, not a .nuke "
+                I18n::tr("That folder is the plugin's source repository, not a .nuke "
                                 "folder. Installing there would overwrite the source files."),
                 OpenInNukeXMessage::Icon::Critical};
     case NukeBridge::Error::PayloadMissing:
@@ -128,36 +150,36 @@ OpenInNukeXMessage bridgeError(NukeBridge::Error error)
         // incompleto (el .qrc no se compilo), nunca por una descarga. Confirmado por el
         // supervisor: se usa el original traducido en vez del texto literal del canvas.
         return {title,
-                QStringLiteral("This copy of LGA Mighty Tools does not carry the bridge files. "
+                I18n::tr("This copy of LGA Mighty Tools does not carry the bridge files. "
                                 "The build is incomplete: download the app again."),
                 OpenInNukeXMessage::Icon::Critical};
     case NukeBridge::Error::WriteFailed:
-        return {title, QStringLiteral("Could not write to that folder. Check that you have permission on it."),
+        return {title, I18n::tr("Could not write to that folder. Check that you have permission on it."),
                 OpenInNukeXMessage::Icon::Critical};
     case NukeBridge::Error::None:
         break;
     }
-    return {title, QStringLiteral("Unknown error."), OpenInNukeXMessage::Icon::Critical};
+    return {title, I18n::tr("Unknown error."), OpenInNukeXMessage::Icon::Critical};
 }
 
 OpenInNukeXMessage nukeNotConfigured()
 {
     return {QStringLiteral("Open in NukeX"),
-            QStringLiteral("Nuke isn't set up yet. Open LGA Mighty Tools and choose a NukeX version."),
+            I18n::tr("Nuke isn't set up yet. Open LGA Mighty Tools and choose a NukeX version."),
             OpenInNukeXMessage::Icon::Warning};
 }
 
 OpenInNukeXMessage nukeXPathGone(const QString &path)
 {
     return {QStringLiteral("Open in NukeX"),
-            QStringLiteral("The saved NukeX no longer exists:") + colorizedPath(path),
+            I18n::tr("The saved NukeX no longer exists:") + colorizedPath(path),
             OpenInNukeXMessage::Icon::Warning};
 }
 
 OpenInNukeXMessage nukeXFailedToStart(const QString &errorDetail)
 {
     return {QStringLiteral("Open in NukeX"),
-            QStringLiteral("NukeX could not start. Error: %1").arg(errorDetail),
+            I18n::tr("NukeX could not start. Error: %1").arg(errorDetail),
             OpenInNukeXMessage::Icon::Critical};
 }
 
@@ -216,11 +238,11 @@ QDialog *buildLaunchNoticeWidget(QWidget *parent)
     dialog->setModal(false);
 
     auto *layout = new QVBoxLayout(dialog);
-    auto *label = new QLabel(QStringLiteral("No NukeX instance found, opening a new one..."), dialog);
+    auto *label = new QLabel(I18n::tr("No NukeX instance found, opening a new one..."), dialog);
     label->setWordWrap(true);
     layout->addWidget(label);
 
-    auto *closeButton = new QPushButton(QStringLiteral("Closing in 3 seconds"), dialog);
+    auto *closeButton = new QPushButton(I18n::tr("Closing in %1 seconds").arg(3), dialog);
     closeButton->setObjectName(QStringLiteral("launcherCountdown"));
     closeButton->setEnabled(false);
     layout->addWidget(closeButton);
@@ -238,7 +260,8 @@ QDialog *buildLaunchNoticeWidget(QWidget *parent)
             dialog->accept();
             return;
         }
-        closeButton->setText(QStringLiteral("Closing in %1 second%2").arg(secondsLeft).arg(secondsLeft == 1 ? "" : "s"));
+        closeButton->setText(secondsLeft == 1 ? I18n::tr("Closing in %1 second").arg(secondsLeft)
+                                          : I18n::tr("Closing in %1 seconds").arg(secondsLeft));
     });
     return dialog;
 }

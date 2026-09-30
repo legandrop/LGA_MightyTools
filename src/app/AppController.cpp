@@ -8,6 +8,7 @@
 #include "app/TrayMenu.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "core/I18n.h"
 #include "platform/AutoStart.h"
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
@@ -25,6 +26,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QSystemTrayIcon>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -34,6 +36,7 @@ const QString kCheckUpdates = QStringLiteral("app/checkUpdatesAtStartup");
 const QString kFirstRunCompleted = QStringLiteral("app/firstRunCompleted");
 const QString kWelcomeDone = QStringLiteral("app/welcomeDone");
 const QString kAutoStartDecided = QStringLiteral("app/autoStartDecided");
+const QString kLanguage = QStringLiteral("app/language");
 
 // Los argumentos que vuelven con el click en un aviso: "module=diskSpace&action=snooze&key=C%3A%2F".
 QString noticeArguments(const QString &moduleId, const QString &action, const QString &key)
@@ -59,6 +62,8 @@ AppController::AppController(const Options &options, QObject *parent)
         m_store = std::make_unique<FileSettingsStore>();
     }
     m_buildTree = LgaBuildTree::isBuildTree(AppPaths::exeDir());
+    // Antes de armar cualquier texto. Sin valor guardado (o en la medicion): ingles.
+    I18n::setLanguage(I18n::fromCode(m_store->value(kLanguage).toString()));
 
     HostOptions hostOptions;
     hostOptions.automatedRun = m_options.measurement;
@@ -85,10 +90,7 @@ AppController::AppController(const Options &options, QObject *parent)
         HelpDialog dialog(sections, m_window);
         dialog.execOver(m_window);
     });
-    GeneralPage *general = m_window->generalPage();
-    connect(general, &GeneralPage::autoStartToggled, this, &AppController::onAutoStartToggled);
-    connect(general, &GeneralPage::checkUpdatesAtStartupToggled, this,
-            [this](bool check) { m_store->setValue(kCheckUpdates, check); });
+    connect(m_window, &MainWindow::rebuilt, this, &AppController::wireGeneralPage);
 
     connect(m_host, &ModuleHost::moduleToggled, this, [this]() { refreshTray(); });
     connect(m_host, &ModuleHost::moduleStatusChanged, this, [this]() { refreshTray(); });
@@ -141,14 +143,11 @@ AppController::AppController(const Options &options, QObject *parent)
         });
         connect(m_updates, &UpdateService::checkFailed, this,
                 [this]() { m_window->setUpdateState(UpdateRowState()); });
-        connect(general, &GeneralPage::checkNowRequested, m_updates, &UpdateService::checkInline);
-        connect(general, &GeneralPage::updateRequested, m_updates, &UpdateService::installAvailable);
     }
 #endif
 
+    wireGeneralPage();
     const bool checkUpdates = m_store->value(kCheckUpdates, true).toBool();
-    general->setCheckUpdatesAtStartup(checkUpdates);
-    refreshAutoStart();
 
     m_host->startEnabled();
     m_window->setFirstRun(firstRunView());
@@ -268,6 +267,41 @@ void AppController::onAutoStartToggled(bool enabled)
             << (AutoStart::storedCommand().isEmpty() ? QStringLiteral("(ninguno)") : AutoStart::storedCommand());
     m_store->setValue(kAutoStartDecided, true);
     refreshAutoStart();
+}
+
+void AppController::wireGeneralPage()
+{
+    GeneralPage *general = m_window->generalPage();
+    connect(general, &GeneralPage::autoStartToggled, this, &AppController::onAutoStartToggled);
+    connect(general, &GeneralPage::checkUpdatesAtStartupToggled, this,
+            [this](bool check) { m_store->setValue(kCheckUpdates, check); });
+    connect(general, &GeneralPage::languageChangeRequested, this, &AppController::onLanguageChangeRequested);
+#ifdef Q_OS_WIN
+    if (m_updates) {
+        connect(general, &GeneralPage::checkNowRequested, m_updates, &UpdateService::checkInline);
+        connect(general, &GeneralPage::updateRequested, m_updates, &UpdateService::installAvailable);
+    }
+#endif
+    general->setCheckUpdatesAtStartup(m_store->value(kCheckUpdates, true).toBool());
+    refreshAutoStart();
+}
+
+void AppController::onLanguageChangeRequested(const QString &code)
+{
+    const I18n::Language language = I18n::fromCode(code);
+    if (language == I18n::language()) {
+        return;
+    }
+    m_store->setValue(kLanguage, I18n::code(language));
+    I18n::setLanguage(language);
+    m_host->refreshDescriptorTexts(ModuleRegistry::all());
+    qInfo().noquote() << QStringLiteral("[AppController] Idioma: %1").arg(I18n::code(language));
+    // Fuera de la senal: el desplegable que la mando es parte de lo que se borra. El menu de la
+    // bandeja, los avisos y la ayuda se arman al vuelo y ya salen en el idioma nuevo.
+    QTimer::singleShot(0, this, [this]() {
+        m_window->rebuildUi();
+        refreshTray();
+    });
 }
 
 void AppController::refreshTray()

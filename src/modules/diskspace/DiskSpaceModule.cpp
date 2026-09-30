@@ -1,4 +1,5 @@
 #include "modules/diskspace/DiskSpaceModule.h"
+#include "core/I18n.h"
 
 #include "app/ModuleContext.h"
 #include "app/ModuleContextImpl.h"
@@ -134,7 +135,7 @@ QString lowLine(const DiskState &state, const DiskWatch &watch)
 {
     DriveInfo drive;
     state.driveReading(watch.root, &drive);
-    return QStringLiteral("%1 is low · %2 free").arg(drive.label, DiskSpace::formatBytes(drive.freeBytes));
+    return I18n::tr("%1 is low · %2 free").arg(drive.label, DiskSpace::formatBytes(drive.freeBytes));
 }
 
 // ---------------------------------------------------------------- self-test
@@ -441,18 +442,18 @@ ModuleStatus DiskSpaceModule::status() const
 {
     const QList<DiskWatch> watches = m_state->diskWatches();
     if (watches.isEmpty()) {
-        return {ModuleTone::Paused, QStringLiteral("Nothing watched yet")};
+        return {ModuleTone::Paused, I18n::tr("Nothing watched yet")};
     }
     const QList<DiskWatch> low = m_state->lowWatches();
     if (low.size() == 1) {
         DriveInfo drive;
         m_state->driveReading(low.first().root, &drive);
-        return {ModuleTone::Attention, QStringLiteral("%1 is low").arg(drive.label)};
+        return {ModuleTone::Attention, I18n::tr("%1 is low").arg(drive.label)};
     }
     if (low.size() > 1) {
-        return {ModuleTone::Attention, QStringLiteral("%1 drives are low").arg(low.size())};
+        return {ModuleTone::Attention, I18n::trc("status", "%1 drives are low").arg(low.size())};
     }
-    return {ModuleTone::Active, QStringLiteral("All good")};
+    return {ModuleTone::Active, I18n::tr("All good")};
 }
 
 QWidget *DiskSpaceModule::createPanel(QWidget *parent)
@@ -494,7 +495,7 @@ QStringList DiskSpaceModule::trayTooltipLines() const
     for (const DiskWatch &watch : m_state->lowWatches()) {
         DriveInfo drive;
         m_state->driveReading(watch.root, &drive);
-        lines.append(QStringLiteral("%1 %2 free").arg(drive.label, DiskSpace::formatBytes(drive.freeBytes)));
+        lines.append(I18n::tr("%1 %2 free").arg(drive.label, DiskSpace::formatBytes(drive.freeBytes)));
     }
     return lines;
 }
@@ -506,16 +507,16 @@ void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &wa
     // Queda en pantalla hasta que se elige algo (tambien pedido de Lega).
     NoticeChoice choice;
     choice.key = watch.root;
-    choice.label = QStringLiteral("Remind me again in");
+    choice.label = I18n::tr("Remind me again in");
     for (const int minutes : DiskSpace::remindChoices()) {
         choice.options.append({QString::number(minutes), DiskSpace::intervalText(minutes)});
     }
     choice.defaultId = QString::number(m_state->remindMinutes());
-    choice.button = QStringLiteral("Remind me");
+    choice.button = I18n::tr("Remind me");
     choice.action = QStringLiteral("snooze");
     choice.persistent = true;
-    context().notifyWithChoice(QStringLiteral("%1 is running low").arg(drive.label),
-                               QStringLiteral("%1 free of %2. You asked to be warned under %3.")
+    context().notifyWithChoice(I18n::tr("%1 is running low").arg(drive.label),
+                               I18n::tr("%1 free of %2. You asked to be warned under %3.")
                                    .arg(DiskSpace::formatBytes(drive.freeBytes), DiskSpace::formatBytes(drive.totalBytes),
                                         DiskSpace::thresholdText(watch)),
                                choice);
@@ -578,10 +579,10 @@ ModuleDescriptor diskSpaceDescriptor()
     ModuleDescriptor d;
     d.id = kId;
     d.title = QStringLiteral("Disk Space");
-    d.description = QStringLiteral("Watches your local drives and warns you when one runs low.");
-    d.offBullets = {QStringLiteral("Checks only the drives you pick, every 15 min"),
-                    QStringLiteral("Warns with a notification and a line in the tray menu"),
-                    QStringLiteral("Each drive has its own limit, in GB or %")};
+    d.description = I18n::tr("Watches your local drives and warns you when one runs low.");
+    d.offBullets = {I18n::tr("Checks only the drives you pick, every 15 min"),
+                    I18n::tr("Warns with a notification and a line in the tray menu"),
+                    I18n::tr("Each drive has its own limit, in GB or %")};
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintDiskIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> { return std::make_unique<DiskSpaceModule>(context); };
@@ -593,9 +594,9 @@ HelpSection diskSpaceHelp(const SettingsReader &)
 {
     HelpSection section;
     section.title = QStringLiteral("Disk Space");
-    section.steps = {QStringLiteral("Add the drives to watch and set when each one should warn you, in %1 or %2.")
+    section.steps = {I18n::tr("Add the drives to watch and set when each one should warn you, in %1 or %2.")
                          .arg(HelpSection::strong(QStringLiteral("GB")), HelpSection::strong(QStringLiteral("%")))};
-    section.note = QStringLiteral("You get a notification when a drive goes under its limit, and a reminder while it stays "
+    section.note = I18n::tr("You get a notification when a drive goes under its limit, and a reminder while it stays "
                                   "low (every 15 min by default). The notification lets you postpone the next one.");
     return section;
 }

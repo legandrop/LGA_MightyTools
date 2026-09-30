@@ -5,6 +5,7 @@
 #include "modules/linkredirector/BrowserDetection.h"
 #include "modules/linkredirector/BrowserRegistration.h"
 #include "app/ModuleContext.h"
+#include "core/I18n.h"
 
 #include <QDebug>
 
@@ -37,7 +38,7 @@ ModuleStatus LinkRedirectorModule::status() const
     ModuleStatus s;
     const bool isDefault = context().captureMode() ? m_captureIsDefault : LinkRedirectorBrowserRegistration::isDefaultBrowser();
     s.tone = isDefault ? ModuleTone::Active : ModuleTone::Attention;
-    s.text = isDefault ? QStringLiteral("Default browser") : QStringLiteral("Not default browser");
+    s.text = isDefault ? I18n::trc("status", "Default browser") : I18n::trc("status", "Not default browser");
     return s;
 }
 

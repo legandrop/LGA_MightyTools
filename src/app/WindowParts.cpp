@@ -1,4 +1,5 @@
 #include "app/WindowParts.h"
+#include "core/I18n.h"
 
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
@@ -200,9 +201,9 @@ OffPanel::OffPanel(const ModuleDescriptor &descriptor, const ModuleOffNotice &no
     auto *layout = new QVBoxLayout(view);
     layout->setContentsMargins(14, 16, 14, 16);
     layout->setSpacing(10);
-    layout->addWidget(Ui::label(QStringLiteral("%1 is off").arg(descriptor.title), "cardTitle", view));
+    layout->addWidget(Ui::label(I18n::trc("tool", "%1 is off").arg(descriptor.title), "cardTitle", view));
     layout->addWidget(
-        Ui::caption(QStringLiteral("Nothing of it is loaded: no memory, no CPU, no shortcuts, no system hooks."), view));
+        Ui::caption(I18n::tr("Nothing of it is loaded: no memory, no CPU, no shortcuts, no system hooks."), view));
     if (!descriptor.offBullets.isEmpty()) {
         auto *bullets = new QVBoxLayout();
         bullets->setContentsMargins(0, 2, 0, 0);
@@ -226,7 +227,7 @@ OffPanel::OffPanel(const ModuleDescriptor &descriptor, const ModuleOffNotice &no
         }
         layout->addLayout(bullets);
     }
-    QPushButton *turnOn = Ui::button(QStringLiteral("Turn on"), QStringLiteral("primary"), QStringLiteral("sm"), view);
+    QPushButton *turnOn = Ui::button(I18n::tr("Turn on"), QStringLiteral("primary"), QStringLiteral("sm"), view);
     turnOn->setObjectName(QStringLiteral("turnOnButton"));
     layout->addWidget(turnOn, 0, Qt::AlignLeft);
     column->addWidget(view);

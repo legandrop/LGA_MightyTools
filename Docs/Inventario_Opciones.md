@@ -20,7 +20,7 @@ corrige acá.
 |---|---|---|
 | Pestañas Settings / Help | Link Redirector | La ventana única las reemplaza; la ayuda pasa a la ayuda común |
 | Estilo «Liquid Glass» | Link Redirector | La estética es la de Nuke Shortcuts |
-| Selector de idioma EN / ES | Open in NukeX | UI solo en inglés por ahora (D-08) |
+| Selector de idioma EN / ES | Open in NukeX | Pasa a la app entera: General > App > Language, inglés o español (D-08, v1.01) |
 | Coloreado de rutas por carpeta en los diálogos | Open in NukeX | Cada ruta en su línea, en un solo color (D-14) |
 | Plugin dentro de Nuke (servidor TCP, `paste_clipboard`, mensajes de consola) | Open in NukeX | Es el plugin, no el módulo: sigue en su repo |
 | `showWarning` sin ningún llamado | Folder Switch | Nunca se usaba |

@@ -1,5 +1,6 @@
 #include "modules/linkredirector/LinkRedirectorRouting.h"
 #include "core/DebugFlags.h"
+#include "core/I18n.h"
 
 #include <QFileInfo>
 #include <QUrl>
@@ -81,13 +82,13 @@ QString reasonText(UnavailableReason reason)
 {
     switch (reason) {
     case UnavailableReason::DefaultNotSet:
-        return QStringLiteral("The default browser isn't set.");
+        return I18n::tr("The default browser isn't set.");
     case UnavailableReason::AlternativeNotSet:
-        return QStringLiteral("The alternative browser isn't set.");
+        return I18n::tr("The alternative browser isn't set.");
     case UnavailableReason::DefaultPathMissing:
-        return QStringLiteral("The default browser's path no longer exists.");
+        return I18n::tr("The default browser's path no longer exists.");
     case UnavailableReason::AlternativePathMissing:
-        return QStringLiteral("The alternative browser's path no longer exists.");
+        return I18n::tr("The alternative browser's path no longer exists.");
     case UnavailableReason::None:
         break;
     }
@@ -96,7 +97,7 @@ QString reasonText(UnavailableReason reason)
 
 QString warningTitle()
 {
-    return QStringLiteral("Browser settings");
+    return I18n::tr("Browser settings");
 }
 
 QString warningCaption(UnavailableReason reason, const QString &usedExe)
@@ -105,7 +106,7 @@ QString warningCaption(UnavailableReason reason, const QString &usedExe)
     if (reasonPart.isEmpty()) {
         return QString();
     }
-    return reasonPart + QStringLiteral(" This link opens with %1 for now.").arg(QFileInfo(usedExe).fileName());
+    return reasonPart + QLatin1Char(' ') + I18n::tr("This link opens with %1 for now.").arg(QFileInfo(usedExe).fileName());
 }
 
 QString browserToSyncAsDefault(bool isNowSystemDefault, const QString &previousSystemDefaultExePath)
@@ -163,7 +164,7 @@ QList<ComboItem> buildBrowserComboItems(const QString &configuredExePath, const 
     if (!foundConfigured) {
         ComboItem custom;
         custom.kind = ComboItem::Kind::Custom;
-        custom.label = QStringLiteral("%1 (custom)").arg(QFileInfo(configuredExePath).completeBaseName());
+        custom.label = I18n::tr("%1 (custom)").arg(QFileInfo(configuredExePath).completeBaseName());
         custom.exePath = configuredExePath;
         custom.selected = true;
         items << custom;
@@ -171,7 +172,7 @@ QList<ComboItem> buildBrowserComboItems(const QString &configuredExePath, const 
 
     ComboItem browse;
     browse.kind = ComboItem::Kind::Browse;
-    browse.label = QStringLiteral("Browse...");
+    browse.label = I18n::tr("Browse...");
     items << browse;
 
     return items;
@@ -185,6 +186,16 @@ QString selectedComboLabel(const QList<ComboItem> &items)
         }
     }
     return QStringLiteral("-");
+}
+
+bool selectedComboIsNone(const QList<ComboItem> &items)
+{
+    for (const ComboItem &item : items) {
+        if (item.selected) {
+            return item.kind == ComboItem::Kind::None;
+        }
+    }
+    return true;
 }
 
 } // namespace LinkRedirectorRouting

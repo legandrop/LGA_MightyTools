@@ -1,4 +1,5 @@
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
+#include "core/I18n.h"
 
 #include "modules/openinnukex/NukeBridge.h"
 #include "modules/openinnukex/NukeOpener.h"
@@ -6,6 +7,7 @@
 #include "modules/openinnukex/NukeXPath.h"
 #include "modules/openinnukex/OpenInNukeXMessages.h"
 #include "modules/openinnukex/OpenInNukeXModule.h"
+#include "modules/openinnukex/OpenInNukeXOperations.h"
 
 #ifdef Q_OS_WIN
 #include "modules/openinnukex/win/UserChoiceLatest.h"
@@ -354,9 +356,9 @@ HelpSection openInNukeXHelp(const SettingsReader &value)
     return HelpSection{
         QStringLiteral("Open in NukeX"),
         {
-            QStringLiteral("Press %1 so .nk files open with Mighty Tools.").arg(HelpSection::strong(QStringLiteral("Apply"))),
-            QStringLiteral("Pick the %1 to use when none is open.").arg(HelpSection::strong(QStringLiteral("NukeX version"))),
-            QStringLiteral("Install the %1 so scripts open in the NukeX you already have open.")
+            I18n::tr("Press %1 so .nk files open with Mighty Tools.").arg(HelpSection::strong(I18n::tr("Apply"))),
+            I18n::tr("Pick the %1 to use when none is open.").arg(HelpSection::strong(I18n::tr("NukeX version"))),
+            I18n::tr("Install the %1 so scripts open in the NukeX you already have open.")
                 .arg(HelpSection::strong(QStringLiteral("Nuke Bridge"))),
         },
         QString(),
@@ -368,12 +370,12 @@ ModuleDescriptor openInNukeXDescriptor()
     ModuleDescriptor descriptor;
     descriptor.id = QStringLiteral("openInNukeX");
     descriptor.title = QStringLiteral("Open in NukeX");
-    descriptor.description = QStringLiteral(
+    descriptor.description = I18n::tr(
         "Double-click a .nk file to open it in the NukeX you already have open, or in your preferred version.");
     descriptor.offBullets = {
-        QStringLiteral("Takes over the .nk file association"),
-        QStringLiteral("Opens scripts in a running NukeX through the Nuke Bridge"),
-        QStringLiteral("Installs the Nuke Bridge in your .nuke folder"),
+        I18n::tr("Takes over the .nk file association"),
+        I18n::tr("Opens scripts in a running NukeX through the Nuke Bridge"),
+        I18n::tr("Installs the Nuke Bridge in your .nuke folder"),
     };
     descriptor.platforms = PlatformWindows | PlatformMac;
     descriptor.paintIcon = paintOnxIcon;
@@ -383,14 +385,22 @@ ModuleDescriptor openInNukeXDescriptor()
 
     descriptor.offNotice = [](const QString &captureState) -> ModuleOffNotice {
         ModuleOffNotice notice;
-        notice.title = QStringLiteral("The .nk association is still set");
-        notice.caption = QStringLiteral("Double-clicked .nk files open straight in NukeX, without the Nuke Bridge.");
-        notice.actionText = QStringLiteral("Release .nk association");
+        notice.title = I18n::tr("The .nk association is still set");
+        notice.caption = I18n::tr("Double-clicked .nk files open straight in NukeX, without the Nuke Bridge.");
+        notice.actionText = I18n::tr("Release .nk association");
         notice.visible = captureState.isEmpty() ? isAssociatedWithUs() : (captureState == QStringLiteral("associated"));
         return notice;
     };
 
     descriptor.releaseSystem = [](QString *error) -> bool {
+        // Apply y la desinstalacion del cliente viejo escriben la misma asociacion en HKCU: con una en curso (por ejemplo
+        // la herramienta se apago con el Apply corriendo) no se escribe nada en paralelo.
+        if (OpenInNukeXOperations::busy()) {
+            if (error) {
+                *error = I18n::tr("An association change is still running. Try again in a moment.");
+            }
+            return false;
+        }
 #ifdef Q_OS_WIN
         return WinFileAssociation::releaseAssociation(error);
 #else

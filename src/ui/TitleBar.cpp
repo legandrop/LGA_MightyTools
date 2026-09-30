@@ -1,6 +1,7 @@
 #include "ui/TitleBar.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
+#include "core/I18n.h"
 
 #include <QAbstractButton>
 #include <QFrame>
@@ -131,8 +132,8 @@ TitleBar::TitleBar(QWidget *parent)
     auto *macLayout = new QHBoxLayout(this);
     macLayout->setContentsMargins(9, 0, 6, 1);
     macLayout->setSpacing(0);
-    auto *closeLight = new TrafficLight(QColor(0xff, 0x5f, 0x57), QStringLiteral("Close"), this);
-    auto *minimizeLight = new TrafficLight(QColor(0xfe, 0xbc, 0x2e), QStringLiteral("Minimize"), this);
+    auto *closeLight = new TrafficLight(QColor(0xff, 0x5f, 0x57), I18n::tr("Close"), this);
+    auto *minimizeLight = new TrafficLight(QColor(0xfe, 0xbc, 0x2e), I18n::tr("Minimize"), this);
     macLayout->addWidget(closeLight, 0, Qt::AlignVCenter);
     macLayout->addWidget(minimizeLight, 0, Qt::AlignVCenter);
     macLayout->addSpacing(10);
@@ -141,7 +142,7 @@ TitleBar::TitleBar(QWidget *parent)
     macTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
     macLayout->addWidget(macTitle, 0, Qt::AlignVCenter);
     macLayout->addStretch(1);
-    auto *macHelp = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, QStringLiteral("Help"), this);
+    auto *macHelp = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
     macLayout->addWidget(macHelp, 0, Qt::AlignVCenter);
     connect(macHelp, &QAbstractButton::clicked, this, &TitleBar::helpClicked);
     connect(minimizeLight, &QAbstractButton::clicked, this, [this]() { window()->showMinimized(); });
@@ -160,7 +161,7 @@ TitleBar::TitleBar(QWidget *parent)
     layout->addWidget(title, 0, Qt::AlignVCenter);
     layout->addStretch(1);
 
-    auto *help = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, QStringLiteral("Help"), this);
+    auto *help = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
     layout->addWidget(help, 0, Qt::AlignVCenter);
 
     layout->addSpacing(4);
@@ -171,10 +172,10 @@ TitleBar::TitleBar(QWidget *parent)
     layout->addSpacing(4);
 
     auto *minimize = new TitleButton(Icon::Minimize, QSize(40, kButtonHeight), 10, Theme::kTextMuted, 0,
-                                     QStringLiteral("Minimize"), this);
+                                     I18n::tr("Minimize"), this);
     layout->addWidget(minimize, 0, Qt::AlignTop);
     auto *close = new TitleButton(Icon::Close, QSize(40, kButtonHeight), 10, Theme::kTextMuted, 0,
-                                  QStringLiteral("Close"), this);
+                                  I18n::tr("Close"), this);
     layout->addWidget(close, 0, Qt::AlignTop);
 
     connect(help, &QAbstractButton::clicked, this, &TitleBar::helpClicked);

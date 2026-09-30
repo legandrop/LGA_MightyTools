@@ -109,6 +109,9 @@ struct ModuleDescriptor
     QString title;          ///< "Nuke Shortcuts"
     QString description;    ///< una oracion, la del encabezado del panel y del primer arranque
     QStringList offBullets; ///< lo que hace al prenderse, para el panel de apagado
+    // Opcional: las mismas vinetas pero con datos vivos de settings.ini (un atajo configurado). Si esta, el
+    // panel de apagado la usa en lugar de offBullets.
+    std::function<QStringList(const SettingsReader &value)> offBulletsFor;
     int platforms = PlatformWindows | PlatformMac;
 
     // Icono de interfaz, monocromo y vectorial (regla de UI: nada de PNG en la interfaz).

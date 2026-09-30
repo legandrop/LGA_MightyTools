@@ -101,6 +101,10 @@ QList<ComboItem> buildBrowserComboItems(const QString &configuredExePath, const 
 // Texto del campo cerrado del combo: el label del item seleccionado (o "-" si no hay ninguno).
 QString selectedComboLabel(const QList<ComboItem> &items);
 
+// true si lo elegido es "ningun navegador" (el item Kind::None, o ninguno marcado): el campo cerrado se
+// pinta en gris. Decide por el tipo del item y nunca por su texto.
+bool selectedComboIsNone(const QList<ComboItem> &items);
+
 } // namespace LinkRedirectorRouting
 
 #endif // MIGHTYTOOLS_LINKREDIRECTOR_ROUTING_H

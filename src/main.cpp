@@ -7,6 +7,7 @@
 #include "core/AppPaths.h"
 #include "core/AppSettings.h"
 #include "core/BuildTree.h"
+#include "core/I18n.h"
 #include "core/DebugFlags.h"
 #include "core/LgaRegistry.h"
 #ifdef Q_OS_WIN
@@ -226,6 +227,11 @@ int main(int argc, char *argv[])
         // Ni leer ni escribir el settings.ini del usuario.
         AppSettings::useMemoryOnly();
         applyAppStyle(app);
+        // --lang es: la captura en espanol (sin settings.ini no hay idioma guardado).
+        const int langIndex = app.arguments().indexOf(QStringLiteral("--lang"));
+        if (langIndex > 0) {
+            I18n::setLanguage(I18n::fromCode(app.arguments().value(langIndex + 1)));
+        }
         if (uiShot) {
             return runUiShot(app.arguments());
         }
@@ -251,6 +257,8 @@ int main(int argc, char *argv[])
     if (!external.isEmpty()) {
         applyAppStyle(app);
         FileSettingsStore store;
+        // Los cuadros de este camino (navegador no disponible, NukeX no configurado) salen en el idioma elegido.
+        I18n::setLanguage(I18n::fromCode(store.value(QStringLiteral("app/language")).toString()));
         const ExternalDispatch::Outcome outcome =
             ExternalDispatch::run(ModuleRegistry::all(), external, &store, /*dryRun=*/false);
         if (outcome.handled) {

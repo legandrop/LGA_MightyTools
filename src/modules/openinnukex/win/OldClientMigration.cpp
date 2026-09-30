@@ -130,8 +130,8 @@ void takeNkAssociation(bool moduleOn, const OldClientMigration::Options &options
                             .arg(options.dryRun ? QStringLiteral("solo log") : QStringLiteral("arbol de build"), own, why, exe));
         return;
     }
-    QStringList errors;
-    const bool ok = WinFileAssociation::registerClasses(&errors);
+    QList<ApplyIssue> issues;
+    const bool ok = WinFileAssociation::registerClasses(&issues);
     RegistryHelper::notifyAssociationsChanged();
     report.nkTaken = ok;
     if (!ok) {
@@ -139,7 +139,7 @@ void takeNkAssociation(bool moduleOn, const OldClientMigration::Options &options
     }
     addLine(report, QStringLiteral("[nk] %1 (%2: %3) -> %4%5")
                         .arg(ok ? QStringLiteral("tomados") : QStringLiteral("FALLO al tomarlos"), why, exe, own,
-                             errors.isEmpty() ? QString() : QStringLiteral(" | ") + errors.join(QLatin1Char(' '))));
+                             issues.isEmpty() ? QString() : QStringLiteral(" | ") + applyIssuesForLog(issues)));
 }
 
 bool stillThere(const QString &oldExe)

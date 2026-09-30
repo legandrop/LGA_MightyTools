@@ -9,6 +9,8 @@
 #include "app/SettingsStore.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "core/I18n.h"
+#include "modules/openinnukex/OpenInNukeXOperations.h"
 #include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
 #include "platform/SystemNotifier.h"
@@ -24,6 +26,9 @@
 #include <QImage>
 #include <QFile>
 #include <QEvent>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QRegularExpression>
 #include <QPointer>
 #include <QThread>
 #include <QTimer>
@@ -549,6 +554,309 @@ void testNotifier(const Check &check)
     QFile::remove(SystemNotifier::iconTempPath(true));
 }
 
+// Idioma: la tabla ingles -> espanol, el camino de un texto en espanol hasta el aviso de Windows.
+// Lista ORDENADA (multiconjunto): "%1 ... %1" y "%1" no son lo mismo.
+QStringList placeholdersOf(const QString &text)
+{
+    QStringList found;
+    static const QRegularExpression placeholder(QStringLiteral("%[1-9]"));
+    auto it = placeholder.globalMatch(text);
+    while (it.hasNext()) {
+        found.append(it.next().captured());
+    }
+    found.sort();
+    return found;
+}
+
+#ifdef Q_OS_WIN
+// Lo que PowerShell lee entre comillas simples a partir de `marker`: una comilla (recta o tipografica,
+// U+2018 a U+201B) seguida de otra es una sola; una sola cierra la cadena. Es la misma regla que
+// SystemNotifier::escapeForScript duplica.
+QString powerShellQuoted(const QString &script, const QString &marker)
+{
+    const int start = script.indexOf(marker);
+    if (start < 0) {
+        return QString();
+    }
+    const auto isQuote = [](QChar c) { return c == QLatin1Char('\'') || (c.unicode() >= 0x2018 && c.unicode() <= 0x201B); };
+    QString out;
+    for (int i = start + marker.size(); i < script.size(); ++i) {
+        const QChar c = script.at(i);
+        if (isQuote(c)) {
+            if (i + 1 < script.size() && isQuote(script.at(i + 1))) {
+                ++i;
+                out += script.at(i);
+                continue;
+            }
+            return out;
+        }
+        out += c;
+    }
+    return QString();
+}
+#endif
+
+// Lee un toast: los <text> y los textos de action / selection / input.
+bool readToast(const QString &document, QStringList *texts, QStringList *contents)
+{
+    QXmlStreamReader reader(document);
+    while (!reader.atEnd()) {
+        if (reader.readNext() != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        if (reader.name() == QLatin1String("text")) {
+            texts->append(reader.readElementText());
+        } else if (reader.name() == QLatin1String("action") || reader.name() == QLatin1String("selection")) {
+            contents->append(reader.attributes().value(QLatin1String("content")).toString());
+        } else if (reader.name() == QLatin1String("input")) {
+            contents->append(reader.attributes().value(QLatin1String("title")).toString());
+        }
+    }
+    return !reader.hasError();
+}
+
+#ifdef Q_OS_WIN
+// Lo "en curso" de Open in NukeX vive fuera del panel (OpenInNukeXOperations). Nada de esto escribe el registro ni
+// lanza procesos: la desinstalacion corre en seco (solo lee) y el Apply se marca "en curso" con un hook de prueba.
+void testOperations(const Check &check)
+{
+    using Ops = OpenInNukeXOperations;
+    const auto flushDeferred = []() {
+        for (int i = 0; i < 3; ++i) {
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        }
+    };
+    const auto waitIdle = [](int limitMs) {
+        QElapsedTimer waited;
+        waited.start();
+        while (Ops::busy() && waited.elapsed() < limitMs) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+        }
+        return !Ops::busy();
+    };
+
+    check(Ops::existing() == nullptr && !Ops::busy(), QStringLiteral("operaciones: sin panel ni operacion el singleton ni existe"));
+    Ops::shutdownIfIdle(); // sin singleton: no hace nada
+    check(Ops::existing() == nullptr, QStringLiteral("operaciones: apagar sin singleton no lo crea"));
+
+    // 1. La desinstalacion (en seco) queda en curso, no deja lanzar otra ni un Apply, y su resultado espera.
+    Ops *operations = Ops::instance();
+    operations->startUninstall(false, /*automatedRun=*/true);
+    check(operations->uninstallRunning() && Ops::busy(),
+          QStringLiteral("operaciones: la desinstalacion queda en curso aunque no haya panel"));
+    operations->startApply(false, nullptr); // no debe lanzar nada: hay una desinstalacion en curso
+    check(!operations->applyRunning(), QStringLiteral("operaciones: con una desinstalacion en curso no arranca un Apply"));
+    check(waitIdle(15000), QStringLiteral("operaciones: la desinstalacion de prueba termino"));
+    check(Ops::existing() == operations, QStringLiteral("operaciones: con la herramienta prendida el singleton sigue"));
+
+    // 2. El resultado que llego sin panel sobrevive a dos rearmados seguidos (un panel que se conecta y muere sin
+    // llegar a tomarlo no lo pierde) y se entrega una sola vez.
+    {
+        QObject firstPanel;
+        QObject::connect(operations, &Ops::uninstallFinished, &firstPanel, [](bool, bool) {});
+    }
+    {
+        QObject secondPanel;
+        QObject::connect(operations, &Ops::uninstallFinished, &secondPanel, [](bool, bool) {});
+    }
+    check(operations->takePendingUninstall().valid,
+          QStringLiteral("operaciones: el resultado pendiente sobrevive a dos rearmados seguidos"));
+    check(!operations->takePendingUninstall().valid, QStringLiteral("operaciones: y se entrega una sola vez"));
+
+    // 3. Apagar la herramienta descarta lo pendiente y destruye el singleton si no hay nada en curso.
+    operations->startUninstall(false, true);
+    check(waitIdle(15000), QStringLiteral("operaciones: segunda desinstalacion de prueba"));
+    Ops::shutdownIfIdle();
+    check(Ops::existing() == nullptr, QStringLiteral("operaciones: apagar sin nada en curso destruye el singleton"));
+    flushDeferred();
+    operations = Ops::instance();
+    check(!operations->takePendingUninstall().valid && !operations->takePendingApply().valid,
+          QStringLiteral("operaciones: apagar descarto los resultados pendientes"));
+
+    // 4. Apagar con algo en curso: se destruye solo al terminar, y nadie recibe el resultado.
+    operations->startUninstall(false, true);
+    Ops::shutdownIfIdle();
+    check(Ops::existing() == operations && Ops::busy(),
+          QStringLiteral("operaciones: apagar con algo en curso NO lo destruye todavia"));
+    check(waitIdle(15000), QStringLiteral("operaciones: lo que estaba en curso termino"));
+    flushDeferred();
+    check(Ops::existing() == nullptr, QStringLiteral("operaciones: y el singleton se destruyo solo al terminar"));
+
+    // 5. Volver a usarlo (la herramienta se prendio de nuevo) cancela la destruccion diferida.
+    operations = Ops::instance();
+    operations->startUninstall(false, true);
+    Ops::shutdownIfIdle();
+    Ops *again = Ops::instance();
+    check(again == operations, QStringLiteral("operaciones: instance() devuelve el mismo mientras sigue en curso"));
+    check(waitIdle(15000), QStringLiteral("operaciones: termino"));
+    flushDeferred();
+    check(Ops::existing() == operations && operations->takePendingUninstall().valid,
+          QStringLiteral("operaciones: si se volvio a usar, no se destruye y el resultado espera al panel"));
+
+    // 6. "Release .nk association" no escribe mientras hay un Apply en curso (marcado por el hook, sin correrlo).
+    const QList<ModuleDescriptor> all = ModuleRegistry::all();
+    const ModuleDescriptor *nuke = nullptr;
+    for (const ModuleDescriptor &d : all) {
+        if (d.id == QLatin1String("openInNukeX")) {
+            nuke = &d;
+        }
+    }
+    operations->markApplyRunningForTest(true);
+    QString error;
+    const bool released = nuke && nuke->releaseSystem ? nuke->releaseSystem(&error) : true;
+    check(nuke && !released && error == QLatin1String("An association change is still running. Try again in a moment."),
+          QStringLiteral("operaciones: release .nk se rechaza con un mensaje claro mientras hay un Apply en curso (%1)").arg(error));
+    operations->startUninstall(false, true);
+    check(!operations->uninstallRunning(), QStringLiteral("operaciones: con un Apply en curso no arranca una desinstalacion"));
+    operations->markApplyRunningForTest(false);
+    Ops::shutdownIfIdle();
+    flushDeferred();
+    check(Ops::existing() == nullptr, QStringLiteral("operaciones: limpio al final"));
+
+    // 7. Apagar la herramienta en medio de un Apply con su hilo de verdad (el Apply de prueba duerme y no toca
+    //    el registro): el objeto se borra solo al terminar y nunca destruye un QThread vivo (antes abortaba
+    //    con "QThread: Destroyed while thread is still running"). El apagado cae antes, durante y justo
+    //    despues del final del hilo.
+    Ops::useFakeApplyForTest(20);
+    int survivors = 0;
+    for (int round = 0; round < 12; ++round) {
+        Ops::instance()->startApply(false, nullptr);
+        QTimer::singleShot((round % 6) * 6, []() { Ops::shutdownIfIdle(); });
+        QEventLoop loop;
+        QTimer::singleShot(90, &loop, &QEventLoop::quit);
+        loop.exec();
+        flushDeferred();
+        if (Ops::existing() != nullptr) {
+            ++survivors;
+            Ops::shutdownIfIdle();
+            flushDeferred();
+        }
+    }
+    Ops::useFakeApplyForTest(-1);
+    check(survivors == 0, QStringLiteral("operaciones: apagar en medio de un Apply real (hilo de prueba) no aborta y el objeto se borra (%1 de 12 sobrevivieron)").arg(survivors));
+}
+#endif
+
+void testI18n(const Check &check)
+{
+    const I18n::Language before = I18n::language();
+    const auto &table = I18n::spanishTable();
+    check(!table.isEmpty(), QStringLiteral("idioma: la tabla tiene %1 entradas").arg(table.size()));
+
+    check(placeholdersOf(QStringLiteral("%1 a %1")) != placeholdersOf(QStringLiteral("%1")) && placeholdersOf(QStringLiteral("%2 %1")) == placeholdersOf(QStringLiteral("%1 %2")),
+          QStringLiteral("idioma: la comparacion de marcadores distingue \"%1 ... %1\" de \"%1\" y no depende del orden"));
+    int emptyTranslations = 0;
+    int placeholderMismatches = 0;
+    QStringList offenders;
+    static const QRegularExpression contextPrefix(QStringLiteral("^[a-z]+\\|"));
+    for (auto it = table.constBegin(); it != table.constEnd(); ++it) {
+        QString english = it.key();
+        english.remove(contextPrefix);
+        if (it.value().trimmed().isEmpty()) {
+            ++emptyTranslations;
+            offenders << it.key();
+        } else if (placeholdersOf(english) != placeholdersOf(it.value())) {
+            ++placeholderMismatches;
+            offenders << it.key();
+        }
+    }
+    check(emptyTranslations == 0, QStringLiteral("idioma: ninguna traduccion vacia (%1)").arg(emptyTranslations));
+    check(placeholderMismatches == 0,
+          QStringLiteral("idioma: cada traduccion lleva los mismos %1..%9 que su clave (distintas: %2)")
+              .arg(QStringLiteral("%"), offenders.join(QStringLiteral(" | "))));
+
+    I18n::setLanguage(I18n::Language::English);
+    check(I18n::tr("Check now") == QLatin1String("Check now")
+              && I18n::trc("tool", "%1 is off") == QLatin1String("%1 is off"),
+          QStringLiteral("idioma: en ingles el texto sale igual"));
+    I18n::setLanguage(I18n::Language::Spanish);
+    check(I18n::tr("Check now") == QStringLiteral("Buscar ahora")
+              && I18n::trc("tool", "%1 is off") == QStringLiteral("%1 está apagada")
+              && I18n::trc("shortcut", "%1 is off") == QStringLiteral("%1 desactivado")
+              && I18n::trc("tool", "Off") == QStringLiteral("Apagada")
+              && I18n::trc("chip", "Off") == QStringLiteral("Inactivo"),
+          QStringLiteral("idioma: en espanol sale la traduccion y los homonimos se separan por contexto"));
+    check(I18n::tr("Text that is not in the table") == QLatin1String("Text that is not in the table"),
+          QStringLiteral("idioma: lo que falta en la tabla queda en ingles, nunca vacio"));
+
+    // El camino de un texto en espanol hasta el aviso de Windows: acentos, enes, apertura de
+    // interrogacion, comillas angulares, raya y comillas (rectas y tipograficas) llegan enteros.
+    SystemNotifier::Notice notice;
+    notice.title = QStringLiteral("Poco espacio en C: — ¿qué pasó? «Recordarme»");
+    notice.body = QStringLiteral("Quedan 35 GB libres de 930 GB. Niño d'Ávila ‘simple’ “doble” & <x>");
+    notice.launch = QStringLiteral("module=diskSpace&action=open");
+    notice.choiceLabel = QStringLiteral("Recordarme de nuevo en");
+    notice.choices = {{QStringLiteral("15"), QStringLiteral("15 min")}, {QStringLiteral("60"), QStringLiteral("1 hora")}};
+    notice.choiceDefault = QStringLiteral("60");
+    notice.button = QStringLiteral("Recordarme");
+    notice.buttonArguments = QStringLiteral("module=diskSpace&action=snooze&key=C%3A%2F");
+    notice.persistent = true;
+    const QString xml = SystemNotifier::toastXml(notice, QString());
+    QStringList texts;
+    QStringList contents;
+    const bool wellFormed = readToast(xml, &texts, &contents);
+    const QStringList expectedContents{notice.choiceLabel, QStringLiteral("15 min"), QStringLiteral("1 hora"),
+                                       notice.button, QStringLiteral("Descartar")};
+    check(wellFormed && texts == QStringList({notice.title, notice.body}),
+          QStringLiteral("aviso en espanol: el XML esta bien formado y titulo y cuerpo vuelven intactos"));
+    check(contents == expectedContents,
+          QStringLiteral("aviso en espanol: desplegable, opciones, boton y Descartar llegan enteros (%1)")
+              .arg(contents.join(QStringLiteral(" | "))));
+
+#ifdef Q_OS_WIN
+    const QString script = SystemNotifier::registeredToastScript(notice, QStringLiteral("C:\\x\\icon.png"),
+                                                                 QStringLiteral("C:\\x\\app's.exe"));
+    const QString embedded = powerShellQuoted(script, QStringLiteral("$toastXml.LoadXml('"));
+    QStringList scriptTexts;
+    QStringList scriptContents;
+    const bool scriptXmlOk = readToast(embedded, &scriptTexts, &scriptContents);
+    check(scriptXmlOk && scriptTexts == texts && scriptContents == contents,
+          QStringLiteral("aviso en espanol: el script de PowerShell lleva el mismo XML despues de sus comillas"));
+    const QByteArray decoded = QByteArray::fromBase64(SystemNotifier::encodeCommand(script).toLatin1());
+    const QString roundTrip = QString::fromUtf16(reinterpret_cast<const char16_t *>(decoded.constData()),
+                                                 decoded.size() / 2);
+    check(roundTrip == script, QStringLiteral("aviso en espanol: -EncodedCommand (UTF-16LE base64) vuelve identico"));
+    const QString plainScript = SystemNotifier::plainToastScript(notice.title, notice.body, QString(),
+                                                                 QStringLiteral("C:\\x\\app.exe"));
+    check(powerShellQuoted(plainScript, QStringLiteral("InnerText = '")) == notice.title,
+          QStringLiteral("aviso en espanol sin anotar: el titulo llega entero al script de -Command"));
+#endif
+
+    // Cambio de idioma con la app abierta: el host vuelve a tomar los textos de los descriptores (titulo,
+    // descripcion, vinetas) y las vinetas de Folder Switch salen con el atajo CONFIGURADO.
+    {
+        I18n::setLanguage(I18n::Language::English);
+        MemorySettingsStore store;
+        HostOptions options;
+        options.captureMode = true;
+        ModuleHost host(ModuleRegistry::all(), &store, options);
+        const ModuleDescriptor *disk = host.descriptor(QStringLiteral("diskSpace"));
+        const QString before = disk ? disk->description : QString();
+        I18n::setLanguage(I18n::Language::Spanish);
+        host.refreshDescriptorTexts(ModuleRegistry::all());
+        disk = host.descriptor(QStringLiteral("diskSpace"));
+        check(disk && before == QLatin1String("Watches your local drives and warns you when one runs low.")
+                  && disk->description == QStringLiteral("Vigila los discos locales y avisa cuando uno se queda con poco espacio."),
+              QStringLiteral("idioma: el host retoma los textos de los descriptores al cambiar de idioma"));
+#ifdef Q_OS_WIN
+        const ModuleDescriptor *folder = host.descriptor(QStringLiteral("folderSwitch"));
+        if (folder && folder->offBulletsFor) {
+            const QStringList bullets = folder->offBulletsFor([](const QString &key, const QVariant &fallback) {
+                return key == QLatin1String("shortcuts/manual") ? QVariant(QStringLiteral("Ctrl+Alt+K")) : fallback;
+            });
+            check(bullets.size() == 3 && bullets.at(1) == QStringLiteral("Dos atajos: Ctrl+Alt+K y Ctrl+Alt+Shift+O"),
+                  QStringLiteral("Folder Switch: la vineta de atajos muestra el configurado (%1)")
+                      .arg(bullets.value(1)));
+        } else {
+            check(false, QStringLiteral("Folder Switch: el descriptor trae offBulletsFor"));
+        }
+#endif
+    }
+
+    I18n::setLanguage(before);
+}
+
 } // namespace
 
 namespace SelfTest {
@@ -571,6 +879,10 @@ int run()
     testRealModules(check);
     testSharedForeground(check);
     testNotifier(check);
+    testI18n(check);
+#ifdef Q_OS_WIN
+    testOperations(check);
+#endif
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {

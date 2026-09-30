@@ -79,6 +79,9 @@ QString formatBytes(qint64 bytes);             ///< "182 GB", "1.82 TB", "512 MB
 QString thresholdText(const DiskWatch &watch); ///< "100 GB", "15%"
 // Keycap de un disco que no esta enchufado: la letra en Windows, el nombre guardado en mac.
 QString labelForRoot(const QString &root, const QString &storedName);
+// El nombre de un volumen para MOSTRAR. "Local Disk" es el marcador crudo de un volumen sin etiqueta (asi se
+// guarda en settings.ini, en cualquier idioma): se traduce aca, al mostrarlo. Lo demas viene del sistema.
+QString displayName(const QString &storedName);
 
 // Lo que se recuerda de cada disco vigilado entre chequeos, para no repetir el aviso en cada uno.
 struct AlertState

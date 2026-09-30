@@ -458,10 +458,10 @@ void scenarioOwnInstall(HiveSession &session, const Check &check)
     QString error;
     check(LinkRedirectorBrowserRegistration::registerAsBrowser(&error),
           QStringLiteral("1 siembra: registro REAL del navegador (por HKEY_CURRENT_USER redirigido) %1").arg(error));
-    QStringList errors;
+    QList<ApplyIssue> errors;
     check(WinFileAssociation::registerClasses(&errors),
           QStringLiteral("1 siembra: registro REAL de .nk (ProgID, Capabilities, RegisteredApplications, Classes\\.nk) %1")
-              .arg(errors.join(QLatin1Char(' '))));
+              .arg(applyIssuesForLog(errors)));
     // UserChoice/UserChoiceLatest como los deja Windows (el hash no importa: no se valida aca).
     putSz(hive, kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId"), kNkProgIdName);
     putSz(hive, kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("Hash"), QStringLiteral("legacy="));
@@ -575,7 +575,7 @@ void scenarioMigrationAndCoexistence(HiveSession &session, const Check &check)
     // Lo que dejaba la version anterior: el .nk en el valor LGA_MightyTools.
     putSz(hive, kRegApps, QStringLiteral("LGA_MightyTools"), kNkCaps);
     putSz(hive, kNkCaps, QStringLiteral("ApplicationIcon"), quoted(own) + QStringLiteral(",0"));
-    QStringList errors;
+    QList<ApplyIssue> errors;
     WinFileAssociation::registerClasses(&errors);
     check(readSz(hive, kRegApps, QStringLiteral("LGA_MightyTools")).isEmpty()
               && readSz(hive, kRegApps, WinFileAssociation::registeredApplicationValue()) == kNkCaps
@@ -1073,7 +1073,7 @@ void scenarioOldClientMigration(HiveSession &cuSession, HiveSession &lmSession, 
     //     La pasada posterior a quitarlo tiene que borrar esos restos y dejar los .nk hacia este exe.
     const auto seedMigratedThenRemoved = [&]() {
         bool ok = f.reset();
-        QStringList errors;
+        QList<ApplyIssue> errors;
         ok &= WinFileAssociation::registerClasses(&errors); // lo que dejo la primera pasada
         ok &= putSz(f.cu(), kFileExtsNk + QStringLiteral("\\UserChoice"), QStringLiteral("ProgId"), kNkProgIdName);
         ok &= f.seedOldCaps(missingOld);

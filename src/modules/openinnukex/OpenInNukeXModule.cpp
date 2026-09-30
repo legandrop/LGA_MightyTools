@@ -1,9 +1,11 @@
 #include "modules/openinnukex/OpenInNukeXModule.h"
+#include "core/I18n.h"
 
 #include "app/ModuleContext.h"
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 #include "modules/openinnukex/OpenInNukeXMessages.h"
 #include "modules/openinnukex/OpenInNukeXPanel.h"
+#include "modules/openinnukex/OpenInNukeXOperations.h"
 
 #ifdef Q_OS_WIN
 #include "modules/openinnukex/win/WinFileAssociation.h"
@@ -28,7 +30,9 @@ void OpenInNukeXModule::start()
 
 void OpenInNukeXModule::stop()
 {
-    // Idempotente y simetrico con start(): nada que soltar todavia.
+    // Idempotente y simetrico con start(). Lo apagado no consume: los resultados pendientes se descartan y
+    // OpenInNukeXOperations se destruye ahora, o al terminar lo que tenga en curso.
+    OpenInNukeXOperations::shutdownIfIdle();
 }
 
 ModuleStatus OpenInNukeXModule::status() const
@@ -41,19 +45,19 @@ ModuleStatus OpenInNukeXModule::status() const
     if (context().captureMode()) {
         if (m_pendingCaptureState == QStringLiteral("old-client")) {
             result.tone = ModuleTone::Attention;
-            result.text = QStringLiteral("Old client still installed");
+            result.text = I18n::tr("Old client still installed");
             return result;
         }
         const bool associated = m_pendingCaptureState != QStringLiteral("first-time");
         result.tone = associated ? ModuleTone::Active : ModuleTone::Attention;
-        result.text = associated ? QStringLiteral("Associated") : QStringLiteral("Not associated");
+        result.text = associated ? I18n::tr("Associated") : I18n::tr("Not associated");
         return result;
     }
 
 #ifdef Q_OS_WIN
     if (WinFileAssociation::isOldClientInstalled()) {
         result.tone = ModuleTone::Attention;
-        result.text = QStringLiteral("Old client still installed");
+        result.text = I18n::tr("Old client still installed");
         return result;
     }
     const bool associated = WinFileAssociation::isNkAssociatedWithUs();
@@ -65,10 +69,10 @@ ModuleStatus OpenInNukeXModule::status() const
 
     if (associated) {
         result.tone = ModuleTone::Active;
-        result.text = QStringLiteral("Associated");
+        result.text = I18n::tr("Associated");
     } else {
         result.tone = ModuleTone::Attention;
-        result.text = QStringLiteral("Not associated");
+        result.text = I18n::tr("Not associated");
     }
     return result;
 }
@@ -84,6 +88,8 @@ QWidget *OpenInNukeXModule::createPanel(QWidget *parent)
     }
     m_panel = panel;
     connect(panel, &OpenInNukeXPanel::oldClientStateChanged, this, &Module::statusChanged);
+    // Un panel nuevo pudo retomar una desinstalacion que termino sin panel: la fila de la barra se vuelve a leer.
+    emit statusChanged();
     return panel;
 }
 
