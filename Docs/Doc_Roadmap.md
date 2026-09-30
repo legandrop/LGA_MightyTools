@@ -9,9 +9,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    - Textos 4-8 % más anchos que el diseño en los tamaños fraccionarios (11,5 y 12,5 px): Qt redondea el
      tamaño de letra a píxel entero y aplica hinting. Medido con `--measure-fonts`; toca la tipografía de
      toda la app.
-   - El encabezado del toast sale vacío (mecanismo de PipeSync, sin AUMID) y un click no vuelve a la
-     app. Para mostrar «LGA Mighty Tools» y abrir la herramienta que avisó hay que registrar un AUMID,
-     con su limpieza en el desinstalador. Solo con pedido de Lega.
+   - Avisos con AUMID propio (v0.09): falta la prueba de Lega del desplegable «Remind me again in», del
+     click con la app cerrada y desde el Centro de notificaciones. Si Lega tiene la copia de `build\` y la
+     instalada a la vez, el click de un aviso lo atiende la copia a la que apunta la anotación.
    - No hay captura de QA del disco desenchufado (el keycap punteado se verificó por código).
    - `--uninstall-cleanup` y el desinstalador no se probaron de punta a punta (solo sobre el hive
      privado): probarlos en Windows Sandbox antes del release.
@@ -33,6 +33,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 4. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
    los links contra Link Redirector.
 5. **Fase 7:** instalador, updater, alta en LGA_Updates y en el sitio; release 1.00 de Windows.
-6. **Fase 8:** macOS.
+6. **Fase 8:** macOS. Los avisos siguen por `osascript`, sin click ni desplegable: el «Remind me again
+   in» de Disk Space pide `UNUserNotificationCenter` con acciones (macOS las agrupa en «Options»).
 7. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.

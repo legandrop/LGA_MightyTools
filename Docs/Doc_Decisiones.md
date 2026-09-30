@@ -28,6 +28,15 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   con su configuración, sin activar el inicio con Windows (se activa si prende otra herramienta). El
   plugin de Nuke lo instala y actualiza el Nuke Bridge embebido (D-04), no PipeSync. `LGA_OpenInNukeX`
   pasa a privado después de un período de espera. Detalle en el plan, sección 9.
+- **D-22 · Recordatorio de Disk Space** (2026-09-30). El chequeo de los discos es fijo, cada 15 min. Lo
+  que se configura es «Remind me every» (15 min a 6 h, 15 min por defecto): cada cuánto se repite el
+  aviso mientras el disco sigue bajo. El aviso de Windows trae «Remind me again in» con ese valor
+  preseleccionado. Elegir otro valor pospone solo el próximo recordatorio de ese disco. El aviso queda en
+  pantalla hasta que se elige algo.
+- **D-23 · Los avisos se anotan ante Windows también desde un build** (2026-09-30). El AUMID y el
+  activador COM de HKCU los escribe el primer aviso, también en una copia de `build\`. Es la única
+  excepción a «desde un build no se escribe nada solo». `--uninstall-cleanup` los borra si apuntan a
+  este exe o a un `LGA_MightyTools.exe` que ya no existe.
 
 ## Abiertas
 
