@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.00:
+
+Primera versión publicada. Disk Space avisaba según un intervalo de chequeo configurable, así que un disco
+lleno podía pasar horas sin detectarse y el aviso no se podía posponer. Ahora el chequeo es fijo cada 15
+minutos y «Check every» pasa a ser «Remind me every» (cada cuánto se repite el aviso de un disco que sigue
+lleno). El toast trae un desplegable «Remind me again in» que pospone solo ese disco, y un click en el
+cuerpo vuelve a la app, también desde el Centro de notificaciones y con la app cerrada. Para eso el primer
+aviso registra el AUMID y el activador COM de la app, que `--uninstall-cleanup` borra al desinstalar.
+[ Release 1.00 - Recordatorio de Disk Space con posponer desde el aviso ]
+
 v0.08:
 
 Apply de Open in NukeX se negaba a asociar los `.nk` cuando la app corría desde una carpeta de build,
