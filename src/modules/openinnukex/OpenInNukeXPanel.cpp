@@ -275,12 +275,15 @@ void OpenInNukeXPanel::onApplyClicked()
         qInfo("[openInNukeX] (automatedRun) Apply/Re-apply: no se toca el registro ni la asociacion");
         return;
     }
+#ifdef Q_OS_MACOS
+    // Solo en mac, como en el cliente original (executeMacAssociation): ahi se asocia la RUTA del
+    // bundle, y el `limpiar.sh` del proximo build la borra. En Windows Apply es una accion explicita
+    // del usuario y desde un build SI se hace (contrato: ModuleContext::persistentRegistrationAllowed).
     if (AppPaths::isBuildTree()) {
-        // Inventario: "Apply desde un arbol de build (Windows y mac)" — asociar .nk con un
-        // ejecutable que desaparece en el proximo `limpiar` rompe la asociacion del usuario.
         report(OpenInNukeXMessages::runningFromBuildFolder());
         return;
     }
+#endif
 
     const bool reapply = m_assocChip->text() == QStringLiteral("Associated");
     m_applyRunning = true;

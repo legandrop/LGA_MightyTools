@@ -40,7 +40,7 @@ OpenInNukeXMessage oneMoreStepInWindows();                  // Apply que necesit
 OpenInNukeXMessage associationFinishedWithWarnings(const QString &technicalDetails); // Apply con errores
 OpenInNukeXMessage associationError(const QString &errorText);       // excepcion no controlada en Apply
 OpenInNukeXMessage almostDoneMac();                         // mac rechazo el cambio de asociacion
-OpenInNukeXMessage runningFromBuildFolder();                // Apply desde un arbol de build (Windows y mac)
+OpenInNukeXMessage runningFromBuildFolder();                // Apply desde un arbol de build (solo mac)
 
 // ---- Nuke Bridge (Install, Export) ----------------------------------------------------------
 OpenInNukeXMessage bridgeInstalled(const QString &path);    // Install exitoso
