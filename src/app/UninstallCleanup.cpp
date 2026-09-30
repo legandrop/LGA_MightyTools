@@ -2,6 +2,7 @@
 
 #include "app/ModuleRegistry.h"
 #include "platform/AutoStart.h"
+#include "platform/ToastActivation.h"
 
 #include <QDebug>
 
@@ -29,6 +30,12 @@ Report run(const QList<ModuleDescriptor> &descriptors)
         ++report.failures;
     }
     report.lines << QStringLiteral("[autoStart] %1").arg(detail);
+    // La anotacion de los avisos ante Windows (AUMID y activador COM).
+    QString toastDetail;
+    if (!ToastActivation::removeIfOwned(&toastDetail)) {
+        ++report.failures;
+    }
+    report.lines << QStringLiteral("[avisos] %1").arg(toastDetail);
     return report;
 }
 

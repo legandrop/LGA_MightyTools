@@ -32,6 +32,7 @@ public:
     ForegroundWatcher *foreground() override;
 
     void notify(const QString &title, const QString &body, NoticeIcon icon, int msecs) override;
+    void notifyWithChoice(const QString &title, const QString &body, const NoticeChoice &choice) override;
 
     void showPanel() override;
     void hideWindowTemporarily() override;

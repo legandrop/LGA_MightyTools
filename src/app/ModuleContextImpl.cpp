@@ -110,6 +110,17 @@ void ModuleContextImpl::notify(const QString &title, const QString &body, Notice
     services->notify(m_id, title, body, icon, msecs);
 }
 
+void ModuleContextImpl::notifyWithChoice(const QString &title, const QString &body, const NoticeChoice &choice)
+{
+    HostServices *services = m_host->hostServices();
+    if (automatedRun() || !services) {
+        qInfo().noquote() << QStringLiteral("[Notifier] (sin mostrar) %1: %2 | %3 | %4 [%5]")
+                                 .arg(m_id, title, body, choice.label, choice.defaultId);
+        return;
+    }
+    services->notifyWithChoice(m_id, title, body, choice);
+}
+
 void ModuleContextImpl::showPanel()
 {
     if (HostServices *services = m_host->hostServices()) {

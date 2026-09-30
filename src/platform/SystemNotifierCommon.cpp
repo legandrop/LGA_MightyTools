@@ -1,5 +1,7 @@
 #include "platform/SystemNotifier.h"
 
+#include "core/AppSettings.h"
+
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
@@ -13,6 +15,43 @@ QString SystemNotifier::iconTempPath(bool automatedRun)
     return QDir(QDir::tempPath())
         .absoluteFilePath(automatedRun ? QStringLiteral("LGA_MightyTools_notification_icon_qa.png")
                                        : QStringLiteral("LGA_MightyTools_notification_icon.png"));
+}
+
+QString SystemNotifier::stableIconPath()
+{
+    return QFileInfo(AppSettings::filePath()).absoluteDir().filePath(QStringLiteral("notification_icon.png"));
+}
+
+QString SystemNotifier::toastXml(const Notice &notice, const QString &imagePath)
+{
+    const auto esc = [](const QString &text) { return text.toHtmlEscaped(); };
+    const bool hasChoice = !notice.choices.isEmpty();
+    QString xml = QStringLiteral("<toast");
+    if (!notice.launch.isEmpty()) {
+        xml += QStringLiteral(" launch=\"%1\"").arg(esc(notice.launch));
+    }
+    // "reminder" sin un boton propio lo ignora Windows: solo con el desplegable.
+    if (notice.persistent && hasChoice) {
+        xml += QStringLiteral(" scenario=\"reminder\"");
+    }
+    xml += QStringLiteral("><visual><binding template=\"ToastGeneric\"><text>%1</text><text>%2</text>")
+               .arg(esc(notice.title), esc(notice.body));
+    if (!imagePath.isEmpty()) {
+        xml += QStringLiteral("<image placement=\"appLogoOverride\" src=\"%1\"/>").arg(esc(imagePath));
+    }
+    xml += QStringLiteral("</binding></visual>");
+    if (hasChoice) {
+        xml += QStringLiteral("<actions><input id=\"%1\" type=\"selection\" title=\"%2\" defaultInput=\"%3\">")
+                   .arg(choiceInputId(), esc(notice.choiceLabel), esc(notice.choiceDefault));
+        for (const auto &choice : notice.choices) {
+            xml += QStringLiteral("<selection id=\"%1\" content=\"%2\"/>").arg(esc(choice.first), esc(choice.second));
+        }
+        xml += QStringLiteral("</input><action content=\"%1\" arguments=\"%2\" activationType=\"foreground\"/>")
+                   .arg(esc(notice.button), esc(notice.buttonArguments));
+        xml += QStringLiteral("<action content=\"Dismiss\" arguments=\"dismiss\" activationType=\"system\"/></actions>");
+    }
+    xml += QStringLiteral("</toast>");
+    return xml;
 }
 
 QString SystemNotifier::escapeForScript(const QString &text)

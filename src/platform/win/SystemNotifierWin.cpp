@@ -1,5 +1,7 @@
 #include "platform/SystemNotifier.h"
 
+#include "platform/ToastActivation.h"
+
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
@@ -28,8 +30,8 @@ constexpr int kWaitSliceMs = 100;
 
 struct Toast
 {
-    QString title;
-    QString body;
+    SystemNotifier::Notice notice;
+    bool registered = false; ///< la app esta anotada: ToastGeneric con AUMID propio
 };
 
 QString toastScript(const QString &title, const QString &body, const QString &imagePath, const QString &exePath)
@@ -104,6 +106,58 @@ QString toastScript(const QString &title, const QString &body, const QString &im
                       SystemNotifier::escapeForScript(imagePath), SystemNotifier::escapeForScript(exePath), aumid);
 }
 
+// Toast con la app anotada ante Windows: XML ToastGeneric (desplegable, botones, click que vuelve a
+// la app) con el AUMID propio. Si la API nativa falla, el globo de respaldo de siempre.
+QString genericToastScript(const SystemNotifier::Notice &notice, const QString &imagePath, const QString &exePath)
+{
+    const QString xml = SystemNotifier::toastXml(notice, imagePath);
+    QString script = QStringLiteral(
+        "try {"
+        "    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null;"
+        "    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null;"
+        "    $toastXml = New-Object Windows.Data.Xml.Dom.XmlDocument;"
+        "    $toastXml.LoadXml('%1');"
+        "    $toast = [Windows.UI.Notifications.ToastNotification]::new($toastXml);"
+        // Con tag, un aviso nuevo del mismo disco reemplaza al anterior en el Centro de notificaciones.
+        "    if ('%6' -ne '') { $toast.Tag = '%6'; $toast.Group = '%7'; }"
+        "    $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('%2');"
+        "    $notifier.Show($toast);"
+        "    Write-Host 'Toast generico enviado';"
+        "} catch {"
+        "    Write-Host 'API nativa fallo:' $_.Exception.Message;"
+        "    try {"
+        "        Add-Type -AssemblyName System.Windows.Forms;"
+        "        Add-Type -AssemblyName System.Drawing;"
+        "        $notification = New-Object System.Windows.Forms.NotifyIcon;"
+        "        $notification.Icon = [System.Drawing.Icon]::ExtractAssociatedIcon('%3');"
+        "        $notification.BalloonTipIcon = 'None';"
+        "        $notification.BalloonTipText = '%5';"
+        "        $notification.BalloonTipTitle = '%4';"
+        "        $notification.Visible = $true;"
+        "        $notification.ShowBalloonTip(5000);"
+        "        Start-Sleep -Seconds 2;"
+        "        $notification.Dispose();"
+        "        Write-Host 'Globo completado';"
+        "    } catch {"
+        "        Write-Host 'Error en respaldo:' $_.Exception.Message;"
+        "        exit 1;"
+        "    }"
+        "}");
+    // Un solo arg() con todos: un "%2" dentro del texto no se reemplaza de nuevo.
+    return script.arg(SystemNotifier::escapeForScript(xml), SystemNotifier::escapeForScript(ToastActivation::appUserModelId()),
+                      SystemNotifier::escapeForScript(exePath), SystemNotifier::escapeForScript(notice.title),
+                      SystemNotifier::escapeForScript(notice.body), SystemNotifier::escapeForScript(notice.tag),
+                      SystemNotifier::escapeForScript(notice.group));
+}
+
+// -EncodedCommand: el script en UTF-16LE y base64. El XML lleva comillas dobles, que por la linea de
+// comandos de -Command pueden llegar partidas.
+QString encodedCommand(const QString &script)
+{
+    const QByteArray utf16(reinterpret_cast<const char *>(script.utf16()), script.size() * 2);
+    return QString::fromLatin1(utf16.toBase64());
+}
+
 // El worker de la cola: vive en su hilo y procesa de a un toast.
 class NotificationWorker : public QObject
 {
@@ -156,15 +210,20 @@ private:
         const SystemNotifier::IconFile icon =
             SystemNotifier::prepareIcon(QStringLiteral(":/icons/LGA_MightyTools.ico"), SystemNotifier::iconTempPath(false));
         const QString exePath = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
-        const QString script = toastScript(toast.title, toast.body, QDir::toNativeSeparators(icon.path), exePath);
+        const QString imagePath = QDir::toNativeSeparators(icon.path);
         QProcess process;
         // Sin consola: PowerShell es una app de consola y abriria una ventana negra.
         process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments) {
             arguments->flags |= CREATE_NO_WINDOW;
         });
-        process.start(QStringLiteral("powershell.exe"),
-                      {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"), QStringLiteral("-ExecutionPolicy"),
-                       QStringLiteral("Bypass"), QStringLiteral("-Command"), script});
+        QStringList arguments = {QStringLiteral("-NoProfile"), QStringLiteral("-NonInteractive"),
+                                 QStringLiteral("-ExecutionPolicy"), QStringLiteral("Bypass")};
+        if (toast.registered) {
+            arguments << QStringLiteral("-EncodedCommand") << encodedCommand(genericToastScript(toast.notice, imagePath, exePath));
+        } else {
+            arguments << QStringLiteral("-Command") << toastScript(toast.notice.title, toast.notice.body, imagePath, exePath);
+        }
+        process.start(QStringLiteral("powershell.exe"), arguments);
         // Se espera de a tramos cortos: si la app se cierra con un toast en vuelo, se corta PowerShell
         // y el hilo termina enseguida (en PipeSync el cierre podia borrar el worker en uso).
         QElapsedTimer elapsed;
@@ -183,7 +242,7 @@ private:
             }
         }
         qInfo().noquote() << QStringLiteral("[SystemNotifier] Toast '%1' (icono %2x%3) -> salida %4: %5")
-                                 .arg(toast.title)
+                                 .arg(toast.notice.title)
                                  .arg(icon.size.width())
                                  .arg(icon.size.height())
                                  .arg(process.exitCode())
@@ -234,7 +293,17 @@ bool SystemNotifier::workerRunning() const
 
 void SystemNotifier::show(const QString &title, const QString &body)
 {
-    m_last = Last{title, body, IconFile{}, false};
+    Notice notice;
+    notice.title = title;
+    notice.body = body;
+    show(notice);
+}
+
+void SystemNotifier::show(const Notice &notice)
+{
+    const QString &title = notice.title;
+    const QString &body = notice.body;
+    m_last = Last{title, body, IconFile{}, false, notice};
     if (m_automated) {
         // Corrida automatizada: sin PowerShell ni hilo. Se prepara el icono (en su propio PNG de QA)
         // y se anota lo que se mostraria.
@@ -256,6 +325,18 @@ void SystemNotifier::show(const QString &title, const QString &body)
         d->thread->start();
         qInfo() << "[SystemNotifier] Hilo de notificaciones creado";
     }
+    if (!m_registered) {
+        // La anotacion ante Windows, con el primer aviso real; tambien desde un build (excepcion
+        // aprobada por Lega el 2026-09-30). Si falla, sale el toast de antes y se reintenta con el
+        // proximo aviso.
+        const IconFile header = prepareIcon(QStringLiteral(":/icons/LGA_MightyTools.ico"), stableIconPath());
+        QString detail;
+        m_registered = ToastActivation::ensureRegistered(header.path, &detail);
+        qInfo().noquote() << QStringLiteral("[SystemNotifier] Anotacion de la app ante Windows: %1").arg(detail);
+        if (m_registered) {
+            ToastActivation::listen();
+        }
+    }
     m_last.launched = true;
-    d->worker->enqueue(Toast{title, body});
+    d->worker->enqueue(Toast{notice, m_registered});
 }

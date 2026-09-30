@@ -114,6 +114,7 @@ set(SOURCES
     src/platform/LocalDrivesCommon.cpp
     src/platform/NukeWatcherCommon.cpp
     src/platform/SystemNotifierCommon.cpp
+    src/platform/ToastActivationCommon.cpp
     src/qa/Measure.cpp
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
@@ -186,6 +187,7 @@ set(HEADERS
     src/platform/ProcessStats.h
     src/platform/SystemInput.h
     src/platform/SystemNotifier.h
+    src/platform/ToastActivation.h
     src/platform/WindowActivation.h
     src/platform/WindowFrame.h
     src/qa/Measure.h
@@ -220,6 +222,7 @@ if(WIN32)
         src/platform/win/RegistryHelper.cpp
         src/platform/win/SystemInputWin.cpp
         src/platform/win/SystemNotifierWin.cpp
+        src/platform/win/ToastActivationWin.cpp
         src/platform/win/WindowActivationWin.cpp
         src/platform/win/WindowFrameWin.cpp
         # Self-test del registro sobre un hive privado (RegLoadAppKey): solo Windows.
@@ -273,6 +276,7 @@ elseif(APPLE)
         src/platform/mac/ProcessStatsMac.cpp
         src/platform/mac/SystemInputMac.cpp
         src/platform/mac/SystemNotifierMac.cpp
+        src/platform/mac/ToastActivationMac.cpp
         src/platform/mac/WindowActivationMac.cpp
         src/platform/mac/WindowFrameMac.cpp
     )

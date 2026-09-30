@@ -24,9 +24,16 @@ bool SystemNotifier::workerRunning() const
     return false;
 }
 
+void SystemNotifier::show(const Notice &notice)
+{
+    // osascript no tiene acciones: salen el titulo y el texto.
+    show(notice.title, notice.body);
+    m_last.notice = notice;
+}
+
 void SystemNotifier::show(const QString &title, const QString &body)
 {
-    m_last = Last{title, body, IconFile{}, false};
+    m_last = Last{title, body, IconFile{}, false, Notice{}};
     if (m_automated) {
         qInfo().noquote() << QStringLiteral("[SystemNotifier] (automatizada, sin mostrar) '%1' | '%2'").arg(title, body);
         return;

@@ -3,7 +3,9 @@
 
 #include "core/Shortcut.h"
 
+#include <QList>
 #include <QObject>
+#include <QPair>
 #include <QString>
 #include <QVariant>
 
@@ -57,6 +59,19 @@ signals:
     void activated(int localId);
 };
 
+// Un aviso con un desplegable y un boton al lado (Windows; en mac sale el aviso simple). Elegir una
+// opcion y apretar el boton llega al modulo como Module::noticeAction(action, key, id elegido).
+struct NoticeChoice
+{
+    QString key;                            ///< que aviso es (la raiz de un disco); uno nuevo con la misma key reemplaza al anterior
+    QString label;                          ///< "Remind me again in"
+    QList<QPair<QString, QString>> options; ///< id, texto
+    QString defaultId;                      ///< el preseleccionado
+    QString button;                         ///< "Remind me"
+    QString action;                         ///< lo que recibe noticeAction ("snooze")
+    bool persistent = false;                ///< queda en pantalla hasta que se elige algo
+};
+
 // Lo que el host le da a un modulo vivo. Vive mientras vive el modulo (se borra despues que el).
 class ModuleContext
 {
@@ -102,6 +117,12 @@ public:
 
     // Notificacion del sistema; el click abre la ventana en el panel de este modulo.
     virtual void notify(const QString &title, const QString &body, NoticeIcon icon, int msecs) = 0;
+    // Aviso con desplegable (NoticeChoice). Sin implementacion propia, el aviso simple.
+    virtual void notifyWithChoice(const QString &title, const QString &body, const NoticeChoice &choice)
+    {
+        Q_UNUSED(choice);
+        notify(title, body, NoticeIcon::Warning, 0);
+    }
 
     // La ventana principal: abrirla en este modulo, u ocultarla y devolverla (el calibrador la
     // esconde para no tapar Nuke). window() sirve de padre para los dialogos del modulo.

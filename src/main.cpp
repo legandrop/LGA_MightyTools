@@ -14,6 +14,7 @@
 #endif
 #include "platform/AutoStart.h"
 #include "platform/ComApartment.h"
+#include "platform/ToastActivation.h"
 #include "platform/WindowActivation.h"
 #include "qa/Measure.h"
 #include "qa/SelfTest.h"
@@ -259,7 +260,14 @@ int main(int argc, char *argv[])
 
     // Instancia unica. La segunda copia sin argumentos le pide a la residente que muestre la ventana.
     static QLockFile singleInstanceLock(QDir(QDir::tempPath()).filePath(QStringLiteral("com.lga.mightytools.singleton.lock")));
+    const bool launchedByNotice = hasArg(argc, argv, "-Embedding") || hasArg(argc, argv, "--toast-activated");
     if (!singleInstanceLock.tryLock(100)) {
+        if (launchedByNotice) {
+            // Windows lanzo esta copia por un click en un aviso, pero ya hay otra residente (de otro
+            // exe: la anotacion apunta aca). El click se pierde; no se abre la ventana de la otra.
+            qInfo() << "Lanzada por un aviso con otra copia residente; se sale sin hacer nada";
+            return 0;
+        }
         // Windows solo deja pasar al frente la ventana de otro proceso si el que tiene el foco (esta
         // copia, que lanzo el usuario) lo autoriza.
         WindowActivation::allowAnyProcessToActivate();
@@ -273,6 +281,13 @@ int main(int argc, char *argv[])
     LgaRegistry::registerThisApp(QStringLiteral("LGA_MightyTools"), QStringLiteral(MIGHTYTOOLS_VERSION));
 
     applyAppStyle(app);
+
+    // Los clicks en los avisos, desde ya: con la app lanzada por Windows desde un aviso, el click
+    // llega enseguida y queda guardado hasta que existen la bandeja y las herramientas. Solo si la
+    // anotacion ante Windows es de este exe (si no, la escribe el primer aviso).
+    if (launchedByNotice || ToastActivation::registeredForThisExe()) {
+        ToastActivation::listen();
+    }
 
     AppController::Options options;
     options.dryRunInput = hasArg(argc, argv, "--dry-run-input") || DebugFlags::isOn(QStringLiteral("dryRunInput"));
@@ -324,5 +339,7 @@ int main(int argc, char *argv[])
     };
     QTimer::singleShot(0, qApp, pollTray);
 
-    return app.exec();
+    const int code = app.exec();
+    ToastActivation::stopListening();
+    return code;
 }

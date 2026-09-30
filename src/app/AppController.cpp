@@ -10,6 +10,7 @@
 #include "core/BuildTree.h"
 #include "platform/AutoStart.h"
 #include "platform/SystemNotifier.h"
+#include "platform/ToastActivation.h"
 #include "ui/HelpDialog.h"
 
 #ifdef Q_OS_WIN
@@ -18,11 +19,14 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCryptographicHash>
 #include <QDebug>
 #include <QFileOpenEvent>
 #include <QMenu>
 #include <QMessageBox>
 #include <QSystemTrayIcon>
+#include <QUrl>
+#include <QUrlQuery>
 
 namespace {
 
@@ -30,6 +34,18 @@ const QString kCheckUpdates = QStringLiteral("app/checkUpdatesAtStartup");
 const QString kFirstRunCompleted = QStringLiteral("app/firstRunCompleted");
 const QString kWelcomeDone = QStringLiteral("app/welcomeDone");
 const QString kAutoStartDecided = QStringLiteral("app/autoStartDecided");
+
+// Los argumentos que vuelven con el click en un aviso: "module=diskSpace&action=snooze&key=C%3A%2F".
+QString noticeArguments(const QString &moduleId, const QString &action, const QString &key)
+{
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("module"), QString::fromLatin1(QUrl::toPercentEncoding(moduleId)));
+    query.addQueryItem(QStringLiteral("action"), QString::fromLatin1(QUrl::toPercentEncoding(action)));
+    if (!key.isEmpty()) {
+        query.addQueryItem(QStringLiteral("key"), QString::fromLatin1(QUrl::toPercentEncoding(key)));
+    }
+    return query.toString(QUrl::FullyEncoded);
+}
 
 } // namespace
 
@@ -143,6 +159,14 @@ AppController::AppController(const Options &options, QObject *parent)
         m_tray->show();
     }
 
+    if (!m_options.measurement) {
+        // Los clicks en los avisos, con las herramientas ya prendidas. Incluye los que llegaron antes
+        // (la app lanzada por Windows desde un aviso, con el click esperando).
+        ToastActivation::setHandler([this](const ToastActivation::Activation &activation) {
+            onNoticeClicked(activation.arguments, activation.inputs.value(SystemNotifier::choiceInputId()));
+        });
+    }
+
     if (m_updates) {
         if (checkUpdates) {
             m_updates->scheduleAutomaticCheck();
@@ -169,6 +193,7 @@ AppController::AppController(const Options &options, QObject *parent)
 
 AppController::~AppController()
 {
+    ToastActivation::setHandler(nullptr);
     // Primero las herramientas (sus paneles son hijos de la ventana), despues la ventana y el menu.
     m_host->shutdown();
     delete m_window;
@@ -279,7 +304,54 @@ void AppController::notify(const QString &moduleId, const QString &title, const 
     Q_UNUSED(icon);
     Q_UNUSED(msecs);
     m_lastNotifier = moduleId;
-    m_notifier->show(title, body);
+    SystemNotifier::Notice notice;
+    notice.title = title;
+    notice.body = body;
+    notice.launch = noticeArguments(moduleId, QStringLiteral("open"), QString());
+    m_notifier->show(notice);
+}
+
+void AppController::notifyWithChoice(const QString &moduleId, const QString &title, const QString &body,
+                                     const NoticeChoice &choice)
+{
+    m_lastNotifier = moduleId;
+    SystemNotifier::Notice notice;
+    notice.title = title;
+    notice.body = body;
+    notice.launch = noticeArguments(moduleId, QStringLiteral("open"), QString());
+    // El tag de Windows es corto: un hash de la key, con el modulo como grupo.
+    notice.tag = QString::fromLatin1(QCryptographicHash::hash(choice.key.toUtf8(), QCryptographicHash::Md5).toHex().left(16));
+    notice.group = moduleId;
+    notice.persistent = choice.persistent;
+    notice.choiceLabel = choice.label;
+    notice.choices = choice.options;
+    notice.choiceDefault = choice.defaultId;
+    notice.button = choice.button;
+    notice.buttonArguments = noticeArguments(moduleId, choice.action, choice.key);
+    m_notifier->show(notice);
+}
+
+void AppController::onNoticeClicked(const QString &arguments, const QString &choice)
+{
+    const QUrlQuery query(arguments);
+    const QString moduleId = query.queryItemValue(QStringLiteral("module"), QUrl::FullyDecoded);
+    const QString action = query.queryItemValue(QStringLiteral("action"), QUrl::FullyDecoded);
+    const QString key = query.queryItemValue(QStringLiteral("key"), QUrl::FullyDecoded);
+    if (action.isEmpty() || action == QLatin1String("open")) {
+        // El cuerpo del aviso: la ventana en la herramienta que aviso.
+        if (moduleId.isEmpty()) {
+            showSettings();
+        } else {
+            showPanel(moduleId);
+        }
+        return;
+    }
+    if (!m_host->isRunning(moduleId)) {
+        qInfo().noquote() << QStringLiteral("[AppController] Boton de un aviso de %1 con la herramienta apagada: se ignora")
+                                 .arg(moduleId);
+        return;
+    }
+    m_host->module(moduleId)->noticeAction(action, key, choice);
 }
 
 void AppController::showPanel(const QString &moduleId)

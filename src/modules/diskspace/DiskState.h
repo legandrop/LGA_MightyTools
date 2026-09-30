@@ -43,7 +43,8 @@ public:
     // adelanta un recordatorio. Dejar de vigilar un disco borra su historial.
     DiskSpace::AlertState alertState(const QString &root) const;
     void setAlertState(const QString &root, const DiskSpace::AlertState &alert);
-    // "Remind me again in" del aviso: el proximo recordatorio de `root` llega a `minutes` de `now`.
+    // "Remind me again in" del aviso: el proximo recordatorio de `root` llega a `minutes` del ultimo
+    // aviso (nunca antes de `now`).
     // Solo un disco vigilado y una opcion de remindChoices(); si no, no hace nada.
     void snooze(const QString &root, int minutes, const QDateTime &now);
 

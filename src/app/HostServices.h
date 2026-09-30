@@ -18,6 +18,13 @@ public:
     // Notificacion del sistema. El click abre la ventana en el panel de `moduleId`.
     virtual void notify(const QString &moduleId, const QString &title, const QString &body,
                         ModuleContext::NoticeIcon icon, int msecs) = 0;
+    // Aviso con desplegable. Sin implementacion propia, el aviso simple.
+    virtual void notifyWithChoice(const QString &moduleId, const QString &title, const QString &body,
+                                  const NoticeChoice &choice)
+    {
+        Q_UNUSED(choice);
+        notify(moduleId, title, body, ModuleContext::NoticeIcon::Warning, 0);
+    }
     virtual void showPanel(const QString &moduleId) = 0;
     // Esconder la ventana y devolverla. hideWindow devuelve si estaba visible (para restaurarla).
     virtual bool hideWindow() = 0;

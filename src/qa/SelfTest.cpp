@@ -12,11 +12,13 @@
 #include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
 #include "platform/SystemNotifier.h"
+#include "platform/ToastActivation.h"
 
 #ifdef Q_OS_WIN
 #include "qa/RegistryHiveTest.h"
 #endif
 
+#include <QXmlStreamReader>
 #include <QCoreApplication>
 #include <QImageReader>
 #include <QImage>
@@ -487,6 +489,61 @@ void testNotifier(const Check &check)
     check(notifier.last().icon.reused, QStringLiteral("notificaciones: el PNG reciente se reusa"));
     check(SystemNotifier::escapeForScript(QStringLiteral("It's")) == QLatin1String("It''s"),
           QStringLiteral("notificaciones: las comillas simples se duplican para PowerShell"));
+
+    // El XML del aviso con desplegable: bien formado, con el texto escapado, y "reminder" solo con
+    // desplegable.
+    SystemNotifier::Notice notice;
+    notice.title = QStringLiteral("C: is <low> & \"full\"");
+    notice.body = QStringLiteral("35 GB free of 930 GB. It's %1");
+    notice.launch = QStringLiteral("module=diskSpace&action=open");
+    notice.persistent = true;
+    const QString plain = SystemNotifier::toastXml(notice, QStringLiteral("C:\\x\\icon.png"));
+    check(!plain.contains(QLatin1String("scenario")) && !plain.contains(QLatin1String("<actions")),
+          QStringLiteral("aviso: sin desplegable no hay acciones ni modo recordatorio"));
+    notice.choiceLabel = QStringLiteral("Remind me again in");
+    notice.choices = {{QStringLiteral("15"), QStringLiteral("15 min")}, {QStringLiteral("60"), QStringLiteral("1 hour")}};
+    notice.choiceDefault = QStringLiteral("60");
+    notice.button = QStringLiteral("Remind me");
+    notice.buttonArguments = QStringLiteral("module=diskSpace&action=snooze&key=C%3A%2F");
+    const QString xml = SystemNotifier::toastXml(notice, QStringLiteral("C:\\x\\icon.png"));
+    QXmlStreamReader xmlReader(xml);
+    QString title;
+    QString defaultInput;
+    QString buttonArguments;
+    QString launch;
+    QString scenario;
+    int selections = 0;
+    while (!xmlReader.atEnd()) {
+        if (xmlReader.readNext() != QXmlStreamReader::StartElement) {
+            continue;
+        }
+        const QXmlStreamAttributes attributes = xmlReader.attributes();
+        if (xmlReader.name() == QLatin1String("toast")) {
+            launch = attributes.value(QLatin1String("launch")).toString();
+            scenario = attributes.value(QLatin1String("scenario")).toString();
+        } else if (xmlReader.name() == QLatin1String("text") && title.isEmpty()) {
+            title = xmlReader.readElementText();
+        } else if (xmlReader.name() == QLatin1String("input")) {
+            defaultInput = attributes.value(QLatin1String("defaultInput")).toString();
+        } else if (xmlReader.name() == QLatin1String("selection")) {
+            ++selections;
+        } else if (xmlReader.name() == QLatin1String("action") && buttonArguments.isEmpty()) {
+            buttonArguments = attributes.value(QLatin1String("arguments")).toString();
+        }
+    }
+    check(!xmlReader.hasError(), QStringLiteral("aviso: el XML esta bien formado (%1)").arg(xmlReader.errorString()));
+    check(title == notice.title && launch == notice.launch && buttonArguments == notice.buttonArguments,
+          QStringLiteral("aviso: titulo, click y boton vuelven intactos del XML (& < > comillas)"));
+    check(selections == 2 && defaultInput == QLatin1String("60") && scenario == QLatin1String("reminder"),
+          QStringLiteral("aviso: dos opciones, la preseleccionada y el modo recordatorio"));
+    notifier.show(notice);
+    check(!notifier.last().launched && notifier.last().notice.choices.size() == 2,
+          QStringLiteral("aviso con desplegable: en corrida automatizada no se lanza ni se anota nada"));
+    check(ToastActivation::isActivationArgument(QStringLiteral("-Embedding"))
+              && ToastActivation::isActivationArgument(QStringLiteral("/embedding"))
+              && ToastActivation::isActivationArgument(QStringLiteral("--toast-activated"))
+              && !ToastActivation::isActivationArgument(QStringLiteral("C:/shots/a.nk")),
+          QStringLiteral("aviso: -Embedding y --toast-activated no son un archivo ni un link"));
     QFile::remove(SystemNotifier::iconTempPath(true));
 }
 

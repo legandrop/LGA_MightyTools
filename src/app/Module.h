@@ -179,6 +179,15 @@ public:
     // Misma semantica que ModuleDescriptor::runExternal.
     virtual ExternalResult handleExternal(const ExternalRequest &request) { Q_UNUSED(request); return ExternalResult::NotMine; }
 
+    // El boton de un aviso con desplegable (ModuleContext::notifyWithChoice): `action` y `key` son los
+    // del aviso, `choice` el id elegido (vacio si no llego ninguno). Solo con la herramienta prendida.
+    virtual void noticeAction(const QString &action, const QString &key, const QString &choice)
+    {
+        Q_UNUSED(action);
+        Q_UNUSED(key);
+        Q_UNUSED(choice);
+    }
+
     // QA (--ui-shot). Los estados que sabe dibujar el modulo construido en modo captura; fijar uno
     // antes de pedir el panel (false si no existe: el arnes lo reporta como error, nunca lo
     // reemplaza por otro). createCaptureWidget() arma lo que NO es el panel (dialogo, popup, burbuja,

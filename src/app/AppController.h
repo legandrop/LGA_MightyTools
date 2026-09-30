@@ -43,6 +43,8 @@ public:
     MainWindow *mainWindow() const { return m_window; }
 
     // HostServices
+    void notifyWithChoice(const QString &moduleId, const QString &title, const QString &body,
+                          const NoticeChoice &choice) override;
     void notify(const QString &moduleId, const QString &title, const QString &body, ModuleContext::NoticeIcon icon,
                 int msecs) override;
     void showPanel(const QString &moduleId) override;
@@ -63,6 +65,8 @@ private:
     void refreshTray();
     void rebuildMenu();
     void refreshAutoStart();
+    // Click en un aviso (ToastActivation): abre el panel de la herramienta, o le pasa el boton.
+    void onNoticeClicked(const QString &arguments, const QString &choice);
     void onAutoStartToggled(bool enabled);
     bool firstRunView() const;
     void quit();

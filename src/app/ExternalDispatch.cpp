@@ -1,6 +1,7 @@
 #include "app/ExternalDispatch.h"
 
 #include "app/SettingsStore.h"
+#include "platform/ToastActivation.h"
 
 #include <QDebug>
 #include <QEventLoop>
@@ -14,7 +15,8 @@ QString firstPlainArgument(const QStringList &arguments)
 {
     for (int i = 1; i < arguments.size(); ++i) {
         const QString &arg = arguments.at(i);
-        if (!arg.startsWith(QLatin1String("--")) && !arg.isEmpty()) {
+        // "-Embedding": Windows lanzo la app por el click en un aviso (ToastActivation).
+        if (!arg.startsWith(QLatin1String("--")) && !arg.isEmpty() && !ToastActivation::isActivationArgument(arg)) {
             return arg;
         }
     }

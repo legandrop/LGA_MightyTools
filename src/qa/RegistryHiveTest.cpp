@@ -8,6 +8,7 @@
 #include "modules/openinnukex/win/OldClientMigration.h"
 #include "modules/openinnukex/win/WinFileAssociation.h"
 #include "platform/AutoStart.h"
+#include "platform/ToastActivation.h"
 #include "platform/win/RegistryHelper.h"
 
 #include <QCoreApplication>
@@ -51,6 +52,12 @@ const QString kMailtoChoice = QStringLiteral("Software\\Microsoft\\Windows\\Shel
 const QString kOldCaps = QStringLiteral("Software\\OpenInNukeX\\Capabilities");
 const QString kOldRoot = QStringLiteral("Software\\OpenInNukeX");
 const QString kNkProgIdName = QStringLiteral("LGA.NukeScript.1");
+// Anotacion de los avisos (ToastActivation).
+const QString kAumidParent = QStringLiteral("Software\\Classes\\AppUserModelId");
+const QString kAumidOwn = kAumidParent + QStringLiteral("\\LGA_MightyTools");
+const QString kAumidForeign = kAumidParent + QStringLiteral("\\SomeVendor.SomeApp");
+const QString kToastClsid = QStringLiteral("Software\\Classes\\CLSID\\{3AB03416-FB8F-436A-872F-5FB73C97F32C}");
+const QString kToastServer = kToastClsid + QStringLiteral("\\LocalServer32");
 // Cliente viejo (LGA OpenInNukeX v1.83): su clave de desinstalacion en cada vista.
 const QString kOldUninstallTail =
     QStringLiteral("Microsoft\\Windows\\CurrentVersion\\Uninstall\\{B8F1A2C3-4D5E-6F78-9A0B-1C2D3E4F5678}_is1");
@@ -461,6 +468,15 @@ void scenarioOwnInstall(HiveSession &session, const Check &check)
     putSz(hive, kFileExtsNk + QStringLiteral("\\UserChoiceLatest\\ProgId"), QStringLiteral("ProgId"), kNkProgIdName);
     putSz(hive, kFileExtsNk + QStringLiteral("\\UserChoiceLatest"), QStringLiteral("Hash"), QStringLiteral("latest="));
     check(AutoStart::setEnabled(true), QStringLiteral("1 siembra: inicio con Windows REAL (Run)"));
+    QString toastDetail;
+    const bool toastRegistered = ToastActivation::ensureRegistered(QStringLiteral("C:\\x\\notification_icon.png"), &toastDetail);
+    check(toastRegistered && ToastActivation::registeredForThisExe()
+              && RegistryHelper::commandPointsTo(readSz(hive, kToastServer), own)
+              && readSz(hive, kAumidOwn, QStringLiteral("DisplayName")) == QLatin1String("LGA Mighty Tools"),
+          QStringLiteral("1 siembra: anotacion REAL de los avisos (AUMID + activador COM) %1").arg(toastDetail));
+    const bool toastAgain = ToastActivation::ensureRegistered(QStringLiteral("C:\\x\\notification_icon.png"), &toastDetail);
+    check(toastAgain && toastDetail == QLatin1String("ya estaba"),
+          QStringLiteral("1 siembra: anotar de nuevo no escribe nada (%1)").arg(toastDetail));
     // Task Manager lo tenia deshabilitado.
     putBinary(hive, kStartupApproved, QStringLiteral("LGA_MightyTools"), QByteArray("\x03\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08", 12));
 
@@ -596,6 +612,40 @@ void scenarioMigrationAndCoexistence(HiveSession &session, const Check &check)
 
 // 4. A4: restos del cliente viejo, solo si no esta instalado y su exe no existe en una unidad local
 //    fija presente. Classes\LGA.NukeScript.1 nunca se toca.
+// 6. La anotacion de los avisos de otro exe: una copia que existe no se toca; una de
+//    LGA_MightyTools.exe que ya no existe (un build borrado) se limpia; un AUMID ajeno queda.
+void scenarioNoticeRegistration(HiveSession &session, const Check &check)
+{
+    const HKEY hive = session.hive();
+    check(session.reset() && seedForeign(hive), QStringLiteral("6 siembra: lo ajeno sembrado por el handle del hive"));
+    putSz(hive, kAumidForeign, QStringLiteral("DisplayName"), QStringLiteral("Some App"));
+    const auto seed = [&](const QString &exe) {
+        putSz(hive, kToastServer, QString(), QStringLiteral("\"%1\" --toast-activated").arg(exe));
+        putSz(hive, kAumidOwn, QStringLiteral("CustomActivator"), QStringLiteral("{3AB03416-FB8F-436A-872F-5FB73C97F32C}"));
+        putSz(hive, kAumidOwn, QStringLiteral("DisplayName"), QStringLiteral("LGA Mighty Tools"));
+    };
+    const QString systemExe = QDir::toNativeSeparators(QStandardPaths::findExecutable(QStringLiteral("notepad.exe")));
+    QString detail;
+
+    seed(systemExe);
+    const Snapshot before = snapshot(hive);
+    check(!ToastActivation::registeredForThisExe(), QStringLiteral("6 de otro exe: no cuenta como anotada para este"));
+    bool removed = ToastActivation::removeIfOwned(&detail);
+    check(removed && snapshot(hive) == before,
+          QStringLiteral("6 de otro exe que existe (%1): no se toca [%2]").arg(systemExe, detail));
+
+    seed(QStringLiteral("C:\\LGA_selftest_missing\\LGA_MightyTools.exe"));
+    removed = ToastActivation::removeIfOwned(&detail);
+    check(removed && !RegistryHelper::keyExists(hive, kToastClsid)
+              && !RegistryHelper::keyExists(hive, kAumidOwn) && RegistryHelper::keyExists(hive, kAumidForeign),
+          QStringLiteral("6 de un LGA_MightyTools.exe que ya no existe: se borra y el AUMID ajeno queda [%1]").arg(detail));
+
+    seed(QStringLiteral("C:\\LGA_selftest_missing\\Other.exe"));
+    removed = ToastActivation::removeIfOwned(&detail);
+    check(removed && RegistryHelper::keyExists(hive, kToastClsid),
+          QStringLiteral("6 de otro nombre de exe que no existe: no se toca [%1]").arg(detail));
+}
+
 void scenarioOldClientLeftovers(HiveSession &session, const Check &check)
 {
     const HKEY hive = session.hive();
@@ -1100,6 +1150,7 @@ void run(const Check &check)
             scenarioOthersOwnOurNames(session, check);
             scenarioMigrationAndCoexistence(session, check);
             scenarioOldClientLeftovers(session, check);
+            scenarioNoticeRegistration(session, check);
 
             // 5. La mudanza lee el HKLM (clave de desinstalacion del cliente viejo) y escribe el
             // settings.ini: HKLM a otro hive privado y settings.ini (y %APPDATA%) a una carpeta

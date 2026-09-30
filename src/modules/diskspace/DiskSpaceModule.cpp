@@ -25,7 +25,6 @@ const QString kId = QStringLiteral("diskSpace");
 // Primer chequeo que puede avisar: un rato despues de prender, para no sumar una notificacion al
 // inicio de la sesion.
 constexpr int kFirstDiskCheckMs = 20000;
-constexpr int kDiskNotificationMs = 10000;
 
 // El panel: la tarjeta de discos. Cada vez que se ve (se elige la herramienta o se abre la ventana
 // con ella elegida) pide numeros al dia, como la ventana de Nuke Shortcuts al abrirse.
@@ -269,6 +268,13 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         state.snooze(QStringLiteral("Z:/"), 60, clock);
         check(!state.alertState(QStringLiteral("D:/")).snoozedUntil.isValid(),
               QStringLiteral("posponer: un plazo fuera de la lista o un disco sin vigilar no hacen nada"));
+        // El click llega 5 min despues del aviso: "15 min" cuenta desde el aviso, no desde el click.
+        state.snooze(QStringLiteral("D:/"), 15, clock.addSecs(5 * 60));
+        check(state.alertState(QStringLiteral("D:/")).snoozedUntil == clock.addSecs(15 * 60),
+              QStringLiteral("posponer: se ancla al aviso, no al click"));
+        state.snooze(QStringLiteral("D:/"), 15, clock.addSecs(40 * 60));
+        check(state.alertState(QStringLiteral("D:/")).snoozedUntil == clock.addSecs(40 * 60),
+              QStringLiteral("posponer: un click tardio nunca pospone hacia atras"));
         state.snooze(QStringLiteral("D:/"), 360, clock);
         disks.remove(QStringLiteral("D:/"));
         clock = clock.addSecs(6 * 3600);
@@ -495,11 +501,35 @@ QStringList DiskSpaceModule::trayTooltipLines() const
 
 void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &watch)
 {
-    context().notify(QStringLiteral("%1 is running low").arg(drive.label),
-                     QStringLiteral("%1 free of %2. You asked to be warned under %3.")
-                         .arg(DiskSpace::formatBytes(drive.freeBytes), DiskSpace::formatBytes(drive.totalBytes),
-                              DiskSpace::thresholdText(watch)),
-                     ModuleContext::NoticeIcon::Warning, kDiskNotificationMs);
+    // Con el desplegable "Remind me again in" (el valor de "Remind me every" preseleccionado): elegir
+    // otro plazo pospone SOLO el proximo recordatorio de este disco (decision de Lega, 2026-09-30).
+    // Queda en pantalla hasta que se elige algo (tambien pedido de Lega).
+    NoticeChoice choice;
+    choice.key = watch.root;
+    choice.label = QStringLiteral("Remind me again in");
+    for (const int minutes : DiskSpace::remindChoices()) {
+        choice.options.append({QString::number(minutes), DiskSpace::intervalText(minutes)});
+    }
+    choice.defaultId = QString::number(m_state->remindMinutes());
+    choice.button = QStringLiteral("Remind me");
+    choice.action = QStringLiteral("snooze");
+    choice.persistent = true;
+    context().notifyWithChoice(QStringLiteral("%1 is running low").arg(drive.label),
+                               QStringLiteral("%1 free of %2. You asked to be warned under %3.")
+                                   .arg(DiskSpace::formatBytes(drive.freeBytes), DiskSpace::formatBytes(drive.totalBytes),
+                                        DiskSpace::thresholdText(watch)),
+                               choice);
+}
+
+void DiskSpaceModule::noticeAction(const QString &action, const QString &key, const QString &choice)
+{
+    if (action != QLatin1String("snooze")) {
+        return;
+    }
+    // Sin valor elegido (no deberia pasar: el desplegable siempre tiene uno), el plazo configurado.
+    bool ok = false;
+    const int minutes = choice.toInt(&ok);
+    m_state->snooze(key, ok ? minutes : m_state->remindMinutes(), QDateTime::currentDateTime());
 }
 
 QStringList DiskSpaceModule::captureStates() const

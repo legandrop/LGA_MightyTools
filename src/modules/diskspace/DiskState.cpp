@@ -99,7 +99,11 @@ void DiskState::snooze(const QString &root, int minutes, const QDateTime &now)
         return;
     }
     DiskSpace::AlertState alert = m_alerts.value(root);
-    alert.snoozedUntil = now.addSecs(qint64(minutes) * 60);
+    // Anclado al aviso, no al click: el aviso cae en la grilla del chequeo de 15 min, el click no. Si
+    // no, elegir "15 min" un rato despues del aviso lo correria al tick siguiente (30 min). Un click
+    // tardio (desde el Centro de notificaciones) nunca pospone hacia atras.
+    const QDateTime anchor = alert.lastNotified.isValid() ? alert.lastNotified : now;
+    alert.snoozedUntil = std::max(now, anchor.addSecs(qint64(minutes) * 60));
     setAlertState(root, alert);
     qInfo() << "[DiskState] Proximo recordatorio de" << root << "en" << minutes << "min";
 }

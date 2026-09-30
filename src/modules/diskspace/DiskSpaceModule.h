@@ -30,6 +30,7 @@ public:
     QWidget *createPanel(QWidget *parent) override;
     void fillTrayMenu(QMenu *menu) override;
     QStringList trayTooltipLines() const override;
+    void noticeAction(const QString &action, const QString &key, const QString &choice) override;
 
     QStringList captureStates() const override;
     bool applyCaptureState(const QString &state) override;
