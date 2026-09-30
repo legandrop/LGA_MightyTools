@@ -17,12 +17,14 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    - `--uninstall-cleanup` y el desinstalador no se probaron de punta a punta (solo sobre el hive
      privado): probarlos en Windows Sandbox antes del release.
 3. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9). El lado de Mighty Tools está
-   hecho (migración en la instalación, casilla y botón para quitar el cliente viejo); falta PipeSync, que
-   espera el release y el alta en LGA_Updates.
-   - **Prueba pendiente en Windows Sandbox**, nunca en la máquina de Lega: instalador de Mighty Tools con
-     el cliente viejo instalado; el UAC de su desinstalador (sin firma); el código de salida de la
-     primera fase de ese desinstalador cuando se cancela el UAC; y si su `assoc .nk=` como administrador
-     toca algo de HKCU (con el UserChoice intacto, ¿el doble click sigue abriendo?).
+   hecho (migración en la instalación, casilla y botón para quitar el cliente viejo). PipeSync ya muestra
+   la tarjeta de Mighty Tools sola cuando el manifiesto de LGA_Updates la publica.
+   - **Probado en Windows Sandbox (2026-09-30), con el instalador v0.07 y el cliente viejo 1.83:** con la
+     casilla marcada, y con la casilla desmarcada más «Uninstall old app», el viejo se desinstala, sus
+     restos se borran, Open in NukeX queda prendido sin inicio con Windows y el doble click en un `.nk`
+     llama a NukeX. El `assoc .nk=` del desinstalador viejo no toca la asociación de HKCU.
+   - **Pendiente:** cancelar el permiso de Windows (UAC) del desinstalador viejo. Windows Sandbox trae el
+     control de cuentas apagado, así que va en una máquina real o virtual con UAC activo.
    - **Hueco aceptado:** si el UserChoice de `.nk` apunta a `Applications\LGA_OpenInNukeX.exe` (el
      usuario lo eligió con «Abrir con» buscando el exe), la migración no lo toca porque no es nuestro
      ProgID; al quitar el viejo, el `.nk` queda sin abrir hasta que el usuario aprieta Apply.
