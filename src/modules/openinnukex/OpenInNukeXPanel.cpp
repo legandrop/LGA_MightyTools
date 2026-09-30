@@ -690,12 +690,9 @@ void OpenInNukeXPanel::onInstallClicked()
         qInfo("[openInNukeX] (automatedRun) Install/Reinstall: no se instala el bridge de verdad");
         return;
     }
-    // A proposito, SIN el guard de AppPaths::isBuildTree() que tiene onApplyClicked(): instalar el
-    // bridge desde un arbol de build es legitimo (es como Lega prueba el modulo antes de un
-    // release) y no rompe nada si el build se borra despues — el bridge instalado en `.nuke` sigue
-    // andando solo, no depende del exe. Asociar `.nk` desde un build si es delicado (el ProgID
-    // apuntaria a un exe que desaparece en el proximo `limpiar`), por eso ese guard esta solo en
-    // Apply/Re-apply. Confirmado en la auditoria (revision de la etapa 2): asimetria intencional.
+    // Sin guard de arbol de build: instalar el bridge desde un build es legitimo y no rompe nada si
+    // el build se borra despues — el bridge instalado en `.nuke` sigue andando solo, no depende del
+    // exe. (Apply/Re-apply solo se frena desde un build en mac, donde se asocia la ruta del bundle.)
     const QString dir = m_nukeDirField->text().trimmed();
     QString detail;
     const NukeBridge::Error err = NukeBridge::install(dir, &detail, /*automatedRun=*/false);

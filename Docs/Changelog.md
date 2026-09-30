@@ -1,5 +1,14 @@
 # Changelog — LGA Mighty Tools
 
+v0.08:
+
+Apply de Open in NukeX se negaba a asociar los `.nk` cuando la app corría desde una carpeta de build,
+también en Windows. El cliente original solo frenaba en mac, donde se asocia la ruta del `.app` y el
+próximo build la borra; en Windows el exe se reemplaza en el mismo lugar y la asociación sigue andando.
+Ahora el aviso queda solo para mac: en Windows, Apply es una acción explícita del usuario y se hace desde
+cualquier copia, como pide el contrato de las herramientas.
+[ Open in NukeX - Apply desde una copia de build solo se frena en mac ]
+
 v0.07:
 
 Los usuarios del Open in NukeX viejo no tenían cómo pasar a Mighty Tools sin perder el doble click en

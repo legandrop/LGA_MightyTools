@@ -25,6 +25,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      llama a NukeX. El `assoc .nk=` del desinstalador viejo no toca la asociación de HKCU.
    - **Pendiente:** cancelar el permiso de Windows (UAC) del desinstalador viejo. Windows Sandbox trae el
      control de cuentas apagado, así que va en una máquina real o virtual con UAC activo.
+   - **Mejora posible:** la migración desde una copia instalada no retoma un ProgID que apunta a otra
+     copia de Mighty Tools (por ejemplo la de `build\`), ni aunque ese exe ya no exista: el panel queda
+     «Not associated» hasta un Apply. Chequear primero si el exe falta y retomarlo en ese caso.
    - **Hueco aceptado:** si el UserChoice de `.nk` apunta a `Applications\LGA_OpenInNukeX.exe` (el
      usuario lo eligió con «Abrir con» buscando el exe), la migración no lo toca porque no es nuestro
      ProgID; al quitar el viejo, el `.nk` queda sin abrir hasta que el usuario aprieta Apply.
