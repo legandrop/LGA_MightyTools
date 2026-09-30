@@ -489,6 +489,8 @@ void testNotifier(const Check &check)
     check(notifier.last().icon.reused, QStringLiteral("notificaciones: el PNG reciente se reusa"));
     check(SystemNotifier::escapeForScript(QStringLiteral("It's")) == QLatin1String("It''s"),
           QStringLiteral("notificaciones: las comillas simples se duplican para PowerShell"));
+    check(SystemNotifier::escapeForScript(QStringLiteral("It’s")) == QStringLiteral("It’’s"),
+          QStringLiteral("notificaciones: la comilla tipografica tambien se duplica"));
 
     // El XML del aviso con desplegable: bien formado, con el texto escapado, y "reminder" solo con
     // desplegable.

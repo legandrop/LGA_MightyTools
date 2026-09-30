@@ -56,8 +56,16 @@ QString SystemNotifier::toastXml(const Notice &notice, const QString &imagePath)
 
 QString SystemNotifier::escapeForScript(const QString &text)
 {
-    QString escaped = text;
-    escaped.replace(QLatin1Char('\''), QStringLiteral("''"));
+    // PowerShell tambien cierra una cadena entre comillas simples con las tipograficas (U+2018 a
+    // U+201B): se duplican igual que la recta.
+    QString escaped;
+    escaped.reserve(text.size());
+    for (const QChar c : text) {
+        escaped += c;
+        if (c == QLatin1Char('\'') || (c.unicode() >= 0x2018 && c.unicode() <= 0x201B)) {
+            escaped += c;
+        }
+    }
     return escaped;
 }
 

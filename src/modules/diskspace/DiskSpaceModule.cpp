@@ -595,7 +595,7 @@ HelpSection diskSpaceHelp(const SettingsReader &)
     section.title = QStringLiteral("Disk Space");
     section.steps = {QStringLiteral("Add the drives to watch and set when each one should warn you, in %1 or %2.")
                          .arg(HelpSection::strong(QStringLiteral("GB")), HelpSection::strong(QStringLiteral("%")))};
-    section.note = QStringLiteral("You get a notification when a drive goes under its limit, and a reminder while it stays low "
-                                  "(every 15 min by default, set in Remind me every).");
+    section.note = QStringLiteral("You get a notification when a drive goes under its limit, and a reminder while it stays "
+                                  "low (every 15 min by default). The notification lets you postpone the next one.");
     return section;
 }
