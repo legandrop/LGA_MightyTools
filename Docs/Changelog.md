@@ -7,7 +7,7 @@ lleno podía pasar horas sin detectarse y el aviso no se podía posponer. Ahora 
 minutos y «Check every» pasa a ser «Remind me every» (cada cuánto se repite el aviso de un disco que sigue
 lleno). El toast trae un desplegable «Remind me again in» que pospone solo ese disco, y un click en el
 cuerpo vuelve a la app, también desde el Centro de notificaciones y con la app cerrada. Para eso el primer
-aviso registra el AUMID y el activador COM de la app, que `--uninstall-cleanup` borra al desinstalar.
+aviso registra el AUMID y el activador COM de la app, que `--uninstall-cleanup` borra al desinstalar. Open in NukeX pasa a ser la primera herramienta de la lista.
 [ Release 1.00 - Recordatorio de Disk Space con posponer desde el aviso ]
 
 v0.08:

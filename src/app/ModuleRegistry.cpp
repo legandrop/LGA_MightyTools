@@ -20,9 +20,9 @@ QList<ModuleDescriptor> all()
 {
     QList<ModuleDescriptor> list;
     // Ej.: list << nukeShortcutsDescriptor();
+    list << openInNukeXDescriptor();
     list << nukeShortcutsDescriptor();
     list << diskSpaceDescriptor();
-    list << openInNukeXDescriptor();
 #if defined(Q_OS_WIN)
     list << folderSwitchDescriptor();
 #endif
