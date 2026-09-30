@@ -52,14 +52,19 @@ constexpr int kDefaultPercent = 10;
 constexpr int kMaxGb = 100000;
 constexpr int kMaxPercent = 99;
 
-// Intervalo del chequeo, uno solo para todos los discos (D-07: desplegable, 15 min por defecto).
-constexpr int kDefaultIntervalMinutes = 15;
-const QList<int> &intervalChoices();
-bool isValidInterval(int minutes);
+// El chequeo es fijo, cada 15 min, para todos los discos (pedido de Lega, 2026-09-30).
+constexpr int kCheckMinutes = 15;
+
+// Mientras un disco sigue bajo, el aviso se repite cada "Remind me every" (uno solo para todos los
+// discos). El minimo es el chequeo: no hay recordatorio mas seguido que la lectura.
+constexpr int kDefaultRemindMinutes = 15;
+const QList<int> &remindChoices();
+bool isValidRemind(int minutes);
 QString intervalText(int minutes); ///< "15 min", "1 hour", "6 hours"
 
-// Mientras un disco sigue bajo, el aviso se repite cada tanto (D-07: 6 h).
-constexpr qint64 kRepeatSeconds = 6 * 60 * 60;
+// Un recordatorio vence con este margen: un tick de 15 min que llega unos ms antes de los 15 min
+// exactos no corre el aviso al tick siguiente.
+constexpr qint64 kDueToleranceSeconds = 60;
 
 int clampValue(int value, DiskWatch::Unit unit);
 QString unitToString(DiskWatch::Unit unit);                       ///< "GB" / "%" (lo que guarda el .ini)
@@ -80,11 +85,15 @@ struct AlertState
 {
     bool wasLow = false;
     QDateTime lastNotified;
+    // "Remind me again in" del aviso: el proximo recordatorio de ESTE disco, en vez de lastNotified +
+    // remindMinutes. Vale para un solo recordatorio: se limpia al avisar o al dejar de estar bajo.
+    QDateTime snoozedUntil;
 };
 
-// Avisar si el disco esta bajo y: acaba de cruzar el umbral, nunca se aviso, o ya pasaron
-// kRepeatSeconds desde el ultimo aviso. Si sube y vuelve a bajar, avisa de nuevo al cruzar.
-bool shouldNotify(bool lowNow, const AlertState &state, const QDateTime &now);
+// Avisar si el disco esta bajo y: acaba de cruzar el umbral, nunca se aviso, o vencio el proximo
+// recordatorio (snoozedUntil si hay, si no lastNotified + remindMinutes). Si sube y vuelve a bajar,
+// avisa de nuevo al cruzar.
+bool shouldNotify(bool lowNow, const AlertState &state, const QDateTime &now, int remindMinutes);
 
 } // namespace DiskSpace
 

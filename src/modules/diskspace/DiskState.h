@@ -23,9 +23,9 @@ class DiskState : public QObject
 public:
     explicit DiskState(ModuleContext *context, QObject *parent = nullptr);
 
-    // ---- Persistente: cada cuantos minutos (uno solo para todos) y que discos, en el orden en que
-    // se agregaron.
-    int diskCheckMinutes() const { return m_diskCheckMinutes; }
+    // ---- Persistente: cada cuantos minutos se repite el aviso (uno solo para todos) y que discos, en
+    // el orden en que se agregaron.
+    int remindMinutes() const { return m_remindMinutes; }
     QList<DiskWatch> diskWatches() const { return m_diskWatches; }
     bool isWatched(const QString &root) const;
 
@@ -40,12 +40,15 @@ public:
 
     // Historial de avisos de cada disco vigilado (si estaba bajo y cuando se aviso por ultima vez).
     // Se guarda con el disco en la seccion: apagar y prender Disk Space, o reiniciar la app, no
-    // repite un aviso antes de las 6 h. Dejar de vigilar un disco borra su historial.
+    // adelanta un recordatorio. Dejar de vigilar un disco borra su historial.
     DiskSpace::AlertState alertState(const QString &root) const;
     void setAlertState(const QString &root, const DiskSpace::AlertState &alert);
+    // "Remind me again in" del aviso: el proximo recordatorio de `root` llega a `minutes` de `now`.
+    // Solo un disco vigilado y una opcion de remindChoices(); si no, no hace nada.
+    void snooze(const QString &root, int minutes, const QDateTime &now);
 
     // Cada setter escribe (si corresponde) y avisa SOLO si el valor cambio.
-    void setDiskCheckMinutes(int minutes);
+    void setRemindMinutes(int minutes);
     // Un disco nuevo toma la unidad y el valor del ultimo de la lista; sin ninguno, 50 GB.
     void addDiskWatch(const QString &root, const QString &name);
     void removeDiskWatch(const QString &root);
@@ -62,7 +65,7 @@ private:
     void writeDiskWatches();
 
     ModuleContext *m_context = nullptr;
-    int m_diskCheckMinutes = DiskSpace::kDefaultIntervalMinutes;
+    int m_remindMinutes = DiskSpace::kDefaultRemindMinutes;
     QList<DiskWatch> m_diskWatches;
     QHash<QString, DiskSpace::AlertState> m_alerts;
     QHash<QString, DriveInfo> m_drives;

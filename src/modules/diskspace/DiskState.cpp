@@ -11,7 +11,9 @@ namespace {
 
 // Claves de la seccion [diskSpace]. La lista va con el formato de array de QSettings
 // (watched/size, watched/1/root...), la misma forma que escribia Nuke Shortcuts.
-const QString kDiskMinutes = QStringLiteral("checkMinutes");
+const QString kRemindMinutes = QStringLiteral("remindMinutes");
+// El intervalo del chequeo era configurable hasta v0.08; hoy es fijo y la clave se borra al cargar.
+const QString kObsoleteCheckMinutes = QStringLiteral("checkMinutes");
 const QString kDiskWatches = QStringLiteral("watched");
 
 QString watchKey(int index, const char *field)
@@ -28,8 +30,11 @@ DiskState::DiskState(ModuleContext *context, QObject *parent)
     if (!m_context) {
         return;
     }
-    const int minutes = m_context->value(kDiskMinutes, DiskSpace::kDefaultIntervalMinutes).toInt();
-    m_diskCheckMinutes = DiskSpace::isValidInterval(minutes) ? minutes : DiskSpace::kDefaultIntervalMinutes;
+    const int minutes = m_context->value(kRemindMinutes, DiskSpace::kDefaultRemindMinutes).toInt();
+    m_remindMinutes = DiskSpace::isValidRemind(minutes) ? minutes : DiskSpace::kDefaultRemindMinutes;
+    if (m_context->value(kObsoleteCheckMinutes).isValid()) {
+        m_context->removeValue(kObsoleteCheckMinutes);
+    }
     // Una entrada ilegible (editada a mano) se descarta sola; las demas se conservan.
     const int count = m_context->value(kDiskWatches + QStringLiteral("/size"), 0).toInt();
     for (int i = 0; i < count; ++i) {
@@ -48,11 +53,13 @@ DiskState::DiskState(ModuleContext *context, QObject *parent)
         DiskSpace::AlertState alert;
         alert.wasLow = m_context->value(watchKey(i, "wasLow"), false).toBool();
         alert.lastNotified = QDateTime::fromString(m_context->value(watchKey(i, "lastNotified")).toString(), Qt::ISODate);
-        if (alert.wasLow || alert.lastNotified.isValid()) {
+        alert.snoozedUntil = QDateTime::fromString(m_context->value(watchKey(i, "snoozedUntil")).toString(), Qt::ISODate);
+        if (alert.wasLow || alert.lastNotified.isValid() || alert.snoozedUntil.isValid()) {
             m_alerts.insert(watch.root, alert);
         }
     }
-    qInfo() << "[DiskState] Cargado:" << m_diskWatches.size() << "discos vigilados cada" << m_diskCheckMinutes << "min";
+    qInfo() << "[DiskState] Cargado:" << m_diskWatches.size() << "discos vigilados, recordatorio cada" << m_remindMinutes
+            << "min";
 }
 
 bool DiskState::isWatched(const QString &root) const
@@ -76,12 +83,25 @@ void DiskState::setAlertState(const QString &root, const DiskSpace::AlertState &
         return;
     }
     const DiskSpace::AlertState previous = m_alerts.value(root);
-    if (previous.wasLow == alert.wasLow && previous.lastNotified == alert.lastNotified) {
+    if (previous.wasLow == alert.wasLow && previous.lastNotified == alert.lastNotified
+        && previous.snoozedUntil == alert.snoozedUntil) {
         return;
     }
     m_alerts.insert(root, alert);
-    // Se escribe solo cuando cambia (al cruzar el umbral o al avisar), no en cada chequeo.
+    // Se escribe solo cuando cambia (al cruzar el umbral, al avisar o al posponer), no en cada chequeo.
     writeDiskWatches();
+}
+
+void DiskState::snooze(const QString &root, int minutes, const QDateTime &now)
+{
+    if (!isWatched(root) || !DiskSpace::isValidRemind(minutes)) {
+        qWarning() << "[DiskState] Posponer ignorado:" << root << minutes << "min";
+        return;
+    }
+    DiskSpace::AlertState alert = m_alerts.value(root);
+    alert.snoozedUntil = now.addSecs(qint64(minutes) * 60);
+    setAlertState(root, alert);
+    qInfo() << "[DiskState] Proximo recordatorio de" << root << "en" << minutes << "min";
 }
 
 bool DiskState::driveReading(const QString &root, DriveInfo *drive) const
@@ -134,21 +154,24 @@ void DiskState::writeDiskWatches()
             if (alert->lastNotified.isValid()) {
                 m_context->setValue(watchKey(i, "lastNotified"), alert->lastNotified.toString(Qt::ISODate));
             }
+            if (alert->snoozedUntil.isValid()) {
+                m_context->setValue(watchKey(i, "snoozedUntil"), alert->snoozedUntil.toString(Qt::ISODate));
+            }
         }
     }
     m_context->setValue(kDiskWatches + QStringLiteral("/size"), int(m_diskWatches.size()));
 }
 
-void DiskState::setDiskCheckMinutes(int minutes)
+void DiskState::setRemindMinutes(int minutes)
 {
-    if (!DiskSpace::isValidInterval(minutes) || m_diskCheckMinutes == minutes) {
+    if (!DiskSpace::isValidRemind(minutes) || m_remindMinutes == minutes) {
         return;
     }
-    m_diskCheckMinutes = minutes;
+    m_remindMinutes = minutes;
     if (m_context) {
-        m_context->setValue(kDiskMinutes, minutes);
+        m_context->setValue(kRemindMinutes, minutes);
     }
-    qInfo() << "[DiskState] Chequeo de discos cada" << minutes << "min";
+    qInfo() << "[DiskState] Recordatorio de discos cada" << minutes << "min";
     emit changed();
 }
 

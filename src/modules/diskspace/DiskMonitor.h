@@ -12,7 +12,7 @@
 class DiskState;
 class QTimer;
 
-// Chequeo periodico del espacio libre. Cada DiskState::diskCheckMinutes lee los discos vigilados,
+// Chequeo periodico del espacio libre. Cada DiskSpace::kCheckMinutes lee los discos vigilados,
 // deja la lectura en DiskState (la tarjeta y el menu de la bandeja la muestran) y emite lowSpace()
 // cuando corresponde avisar (DiskSpace::shouldNotify).
 //
@@ -50,13 +50,11 @@ signals:
     void lowSpace(const DriveInfo &drive, const DiskWatch &watch);
 
 private:
-    void onStateChanged();
     QDateTime now() const;
 
     DiskState *m_state = nullptr;
     Sources m_sources;
     QTimer *m_timer = nullptr;
-    int m_timerMinutes = 0;
 };
 
 #endif // MIGHTYTOOLS_DISKMONITOR_H

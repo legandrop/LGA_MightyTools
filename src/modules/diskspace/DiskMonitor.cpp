@@ -18,7 +18,6 @@ DiskMonitor::DiskMonitor(DiskState *state, Sources sources, QObject *parent)
     // este. El costo de un timer preciso cada 15 min es nulo.
     m_timer->setTimerType(Qt::PreciseTimer);
     connect(m_timer, &QTimer::timeout, this, [this]() { checkNow(true); });
-    connect(m_state, &DiskState::changed, this, &DiskMonitor::onStateChanged);
 }
 
 QDateTime DiskMonitor::now() const
@@ -28,8 +27,7 @@ QDateTime DiskMonitor::now() const
 
 void DiskMonitor::start(int firstCheckDelayMs)
 {
-    m_timerMinutes = m_state->diskCheckMinutes();
-    m_timer->start(m_timerMinutes * 60 * 1000);
+    m_timer->start(DiskSpace::kCheckMinutes * 60 * 1000);
     checkNow(false);
     // Un QTimer hijo del monitor y no QTimer::singleShot: muere con el monitor al apagar Disk Space,
     // aunque todavia no haya vencido. Preciso por lo mismo que m_timer.
@@ -41,17 +39,6 @@ void DiskMonitor::start(int firstCheckDelayMs)
         checkNow(true);
     });
     first->start(firstCheckDelayMs);
-}
-
-void DiskMonitor::onStateChanged()
-{
-    // Otro intervalo: el timer arranca de cero con el nuevo (setInterval lo reinicia si esta activo).
-    if (m_timer->isActive() && m_state->diskCheckMinutes() != m_timerMinutes) {
-        m_timerMinutes = m_state->diskCheckMinutes();
-        m_timer->setInterval(m_timerMinutes * 60 * 1000);
-    }
-    // El historial de avisos vive en DiskState (se guarda con cada disco y se borra al dejar de
-    // vigilarlo): apagar y prender Disk Space no repite un aviso.
 }
 
 void DiskMonitor::refreshAll()
@@ -88,9 +75,13 @@ void DiskMonitor::checkNow(bool mayNotify)
         }
         const bool low = DiskSpace::isLow(watch, drive);
         DiskSpace::AlertState alert = m_state->alertState(watch.root);
-        const bool notify = DiskSpace::shouldNotify(low, alert, current);
+        const bool notify = DiskSpace::shouldNotify(low, alert, current, m_state->remindMinutes());
         if (notify) {
             alert.lastNotified = current;
+        }
+        // Lo pospuesto vale para un solo recordatorio, y un disco que se recupera lo olvida.
+        if (notify || !low) {
+            alert.snoozedUntil = QDateTime();
         }
         alert.wasLow = low;
         m_state->setAlertState(watch.root, alert);

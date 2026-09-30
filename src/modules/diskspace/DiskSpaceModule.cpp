@@ -110,7 +110,7 @@ void applyFixture(DiskState &state, const QString &name)
     state.setDiskThreshold(QStringLiteral("C:/"), 50, DiskWatch::Unit::GB);
     state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
     state.setDiskThreshold(QStringLiteral("D:/"), 100, DiskWatch::Unit::GB);
-    if (name != QLatin1String("good") && name != QLatin1String("add-menu") && name != QLatin1String("interval-menu")) {
+    if (name != QLatin1String("good") && name != QLatin1String("add-menu") && name != QLatin1String("remind-menu")) {
         state.addDiskWatch(QStringLiteral("E:/"), QStringLiteral("Renders"));
         state.setDiskThreshold(QStringLiteral("E:/"), 15, DiskWatch::Unit::Percent);
     }
@@ -173,20 +173,32 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     check(DiskSpace::unitFromString(QStringLiteral("%"), &unit) && unit == DiskWatch::Unit::Percent,
           QStringLiteral("unidad leida del .ini: %"));
     check(!DiskSpace::unitFromString(QStringLiteral("gb"), &unit), QStringLiteral("unidad invalida rechazada: gb en minuscula"));
-    check(DiskSpace::isValidInterval(15) && !DiskSpace::isValidInterval(7), QStringLiteral("intervalo: 15 vale, 7 no"));
+    check(DiskSpace::isValidRemind(15) && DiskSpace::isValidRemind(120) && !DiskSpace::isValidRemind(5),
+          QStringLiteral("recordatorio: 15 y 120 valen, 5 no (menos que el chequeo)"));
     check(DiskSpace::intervalText(360) == QLatin1String("6 hours") && DiskSpace::intervalText(60) == QLatin1String("1 hour"),
           QStringLiteral("texto del intervalo en horas"));
 
     const QDateTime t0(QDate(2026, 9, 24), QTime(12, 0));
     DiskSpace::AlertState alert;
-    check(DiskSpace::shouldNotify(true, alert, t0), QStringLiteral("aviso: cruza el umbral"));
-    check(!DiskSpace::shouldNotify(false, alert, t0), QStringLiteral("aviso: no bajo, no avisa"));
+    check(DiskSpace::shouldNotify(true, alert, t0, 15), QStringLiteral("aviso: cruza el umbral"));
+    check(!DiskSpace::shouldNotify(false, alert, t0, 15), QStringLiteral("aviso: no bajo, no avisa"));
     alert.wasLow = true;
     alert.lastNotified = t0;
-    check(!DiskSpace::shouldNotify(true, alert, t0.addSecs(5 * 3600)), QStringLiteral("aviso: sigue bajo a las 5 h, no repite"));
-    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(6 * 3600)), QStringLiteral("aviso: sigue bajo a las 6 h, repite"));
+    check(!DiskSpace::shouldNotify(true, alert, t0.addSecs(10 * 60), 15),
+          QStringLiteral("aviso: sigue bajo a los 10 min con recordatorio de 15, no repite"));
+    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(15 * 60), 15),
+          QStringLiteral("aviso: sigue bajo a los 15 min, repite"));
+    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(15 * 60 - 2), 15),
+          QStringLiteral("aviso: un tick que llega 2 s antes de los 15 min igual repite (tolerancia)"));
+    check(!DiskSpace::shouldNotify(true, alert, t0.addSecs(90 * 60), 120),
+          QStringLiteral("aviso: con recordatorio de 2 h, a los 90 min no repite"));
+    alert.snoozedUntil = t0.addSecs(60 * 60);
+    check(!DiskSpace::shouldNotify(true, alert, t0.addSecs(30 * 60), 15),
+          QStringLiteral("aviso: pospuesto 1 h, a los 30 min no repite aunque el recordatorio sea de 15"));
+    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(60 * 60), 15), QStringLiteral("aviso: pospuesto 1 h, a la hora repite"));
+    alert.snoozedUntil = QDateTime();
     alert.wasLow = false;
-    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(60)), QStringLiteral("aviso: subio y volvio a bajar, avisa al cruzar"));
+    check(DiskSpace::shouldNotify(true, alert, t0.addSecs(60), 15), QStringLiteral("aviso: subio y volvio a bajar, avisa al cruzar"));
 
     // ---- DiskMonitor entero con discos falsos y un reloj que se adelanta a mano.
     {
@@ -233,31 +245,53 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               QStringLiteral("monitor: la lectura sin aviso marca D: bajo y no notifica"));
         monitor.checkNow(true);
         check(notified == QStringList{QStringLiteral("D:/")}, QStringLiteral("monitor: primer chequeo avisa D: y no C:"));
+        check(state.remindMinutes() == DiskSpace::kDefaultRemindMinutes, QStringLiteral("recordatorio por defecto: 15 min"));
+        state.setRemindMinutes(60);
         clock = clock.addSecs(15 * 60);
         monitor.checkNow(true);
-        check(notified.size() == 1, QStringLiteral("monitor: 15 min despues, sigue bajo y no repite"));
-        clock = clock.addSecs(6 * 3600);
+        check(notified.size() == 1, QStringLiteral("monitor: con recordatorio de 1 h, 15 min despues no repite"));
+        clock = clock.addSecs(45 * 60);
         monitor.checkNow(true);
-        check(notified.size() == 2, QStringLiteral("monitor: 6 h despues, repite"));
+        check(notified.size() == 2, QStringLiteral("monitor: a la hora, repite"));
+        state.setRemindMinutes(15);
+        state.snooze(QStringLiteral("D:/"), 120, clock);
+        clock = clock.addSecs(15 * 60);
+        monitor.checkNow(true);
+        check(notified.size() == 2, QStringLiteral("monitor: pospuesto 2 h, a los 15 min no repite"));
+        clock = clock.addSecs(105 * 60);
+        monitor.checkNow(true);
+        check(notified.size() == 3 && !state.alertState(QStringLiteral("D:/")).snoozedUntil.isValid(),
+              QStringLiteral("monitor: a las 2 h repite y lo pospuesto se olvida"));
+        clock = clock.addSecs(15 * 60);
+        monitor.checkNow(true);
+        check(notified.size() == 4, QStringLiteral("monitor: despues de lo pospuesto vuelve a 15 min"));
+        state.snooze(QStringLiteral("D:/"), 7, clock);
+        state.snooze(QStringLiteral("Z:/"), 60, clock);
+        check(!state.alertState(QStringLiteral("D:/")).snoozedUntil.isValid(),
+              QStringLiteral("posponer: un plazo fuera de la lista o un disco sin vigilar no hacen nada"));
+        state.snooze(QStringLiteral("D:/"), 360, clock);
         disks.remove(QStringLiteral("D:/"));
         clock = clock.addSecs(6 * 3600);
         monitor.checkNow(true);
-        check(notified.size() == 2 && state.lowWatches().isEmpty(),
+        check(notified.size() == 4 && state.lowWatches().isEmpty(),
               QStringLiteral("monitor: D: desenchufado no avisa ni cuenta como bajo"));
+        check(state.alertState(QStringLiteral("D:/")).snoozedUntil.isValid(),
+              QStringLiteral("monitor: desenchufado conserva lo pospuesto"));
         d.freeBytes = 400 * kGiB;
         disks.insert(d.root, d);
         clock = clock.addSecs(60);
         monitor.checkNow(true);
-        check(notified.size() == 2, QStringLiteral("monitor: D: vuelve con espacio, no avisa"));
+        check(notified.size() == 4 && !state.alertState(QStringLiteral("D:/")).snoozedUntil.isValid(),
+              QStringLiteral("monitor: D: vuelve con espacio, no avisa y olvida lo pospuesto"));
         d.freeBytes = 20 * kGiB;
         disks.insert(d.root, d);
         clock = clock.addSecs(60);
         monitor.checkNow(true);
-        check(notified.size() == 3, QStringLiteral("monitor: D: vuelve a bajar, avisa de nuevo al cruzar"));
+        check(notified.size() == 5, QStringLiteral("monitor: D: vuelve a bajar, avisa de nuevo al cruzar"));
         state.setDiskThreshold(QStringLiteral("D:/"), 1, DiskWatch::Unit::Percent);
         clock = clock.addSecs(7 * 3600);
         monitor.checkNow(true);
-        check(notified.size() == 3, QStringLiteral("monitor: con el umbral en 1% (2% libre), D: ya no esta bajo"));
+        check(notified.size() == 5, QStringLiteral("monitor: con el umbral en 1% (2% libre), D: ya no esta bajo"));
         state.removeDiskWatch(QStringLiteral("C:/"));
         check(state.diskWatches().size() == 1 && !state.isWatched(QStringLiteral("C:/")),
               QStringLiteral("dejar de vigilar C:"));
@@ -277,7 +311,7 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
             state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
             state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
             state.setDiskThreshold(QStringLiteral("D:/"), 12, DiskWatch::Unit::Percent);
-            state.setDiskCheckMinutes(60);
+            state.setRemindMinutes(120);
             state.removeDiskWatch(QStringLiteral("C:/"));
         }
         check(store.value(QStringLiteral("diskSpace/watched/size")).toInt() == 1
@@ -286,15 +320,18 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               QStringLiteral("settings: la lista se reescribe entera en [diskSpace] (sin indices viejos)"));
         DiskState reloaded(&context);
         check(reloaded.diskWatches().size() == 1 && reloaded.diskWatches().first().unit == DiskWatch::Unit::Percent
-                  && reloaded.diskWatches().first().value == 12 && reloaded.diskCheckMinutes() == 60,
-              QStringLiteral("settings: ida y vuelta de discos, umbral y intervalo"));
+                  && reloaded.diskWatches().first().value == 12 && reloaded.remindMinutes() == 120,
+              QStringLiteral("settings: ida y vuelta de discos, umbral y recordatorio"));
         store.setValue(QStringLiteral("diskSpace/watched/size"), 2);
         store.setValue(QStringLiteral("diskSpace/watched/2/root"), QStringLiteral("E:/"));
         store.setValue(QStringLiteral("diskSpace/watched/2/unit"), QStringLiteral("gb"));
-        store.setValue(QStringLiteral("diskSpace/checkMinutes"), 7);
+        store.setValue(QStringLiteral("diskSpace/remindMinutes"), 7);
+        store.setValue(QStringLiteral("diskSpace/checkMinutes"), 60);
         DiskState damaged(&context);
-        check(damaged.diskWatches().size() == 1 && damaged.diskCheckMinutes() == DiskSpace::kDefaultIntervalMinutes,
-              QStringLiteral("settings: una entrada ilegible y un intervalo invalido se descartan"));
+        check(damaged.diskWatches().size() == 1 && damaged.remindMinutes() == DiskSpace::kDefaultRemindMinutes,
+              QStringLiteral("settings: una entrada ilegible y un recordatorio invalido se descartan"));
+        check(!store.value(QStringLiteral("diskSpace/checkMinutes")).isValid(),
+              QStringLiteral("settings: la clave vieja checkMinutes se borra al cargar"));
     }
 
     // ---- El historial de avisos sobrevive a apagar y prender (se guarda con cada disco).
@@ -328,19 +365,22 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
             DiskMonitor monitor(&state, sources);
             QObject::connect(&monitor, &DiskMonitor::lowSpace, [&notified](const DriveInfo &, const DiskWatch &) { ++notified; });
             monitor.checkNow(true);
+            state.snooze(QStringLiteral("D:/"), 60, clock);
         }
-        check(notified == 1 && store.value(QStringLiteral("diskSpace/watched/1/lastNotified")).toString() == t0.toString(Qt::ISODate),
-              QStringLiteral("historial: el aviso queda guardado con su disco"));
-        clock = t0.addSecs(3600);
+        check(notified == 1 && store.value(QStringLiteral("diskSpace/watched/1/lastNotified")).toString() == t0.toString(Qt::ISODate)
+                  && store.value(QStringLiteral("diskSpace/watched/1/snoozedUntil")).toString()
+                         == t0.addSecs(3600).toString(Qt::ISODate),
+              QStringLiteral("historial: el aviso y lo pospuesto quedan guardados con su disco"));
+        clock = t0.addSecs(30 * 60);
         {
             DiskState state(&context); // "prender de nuevo": estado nuevo desde la seccion
             DiskMonitor monitor(&state, sources);
             QObject::connect(&monitor, &DiskMonitor::lowSpace, [&notified](const DriveInfo &, const DiskWatch &) { ++notified; });
             monitor.checkNow(true);
-            check(notified == 1, QStringLiteral("historial: apagar y prender no repite el aviso antes de las 6 h"));
-            clock = t0.addSecs(6 * 3600);
+            check(notified == 1, QStringLiteral("historial: apagar y prender respeta lo pospuesto (1 h)"));
+            clock = t0.addSecs(3600);
             monitor.checkNow(true);
-            check(notified == 2, QStringLiteral("historial: a las 6 h repite, como siempre"));
+            check(notified == 2, QStringLiteral("historial: a la hora pospuesta repite"));
             state.removeDiskWatch(QStringLiteral("D:/"));
             state.addDiskWatch(QStringLiteral("D:/"), QStringLiteral("Cache"));
             clock = clock.addSecs(60);
@@ -467,7 +507,7 @@ QStringList DiskSpaceModule::captureStates() const
     // Canvas, secciones 2, 3 y 5: estado normal, uno y dos discos bajos, uno desenchufado, sin
     // discos, y los dos menus de la tarjeta.
     return {QStringLiteral("good"),  QStringLiteral("low"),      QStringLiteral("low2"),         QStringLiteral("missing"),
-            QStringLiteral("empty"), QStringLiteral("add-menu"), QStringLiteral("interval-menu")};
+            QStringLiteral("empty"), QStringLiteral("add-menu"), QStringLiteral("remind-menu")};
 }
 
 bool DiskSpaceModule::applyCaptureState(const QString &state)
@@ -485,7 +525,7 @@ bool DiskSpaceModule::applyCaptureState(const QString &state)
 
 QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *parent)
 {
-    if (state != QLatin1String("add-menu") && state != QLatin1String("interval-menu")) {
+    if (state != QLatin1String("add-menu") && state != QLatin1String("remind-menu")) {
         return nullptr;
     }
     // Los menus de la tarjeta, armados por la misma tarjeta que los abre en la app.
@@ -498,7 +538,7 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
             menu->setActiveAction(menu->actions().at(1));
         }
     } else {
-        card->fillIntervalMenu(menu);
+        card->fillRemindMenu(menu);
     }
     return menu;
 }
@@ -509,7 +549,7 @@ ModuleDescriptor diskSpaceDescriptor()
     d.id = kId;
     d.title = QStringLiteral("Disk Space");
     d.description = QStringLiteral("Watches your local drives and warns you when one runs low.");
-    d.offBullets = {QStringLiteral("Checks only the drives you pick, every 15 min by default"),
+    d.offBullets = {QStringLiteral("Checks only the drives you pick, every 15 min"),
                     QStringLiteral("Warns with a notification and a line in the tray menu"),
                     QStringLiteral("Each drive has its own limit, in GB or %")};
     d.platforms = PlatformWindows | PlatformMac;
@@ -525,6 +565,7 @@ HelpSection diskSpaceHelp(const SettingsReader &)
     section.title = QStringLiteral("Disk Space");
     section.steps = {QStringLiteral("Add the drives to watch and set when each one should warn you, in %1 or %2.")
                          .arg(HelpSection::strong(QStringLiteral("GB")), HelpSection::strong(QStringLiteral("%")))};
-    section.note = QStringLiteral("You get a notification when a drive goes under its limit, again every 6 hours while it stays low.");
+    section.note = QStringLiteral("You get a notification when a drive goes under its limit, and a reminder while it stays low "
+                                  "(every 15 min by default, set in Remind me every).");
     return section;
 }

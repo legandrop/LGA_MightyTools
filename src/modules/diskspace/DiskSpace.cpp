@@ -20,15 +20,15 @@ QString trimmed(double value)
 
 namespace DiskSpace {
 
-const QList<int> &intervalChoices()
+const QList<int> &remindChoices()
 {
-    static const QList<int> choices = {1, 5, 15, 30, 60, 360};
+    static const QList<int> choices = {15, 30, 60, 120, 360};
     return choices;
 }
 
-bool isValidInterval(int minutes)
+bool isValidRemind(int minutes)
 {
-    return intervalChoices().contains(minutes);
+    return remindChoices().contains(minutes);
 }
 
 QString intervalText(int minutes)
@@ -120,7 +120,7 @@ QString labelForRoot(const QString &root, const QString &storedName)
 #endif
 }
 
-bool shouldNotify(bool lowNow, const AlertState &state, const QDateTime &now)
+bool shouldNotify(bool lowNow, const AlertState &state, const QDateTime &now, int remindMinutes)
 {
     if (!lowNow) {
         return false;
@@ -128,7 +128,9 @@ bool shouldNotify(bool lowNow, const AlertState &state, const QDateTime &now)
     if (!state.wasLow || !state.lastNotified.isValid()) {
         return true;
     }
-    return state.lastNotified.secsTo(now) >= kRepeatSeconds;
+    const QDateTime due =
+        state.snoozedUntil.isValid() ? state.snoozedUntil : state.lastNotified.addSecs(qint64(remindMinutes) * 60);
+    return now.secsTo(due) <= kDueToleranceSeconds;
 }
 
 } // namespace DiskSpace

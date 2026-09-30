@@ -75,7 +75,7 @@ private:
     QLabel *m_threshold = nullptr;
 };
 
-// Tarjeta "Watched drives" del panel de Disk Space (D-07 de Nuke Shortcuts): el intervalo, una fila por disco
+// Tarjeta "Watched drives" del panel de Disk Space (D-07 de Nuke Shortcuts): "Remind me every", una fila por disco
 // vigilado y "Add drive...". Crece con cada disco; el panel de la ventana tiene scroll.
 // Lee todo de DiskState y escribe en DiskState. Con interactive = false (captura de QA) no conecta
 // nada.
@@ -90,8 +90,8 @@ public:
 
     // Arma el menu de "Add drive..." con los discos locales sin vigilar. Publico para la captura.
     void fillAddMenu(QMenu *menu) const;
-    // El menu del intervalo ("15 min" tildado). Publico para la captura.
-    void fillIntervalMenu(QMenu *menu) const;
+    // El menu de "Remind me every" ("15 min" tildado). Publico para la captura.
+    void fillRemindMenu(QMenu *menu) const;
     QPushButton *addButton() const { return m_addButton; }
 
 signals:
@@ -104,15 +104,15 @@ protected:
 private:
     void rebuildRows(const QList<DiskWatch> &watches);
     void showAddMenu();
-    void showIntervalMenu();
+    void showRemindMenu();
 
     DiskState *m_state = nullptr;
     bool m_interactive = false;
 
     Chip *m_chip = nullptr;
     QLabel *m_emptyCaption = nullptr;
-    QWidget *m_intervalRow = nullptr;
-    QPushButton *m_intervalButton = nullptr;
+    QWidget *m_remindRow = nullptr;
+    QPushButton *m_remindButton = nullptr;
     QLabel *m_lastCheck = nullptr;
     QWidget *m_listBlock = nullptr;
     QVBoxLayout *m_rowsLayout = nullptr;

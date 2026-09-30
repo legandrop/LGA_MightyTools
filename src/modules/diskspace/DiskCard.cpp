@@ -308,28 +308,29 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     m_emptyCaption->setContentsMargins(0, 0, 0, 8);
     layout->addWidget(m_emptyCaption);
 
-    // Con discos: el intervalo arriba, una fila por disco, y "Add drive..." abajo.
+    // Con discos: cada cuanto se repite el aviso arriba, una fila por disco, y "Add drive..." abajo.
     m_listBlock = new QWidget(this);
     auto *list = new QVBoxLayout(m_listBlock);
     list->setContentsMargins(0, 0, 0, 0);
     list->setSpacing(0);
-    m_intervalRow = new QWidget(m_listBlock);
-    m_intervalRow->setMinimumHeight(26); // `.row` de 26 del canvas
-    auto *interval = new QHBoxLayout(m_intervalRow);
-    interval->setContentsMargins(0, 0, 0, 0);
-    interval->setSpacing(8);
-    interval->addWidget(label(QStringLiteral("Check every"), "optionLabel", m_intervalRow), 0, Qt::AlignVCenter);
-    m_intervalButton = Ui::button(QString(), QString(), QString(), m_intervalRow);
-    m_intervalButton->setObjectName(QStringLiteral("fieldButton"));
+    m_remindRow = new QWidget(m_listBlock);
+    m_remindRow->setMinimumHeight(26); // `.row` de 26 del canvas
+    auto *remind = new QHBoxLayout(m_remindRow);
+    remind->setContentsMargins(0, 0, 0, 0);
+    remind->setSpacing(8);
+    remind->addWidget(label(QStringLiteral("Remind me every"), "optionLabel", m_remindRow), 0, Qt::AlignVCenter);
+    m_remindButton = Ui::button(QString(), QString(), QString(), m_remindRow);
+    m_remindButton->setObjectName(QStringLiteral("fieldButton"));
     // El icono a la derecha del texto, como la flecha de un desplegable.
-    m_intervalButton->setLayoutDirection(Qt::RightToLeft);
-    Ui::setIcon(m_intervalButton, Icon::ChevronDown, Theme::color(Theme::kTextMuted), 8);
-    m_intervalButton->setToolTip(QStringLiteral("How often the drives are checked"));
-    interval->addWidget(m_intervalButton, 0, Qt::AlignVCenter);
-    interval->addStretch(1);
-    m_lastCheck = label(QString(), "meta", m_intervalRow);
-    interval->addWidget(m_lastCheck, 0, Qt::AlignVCenter);
-    list->addWidget(m_intervalRow);
+    m_remindButton->setLayoutDirection(Qt::RightToLeft);
+    Ui::setIcon(m_remindButton, Icon::ChevronDown, Theme::color(Theme::kTextMuted), 8);
+    m_remindButton->setToolTip(QStringLiteral("While a drive stays low. Drives are checked every %1 min.")
+                                   .arg(DiskSpace::kCheckMinutes));
+    remind->addWidget(m_remindButton, 0, Qt::AlignVCenter);
+    remind->addStretch(1);
+    m_lastCheck = label(QString(), "meta", m_remindRow);
+    remind->addWidget(m_lastCheck, 0, Qt::AlignVCenter);
+    list->addWidget(m_remindRow);
     addDivider(list, m_listBlock);
     auto *rows = new QWidget(m_listBlock);
     m_rowsLayout = new QVBoxLayout(rows);
@@ -353,7 +354,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
         // del umbral: lo hace este filtro. Solo mira clicks.
         qApp->installEventFilter(this);
         connect(m_addButton, &QPushButton::clicked, this, &DiskCard::showAddMenu);
-        connect(m_intervalButton, &QPushButton::clicked, this, &DiskCard::showIntervalMenu);
+        connect(m_remindButton, &QPushButton::clicked, this, &DiskCard::showRemindMenu);
     }
     refresh();
 }
@@ -443,7 +444,7 @@ void DiskCard::refresh()
         m_rows.value(watch.root)->update(watch, connected ? &drive : nullptr);
     }
 
-    m_intervalButton->setText(DiskSpace::intervalText(m_state->diskCheckMinutes()));
+    m_remindButton->setText(DiskSpace::intervalText(m_state->remindMinutes()));
     const QDateTime last = m_state->lastDiskCheck();
     m_lastCheck->setText(last.isValid() ? QStringLiteral("Last check %1").arg(last.toString(QStringLiteral("HH:mm")))
                                         : QString());
@@ -503,22 +504,22 @@ void DiskCard::showAddMenu()
     }
 }
 
-void DiskCard::fillIntervalMenu(QMenu *menu) const
+void DiskCard::fillRemindMenu(QMenu *menu) const
 {
-    for (const int minutes : DiskSpace::intervalChoices()) {
+    for (const int minutes : DiskSpace::remindChoices()) {
         QAction *action = menu->addAction(DiskSpace::intervalText(minutes));
         action->setData(minutes);
         action->setCheckable(true);
-        action->setChecked(minutes == m_state->diskCheckMinutes());
+        action->setChecked(minutes == m_state->remindMinutes());
     }
 }
 
-void DiskCard::showIntervalMenu()
+void DiskCard::showRemindMenu()
 {
     QMenu menu(this);
-    fillIntervalMenu(&menu);
-    QAction *chosen = menu.exec(m_intervalButton->mapToGlobal(QPoint(0, m_intervalButton->height() + 2)));
+    fillRemindMenu(&menu);
+    QAction *chosen = menu.exec(m_remindButton->mapToGlobal(QPoint(0, m_remindButton->height() + 2)));
     if (chosen) {
-        m_state->setDiskCheckMinutes(chosen->data().toInt());
+        m_state->setRemindMinutes(chosen->data().toInt());
     }
 }
