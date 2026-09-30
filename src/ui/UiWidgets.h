@@ -177,6 +177,9 @@ namespace Ui {
 QPushButton *button(const QString &text, const QString &variant = QString(), const QString &size = QString(),
                     QWidget *parent = nullptr);
 void setIcon(QPushButton *button, Icon icon, const QColor &color, int size = 14);
+// La flecha de un desplegable (`fieldButton`): a la derecha del texto y con aire entre los dos. El espacio
+// que QPushButton deja entre icono y texto es fijo y la dejaba pegada.
+void setDropdownArrow(QPushButton *button);
 void repolish(QWidget *widget);
 // Cambia una propiedad de estilo y vuelve a pulir solo si cambio.
 void setStyleProperty(QWidget *widget, const char *name, const QVariant &value);

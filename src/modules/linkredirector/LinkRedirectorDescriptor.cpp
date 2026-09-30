@@ -302,7 +302,7 @@ ModuleDescriptor linkRedirectorDescriptor()
     d.id = QStringLiteral("linkRedirector");
     d.title = QStringLiteral("Link Redirector");
     d.description = I18n::tr(
-        "Opens each link in the right browser: links with your keywords go to the alternative browser.");
+        "Opens each link in your preferred browser, based on configurable rules. Only for links opened from outside the browser.");
     d.offBullets = {
         I18n::tr("Becomes the system default browser"),
         I18n::tr("Routes each link by keyword"),

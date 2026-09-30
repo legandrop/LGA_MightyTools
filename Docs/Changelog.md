@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.02:
+
+El encabezado de cada página tenía el cuadro del ícono con 34 px fijos: terminaba a mitad de la primera
+línea de la descripción, y el dibujo quedaba siempre en 16 px porque `ToolIcon` solo respetaba el ancho
+pedido. Ahora el cuadro mide lo que suman el título y la primera línea, con las fuentes reales, y el
+dibujo acompaña. Las descripciones de General, Open in NukeX, Folder Switch (con sus dos atajos) y Link
+Redirector pasan a los textos del sitio, en inglés y en español. La flecha de los desplegables («Language»,
+«Remind me every») ya no queda pegada al texto.
+[ UI - Encabezados alineados, descripciones nuevas y flecha de desplegable con aire ]
+
 v1.01:
 
 La app estaba solo en inglés. Ahora General > App > Language permite elegir español y la interfaz cambia

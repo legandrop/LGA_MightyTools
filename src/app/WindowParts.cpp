@@ -17,8 +17,11 @@ ToolIcon::ToolIcon(IconPainter painter, int size, QWidget *parent)
     : QWidget(parent)
     , m_painter(std::move(painter))
     , m_color(Theme::color(Theme::kToolIconOn))
+    , m_glyph(size)
 {
-    setFixedSize(size, 16);
+    // Cuadrado del tamano del dibujo. Antes el alto y el dibujo quedaban fijos en 16 aunque se pidiera otro
+    // tamano; quien necesita mas aire alrededor (la barra lateral) ensancha el widget aparte.
+    setFixedSize(size, size);
     setAttribute(Qt::WA_TransparentForMouseEvents);
 }
 
@@ -57,7 +60,8 @@ SidebarItem::SidebarItem(const QString &id, const QString &title, IconPainter ic
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(8, 0, 8, 0);
     row->setSpacing(9);
-    m_icon = new ToolIcon(std::move(icon), 18, this);
+    m_icon = new ToolIcon(std::move(icon), 16, this);
+    m_icon->setFixedWidth(18); // columna de 18 de la barra lateral, con el dibujo de 16 centrado
     row->addWidget(m_icon, 0, Qt::AlignVCenter);
     auto *texts = new QVBoxLayout();
     texts->setContentsMargins(0, 0, 0, 0);
@@ -135,11 +139,8 @@ ModuleHeader::ModuleHeader(const QString &title, const QString &platforms, const
 
     auto *box = new QFrame(this);
     box->setObjectName(QStringLiteral("modIcon"));
-    box->setFixedSize(34, 34);
     auto *boxLayout = new QHBoxLayout(box);
     boxLayout->setContentsMargins(0, 0, 0, 0);
-    m_icon = new ToolIcon(std::move(icon), 16, box);
-    boxLayout->addWidget(m_icon, 0, Qt::AlignCenter);
     row->addWidget(box, 0, Qt::AlignTop);
 
     auto *texts = new QVBoxLayout();
@@ -148,17 +149,35 @@ ModuleHeader::ModuleHeader(const QString &title, const QString &platforms, const
     auto *titleRow = new QHBoxLayout();
     titleRow->setContentsMargins(0, 0, 0, 0);
     titleRow->setSpacing(8);
-    titleRow->addWidget(Ui::label(title, "modTitle", this), 0, Qt::AlignVCenter);
+    QLabel *titleLabel = Ui::label(title, "modTitle", this);
+    titleRow->addWidget(titleLabel, 0, Qt::AlignVCenter);
+    QLabel *tag = nullptr;
     if (!platforms.isEmpty()) {
-        QLabel *tag = Ui::label(platforms, "platTag", this);
+        tag = Ui::label(platforms, "platTag", this);
         // Un QLabel con borde agrega una sangria automatica (media "x"): sin ella mide lo del canvas.
         tag->setIndent(0);
         titleRow->addWidget(tag, 0, Qt::AlignVCenter);
     }
     titleRow->addStretch(1);
     texts->addLayout(titleRow);
-    texts->addWidget(Ui::caption(description, this));
+    QLabel *descriptionLabel = Ui::caption(description, this);
+    texts->addWidget(descriptionLabel);
     row->addLayout(texts, 1);
+
+    // El cuadro del icono va del borde de arriba del titulo al de abajo de la PRIMERA linea de la
+    // descripcion (con dos o mas lineas, las demas quedan debajo). Se mide con las fuentes ya puestas por
+    // la hoja de estilo, asi acompana cualquier escala de texto; el icono guarda la proporcion 16/34.
+    titleLabel->ensurePolished();
+    descriptionLabel->ensurePolished();
+    int titleHeight = titleLabel->sizeHint().height();
+    if (tag) {
+        tag->ensurePolished();
+        titleHeight = qMax(titleHeight, tag->sizeHint().height());
+    }
+    const int side = titleHeight + texts->spacing() + descriptionLabel->fontMetrics().height();
+    box->setFixedSize(side, side);
+    m_icon = new ToolIcon(std::move(icon), qRound(side * 16.0 / 34.0), box);
+    boxLayout->addWidget(m_icon, 0, Qt::AlignCenter);
 
     if (withSwitch) {
         m_switch = new ToggleSwitch(this);

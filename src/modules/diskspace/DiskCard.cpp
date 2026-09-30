@@ -323,9 +323,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     remind->addWidget(label(I18n::tr("Remind me every"), "optionLabel", m_remindRow), 0, Qt::AlignVCenter);
     m_remindButton = Ui::button(QString(), QString(), QString(), m_remindRow);
     m_remindButton->setObjectName(QStringLiteral("fieldButton"));
-    // El icono a la derecha del texto, como la flecha de un desplegable.
-    m_remindButton->setLayoutDirection(Qt::RightToLeft);
-    Ui::setIcon(m_remindButton, Icon::ChevronDown, Theme::color(Theme::kTextMuted), 8);
+    Ui::setDropdownArrow(m_remindButton);
     m_remindButton->setToolTip(I18n::tr("While a drive stays low. Drives are checked every %1 min.")
                                    .arg(DiskSpace::kCheckMinutes));
     remind->addWidget(m_remindButton, 0, Qt::AlignVCenter);

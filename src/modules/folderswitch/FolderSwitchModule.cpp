@@ -1166,7 +1166,9 @@ ModuleDescriptor folderSwitchDescriptor()
     d.id = QStringLiteral("folderSwitch");
     d.title = QStringLiteral("Folder Switch");
     // Texto exacto del canvas de diseno (MODS, id 'fs').
-    d.description = I18n::tr("Open and Save dialogs jump to the folder you have open in Explorer or XYplorer.");
+    // Los atajos no se nombran por sus teclas: el usuario los puede cambiar.
+    d.description = I18n::tr(
+        "Quick access to the folder already open in Explorer from file open or save dialogs. Simply switch to Explorer and back, and the dialog moves to that folder. Inside the dialog, one shortcut jumps there right away and another picks a recent folder. Also works in Nuke.");
     d.offBullets = folderSwitchOffBullets([](const QString &, const QVariant &fallback) { return fallback; });
     // Los atajos de la vineta son los CONFIGURADOS (settings.ini), no los de fabrica.
     d.offBulletsFor = &folderSwitchOffBullets;

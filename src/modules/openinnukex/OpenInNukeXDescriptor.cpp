@@ -371,7 +371,7 @@ ModuleDescriptor openInNukeXDescriptor()
     descriptor.id = QStringLiteral("openInNukeX");
     descriptor.title = QStringLiteral("Open in NukeX");
     descriptor.description = I18n::tr(
-        "Double-click a .nk file to open it in the NukeX you already have open, or in your preferred version.");
+        "Opens Nuke files with a double-click from Explorer or Finder, directly in NukeX, reusing the session already open. If none is open, it starts a new one.");
     descriptor.offBullets = {
         I18n::tr("Takes over the .nk file association"),
         I18n::tr("Opens scripts in a running NukeX through the Nuke Bridge"),

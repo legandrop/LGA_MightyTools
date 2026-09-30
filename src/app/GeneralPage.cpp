@@ -61,11 +61,7 @@ GeneralPage::GeneralPage(ModuleHost *host, QWidget *parent)
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
 
-#ifdef Q_OS_MACOS
-    const QString description = I18n::tr("Open at login, updates and version.");
-#else
-    const QString description = I18n::tr("Start with Windows, updates and version.");
-#endif
+    const QString description = I18n::tr("Settings for the whole app and an overview of your tools.");
     m_header = new ModuleHeader(
         QStringLiteral("General"), QString(), description,
         [](QPainter &p, const QRectF &r, const QColor &c) { Icons::paint(p, Icon::General, r, c); }, false, this);
@@ -201,9 +197,7 @@ QFrame *GeneralPage::buildAppCard()
     language->addWidget(Ui::label(I18n::tr("Language"), "optionLabel", languageRow), 0, Qt::AlignVCenter);
     m_languageButton = Ui::button(I18n::nativeName(I18n::language()), QString(), QString(), languageRow);
     m_languageButton->setObjectName(QStringLiteral("fieldButton"));
-    // El icono a la derecha del texto, como la flecha de un desplegable.
-    m_languageButton->setLayoutDirection(Qt::RightToLeft);
-    Ui::setIcon(m_languageButton, Icon::ChevronDown, Theme::color(Theme::kTextMuted), 8);
+    Ui::setDropdownArrow(m_languageButton);
     language->addWidget(m_languageButton, 0, Qt::AlignVCenter);
     language->addStretch(1);
     layout->addWidget(languageRow);

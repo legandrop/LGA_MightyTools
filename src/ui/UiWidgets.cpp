@@ -11,6 +11,8 @@
 #include <QVBoxLayout>
 #include <QPainter>
 #include <QPainterPath>
+#include <QApplication>
+#include <QPixmap>
 #include <QPushButton>
 #include <QStyle>
 #include <QAbstractTextDocumentLayout>
@@ -598,6 +600,25 @@ void setIcon(QPushButton *button, Icon icon, const QColor &color, int size)
 {
     button->setIcon(Icons::icon(icon, color));
     button->setIconSize(QSize(size, size));
+}
+
+void setDropdownArrow(QPushButton *button)
+{
+    constexpr int kGlyph = 8;
+    constexpr int kGap = 6;
+    // El aire va adentro del icono, a la izquierda del dibujo: con RightToLeft el icono queda a la derecha
+    // del texto y esa franja transparente es la separacion.
+    const qreal dpr = qApp ? qApp->devicePixelRatio() : 1.0;
+    QPixmap pixmap(QSize(kGap + kGlyph, kGlyph) * dpr);
+    pixmap.setDevicePixelRatio(dpr);
+    pixmap.fill(Qt::transparent);
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    Icons::paint(painter, Icon::ChevronDown, QRectF(kGap, 0, kGlyph, kGlyph), Theme::color(Theme::kTextMuted));
+    painter.end();
+    button->setLayoutDirection(Qt::RightToLeft);
+    button->setIcon(QIcon(pixmap));
+    button->setIconSize(QSize(kGap + kGlyph, kGlyph));
 }
 
 void repolish(QWidget *widget)

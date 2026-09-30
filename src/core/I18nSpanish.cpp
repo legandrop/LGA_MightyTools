@@ -20,8 +20,7 @@ const QHash<QString, QString> &spanishTable()
     static const QHash<QString, QString> table = {
         // ---------- General
         E("Language", "Idioma"),
-        E("Open at login, updates and version.", "Abrir al iniciar sesión, actualizaciones y versión."),
-        E("Start with Windows, updates and version.", "Inicio con Windows, actualizaciones y versión."),
+        E("Settings for the whole app and an overview of your tools.", "Ajustes de toda la app y un resumen de las herramientas."),
         E("One small tool in one app. Turn on the ones you want: a tool that is off isn't loaded and uses no memory or CPU.",
           "Una herramienta pequeña en una sola app. Activarla si se quiere: una herramienta apagada no se carga y no usa memoria ni CPU."),
         E("%1 small tools in one app. Turn on the ones you want: a tool that is off isn't loaded and uses no memory or CPU.",
@@ -58,8 +57,8 @@ const QHash<QString, QString> &spanishTable()
         E("Open at login", "Abrir al iniciar sesión"),
 
         // ---------- Open in NukeX: descriptor, estado y ayuda
-        E("Double-click a .nk file to open it in the NukeX you already have open, or in your preferred version.",
-          "Hacer doble clic en un archivo .nk para abrirlo en el NukeX que ya está abierto o en la versión preferida."),
+        E("Opens Nuke files with a double-click from Explorer or Finder, directly in NukeX, reusing the session already open. If none is open, it starts a new one.",
+          "Abre archivos de Nuke con doble clic desde Explorer o Finder, directamente en NukeX y en la sesión que ya está abierta. Si no hay ninguna, inicia una nueva."),
         E("Takes over the .nk file association", "Toma la asociación de los archivos .nk"),
         E("Opens scripts in a running NukeX through the Nuke Bridge",
           "Abre scripts en un NukeX en ejecución mediante el Nuke Bridge"),
@@ -305,8 +304,8 @@ const QHash<QString, QString> &spanishTable()
         E("Local Disk", "Disco local"),
 
         // ---------- Folder Switch
-        E("Open and Save dialogs jump to the folder you have open in Explorer or XYplorer.",
-          "Los diálogos Abrir y Guardar saltan a la carpeta que está abierta en Explorer o en XYplorer."),
+        E("Quick access to the folder already open in Explorer from file open or save dialogs. Simply switch to Explorer and back, and the dialog moves to that folder. Inside the dialog, one shortcut jumps there right away and another picks a recent folder. Also works in Nuke.",
+          "Acceso rápido a la carpeta ya abierta en Explorer desde los diálogos de abrir o guardar archivos. Con solo pasar a Explorer y volver, el diálogo queda en esa carpeta. Dentro del diálogo, un atajo salta a esa carpeta en el acto y otro permite elegir una carpeta reciente. También funciona en Nuke."),
         E("Watches which window is in front", "Vigila qué ventana está al frente"),
         E("Two shortcuts: %1 and %2", "Dos atajos: %1 y %2"),
         E("Remembers your last 5 folders", "Recuerda las últimas 5 carpetas"),
@@ -350,8 +349,8 @@ const QHash<QString, QString> &spanishTable()
         E("Press", "Presionar"),
 
         // ---------- Link Redirector
-        E("Opens each link in the right browser: links with your keywords go to the alternative browser.",
-          "Abre cada enlace en el navegador correcto: los enlaces con las palabras clave van al navegador alternativo."),
+        E("Opens each link in your preferred browser, based on configurable rules. Only for links opened from outside the browser.",
+          "Abre cada enlace en el navegador preferido, según reglas configurables. Solo para enlaces abiertos desde fuera del navegador."),
         E("Becomes the system default browser", "Se convierte en el navegador predeterminado del sistema"),
         E("Routes each link by keyword", "Dirige cada enlace según palabras clave"),
         E("Everything else opens in your default browser", "Todo lo demás se abre en el navegador predeterminado"),
