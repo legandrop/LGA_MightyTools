@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.07 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.08 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -220,6 +220,7 @@ set(HEADERS
     src/platform/DirEnumerator.h
     src/platform/FileSystemOps.h
     src/platform/RecycleBin.h
+    src/platform/ScreenInfo.h
     src/platform/SystemPaths.h
     src/platform/ForegroundWatcher.h
     src/platform/HotkeyService.h
@@ -259,6 +260,7 @@ if(WIN32)
         src/platform/win/DirEnumeratorWin.cpp
         src/platform/win/FileSystemOpsWin.cpp
         src/platform/win/RecycleBinWin.cpp
+        src/platform/win/ScreenInfoWin.cpp
         src/platform/win/SystemPathsWin.cpp
         src/modules/diskspace/cleanup/win/CleanupRulesWin.cpp
         src/platform/win/ForegroundWatcherWin.cpp
@@ -319,6 +321,7 @@ elseif(APPLE)
         src/platform/mac/DirEnumeratorMac.cpp
         src/platform/mac/FileSystemOpsMac.cpp
         src/platform/mac/RecycleBinMac.cpp
+        src/platform/mac/ScreenInfoMac.mm
         src/platform/mac/SystemPathsMac.cpp
         src/modules/diskspace/cleanup/mac/CleanupRulesMac.cpp
         src/platform/mac/ForegroundWatcherMac.mm

@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.08:
+
+En una pantalla chica el tamaño de interfaz 2 dejaba la ventana con el borde de abajo cortado: con
+1366×768 ni el 1 de fábrica entraba. Ahora la app lee el área útil de la pantalla principal antes de
+arrancar y usa el tamaño más grande con el que la ventana más grande (960×676 lógicos) entra entera, sin
+cambiar lo guardado, así que en una pantalla grande vuelve solo. En General, los tamaños que no entran
+quedan apagados y una línea dice hasta cuál entra. `--ui-shot` acepta `--screen-area` para capturar ese
+caso.
+[ General - Tamano de la interfaz limitado por la pantalla ]
+
 v1.07:
 
 No había forma de agrandar la interfaz: textos e íconos se veían chicos en un monitor grande. Ahora la

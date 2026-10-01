@@ -22,6 +22,8 @@ const QHash<QString, QString> &spanishTable()
         E("Language", "Idioma"),
         E("Interface size", "Tamaño de la interfaz"),
         E("1 is the default size. Changing it restarts the app.", "1 es el tamaño normal. Cambiarlo reinicia la app."),
+        E("Only 0 fits on this screen.", "En esta pantalla solo entra el 0."),
+        E("Up to %1 fits on this screen.", "En esta pantalla entra hasta el %1."),
         E("Settings for the whole app and an overview of your tools.", "Ajustes de toda la app y un resumen de las herramientas."),
         E("One small tool in one app. Turn on the ones you want: a tool that is off isn't loaded and uses no memory or CPU.",
           "Una herramienta pequeña en una sola app. Activarla si se quiere: una herramienta apagada no se carga y no usa memoria ni CPU."),

@@ -30,9 +30,8 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    - **Tamaño de la interfaz (v1.07), para probar Lega:** que arranque en 1 sin nada guardado, elegir 0 y 2 desde General (la app se reinicia
      sola y la ventana vuelve a su lugar, más grande), que NukeX abierto desde la app NO salga agrandado,
      y mirar los bordes finos en el tamaño 1 (a 110 % una línea de 1 px puede salir de 1 o de 2 px).
-     En una pantalla chica (1366×768) el tamaño 2 no deja entrar entera la ventana (780×676 lógicos ya
-     son 936×811): queda con la barra de título adentro y el borde de abajo cortado; decidir si se limita
-     el nivel según la pantalla. Visto en las capturas, de antes: en español la fila «Buscar actualizaciones al iniciar» llena justo
+     Límite por pantalla (v1.08): en macOS falta probar que `NSScreen` responda antes de la app (si no,
+     no limita al arrancar; la página General igual apaga lo que no entra). Visto en las capturas, de antes: en español la fila «Buscar actualizaciones al iniciar» llena justo
      la tarjeta App y deja las tarjetas 5 px más anchas que en inglés (margen derecho de 11 px, no 16).
    - **Sitio (D-32):** el día del primer release, dar de alta el repo en `LGA_Updates` y regenerar el
      sitio para que la tarjeta pase de «Pronto» a la descarga.

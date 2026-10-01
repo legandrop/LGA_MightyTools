@@ -256,7 +256,7 @@ int runUiShot(const QStringList &args)
         return 0;
     }
     if (index < 0 || index + 2 >= args.size()) {
-        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>]\n");
+        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>] [--screen-area <w>x<h>]\n");
         return 2;
     }
     const QString outPath = QFileInfo(args.at(index + 2)).absoluteFilePath();

@@ -584,6 +584,14 @@ SegmentedSwitch::SegmentedSwitch(const QStringList &labels, int current, QWidget
     setCurrent(current);
 }
 
+void SegmentedSwitch::setSegmentEnabled(int index, bool enabled)
+{
+    if (QPushButton *segment = m_segments.value(index)) {
+        segment->setEnabled(enabled);
+        segment->setCursor(enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    }
+}
+
 void SegmentedSwitch::setCurrent(int index)
 {
     m_current = index;

@@ -11,6 +11,8 @@
 
 #include <QCheckBox>
 #include <QGridLayout>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -219,9 +221,30 @@ QFrame *GeneralPage::buildAppCard()
     m_uiSizeSwitch = new SegmentedSwitch(levels, UiScale::sessionLevel(), optionsBox);
     options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
     layout->addWidget(optionsBox);
+    // Limite por pantalla (D-35): lo que no entra en la pantalla principal queda apagado. Qt da el area en
+    // pixeles logicos de esta sesion; por el factor vuelve a la escala del sistema, la misma que usa main.
+    // En una corrida automatizada, la pantalla que eligio la prueba (UiScale::overrideScreenArea).
+    QSize unscaledArea;
+    if (UiScale::screenAreaOverridden()) {
+        unscaledArea = UiScale::overriddenScreenArea();
+    } else if (const QScreen *screen = QGuiApplication::primaryScreen()) {
+        const qreal f = UiScale::factor(UiScale::sessionLevel());
+        const QSize area = screen->availableGeometry().size();
+        unscaledArea = QSize(qRound(area.width() * f), qRound(area.height() * f));
+    }
+    const int maxLevel = UiScale::maxFittingLevel(unscaledArea);
+    for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
+        m_uiSizeSwitch->setSegmentEnabled(level, level <= maxLevel);
+    }
     QLabel *uiSizeCaption = Ui::caption(I18n::tr("1 is the default size. Changing it restarts the app."), card);
     uiSizeCaption->setContentsMargins(0, 3, 0, 0);
     layout->addWidget(uiSizeCaption);
+    // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
+    if (maxLevel < UiScale::kMaxLevel) {
+        const QString limit = maxLevel == 0 ? I18n::tr("Only 0 fits on this screen.")
+                                            : I18n::tr("Up to %1 fits on this screen.").arg(maxLevel);
+        layout->addWidget(Ui::caption(limit, card));
+    }
     connect(m_uiSizeSwitch, &SegmentedSwitch::currentChanged, this, &GeneralPage::uiSizeChangeRequested);
     connect(m_languageButton, &QPushButton::clicked, this, [this]() {
         QMenu menu(this);

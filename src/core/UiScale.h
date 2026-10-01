@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_UISCALE_H
 #define MIGHTYTOOLS_UISCALE_H
 
+#include <QSize>
 #include <QString>
 #include <QtGlobal>
 
@@ -23,6 +24,24 @@ QString settingsKey();
 // 1.0, 1.1, 1.2. Un nivel fuera de rango vale como el de fabrica.
 qreal factor(int level);
 int clampLevel(int level);
+
+// Limite por pantalla (D-35): un nivel solo vale si la ventana mas grande de la app entra entera en el
+// area util de la pantalla principal. La ventana de limpieza es la mas ancha (960) y la principal la
+// mas alta (676); el self-test controla que ninguna crezca sin pasar por aca.
+QSize largestWindow();
+// El nivel mas alto con el que largestWindow() entra en `unscaledArea` (pixeles logicos del sistema, sin
+// el factor de la app). El 0 siempre vale. Un area invalida no limita (kMaxLevel).
+int maxFittingLevel(const QSize &unscaledArea);
+// `wanted` (el guardado) recortado al que entra. El guardado no se toca: en una pantalla mas grande
+// vuelve solo.
+int fitLevel(int wanted, const QSize &unscaledArea);
+
+// Corridas automatizadas: la pantalla virtual de la captura (800 x 600) no es la del usuario. main la
+// reemplaza con --screen-area <ancho>x<alto> (sin el flag, QSize(): no se limita) y la pagina General
+// usa esta en lugar de la de Qt.
+void overrideScreenArea(const QSize &unscaledArea);
+bool screenAreaOverridden();
+QSize overriddenScreenArea();
 
 // Lee el nivel guardado en settings.ini (sin nada guardado, kDefaultLevel). Se puede llamar antes de la QApplication (con los nombres de
 // la app ya fijados).

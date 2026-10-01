@@ -172,6 +172,7 @@ QPushButton#segment {
     padding: 0px 9px; min-height: 18px; max-height: 18px; font-size: @fs12_5; font-weight: 400;
 }
 QPushButton#segment:hover { color: @textStrong; }
+QPushButton#segment:disabled { color: @textPlaceholder; }
 QPushButton#segment:checked { background-color: @chosenBg; border: 1px solid @chosenBorder; color: @chosenText; }
 QPushButton#fieldButton {
     background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; color: @textStrong;

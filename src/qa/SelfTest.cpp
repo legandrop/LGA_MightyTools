@@ -4,6 +4,7 @@
 #include "app/HostServices.h"
 #include "app/HotkeyHub.h"
 #include "app/ModuleContextImpl.h"
+#include "app/MainWindow.h"
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
@@ -11,8 +12,10 @@
 #include "core/BuildTree.h"
 #include "core/I18n.h"
 #include "core/UiScale.h"
+#include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/openinnukex/OpenInNukeXOperations.h"
 #include "platform/ForegroundWatcher.h"
+#include "platform/ScreenInfo.h"
 #include "platform/ProcessStats.h"
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
@@ -748,6 +751,30 @@ void testUiScale(const Check &check)
     check(UiScale::clampLevel(-1) == 1 && UiScale::clampLevel(3) == 1 && qFuzzyCompare(UiScale::factor(7), 1.1),
           QStringLiteral("tamano de interfaz: un nivel fuera de rango vale como el de fabrica (1)"));
     check(UiScale::readSavedLevel() == UiScale::kDefaultLevel && UiScale::kDefaultLevel == 1, QStringLiteral("tamano de interfaz: sin settings.ini (en memoria) arranca en 1"));
+    // Limite por pantalla: 960 x 676 por el factor tiene que entrar en el area util.
+    check(UiScale::maxFittingLevel(QSize(1920, 1032)) == 2 && UiScale::maxFittingLevel(QSize(3440, 1392)) == 2,
+          QStringLiteral("tamano de interfaz: en 1920x1080 y 3440x1440 entran los tres"));
+    check(UiScale::maxFittingLevel(QSize(1400, 760)) == 1, QStringLiteral("tamano de interfaz: con 760 de alto util, hasta el 1"));
+    check(UiScale::maxFittingLevel(QSize(1366, 728)) == 0 && UiScale::fitLevel(1, QSize(1366, 728)) == 0,
+          QStringLiteral("tamano de interfaz: en 1366x768 solo el 0 (ni el 1 de fabrica)"));
+    check(UiScale::fitLevel(2, QSize(1400, 760)) == 1 && UiScale::fitLevel(0, QSize(1366, 728)) == 0,
+          QStringLiteral("tamano de interfaz: lo guardado se recorta, nunca se agranda"));
+    check(UiScale::maxFittingLevel(QSize()) == UiScale::kMaxLevel, QStringLiteral("tamano de interfaz: sin dato de pantalla no se limita"));
+    // Bordes exactos: 960 x 676 por 1,1 = 1056 x 743,6 y por 1,2 = 1152 x 811,2.
+    check(UiScale::maxFittingLevel(QSize(1056, 744)) == 1 && UiScale::maxFittingLevel(QSize(1056, 743)) == 0
+              && UiScale::maxFittingLevel(QSize(1152, 812)) == 2 && UiScale::maxFittingLevel(QSize(1151, 812)) == 1,
+          QStringLiteral("tamano de interfaz: los bordes exactos de cada nivel"));
+#ifdef Q_OS_WIN
+    // En Windows siempre hay pantalla (en mac, una sesion sin servidor de ventanas no tiene ninguna).
+    const QSize screenArea = ScreenInfo::primaryAvailableSize();
+    check(screenArea.width() >= 640 && screenArea.height() >= 400,
+          QStringLiteral("tamano de interfaz: area util de la pantalla principal leida (%1x%2, hasta el nivel %3)")
+              .arg(screenArea.width()).arg(screenArea.height()).arg(UiScale::maxFittingLevel(screenArea)));
+#endif
+    const QSize largest = UiScale::largestWindow();
+    check(MainWindow::kWidth <= largest.width() && MainWindow::kHeight <= largest.height()
+              && CleanupWindow::kWidth <= largest.width() && CleanupWindow::kHeight <= largest.height(),
+          QStringLiteral("tamano de interfaz: ninguna ventana es mas grande que largestWindow()"));
     const int before = UiScale::sessionLevel();
     const bool hadEnv = qEnvironmentVariableIsSet("QT_SCALE_FACTOR");
     if (!hadEnv) {

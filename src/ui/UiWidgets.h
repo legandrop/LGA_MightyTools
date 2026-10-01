@@ -157,6 +157,8 @@ public:
     SegmentedSwitch(const QStringList &labels, int current, QWidget *parent = nullptr);
     int current() const { return m_current; }
     void setCurrent(int index);
+    // Una opcion que no se puede elegir queda apagada (sin hover ni mano).
+    void setSegmentEnabled(int index, bool enabled);
     QPushButton *segment(int index) const { return m_segments.value(index); }
 
 signals:

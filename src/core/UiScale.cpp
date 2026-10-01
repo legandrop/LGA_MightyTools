@@ -11,6 +11,8 @@ bool g_envSet = false;
 // Un QT_SCALE_FACTOR que el usuario ya tuviera: se devuelve tal cual despues de crear la app.
 bool g_hadPrevious = false;
 QByteArray g_previous;
+bool g_areaOverridden = false;
+QSize g_overriddenArea;
 constexpr char kEnvName[] = "QT_SCALE_FACTOR";
 
 } // namespace
@@ -29,10 +31,51 @@ int clampLevel(int level)
 
 qreal factor(int level)
 {
-    // Pasos chicos: el 2 es "un puntito mas" que el 1. Con la ventana de 780 x 676, el 2 la deja en
-    // 936 x 811 sobre una pantalla al 100 %.
+    // Pasos chicos: el 2 es "un puntito mas" que el 1. Con la ventana mas grande (largestWindow, 960 x 676),
+    // el 2 pide 1152 x 812 de area util.
     static constexpr qreal kFactors[kMaxLevel + 1] = {1.0, 1.1, 1.2};
     return kFactors[clampLevel(level)];
+}
+
+QSize largestWindow()
+{
+    return QSize(960, 676);
+}
+
+int maxFittingLevel(const QSize &unscaledArea)
+{
+    if (!unscaledArea.isValid() || unscaledArea.isEmpty()) {
+        return kMaxLevel;
+    }
+    const QSize window = largestWindow();
+    for (int level = kMaxLevel; level > 0; --level) {
+        const qreal f = factor(level);
+        if (window.width() * f <= unscaledArea.width() && window.height() * f <= unscaledArea.height()) {
+            return level;
+        }
+    }
+    return 0;
+}
+
+int fitLevel(int wanted, const QSize &unscaledArea)
+{
+    return qMin(clampLevel(wanted), maxFittingLevel(unscaledArea));
+}
+
+void overrideScreenArea(const QSize &unscaledArea)
+{
+    g_areaOverridden = true;
+    g_overriddenArea = unscaledArea;
+}
+
+bool screenAreaOverridden()
+{
+    return g_areaOverridden;
+}
+
+QSize overriddenScreenArea()
+{
+    return g_overriddenArea;
 }
 
 int readSavedLevel()

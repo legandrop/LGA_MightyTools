@@ -330,11 +330,13 @@ void AppController::onUiSizeChangeRequested(int level)
     const QPoint origin = m_window->screen() ? m_window->screen()->geometry().topLeft() : QPoint();
     // Qt lee el factor solo al arrancar: se lanza una copia nueva que espera a que esta suelte la
     // instancia unica (--relaunch) y abre la ventana. El nivel se guarda ANTES: la copia nueva lo lee
-    // apenas arranca. Si no se pudo lanzar, se vuelve al de esta sesion y la app sigue como estaba.
+    // apenas arranca. Si no se pudo lanzar, vuelve lo que habia guardado (puede ser mayor que el de esta
+    // sesion, recortado por la pantalla) y la app sigue como estaba.
+    const int previousSaved = UiScale::readSavedLevel();
     m_store->setValue(UiScale::settingsKey(), level);
     if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--relaunch")})) {
         qWarning() << "[AppController] No se pudo relanzar la app; se mantiene el tamano de interfaz actual";
-        m_store->setValue(UiScale::settingsKey(), UiScale::sessionLevel());
+        m_store->setValue(UiScale::settingsKey(), previousSaved);
         m_window->generalPage()->showSessionUiSize();
         return;
     }

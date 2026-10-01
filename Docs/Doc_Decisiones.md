@@ -81,6 +81,10 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   fábrica**. Las capturas de QA siguen en 0 (el tamaño del diseño aprobado) salvo `--ui-scale`. Aplicada con el factor de escala global de Qt (`QT_SCALE_FACTOR`, fijado
   antes de crear la app y borrado enseguida para que no lo herede NukeX). No se reescalan las medidas a
   mano: con el factor de Qt todo crece parejo y el layout no cambia. Elegir otro tamaño reinicia la app.
+  **Límite por pantalla** (Lega, mismo día): un tamaño vale solo si la ventana más grande (960×676
+  lógicos) entra entera en el área útil de la pantalla principal; si no, se usa el mayor que entra, sin
+  tocar lo guardado (en una pantalla grande vuelve solo), y General apaga los que no entran. En 1366×768
+  solo entra el 0.
 
 ## Abiertas
 

@@ -17,6 +17,7 @@
 #endif
 #include "platform/AutoStart.h"
 #include "platform/ComApartment.h"
+#include "platform/ScreenInfo.h"
 #include "platform/ToastActivation.h"
 #include "platform/WindowActivation.h"
 #include "qa/Measure.h"
@@ -69,6 +70,10 @@ void fileMessageHandler(QtMsgType, const QMessageLogContext &, const QString &ms
     out.flush();
 }
 
+// El area de la pantalla principal leida antes de la QApplication: despues Qt declara el DPI del proceso y
+// la misma lectura vuelve en otra escala.
+QSize g_startupScreenArea;
+
 // Lo que hace falta leer del log cuando "no arranca con el sistema".
 void logStartupDiagnostics()
 {
@@ -79,7 +84,9 @@ void logStartupDiagnostics()
     qInfo() << "Inicio con la sesion:" << (AutoStart::isEnabled() ? "activo" : "inactivo")
             << "| valor en Run:" << (stored.isEmpty() ? QStringLiteral("(ninguno)") : stored)
             << "| deshabilitado en Task Manager:" << AutoStart::disabledByTaskManager();
-    qInfo() << "Tamano de interfaz:" << UiScale::sessionLevel() << "| factor:" << UiScale::factor(UiScale::sessionLevel())
+    qInfo() << "Tamano de interfaz:" << UiScale::sessionLevel() << "| guardado:" << UiScale::readSavedLevel()
+            << "| pantalla principal sin escalar:" << g_startupScreenArea
+            << "| factor:" << UiScale::factor(UiScale::sessionLevel())
             << "| DPR de la pantalla principal:" << qApp->devicePixelRatio()
             << "| settings:" << QDir::toNativeSeparators(AppSettings::filePath());
 }
@@ -244,8 +251,13 @@ int main(int argc, char *argv[])
     setNames();
     if (automated) {
         UiScale::applyBeforeApp(argValue(argc, argv, "--ui-scale").toInt());
+        // --screen-area 1366x728: la pantalla chica del limite (D-35). Sin el flag, sin limite.
+        const QList<QByteArray> area = argValue(argc, argv, "--screen-area").split('x');
+        UiScale::overrideScreenArea(area.size() == 2 ? QSize(area.at(0).toInt(), area.at(1).toInt()) : QSize());
     } else {
-        UiScale::applyBeforeApp(UiScale::readSavedLevel());
+        // Recortado a lo que entra en la pantalla principal (D-35); lo guardado no se toca.
+        g_startupScreenArea = ScreenInfo::primaryAvailableSize();
+        UiScale::applyBeforeApp(UiScale::fitLevel(UiScale::readSavedLevel(), g_startupScreenArea));
     }
     QApplication app(argc, argv);
     setNames();
