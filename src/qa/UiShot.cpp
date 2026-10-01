@@ -684,6 +684,142 @@ int runRebuildProbe()
     return failures == 0 ? 0 : 1;
 }
 
+// --ui-probe threshold-drag: la marca del umbral de un disco se arrastra con el mouse. Tarjeta interactiva real
+// en offscreen, con eventos de mouse mandados a la barra (nunca al escritorio). Mientras se arrastra cambian
+// el numero y el texto, sin guardar; al soltar se guarda UNA vez. Probado en GB y en %.
+int runThresholdDragProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const auto settle = []() {
+        for (int i = 0; i < 5; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    };
+
+    DiskState state(nullptr);
+    state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
+    state.setDriveReadings({probeDrive()}, QStringList(), true, QDateTime::currentDateTime());
+    state.setDiskThreshold(QStringLiteral("C:/"), 50, DiskWatch::Unit::GB);
+    int saves = 0;
+    QObject::connect(&state, &DiskState::changed, [&saves]() { ++saves; });
+
+    QWidget host;
+    auto *layout = new QVBoxLayout(&host);
+    auto *card = new DiskCard(&state, true, &host);
+    layout->addWidget(card);
+    QObject::connect(&state, &DiskState::changed, card, &DiskCard::refresh);
+    host.resize(440, 260);
+    host.show();
+    settle();
+
+    auto *bar = card->findChild<UsageBar *>();
+    auto *spin = card->findChild<QSpinBox *>(QStringLiteral("threshold"));
+    check(bar && spin, QStringLiteral("la fila tiene su barra y su campo"));
+    if (!bar || !spin) {
+        fprintf(stdout, "threshold-drag FALLO: %d fallas\n", failures);
+        return 1;
+    }
+    check(!bar->testAttribute(Qt::WA_TransparentForMouseEvents) && bar->cursor().shape() == Qt::SizeHorCursor,
+          QStringLiteral("la barra toma el mouse y muestra el cursor de arrastre"));
+
+    const auto send = [bar](QEvent::Type type, double fraction, Qt::MouseButtons buttons) {
+        const QPointF local(fraction * bar->width(), bar->height() / 2.0);
+        QMouseEvent event(type, local, bar->mapToGlobal(local), Qt::LeftButton, buttons, Qt::NoModifier);
+        QCoreApplication::sendEvent(bar, &event);
+    };
+    const auto watchValue = [&state]() { return state.diskWatches().value(0).value; };
+
+    // GB: 931 GB de total. La marca al 90 % del ancho = 10 % libre = 93 GB.
+    const int savesBefore = saves;
+    send(QEvent::MouseButtonPress, 0.80, Qt::LeftButton);
+    send(QEvent::MouseMove, 0.90, Qt::LeftButton);
+    settle();
+    check(spin->value() == 93, QStringLiteral("GB: arrastrando al 90 % el numero muestra 93 (muestra %1)").arg(spin->value()));
+    check(watchValue() == 50 && saves == savesBefore, QStringLiteral("GB: mientras se arrastra no se guarda nada"));
+    send(QEvent::MouseButtonRelease, 0.90, Qt::NoButton);
+    settle();
+    check(watchValue() == 93, QStringLiteral("GB: al soltar se guarda 93 (guardado %1)").arg(watchValue()));
+    check(saves == savesBefore + 1, QStringLiteral("GB: se guarda una sola vez (%1)").arg(saves - savesBefore));
+
+    // Extremos: nunca menos de 1 ni mas que el disco.
+    send(QEvent::MouseButtonPress, 1.0, Qt::LeftButton);
+    send(QEvent::MouseButtonRelease, 1.0, Qt::NoButton);
+    settle();
+    check(watchValue() == 1, QStringLiteral("GB: al extremo derecho el limite es 1 (%1)").arg(watchValue()));
+    send(QEvent::MouseButtonPress, 0.0, Qt::LeftButton);
+    send(QEvent::MouseButtonRelease, 0.0, Qt::NoButton);
+    settle();
+    check(watchValue() == 931, QStringLiteral("GB: al extremo izquierdo el limite es el disco entero (%1)").arg(watchValue()));
+
+    // Porcentaje.
+    state.setDiskThreshold(QStringLiteral("C:/"), 10, DiskWatch::Unit::Percent);
+    settle();
+    bar = card->findChild<UsageBar *>();
+    spin = card->findChild<QSpinBox *>(QStringLiteral("threshold"));
+    send(QEvent::MouseButtonPress, 0.75, Qt::LeftButton);
+    send(QEvent::MouseMove, 0.70, Qt::LeftButton);
+    settle();
+    check(spin->value() == 30, QStringLiteral("%: arrastrando al 70 % el numero muestra 30 (muestra %1)").arg(spin->value()));
+    send(QEvent::MouseButtonRelease, 0.70, Qt::NoButton);
+    settle();
+    check(watchValue() == 30 && state.diskWatches().value(0).unit == DiskWatch::Unit::Percent,
+          QStringLiteral("%: al soltar se guarda 30 % (guardado %1)").arg(watchValue()));
+
+    // Sin moverse: soltar donde ya estaba no guarda.
+    const int savesSame = saves;
+    send(QEvent::MouseButtonPress, 0.70, Qt::LeftButton);
+    send(QEvent::MouseButtonRelease, 0.70, Qt::NoButton);
+    settle();
+    check(saves == savesSame, QStringLiteral("soltar en el mismo valor no guarda"));
+
+    // La ventana se oculta en medio del arrastre y el soltar nunca llega: el arrastre se corta, no se guarda
+    // y el numero vuelve a lo guardado (antes la fila quedaba "editando" para siempre).
+    const int savesHide = saves;
+    send(QEvent::MouseButtonPress, 0.50, Qt::LeftButton);
+    send(QEvent::MouseMove, 0.40, Qt::LeftButton);
+    settle();
+    host.hide();
+    settle();
+    check(!bar->isDragging() && spin->value() == 30 && saves == savesHide,
+          QStringLiteral("ocultar en medio del arrastre lo corta y vuelve a lo guardado (muestra %1)").arg(spin->value()));
+    host.show();
+    settle();
+
+    // Un movimiento sin el boton apretado (el soltar se perdio) tambien corta el arrastre.
+    send(QEvent::MouseButtonPress, 0.50, Qt::LeftButton);
+    send(QEvent::MouseMove, 0.40, Qt::NoButton);
+    settle();
+    check(!bar->isDragging() && spin->value() == 30, QStringLiteral("moverse sin el boton apretado corta el arrastre (arrastrando %1, muestra %2)").arg(bar->isDragging()).arg(spin->value()));
+
+    // El disco se desenchufa en medio del arrastre: al soltar no se guarda y se vuelve a lo guardado; y un
+    // disco desenchufado no se arrastra (ni cursor de arrastre).
+    const int savesMissing = saves;
+    send(QEvent::MouseButtonPress, 0.50, Qt::LeftButton);
+    send(QEvent::MouseMove, 0.40, Qt::LeftButton);
+    state.setDriveReadings({}, QStringList(), true, QDateTime::currentDateTime());
+    settle();
+    bar = card->findChild<UsageBar *>();
+    spin = card->findChild<QSpinBox *>(QStringLiteral("threshold"));
+    send(QEvent::MouseButtonRelease, 0.40, Qt::NoButton);
+    settle();
+    check(watchValue() == 30 && spin->value() == 30,
+          QStringLiteral("desenchufado en medio del arrastre: no guarda y muestra lo guardado (muestra %1)").arg(spin->value()));
+    check(bar->testAttribute(Qt::WA_TransparentForMouseEvents) && bar->cursor().shape() != Qt::SizeHorCursor
+              && bar->toolTip().isEmpty(),
+          QStringLiteral("desenchufado: la barra no se arrastra, sin cursor ni tooltip de arrastre"));
+    Q_UNUSED(savesMissing);
+
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "threshold-drag ok" : "threshold-drag FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -692,6 +828,9 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
+    if (probe == QLatin1String("threshold-drag")) {
+        return runThresholdDragProbe();
+    }
     if (probe == QLatin1String("rebuild-lang")) {
         return runRebuildProbe();
     }

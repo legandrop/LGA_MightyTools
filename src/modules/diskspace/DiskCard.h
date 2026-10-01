@@ -18,22 +18,45 @@ class QVBoxLayout;
 
 // Barra de uso de un disco: lo ocupado sobre el total y una marca donde empieza a contar como bajo.
 // Pasada la marca, la barra se pinta de ambar.
+// Con setDraggable(true) la marca se agarra con el mouse (un click en cualquier punto de la barra la
+// lleva ahi) y se arrastra: avisa la posicion en fraccion del ancho mientras se mueve y al soltar.
 class UsageBar : public QWidget
 {
+    Q_OBJECT
+
 public:
     explicit UsageBar(QWidget *parent = nullptr);
     // used y mark en fraccion del total (0..1). connected = false: solo el riel, atenuado.
     void set(bool connected, double used, double mark, bool low);
+    void setDraggable(bool draggable);
+    bool isDragging() const { return m_dragging; }
+    // Corta el arrastre sin guardar (avisa con dragCanceled).
+    void cancelDrag();
     QSize sizeHint() const override;
 
+signals:
+    void markDragged(double fraction);
+    void markReleased(double fraction);
+    // El arrastre termino sin soltar (la ventana se oculto o perdio el frente): nada que guardar.
+    void dragCanceled();
+
 protected:
+    bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    double fractionAt(double x) const;
+    void refreshInteraction();
+
     bool m_connected = false;
     double m_used = 0.0;
     double m_mark = 0.0;
     bool m_low = false;
+    bool m_draggable = false;
+    bool m_dragging = false;
 };
 
 // Una fila de la tarjeta: keycap del disco, nombre, umbral editable (numero + GB/%), el boton para
@@ -48,8 +71,11 @@ public:
     QString root() const { return m_root; }
     // drive = nullptr: el disco no esta enchufado.
     void update(const DiskWatch &watch, const DriveInfo *drive);
-    // El campo tiene el teclado (el usuario esta escribiendo): refrescar no lo pisa.
+    // El campo tiene el teclado (el usuario esta escribiendo) o se esta arrastrando la marca: refrescar
+    // no lo pisa.
     bool isEditing() const;
+    // La marca del umbral se arrastra con el mouse (no en la captura de QA).
+    void setInteractive(bool interactive);
 
 signals:
     void thresholdChanged(const QString &root, int value, DiskWatch::Unit unit);
@@ -60,9 +86,20 @@ protected:
 
 private:
     void onUnitClicked(DiskWatch::Unit unit);
+    // Dibuja la barra y el texto de abajo con el umbral `value` (el guardado, o el que se esta arrastrando).
+    void render(int value);
+    // El umbral que corresponde a la marca en `fraction` del ancho, en la unidad del disco y dentro del rango.
+    int valueAtMark(double fraction) const;
+    void onMarkDragged(double fraction);
+    void onMarkReleased(double fraction);
+    // El numero y el texto vuelven al umbral guardado (arrastre cancelado o sin cambio).
+    void showSavedValue();
 
     QString m_root;
     DiskWatch m_watch;
+    DriveInfo m_drive;
+    bool m_connected = false;
+    int m_dragValue = 0;
     Chip *m_keycap = nullptr;
     ElidedLabel *m_name = nullptr;
     QLabel *m_missing = nullptr;

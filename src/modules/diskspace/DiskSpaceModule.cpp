@@ -515,9 +515,11 @@ void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &wa
     choice.button = I18n::tr("Remind me");
     choice.action = QStringLiteral("snooze");
     choice.persistent = true;
-    context().notifyWithChoice(I18n::tr("%1 is running low").arg(drive.label),
-                               I18n::tr("%1 free of %2. You asked to be warned under %3.")
-                                   .arg(DiskSpace::formatBytes(drive.freeBytes), DiskSpace::formatBytes(drive.totalBytes),
+    // Lo libre va en el titulo: el texto de un aviso de Windows no admite negrita, pero el titulo sale
+    // en negrita (pedido de Lega: resaltar cuanto queda).
+    context().notifyWithChoice(I18n::tr("%1 free on %2").arg(DiskSpace::formatBytes(drive.freeBytes), drive.label),
+                               I18n::tr("%1 is running low (%2 in total). You asked to be warned under %3.")
+                                   .arg(drive.label, DiskSpace::formatBytes(drive.totalBytes),
                                         DiskSpace::thresholdText(watch)),
                                choice);
 }

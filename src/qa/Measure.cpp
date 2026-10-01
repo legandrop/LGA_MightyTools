@@ -276,7 +276,7 @@ int notifyPreview(const QStringList &)
     SystemNotifier notifier(true);
     const char *const samples[][2] = {
         {"Frame Dope Sheet", "Calibrate the Dope Sheet first: one click, from the tray menu."},
-        {"D: is running low", "42 GB free of 1.82 TB. You asked to be warned under 100 GB."},
+        {"42 GB free on D:", "D: is running low (1.82 TB in total). You asked to be warned under 100 GB."},
     };
     bool ok = true;
     for (const auto &sample : samples) {

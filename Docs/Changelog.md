@@ -1,5 +1,14 @@
 # Changelog — LGA Mighty Tools
 
+v1.03:
+
+En Disk Space el espacio libre no se destacaba y el límite de aviso solo se cambiaba escribiendo el número.
+Ahora «29 GB free» va en negrita en la fila de cada disco, en gris o en ámbar. En el aviso de Windows, cuyo
+cuerpo no admite negrita, la cantidad libre pasa al título, que Windows muestra en negrita. La marca del
+límite en la barra se agarra y se arrastra: el número (GB o %) cambia en vivo y se guarda una sola vez al
+soltar. `--ui-probe threshold-drag` lo prueba sin tocar el escritorio.
+[ Disk Space - Espacio libre en negrita y limite arrastrable en la barra ]
+
 v1.02:
 
 El encabezado de cada página tenía el cuadro del ícono con 34 px fijos: terminaba a mitad de la primera

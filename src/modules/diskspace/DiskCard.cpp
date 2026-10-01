@@ -12,6 +12,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
 #include <QSpinBox>
@@ -41,6 +42,8 @@ void addDivider(QVBoxLayout *layout, QWidget *parent)
     layout->addSpacing(8);
 }
 
+constexpr qint64 kGiB = qint64(1024) * 1024 * 1024; // el mismo GB de DiskSpace (thresholdBytes)
+
 double fraction(qint64 part, qint64 total)
 {
     return total <= 0 ? 0.0 : qBound(0.0, double(part) / double(total), 1.0);
@@ -59,6 +62,90 @@ UsageBar::UsageBar(QWidget *parent)
     setAttribute(Qt::WA_TransparentForMouseEvents);
 }
 
+void UsageBar::setDraggable(bool draggable)
+{
+    m_draggable = draggable;
+    refreshInteraction();
+}
+
+void UsageBar::refreshInteraction()
+{
+    // Desenchufado no hay marca que mover: ni cursor de arrastre ni tooltip.
+    const bool active = m_draggable && m_connected;
+    setAttribute(Qt::WA_TransparentForMouseEvents, !active);
+    // Sin seguimiento, Qt no entrega los movimientos sin boton apretado: justo los que delatan un soltar
+    // perdido (mouseMoveEvent corta el arrastre con ellos).
+    setMouseTracking(active);
+    if (active) {
+        setCursor(Qt::SizeHorCursor);
+        setToolTip(I18n::tr("Drag the mark to change the limit"));
+    } else {
+        unsetCursor();
+        setToolTip(QString());
+    }
+}
+
+double UsageBar::fractionAt(double x) const
+{
+    return width() <= 0 ? 0.0 : qBound(0.0, x / double(width()), 1.0);
+}
+
+void UsageBar::mousePressEvent(QMouseEvent *event)
+{
+    if (!m_draggable || !m_connected || event->button() != Qt::LeftButton) {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    m_dragging = true;
+    emit markDragged(fractionAt(event->position().x()));
+    event->accept();
+}
+
+void UsageBar::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!m_dragging) {
+        QWidget::mouseMoveEvent(event);
+        return;
+    }
+    // El soltar se perdio (otra ventana tomo el mouse): el arrastre termina donde estaba.
+    if (!(event->buttons() & Qt::LeftButton)) {
+        cancelDrag();
+        return;
+    }
+    emit markDragged(fractionAt(event->position().x()));
+    event->accept();
+}
+
+void UsageBar::cancelDrag()
+{
+    if (!m_dragging) {
+        return;
+    }
+    m_dragging = false;
+    emit dragCanceled();
+}
+
+bool UsageBar::event(QEvent *event)
+{
+    // La ventana se oculta o pierde el frente en medio del arrastre: Windows puede no mandar el soltar. Sin
+    // esto la fila quedaba "editando" para siempre y dejaba de mostrar el umbral guardado.
+    if (event->type() == QEvent::Hide || event->type() == QEvent::WindowDeactivate) {
+        cancelDrag();
+    }
+    return QWidget::event(event);
+}
+
+void UsageBar::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (!m_dragging || event->button() != Qt::LeftButton) {
+        QWidget::mouseReleaseEvent(event);
+        return;
+    }
+    m_dragging = false;
+    emit markReleased(fractionAt(event->position().x()));
+    event->accept();
+}
+
 QSize UsageBar::sizeHint() const
 {
     return QSize(200, 10);
@@ -66,7 +153,10 @@ QSize UsageBar::sizeHint() const
 
 void UsageBar::set(bool connected, double used, double mark, bool low)
 {
-    m_connected = connected;
+    if (connected != m_connected) {
+        m_connected = connected;
+        refreshInteraction();
+    }
     m_used = used;
     m_mark = mark;
     m_low = low;
@@ -169,11 +259,15 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
 
     m_bar = new UsageBar(this);
     column->addWidget(m_bar);
+    connect(m_bar, &UsageBar::markDragged, this, &DriveRow::onMarkDragged);
+    connect(m_bar, &UsageBar::markReleased, this, &DriveRow::onMarkReleased);
+    connect(m_bar, &UsageBar::dragCanceled, this, &DriveRow::showSavedValue);
 
     auto *foot = new QHBoxLayout();
     foot->setContentsMargins(0, 0, 0, 0);
     foot->setSpacing(8);
     m_free = label(QString(), "caption", this);
+    m_free->setTextFormat(Qt::RichText);
     foot->addWidget(m_free, 1);
     m_threshold = label(QString(), "meta", this);
     foot->addWidget(m_threshold, 0);
@@ -220,7 +314,60 @@ bool DriveRow::eventFilter(QObject *watched, QEvent *event)
 
 bool DriveRow::isEditing() const
 {
-    return m_value->hasFocus() || (m_value->findChild<QLineEdit *>() && m_value->findChild<QLineEdit *>()->hasFocus());
+    return m_bar->isDragging() || m_value->hasFocus()
+           || (m_value->findChild<QLineEdit *>() && m_value->findChild<QLineEdit *>()->hasFocus());
+}
+
+void DriveRow::setInteractive(bool interactive)
+{
+    m_bar->setDraggable(interactive);
+}
+
+int DriveRow::valueAtMark(double fraction) const
+{
+    // La marca esta donde lo usado llega al umbral: a su derecha queda el espacio libre del umbral.
+    const double freeShare = 1.0 - fraction;
+    if (m_watch.unit == DiskWatch::Unit::Percent) {
+        return qBound(1, qRound(freeShare * 100.0), DiskSpace::kMaxPercent);
+    }
+    const int totalGb = int(qMin<qint64>(m_drive.totalBytes / kGiB, DiskSpace::kMaxGb));
+    return qBound(1, qRound(freeShare * double(m_drive.totalBytes) / double(kGiB)), qMax(1, totalGb));
+}
+
+void DriveRow::onMarkDragged(double fraction)
+{
+    if (!m_connected) {
+        return;
+    }
+    // Mientras se arrastra solo cambia lo que se ve: se guarda una vez, al soltar.
+    m_dragValue = valueAtMark(fraction);
+    m_value->blockSignals(true);
+    m_value->setValue(m_dragValue);
+    m_value->blockSignals(false);
+    render(m_dragValue);
+}
+
+void DriveRow::showSavedValue()
+{
+    m_value->blockSignals(true);
+    m_value->setValue(m_watch.value);
+    m_value->blockSignals(false);
+    render(m_watch.value);
+}
+
+void DriveRow::onMarkReleased(double fraction)
+{
+    // El disco se desenchufo en medio del arrastre: no se guarda nada y se vuelve a lo guardado.
+    if (!m_connected) {
+        showSavedValue();
+        return;
+    }
+    const int value = valueAtMark(fraction);
+    if (value != m_watch.value) {
+        emit thresholdChanged(m_root, value, m_watch.unit);
+    } else {
+        showSavedValue();
+    }
 }
 
 void DriveRow::onUnitClicked(DiskWatch::Unit unit)
@@ -239,7 +386,8 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
 {
     m_watch = watch;
     const bool connected = drive != nullptr;
-    const bool low = connected && DiskSpace::isLow(watch, *drive);
+    m_connected = connected;
+    m_drive = connected ? *drive : DriveInfo();
 
     // Desenchufado: el keycap punteado y gris (`.kc.dim` del canvas).
     m_keycap->set(connected ? QStringLiteral("key") : QStringLiteral("keyDim"),
@@ -257,6 +405,22 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
     }
     m_gb->setChecked(watch.unit == DiskWatch::Unit::GB);
     m_percent->setChecked(watch.unit == DiskWatch::Unit::Percent);
+    // Desenchufado en medio del arrastre: la barra deja de tomar el mouse y el soltar puede no llegar, asi
+    // que el arrastre se corta aca (vuelve a lo guardado). Con la marca agarrada y el disco enchufado, una
+    // lectura nueva no la devuelve al valor guardado.
+    if (!connected && m_bar->isDragging()) {
+        m_bar->cancelDrag();
+    }
+    render(m_bar->isDragging() ? m_dragValue : watch.value);
+}
+
+void DriveRow::render(int value)
+{
+    DiskWatch watch = m_watch;
+    watch.value = value;
+    const bool connected = m_connected;
+    const DriveInfo *drive = connected ? &m_drive : nullptr;
+    const bool low = connected && DiskSpace::isLow(watch, *drive);
 
     if (!connected) {
         m_bar->set(false, 0, 0, false);
@@ -269,12 +433,14 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
     const qint64 threshold = DiskSpace::thresholdBytes(watch, drive->totalBytes);
     m_bar->set(true, fraction(drive->totalBytes - drive->freeBytes, drive->totalBytes),
                fraction(drive->totalBytes - threshold, drive->totalBytes), low);
-    // Dos claves completas (no una frase pegada): el espanol puede mover el umbral.
+    // Dos claves completas (no una frase pegada): el espanol puede mover el umbral. Lo libre va en
+    // negrita (pedido de Lega): la marca esta en la clave, asi cada idioma resalta su "libres". Peso 600
+    // y no <b>: la app trae Inter SemiBold y no Bold, y un 700 sale sintetizado.
     const QString freeBytes = DiskSpace::formatBytes(drive->freeBytes);
     const QString totalBytes = DiskSpace::formatBytes(drive->totalBytes);
-    const QString freeText = low ? I18n::tr("%1 free of %2 · under %3")
+    const QString freeText = low ? I18n::tr("<span style=\"font-weight:600\">%1 free</span> of %2 · under %3")
                                        .arg(freeBytes, totalBytes, DiskSpace::thresholdText(watch))
-                                 : I18n::tr("%1 free of %2").arg(freeBytes, totalBytes);
+                                 : I18n::tr("<span style=\"font-weight:600\">%1 free</span> of %2").arg(freeBytes, totalBytes);
     m_free->setText(freeText);
     Ui::setStyleProperty(m_free, "tone", low ? QStringLiteral("warn") : QString());
     m_threshold->setText(I18n::tr("warn under %1").arg(DiskSpace::thresholdText(watch)));
@@ -415,6 +581,7 @@ void DiskCard::rebuildRows(const QList<DiskWatch> &watches)
             m_rowsLayout->addSpacing(8);
         }
         auto *row = new DriveRow(watches.at(i).root, container);
+        row->setInteractive(m_interactive);
         m_rowsLayout->addWidget(row);
         row->show();
         m_rows.insert(row->root(), row);
