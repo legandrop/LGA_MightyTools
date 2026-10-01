@@ -135,6 +135,7 @@ private:
     QTimer* m_directDelayTimer;
     QPointer<QWidget> m_pendingDirectParent;
     QString m_pendingDirectText;
+    bool m_pendingDirectHadParent = false; // el pedido tenia ancla: si desaparecio, no se muestra
     QPoint m_pendingDirectPos;
 
     // Ocultado robusto del tooltip visible

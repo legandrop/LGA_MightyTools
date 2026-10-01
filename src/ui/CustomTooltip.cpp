@@ -1,15 +1,17 @@
 #include "ui/CustomTooltip.h"
 
-// Copia de `src/utils/CustomTooltip.cpp` de LGA_Base_QT_C_Py (el tooltip unificado de las apps LGA:
-// flecha, sombra, flip arriba/abajo, demora y ocultado robusto). Diferencias con la Base, a mantener
-// si se vuelve a sincronizar:
+// El tooltip unificado de las apps LGA (flecha, sombra, flip arriba/abajo, demora y ocultado robusto),
+// copiado de la base comun. Diferencias con el original, a mantener si se vuelve a sincronizar:
 //  - Sin debug flags y sin ajustes: en esta app el tooltip esta siempre prendido y con demora.
 //  - El filtro NO consume Enter, Leave, Hide ni Close: el widget los sigue recibiendo, asi su
 //    estado de hover (QSS `:hover`) no depende de reconstruirlo aparte.
 //  - Un click, una tecla o la rueda ocultan el tooltip.
 //  - Fuente y color del texto se fijan por codigo con los tokens de Theme.
-// La guia de uso (cuando lleva tooltip un control, formato, atajos) es `docs/Doc_CustomTooltip.md`
-// de la Base.
+//  - La ventana del tooltip no toma el mouse (WindowTransparentForInput): si lo tomara, el control de
+//    abajo recibiria un Leave y el tooltip se ocultaria solo.
+//  - Los bordes contra los que se acomoda son los de la ventana DEL CONTROL, no los de la ventana
+//    activa: esta app puede tener dos ventanas abiertas a la vez.
+//  - Un pedido directo cuya ancla desaparecio durante la demora no se muestra.
 
 #include "ui/Theme.h"
 #include <QApplication>
@@ -83,7 +85,8 @@ public:
         //    doble halo con un "hueco" visible entre ambas sombras — más notorio sobre
         //    backgrounds saturados donde el alpha blend de la sombra nativa contrasta.
         //    Windows/Linux ignoran este flag, no cambia nada ahí.
-        setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::NoDropShadowWindowHint);
+        setWindowFlags(Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::NoDropShadowWindowHint
+                       | Qt::WindowTransparentForInput);
 
         setWordWrap(true);
     }
@@ -345,7 +348,8 @@ CustomTooltip::~CustomTooltip() {
 // Método para crear el widget de tooltip - Ahora mucho más simple
 void CustomTooltip::createTooltipWidget() {
     // Crear el widget como TooltipWidget que hereda de QLabel
-    TooltipWidget* tooltipWidget = new TooltipWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint | Qt::NoDropShadowWindowHint);
+    TooltipWidget* tooltipWidget = new TooltipWidget(nullptr, Qt::ToolTip | Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint
+                                                                  | Qt::NoDropShadowWindowHint | Qt::WindowTransparentForInput);
     m_tooltipWidget = tooltipWidget;
     m_textLabel = tooltipWidget; // Ahora son el mismo objeto
     
@@ -506,7 +510,7 @@ bool CustomTooltip::debugGrabToFile(const QString& text, const QString& outputPa
         return false;
     }
 
-    // La captura se usa desde --tooltip-shot; no tiene ancla real, por lo que
+    // La captura se usa desde `--ui-shot tooltip`; no tiene ancla real, por lo que
     // alcanza con una posición global estable dentro del escritorio.
     showToolTip(text, nullptr, QPoint(100, 100));
     QApplication::processEvents();
@@ -564,6 +568,7 @@ void CustomTooltip::requestToolTip(const QString& text, QWidget* parent, const Q
             m_tooltipWidget->hide();
         }
         m_pendingDirectParent = parent;
+        m_pendingDirectHadParent = parent != nullptr;
         m_pendingDirectText = text;
         m_pendingDirectPos = pos;
         m_directDelayTimer->start(TOOLTIP_SHOW_DELAY_MS);
@@ -581,6 +586,14 @@ void CustomTooltip::showPendingDirectToolTip() {
     QWidget* parent = m_pendingDirectParent.data();
     const QPoint pos = m_pendingDirectPos;
     m_pendingDirectText.clear();
+
+    // Durante la demora el ancla pudo destruirse, ocultarse o quedar sin el cursor encima: en ese
+    // caso el tooltip ya no corresponde (y sin ancla nadie lo ocultaria).
+    if (m_pendingDirectHadParent) {
+        if (!parent || !parent->isVisible() || !parent->rect().adjusted(-2, -2, 2, 2).contains(parent->mapFromGlobal(QCursor::pos()))) {
+            return;
+        }
+    }
 
     showToolTip(text, parent, pos);
 }
@@ -771,7 +784,8 @@ void CustomTooltip::showToolTip(const QString& text, QWidget* parent, const QPoi
     
     // Obtener los límites de la ventana de la aplicación en lugar de la pantalla
     QRect windowGeometry;
-    QWidget* activeWindow = QApplication::activeWindow();
+    // La ventana del control que disparo el tooltip; sin control, la activa.
+    QWidget* activeWindow = parent ? parent->window() : QApplication::activeWindow();
     
     if (activeWindow) {
         // Usar las coordenadas globales de la ventana de la aplicación
@@ -837,11 +851,11 @@ void CustomTooltip::showToolTip(const QString& text, QWidget* parent, const QPoi
         QScreen* screen = QApplication::screenAt(idealPos);
         if (screen) {
             windowGeometry = screen->availableGeometry();
-        } else {
         }
-        // Default: mostrar abajo (Up), sin flip.
+        // Default: mostrar abajo (Up), sin flip y con la flecha al centro.
         idealPos.setY(posBelowY);
         TooltipWidget* fallbackWidget = static_cast<TooltipWidget*>(m_tooltipWidget);
+        fallbackWidget->setTriangleOffset(0);
         fallbackWidget->setTriangleDirection(TooltipWidget::Up);
     }
 

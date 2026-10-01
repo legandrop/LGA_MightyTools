@@ -583,7 +583,7 @@ QStringList DiskSpaceModule::captureStates() const
         states << state;
     }
     states << QStringLiteral("cleanup-confirm") << QStringLiteral("cleanup-confirm-all") << QStringLiteral("cleanup-delete")
-           << QStringLiteral("cleanup-rule");
+           << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
     return states;
 }
 
@@ -639,6 +639,9 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
                                              {{QStringLiteral("C:\\temp"), QStringLiteral("7.30 GB")},
                                               {QStringLiteral("C:\\Portable\\LGA_SceneBuilder\\tmp"), QStringLiteral("14.1 GB")}},
                                              0, 12817, true, CleanupDialogs::DeleteKind::Folders);
+    }
+    if (state == QLatin1String("cleanup-export")) {
+        return CleanupDialogs::exportForAi(parent, 14, QStringLiteral("21.3 GB"));
     }
     if (state == QLatin1String("cleanup-rule")) {
         auto *dialog = new FolderRuleDialog(QStringLiteral("C:\\"), parent);
@@ -700,6 +703,9 @@ HelpSection diskSpaceHelp(const SettingsReader &)
         section.steps.append(I18n::tr("To see what fills a drive and delete caches, folders or files, use the list button "
                                       "of that drive, or %1 when it is low.")
                                  .arg(HelpSection::strong(I18n::tr("Free up space"))));
+        section.steps.append(I18n::tr("Not sure about something? %1 saves what is selected with a question ready to send to your "
+                                      "AI assistant, before deleting anything.")
+                                 .arg(HelpSection::strong(I18n::tr("Export for AI..."))));
     }
     section.note = I18n::tr("You get a notification when a drive goes under its limit, and a reminder while it stays "
                                   "low (every 15 min by default). The notification lets you postpone the next one.");

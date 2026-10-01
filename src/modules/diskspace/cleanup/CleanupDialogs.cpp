@@ -182,6 +182,41 @@ QDialog *confirmDelete(QWidget *parent, const QList<QPair<QString, QString>> &pa
     return dialog;
 }
 
+QDialog *exportForAi(QWidget *parent, int count, const QString &size)
+{
+    auto *dialog = new QDialog(parent);
+    dialog->setWindowTitle(I18n::tr("Export for AI"));
+    QVBoxLayout *layout = dialogLayout(dialog, I18n::tr("Ask an AI before deleting"), 440);
+    QLabel *text = Ui::label(
+        count == 1 ? I18n::tr("Exports the selected item (%1) with its path, size and dates, and a question ready to send. "
+                              "Nothing is sent from here: attach it or paste it into your AI assistant.")
+                         .arg(size)
+                   : I18n::tr("Exports the %1 selected items (%2) with their paths, sizes and dates, and a question ready to "
+                              "send. Nothing is sent from here: attach it or paste it into your AI assistant.")
+                         .arg(count)
+                         .arg(size),
+        "dialogLine", dialog);
+    text->setWordWrap(true);
+    layout->addWidget(text);
+    layout->addWidget(new CaptionLabel(I18n::tr("It includes folder and file names, not their contents."), dialog));
+
+    auto *buttons = new QHBoxLayout();
+    buttons->setContentsMargins(0, 0, 0, 0);
+    buttons->setSpacing(8);
+    buttons->addStretch(1);
+    auto *cancel = Ui::button(I18n::tr("Cancel"), QString(), QString(), dialog);
+    auto *copy = Ui::button(I18n::tr("Copy"), QString(), QString(), dialog);
+    auto *save = Ui::button(I18n::tr("Save file..."), QStringLiteral("primary"), QString(), dialog);
+    buttons->addWidget(cancel);
+    buttons->addWidget(copy);
+    buttons->addWidget(save);
+    layout->addLayout(buttons);
+    QObject::connect(cancel, &QPushButton::clicked, dialog, [dialog]() { dialog->done(ExportCancel); });
+    QObject::connect(copy, &QPushButton::clicked, dialog, [dialog]() { dialog->done(ExportCopy); });
+    QObject::connect(save, &QPushButton::clicked, dialog, [dialog]() { dialog->done(ExportSave); });
+    return dialog;
+}
+
 } // namespace CleanupDialogs
 
 // ------------------------------------------------------------------ FolderRuleDialog

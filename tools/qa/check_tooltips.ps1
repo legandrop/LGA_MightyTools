@@ -25,8 +25,14 @@ Get-ChildItem -Path $src -Recurse -Include *.cpp, *.h, *.mm | ForEach-Object {
     foreach ($line in [System.IO.File]::ReadAllLines($_.FullName)) {
         $number++
         $code = $line.Trim()
-        if ($code.StartsWith('//')) { continue }
-        $native = ($code -match '(?<!CustomTooltip::instance\(\))->setToolTip\(' -or $code -match '(^|[^>:\w])setToolTip\(' -or $code -match '\bQToolTip\b')
+        if ($code.StartsWith('//') -or $code.StartsWith('*') -or $code.StartsWith('/*')) { continue }
+        # Sin el comentario de fin de linea (un "//" adentro de una cadena, como una URL, no cuenta).
+        $code = ($code -replace '\s+//(?![^"]*"[^"]*$).*$', '')
+        # Las formas de un tooltip nativo: el metodo sobre cualquier objeto, suelto dentro de una clase o por
+        # su nombre calificado; QToolTip; el rol de un modelo; y la propiedad "toolTip".
+        $native = ($code -match '(?<!CustomTooltip::instance\(\))(->|\.)setToolTip\(' -or $code -match '(^|[^>.:\w])setToolTip\(' `
+                -or $code -match 'QWidget::setToolTip' -or $code -match '\bQToolTip\b' -or $code -match 'Qt::ToolTipRole' `
+                -or $code -cmatch '"toolTip"')
         if (-not $native) { continue }
         $allowed = $false
         foreach ($ok in $allowedLines) { if ($code.Contains($ok)) { $allowed = $true } }

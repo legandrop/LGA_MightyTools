@@ -107,6 +107,7 @@ private:
         QString path;
         qint64 bytes = 0;
         qint64 files = 0;
+        qint64 modified = 0; ///< ultimo cambio (segundos desde 1970)
     };
     struct FileRow
     {
@@ -140,7 +141,13 @@ private:
     void setFolderColumns(bool scanning);
     void toggleFolder(const QString &rowId);
     QList<Picked> pickedItems() const;
+    // Lo elegido sin lo que cuelga de otra carpeta elegida (ya viaja con ella): lo que de verdad se borra.
+    QList<Picked> topPickedItems() const;
     void revealPicked();
+    // "Export for AI...": lo elegido para borrar, como texto con la pregunta hecha (copiar o guardar).
+    void exportForAi();
+    // Un aviso corto en la barra de abajo, que se va solo.
+    void flash(const QString &text, bool error = false);
     void deletePicked(bool toTrash);
     void runCleanup();
     void addFolderRule();
@@ -176,6 +183,9 @@ private:
     QList<Picked> m_jobItems; ///< borrado a mano: lo elegido, en el orden de los pedidos
     qint64 m_freeBeforeJob = 0;
     QString m_notice; ///< resultado del ultimo borrado a mano, en la barra de abajo
+    QString m_flash;  ///< aviso que se va solo ("Copied.")
+    bool m_flashError = false;
+    QTimer *m_flashTimer = nullptr;
 
     QSet<ScanTree::Index> m_expanded;
     QHash<ScanTree::Index, ScanEngine::FileListing> m_listings;
@@ -210,6 +220,7 @@ private:
     QPushButton *m_actionTrash = nullptr;
     QPushButton *m_actionDelete = nullptr;
     QPushButton *m_actionCompare = nullptr;
+    QPushButton *m_actionExport = nullptr;
     bool m_nativeFrameApplied = false;
 };
 

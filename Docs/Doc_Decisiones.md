@@ -70,6 +70,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-33 · Tooltips propios** (2026-10-01). Ningún tooltip nativo de Qt: todos pasan por `CustomTooltip`,
   el mismo de las demás apps LGA. Siempre prendidos y con demora; no se suman opciones a General. Única
   excepción: el ícono de la bandeja, cuyo tooltip lo dibuja el sistema.
+- **D-34 · «Export for AI...»** (2026-10-01). La ventana de limpieza exporta lo elegido para borrar, y
+  solo eso, para preguntarle a un asistente de IA si es seguro antes de hacerlo. Formato Markdown, con la
+  pregunta ya escrita, en el idioma de la interfaz. La app no envía nada: el usuario copia el texto o
+  guarda el archivo. La interfaz dice «your AI assistant», sin nombrar marcas. El aviso de privacidad
+  (lleva nombres de carpetas y de archivos, no su contenido) va en la letra chica del cartel, sin
+  casilla ni opción de ocultar nombres.
 
 ## Abiertas
 

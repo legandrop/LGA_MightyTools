@@ -4,7 +4,9 @@
 #include "core/I18n.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskState.h"
+#include "core/AutomatedRun.h"
 #include "modules/diskspace/cleanup/CleanupDialogs.h"
+#include "modules/diskspace/cleanup/CleanupExport.h"
 #include "modules/diskspace/cleanup/CleanupFixture.h"
 #include "modules/diskspace/cleanup/CleanupPane.h"
 #include "modules/diskspace/cleanup/CleanupRules.h"
@@ -18,8 +20,10 @@
 #include "ui/UiWidgets.h"
 
 #include <QAction>
+#include <QClipboard>
 #include <QCloseEvent>
 #include <QDir>
+#include <QFileDialog>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
@@ -31,9 +35,12 @@
 #include <QPainter>
 #include <QPointer>
 #include <QPushButton>
+#include <QSaveFile>
 #include <QScreen>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QStandardPaths>
+#include <QSysInfo>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -370,6 +377,13 @@ CleanupWindow::CleanupWindow(DiskState *state, ModuleContext *context, bool capt
     m_poll = new QTimer(this);
     m_poll->setInterval(kPollMs);
     connect(m_poll, &QTimer::timeout, this, &CleanupWindow::poll);
+    m_flashTimer = new QTimer(this);
+    m_flashTimer->setSingleShot(true);
+    m_flashTimer->setInterval(5000);
+    connect(m_flashTimer, &QTimer::timeout, this, [this]() {
+        m_flash.clear();
+        refreshActionBar();
+    });
 }
 
 CleanupWindow::~CleanupWindow()
@@ -492,6 +506,9 @@ void CleanupWindow::buildUi()
     m_actionText = Ui::label(QString(), "actionText", bar);
     m_actionText->setTextFormat(Qt::RichText);
     actions->addWidget(m_actionText, 1);
+    // Lo elegido para borrar, para preguntarle a un asistente de IA antes de hacerlo.
+    // (Sin tooltip: lo que hace lo explica el cartel que abre.)
+    m_actionExport = Ui::button(I18n::tr("Export for AI..."), QString(), QStringLiteral("sm"), bar);
     m_actionReveal = Ui::button(I18n::tr("Show in Explorer"), QString(), QStringLiteral("sm"), bar);
     Ui::setIcon(m_actionReveal, Icon::Reveal, Theme::color(Theme::kText), 13);
     m_actionTrash = Ui::button(I18n::tr("Move to Recycle Bin"), QString(), QStringLiteral("sm"), bar);
@@ -503,7 +520,7 @@ void CleanupWindow::buildUi()
     Ui::setIcon(m_actionCompare, Icon::ChevronDown, Theme::color(Theme::kText), 11);
     m_actionCompare->setLayoutDirection(Qt::RightToLeft);
     m_actionPrimary = Ui::button(QString(), QStringLiteral("primary"), QString(), bar);
-    for (QPushButton *button : {m_actionReveal, m_actionTrash, m_actionDelete, m_actionCompare, m_actionPrimary}) {
+    for (QPushButton *button : {m_actionExport, m_actionReveal, m_actionTrash, m_actionDelete, m_actionCompare, m_actionPrimary}) {
         actions->addWidget(button, 0, Qt::AlignVCenter);
     }
     root->addWidget(bar);
@@ -555,6 +572,7 @@ void CleanupWindow::buildUi()
     for (SizeListView *list : {m_folders, m_files}) {
         connect(list, &SizeListView::selectionChanged, this, [this]() {
             m_notice.clear();
+            m_flash.clear();
             refreshActionBar();
         });
         connect(list, &SizeListView::activated, this, [this](const QString &) { revealPicked(); });
@@ -563,6 +581,7 @@ void CleanupWindow::buildUi()
     connect(m_actionTrash, &QPushButton::clicked, this, [this]() { deletePicked(true); });
     connect(m_actionDelete, &QPushButton::clicked, this, [this]() { deletePicked(false); });
     connect(m_actionCompare, &QPushButton::clicked, this, &CleanupWindow::showCompareMenu);
+    connect(m_actionExport, &QPushButton::clicked, this, &CleanupWindow::exportForAi);
     connect(m_actionPrimary, &QPushButton::clicked, this, [this]() {
         if (m_jobKind != JobKind::None) {
             m_job.cancel();
@@ -920,6 +939,7 @@ void CleanupWindow::refreshFolders()
                         picked.path = joinPath(nodePath, row.name);
                         picked.bytes = qint64(n.bytes);
                         picked.files = n.files;
+                        picked.modified = n.newest;
                     } else {
                         const ScanEngine::FileEntry &file = listing.largest.at(entry.file);
                         row.id = QStringLiteral("f%1|%2").arg(node).arg(file.name);
@@ -931,6 +951,7 @@ void CleanupWindow::refreshFolders()
                         picked.path = joinPath(nodePath, file.name);
                         picked.bytes = qint64(file.bytes);
                         picked.files = 1;
+                        picked.modified = file.modified;
                     }
                     row.share = share;
                     row.tooltip = picked.path;
@@ -1050,6 +1071,7 @@ QList<CleanupWindow::Picked> CleanupWindow::pickedItems() const
                 picked.path = joinPath(entry.dirPath, entry.file.name);
                 picked.bytes = qint64(entry.file.bytes);
                 picked.files = 1;
+                picked.modified = entry.file.modified;
                 items.append(picked);
             }
         }
@@ -1065,6 +1087,8 @@ void CleanupWindow::refreshActionBar()
     bool trash = false;
     bool remove = false;
     bool compare = false;
+    bool exportShown = false;
+    bool exportEnabled = false;
     bool trashEnabled = false;
     bool removeEnabled = false;
     QString primary;
@@ -1094,9 +1118,12 @@ void CleanupWindow::refreshActionBar()
                             DiskSpace::formatSize(m_drive.freeBytes), DiskSpace::formatSize(m_drive.freeBytes + selected));
             primary = I18n::tr("Clean up %1").arg(DiskSpace::formatSize(selected));
             primaryEnabled = true;
+            exportShown = true;
+            exportEnabled = true;
         } else {
             text = QStringLiteral("<span style=\"color:%1\">%2</span>").arg(QLatin1String(Theme::kTextFaint), I18n::tr("Nothing selected."));
             primary = I18n::tr("Clean up");
+            exportShown = true;
         }
     } else if (tab == Changes) {
         if (m_scanState == ScanState::Complete && m_baseline.isValid()) {
@@ -1139,10 +1166,20 @@ void CleanupWindow::refreshActionBar()
             remove = true;
             trashEnabled = ready && trashAllowed;
             removeEnabled = ready && removeAllowed;
+            // Solo si algo de lo elegido se puede borrar: de lo protegido no hay nada que preguntar.
+            exportShown = true;
+            exportEnabled = ready && (trashAllowed || removeAllowed);
         }
+    }
+    // El aviso que se va solo tapa el texto de la barra mientras dura.
+    if (!m_flash.isEmpty() && m_jobKind == JobKind::None) {
+        text = QStringLiteral("<span style=\"color:%1\">%2</span>")
+                   .arg(QLatin1String(m_flashError ? Theme::kError : Theme::kOk), m_flash.toHtmlEscaped());
     }
 
     m_actionText->setText(text);
+    m_actionExport->setVisible(exportShown);
+    m_actionExport->setEnabled(exportEnabled);
     m_actionReveal->setVisible(reveal);
     m_actionTrash->setVisible(trash);
     m_actionTrash->setEnabled(trashEnabled);
@@ -1157,6 +1194,7 @@ void CleanupWindow::refreshActionBar()
 
 void CleanupWindow::setTab(int tab)
 {
+    m_flash.clear();
     m_stack->setCurrentIndex(tab);
     if (tab == Folders) {
         refreshFolders();
@@ -1248,6 +1286,103 @@ void CleanupWindow::toggleFolder(const QString &rowId)
     refreshFolders();
 }
 
+QList<CleanupWindow::Picked> CleanupWindow::topPickedItems() const
+{
+    const QList<Picked> items = pickedItems();
+    QList<Picked> top;
+    for (const Picked &item : items) {
+        bool inside = false;
+        for (const Picked &other : items) {
+            if (other.isDir && other.path != item.path && DeleteGuard::isInside(item.path, other.path)) {
+                inside = true;
+                break;
+            }
+        }
+        if (!inside) {
+            top.append(item);
+        }
+    }
+    return top;
+}
+
+void CleanupWindow::flash(const QString &text, bool error)
+{
+    m_flashError = error;
+    m_flash = text;
+    m_flashTimer->start();
+    refreshActionBar();
+}
+
+void CleanupWindow::exportForAi()
+{
+    if (busy() || m_capture) {
+        return;
+    }
+    CleanupExport::Request request;
+    const int tab = m_tabs->current();
+    if (tab == CleanUp) {
+        if (m_scanState != ScanState::Complete) {
+            return;
+        }
+        request.entries = CleanupExport::entriesForChecked(m_categories);
+    } else if (tab == Folders || tab == Files) {
+        // Lo mismo que se borraria: una subcarpeta de otra carpeta elegida no se cuenta dos veces.
+        for (const Picked &item : topPickedItems()) {
+            request.entries.append(CleanupExport::entryForPath(item.path, item.isDir, item.bytes, item.files, item.modified));
+        }
+    }
+    if (request.entries.isEmpty()) {
+        return;
+    }
+    // Lo que tienen adentro las carpetas mas pesadas: es lo que le permite al asistente opinar.
+    CleanupExport::detail(request.entries, m_engine);
+    request.driveLabel = m_drive.label;
+    request.system = QSysInfo::prettyProductName();
+    request.freeBytes = m_drive.freeBytes;
+    request.totalBytes = m_drive.totalBytes;
+    request.when = QDateTime::currentDateTime();
+
+    const QPointer<CleanupWindow> self(this);
+    QDialog *dialog = CleanupDialogs::exportForAi(this, int(request.entries.size()), DiskSpace::formatSize(CleanupExport::totalBytes(request)));
+    const int choice = dialog->exec();
+    delete dialog;
+    if (!self || choice == CleanupDialogs::ExportCancel) {
+        return;
+    }
+    const QString text = CleanupExport::markdown(request);
+    // En una corrida automatizada no se toca el portapapeles ni se escribe un archivo del usuario.
+    if (AutomatedRun::active()) {
+        return;
+    }
+    if (choice == CleanupDialogs::ExportCopy) {
+        QGuiApplication::clipboard()->setText(text);
+        flash(I18n::tr("Copied. Paste it into your AI assistant."));
+        return;
+    }
+    // Guardar: en la ultima carpeta usada, o en Documentos.
+    const QString key = QStringLiteral("cleanup/exportDir");
+    QString dir = m_context ? m_context->value(key).toString() : QString();
+    if (dir.isEmpty() || !QFileInfo(dir).isDir()) {
+        dir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    }
+    const QString path = QFileDialog::getSaveFileName(this, I18n::tr("Save the list"), QDir(dir).filePath(CleanupExport::suggestedFileName(request)),
+                                                      QStringLiteral("Markdown (*.md)"));
+    if (!self || path.isEmpty()) {
+        return;
+    }
+    QSaveFile file(path);
+    const bool saved = file.open(QIODevice::WriteOnly) && file.write(text.toUtf8()) >= 0 && file.commit();
+    if (!saved) {
+        flash(I18n::tr("The file could not be saved."), true);
+        return;
+    }
+    if (m_context) {
+        m_context->setValue(key, QFileInfo(path).absolutePath());
+    }
+    // Solo el nombre: la ruta entera no entra en la barra, y la carpeta la acaba de elegir el usuario.
+    flash(I18n::tr("Saved: %1").arg(QFileInfo(path).fileName()));
+}
+
 void CleanupWindow::revealPicked()
 {
     const QList<Picked> items = pickedItems();
@@ -1295,21 +1430,8 @@ void CleanupWindow::deletePicked(bool toTrash)
     if (busy() || m_scanState != ScanState::Complete) {
         return;
     }
-    QList<Picked> items = pickedItems();
     // Lo que cuelga de otra carpeta elegida ya viaja con ella.
-    QList<Picked> top;
-    for (const Picked &item : items) {
-        bool inside = false;
-        for (const Picked &other : items) {
-            if (other.isDir && other.path != item.path && DeleteGuard::isInside(item.path, other.path)) {
-                inside = true;
-                break;
-            }
-        }
-        if (!inside) {
-            top.append(item);
-        }
-    }
+    const QList<Picked> top = topPickedItems();
     if (top.isEmpty()) {
         return;
     }

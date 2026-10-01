@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.05 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.06 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -94,6 +94,7 @@ set(SOURCES
     src/modules/diskspace/DiskState.cpp
     src/modules/diskspace/cleanup/CleanupJob.cpp
     src/modules/diskspace/cleanup/CleanupDialogs.cpp
+    src/modules/diskspace/cleanup/CleanupExport.cpp
     src/modules/diskspace/cleanup/CleanupFixture.cpp
     src/modules/diskspace/cleanup/CleanupPane.cpp
     src/modules/diskspace/cleanup/CleanupWindow.cpp
@@ -175,6 +176,7 @@ set(HEADERS
     src/modules/diskspace/DiskState.h
     src/modules/diskspace/cleanup/CleanupJob.h
     src/modules/diskspace/cleanup/CleanupDialogs.h
+    src/modules/diskspace/cleanup/CleanupExport.h
     src/modules/diskspace/cleanup/CleanupFixture.h
     src/modules/diskspace/cleanup/CleanupPane.h
     src/modules/diskspace/cleanup/CleanupWindow.h

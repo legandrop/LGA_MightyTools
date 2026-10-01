@@ -511,7 +511,16 @@ LinkLabel::LinkLabel(const QString &text, const QString &url, QWidget *parent)
     setObjectName(QStringLiteral("linkLabel"));
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover);
-    CustomTooltip::instance()->setToolTip(this, url.toHtmlEscaped());
+    // A donde lleva, solo si el texto no lo dice ya ("github.com/x" con "https://github.com/x").
+    QString bare = url;
+    for (const char *scheme : {"https://", "http://"}) {
+        if (bare.startsWith(QLatin1String(scheme))) {
+            bare.remove(0, int(qstrlen(scheme)));
+        }
+    }
+    if (bare != text && url != text) {
+        CustomTooltip::instance()->setToolTip(this, url.toHtmlEscaped());
+    }
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 

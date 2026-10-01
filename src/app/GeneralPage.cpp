@@ -146,6 +146,8 @@ QFrame *GeneralPage::buildAppCard()
     // El checkbox queda habilitado tambien desde una salida de desarrollo: el click EXPLICITO del
     // usuario se respeta siempre; lo prohibido es la escritura automatica (ver AutoStart.h).
     m_autoStart = new QCheckBox(AutoStart::checkboxText(), card);
+    // Del ancho de su texto: asi la flecha del tooltip le apunta a la casilla y no al medio de la tarjeta.
+    m_autoStart->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     layout->addWidget(m_autoStart);
     m_firstRunCaption = Ui::caption(I18n::tr("Turns on by itself with the first tool you turn on."), card);
     m_firstRunCaption->setContentsMargins(kCheckIndent, 3, 0, 0);
@@ -348,12 +350,14 @@ void GeneralPage::setAutoStart(bool enabled, bool installedCopy)
     m_autoStart->setChecked(enabled);
     m_autoStart->blockSignals(false);
 #ifdef Q_OS_MACOS
+    // La copia instalada no lleva tooltip: la casilla ya dice lo que hace. La de desarrollo, si.
     CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
-                                                           ? I18n::tr("Open LGA Mighty Tools when you log in")
+                                                           ? QString()
                                                            : I18n::tr("Registers THIS development copy to open when you log in"));
 #else
+    // La copia instalada no lleva tooltip: la casilla ya dice lo que hace. La de desarrollo, si.
     CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
-                                                           ? I18n::tr("Start LGA Mighty Tools when you sign in to Windows")
+                                                           ? QString()
                                                            : I18n::tr("Registers THIS development copy to start when you sign in"));
 #endif
 }

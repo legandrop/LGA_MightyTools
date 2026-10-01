@@ -1,7 +1,6 @@
 #include "modules/folderswitch/FolderSwitchPanel.h"
 #include "core/I18n.h"
 
-#include "ui/CustomTooltip.h"
 #include "ui/ShortcutRow.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
@@ -185,11 +184,9 @@ void FolderSwitchPanel::updateLastFolderCard()
         const QString nativePath = QDir::toNativeSeparators(m_state.lastSwitch.path);
         Ui::setStyleProperty(m_lastFieldValue, "empty", false);
         m_lastFieldValue->setText(nativePath);
-        CustomTooltip::instance()->setToolTip(m_lastFieldValue, nativePath.toHtmlEscaped());
     } else {
         Ui::setStyleProperty(m_lastFieldValue, "empty", true);
         m_lastFieldValue->setText(I18n::tr("No folder yet"));
-        CustomTooltip::instance()->setToolTip(m_lastFieldValue, QString());
     }
 
     QString caption;

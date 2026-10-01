@@ -33,6 +33,11 @@ enum class DeleteKind { Items, Folders, Files };
 QDialog *confirmDelete(QWidget *parent, const QList<QPair<QString, QString>> &paths, int moreCount, qint64 fileCount,
                        bool offerRecycleBin, DeleteKind kind = DeleteKind::Items);
 
+// "Ask an AI before deleting": que se exporta y a donde va. El resultado de exec() es ExportChoice.
+// `count`: cuantas cosas hay elegidas; `size`: su peso, ya formateado.
+enum ExportChoice { ExportCancel = 0, ExportCopy = 4, ExportSave = 5 };
+QDialog *exportForAi(QWidget *parent, int count, const QString &size);
+
 } // namespace CleanupDialogs
 
 // "Add a folder rule...": una carpeta, y si la regla es esa carpeta o toda carpeta con cierto nombre

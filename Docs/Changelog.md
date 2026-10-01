@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.06:
+
+Antes de borrar algo dudoso había que copiar rutas a mano para preguntarle a un asistente de IA si era
+seguro. Ahora la ventana de limpieza tiene «Export for AI...»: arma un Markdown con la pregunta ya escrita
+y solo lo elegido para borrar (lo tildado en Clean up, o lo seleccionado en Folders y Largest files), con
+ruta, peso, archivos, último cambio y cómo se borra. De las carpetas más pesadas suma lo que tienen
+adentro, y de un navegador o una app, qué carpetas de caché se vacían. Un cartel aclara que desde la app no
+se envía nada y deja copiarlo o guardarlo. Sale en el idioma de la interfaz, sin el contenido de ningún
+archivo. `--simulate-action diskSpace:cleanup-export` lo genera en modo de solo lectura.
+[ Disk Space - Exportar lo elegido para preguntarle a una IA antes de borrar ]
+
 v1.05:
 
 Los tooltips de la app eran los nativos de Qt con un color encima, cuando la regla de las apps LGA pide el
@@ -7,7 +18,7 @@ tooltip propio. Venían de Nuke Shortcuts, que nunca lo tuvo. Ahora se usa `Cust
 Base: globo con flecha, demora de 600 ms, se ubica arriba o abajo según el lugar y se oculta apenas el mouse
 sale, con un click o con una tecla. Se migraron todos; los que solo repetían lo que el ícono ya dice (cerrar,
 minimizar, ayuda, el lápiz del atajo) se quitaron, y un texto recortado muestra el suyo solo cuando no entra.
-`tools\qa\check_tooltips.ps1` frena cualquier tooltip nativo nuevo y `--ui-probe tooltip-hover` lo prueba
+`tools\qa\check_tooltips.ps1` detecta cualquier tooltip nativo nuevo y `--ui-probe tooltip-hover` lo prueba
 sin tocar el escritorio.
 [ UI - Tooltips propios en lugar de los nativos de Qt ]
 

@@ -97,6 +97,8 @@ private:
     void setHovered(int row);
     // El tooltip de una fila (su ruta completa). `x`: donde apunta la flecha, en el viewport.
     void updateRowTip(int row, int x);
+    // El nombre de esa fila no entra en el ancho que tiene (se pinta recortado).
+    bool nameIsCut(const SizeListRow &row) const;
 
     QString m_nameTitle;
     QList<SizeListColumn> m_columns;

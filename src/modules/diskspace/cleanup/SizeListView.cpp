@@ -3,6 +3,7 @@
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 
+#include <QCursor>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QScrollBar>
@@ -61,6 +62,10 @@ void SizeListView::setColumns(const QString &nameTitle, const QList<SizeListColu
 
 void SizeListView::setRows(const QList<SizeListRow> &rows)
 {
+    // Si la fila bajo el mouse sigue siendo la misma, su tooltip (visible o por aparecer) se queda:
+    // durante un escaneo la lista se rearma cinco veces por segundo.
+    const QString tipId = m_tipRow >= 0 && m_tipRow < m_rows.size() ? m_rows.at(m_tipRow).id : QString();
+    const bool keepTip = !tipId.isEmpty() && m_tipRow < rows.size() && rows.at(m_tipRow).id == tipId;
     m_rows = rows;
     // De lo elegido queda lo que sigue existiendo.
     QSet<QString> alive;
@@ -72,7 +77,9 @@ void SizeListView::setRows(const QList<SizeListRow> &rows)
     const bool changed = alive.size() != m_selected.size();
     m_selected = alive;
     m_hovered = -1;
-    updateRowTip(-1, 0);
+    if (!keepTip) {
+        updateRowTip(-1, 0);
+    }
     updateScrollRange();
     viewport()->update();
     if (changed) {
@@ -114,6 +121,7 @@ void SizeListView::setInteractive(bool interactive)
     m_interactive = interactive;
     if (!interactive) {
         setHovered(-1);
+        updateRowTip(-1, 0);
     }
 }
 
@@ -194,9 +202,10 @@ void SizeListView::updateRowTip(int row, int x)
         m_tipAnchor->setGeometry(0, 0, 0, 0);
         return;
     }
-    // Solo cuando agrega algo: la ruta entera de una fila que muestra nada mas que el nombre.
+    // Solo cuando agrega algo: la ruta entera de una fila que muestra nada mas que el nombre, o el
+    // nombre entero cuando se pinta recortado.
     const SizeListRow &entry = m_rows.at(row);
-    if (entry.tooltip.isEmpty() || entry.tooltip == entry.name) {
+    if (entry.tooltip.isEmpty() || (entry.tooltip == entry.name && !nameIsCut(entry))) {
         m_tipAnchor->setGeometry(0, 0, 0, 0);
         return;
     }
@@ -204,6 +213,31 @@ void SizeListView::updateRowTip(int row, int x)
     m_tipAnchor->setGeometry(0, top, viewport()->width(), kRowHeight);
     CustomTooltip::instance()->requestToolTip(entry.tooltip.toHtmlEscaped(), m_tipAnchor,
                                               m_tipAnchor->mapToGlobal(QPoint(x, kRowHeight)));
+}
+
+bool SizeListView::nameIsCut(const SizeListRow &row) const
+{
+    // Las mismas cuentas que el pintado del nombre (paintEvent).
+    int x = nameLeft(row);
+    if (m_tree) {
+        x += kExpander + kPartGap;
+    }
+    if (row.hasIcon) {
+        x += kIcon + kPartGap;
+    }
+    const int available = columnsLeft() - x;
+    if (available <= 8) {
+        return true;
+    }
+    QFont noteFont = Theme::uiFont(12);
+    noteFont.setItalic(true);
+    const QFont chipFont = Theme::uiFont(11.5, QFont::Medium);
+    const int extras = (row.note.isEmpty() ? 0 : QFontMetrics(noteFont).horizontalAdvance(row.note) + kPartGap)
+                       + (row.chip.isEmpty() ? 0 : QFontMetrics(chipFont).horizontalAdvance(row.chip) + 14 + kPartGap);
+    const int limit = qMax(8, row.detail.isEmpty() ? available - extras : int(available * 0.6));
+    QFont nameFont = Theme::uiFont(13);
+    nameFont.setItalic(row.muted);
+    return QFontMetrics(nameFont).horizontalAdvance(row.name) > limit;
 }
 
 void SizeListView::mouseMoveEvent(QMouseEvent *event)
@@ -215,6 +249,11 @@ void SizeListView::mouseMoveEvent(QMouseEvent *event)
 
 void SizeListView::leaveEvent(QEvent *event)
 {
+    // Un Leave con el cursor todavia adentro (otra ventana que se le puso encima un instante) no cuenta.
+    if (viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos()))) {
+        QAbstractScrollArea::leaveEvent(event);
+        return;
+    }
     setHovered(-1);
     updateRowTip(-1, 0);
     QAbstractScrollArea::leaveEvent(event);

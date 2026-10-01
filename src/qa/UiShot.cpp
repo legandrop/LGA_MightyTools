@@ -282,7 +282,7 @@ int runUiShot(const QStringList &args)
                                  : QStringLiteral("<span style='color:#E8E8E8'><b>Click:</b></span> %1<sbr/>"
                                                   "<span style='color:#E8E8E8'><b>Shift+Click:</b></span> %2"
                                                   "<div align='center'><span style='color:#E8E8E8'><b>Ctrl+Alt+O</b></span></div>")
-                                       .arg(I18n::tr("While a drive stays low. Drives are checked every %1 min.").arg(15),
+                                       .arg(I18n::tr("While a drive stays low.<br>Drives are checked every %1 min.").arg(15),
                                             I18n::tr("Remove this rule (deletes nothing)"));
         return CustomTooltip::instance()->debugGrabToFile(text, outPath) ? 0 : 1;
     }
@@ -909,18 +909,23 @@ int runTooltipProbe()
     list->setTree(false);
     list->setColumns(QStringLiteral("Name"), {{QStringLiteral("Size"), 84, SizeListColumn::Kind::Size, true}});
     QList<SizeListRow> rows;
-    for (int i = 0; i < 3; ++i) {
+    for (int i = 0; i < 4; ++i) {
         SizeListRow row;
         row.id = QStringLiteral("r%1").arg(i);
         row.name = QStringLiteral("file%1.bin").arg(i);
         row.tooltip = i == 2 ? row.name : QStringLiteral("C:\\data\\file%1.bin").arg(i);
+        if (i == 3) {
+            // Como en "What changed": el nombre ES la ruta, y no entra.
+            row.name = QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Packages\\Some.Very.Long.Package.Name_abcdefghijk\\LocalCache\\Roaming\\App");
+            row.tooltip = row.name;
+        }
         row.cells = {QStringLiteral("1.00 GB")};
         rows.append(row);
     }
     list->setRows(rows);
-    list->setMinimumHeight(140);
+    list->setMinimumHeight(170);
     layout->addWidget(list);
-    host.resize(440, 520);
+    host.resize(440, 560);
     host.show();
     wait(50);
 
@@ -957,6 +962,29 @@ int runTooltipProbe()
     moveTo(&host, QPoint(5, 5));
     wait(20);
     check(!tipVisible(), QStringLiteral("al salir del boton se oculta en el acto"));
+    // ---- Con OTRA ventana de la app activa y lejos, el tooltip se sigue acomodando a la ventana de su
+    // control (la ventana de limpieza y la principal conviven).
+    {
+        QWidget other;
+        other.resize(200, 100);
+        other.move(host.mapToGlobal(QPoint(host.width(), 0)).x() + 700, 0);
+        other.show();
+        other.activateWindow();
+        wait(60);
+        const bool otherActive = QApplication::activeWindow() == &other;
+        enter(explore);
+        wait(850);
+        const QPoint anchor = explore->mapToGlobal(QPoint(explore->width() / 2, explore->height()));
+        const QRect shown = tipVisible() ? tip()->geometry() : QRect();
+        check(tipVisible() && shown.left() <= anchor.x() && anchor.x() <= shown.right(),
+              QStringLiteral("con otra ventana activa (%1) el tooltip sigue junto a su boton (tooltip x %2..%3; boton x %4)")
+                  .arg(otherActive ? QStringLiteral("activa") : QStringLiteral("no se pudo activar"))
+                  .arg(shown.left()).arg(shown.right()).arg(anchor.x()));
+        moveTo(&host, QPoint(5, 5));
+        other.hide();
+        host.activateWindow();
+        wait(60);
+    }
     // ---- Un click lo oculta, y tambien cancela el que estaba por aparecer.
     enter(explore);
     wait(850);
@@ -1023,13 +1051,18 @@ int runTooltipProbe()
     moveTo(viewport, QPoint(40, headerHeight + 2 * rowHeight + rowHeight / 2));
     wait(850);
     check(!tipVisible(), QStringLiteral("una fila cuya ruta es lo mismo que ya dice no lleva tooltip"));
-    {
-        QEvent leave(QEvent::Leave);
-        QCoreApplication::sendEvent(viewport, &leave);
-    }
+    moveTo(viewport, QPoint(40, headerHeight + 3 * rowHeight + rowHeight / 2));
+    wait(850);
+    check(tipVisible() && tip()->text().contains(QStringLiteral("LocalCache")),
+          QStringLiteral("una fila cuyo nombre se pinta recortado muestra el nombre entero"));
+    // Salir de la lista con un tooltip a la vista.
+    const bool visibleBeforeLeaving = tipVisible();
     moveTo(&host, QPoint(5, 5));
     wait(20);
-    check(!tipVisible(), QStringLiteral("al salir de la lista no queda ninguno"));
+    check(visibleBeforeLeaving && !tipVisible(), QStringLiteral("al salir de la lista con un tooltip a la vista, se oculta"));
+    // La ventana del tooltip no toma el mouse: no le saca el hover al control de abajo.
+    check(tip() && tip()->windowFlags().testFlag(Qt::WindowTransparentForInput),
+          QStringLiteral("la ventana del tooltip es transparente al mouse"));
 
     fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "tooltip-hover ok" : "tooltip-hover FALLO", failures);
     return failures == 0 ? 0 : 1;

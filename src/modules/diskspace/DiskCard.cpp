@@ -80,7 +80,7 @@ void UsageBar::refreshInteraction()
     setMouseTracking(active);
     if (active) {
         setCursor(Qt::SizeHorCursor);
-        CustomTooltip::instance()->setToolTip(this, I18n::tr("Drag the mark to change the limit"));
+        CustomTooltip::instance()->setToolTip(this, I18n::tr("Warning limit: drag the mark to change it"));
     } else {
         unsetCursor();
         CustomTooltip::instance()->setToolTip(this, QString());
@@ -516,7 +516,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     m_remindButton = Ui::button(QString(), QString(), QString(), m_remindRow);
     m_remindButton->setObjectName(QStringLiteral("fieldButton"));
     Ui::setDropdownArrow(m_remindButton);
-    CustomTooltip::instance()->setToolTip(m_remindButton, I18n::tr("While a drive stays low. Drives are checked every %1 min.")
+    CustomTooltip::instance()->setToolTip(m_remindButton, I18n::tr("While a drive stays low.<br>Drives are checked every %1 min.")
                                                               .arg(DiskSpace::kCheckMinutes));
     remind->addWidget(m_remindButton, 0, Qt::AlignVCenter);
     remind->addStretch(1);

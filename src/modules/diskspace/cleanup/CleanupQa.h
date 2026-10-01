@@ -18,6 +18,8 @@ void selfTestSandbox(const std::function<void(bool ok, const QString &what)> &ch
 // --simulate-action diskSpace:<accion> [args]. Devuelve 2 si no conoce la accion.
 //   scan <raiz>          escanea el volumen e imprime tiempos, totales y lo mas pesado
 //   cleanup-plan <raiz>  imprime que limpiaria cada regla en ese volumen, con su peso (solo lectura)
+//   cleanup-export <raiz> <salida.md>  escribe en un archivo NUEVO lo que "Export for AI..." daria por lo
+//                        tildado en ese volumen (solo lee el disco; lo unico que escribe es esa salida)
 int simulate(const QString &action, const QStringList &args);
 
 } // namespace CleanupQa
