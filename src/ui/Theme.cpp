@@ -110,7 +110,8 @@ QString styleSheet()
     QString qss = QStringLiteral(R"QSS(
 QMainWindow, QWidget#central, QWidget#content, QWidget#helpPage { background-color: @window; }
 QLabel { background: transparent; color: @text; }
-QToolTip { background-color: @tile; color: @text; border: 1px solid #333333; padding: 4px 6px; }
+/* El tooltip es propio (ui/CustomTooltip): su fondo, borde y flecha se pintan por codigo. */
+QLabel#tooltipLabel { color: @text; background-color: transparent; font-size: @fs13; font-weight: 400; }
 
 /* Barra de titulo propia */
 QLabel#titleBarTitle { color: @textMuted; font-size: @fs13; font-weight: 500; }

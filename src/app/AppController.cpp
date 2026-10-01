@@ -310,6 +310,7 @@ void AppController::refreshTray()
         return;
     }
     m_tray->setIcon(trayIcon(m_host->allPausedOrOff()));
+    // El unico tooltip nativo de la app: el del icono de la bandeja lo dibuja el sistema.
     m_tray->setToolTip(trayTooltip(m_host));
 }
 

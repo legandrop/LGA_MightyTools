@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.05:
+
+Los tooltips de la app eran los nativos de Qt con un color encima, cuando la regla de las apps LGA pide el
+tooltip propio. Venían de Nuke Shortcuts, que nunca lo tuvo. Ahora se usa `CustomTooltip`, traído de la
+Base: globo con flecha, demora de 600 ms, se ubica arriba o abajo según el lugar y se oculta apenas el mouse
+sale, con un click o con una tecla. Se migraron todos; los que solo repetían lo que el ícono ya dice (cerrar,
+minimizar, ayuda, el lápiz del atajo) se quitaron, y un texto recortado muestra el suyo solo cuando no entra.
+`tools\qa\check_tooltips.ps1` frena cualquier tooltip nativo nuevo y `--ui-probe tooltip-hover` lo prueba
+sin tocar el escritorio.
+[ UI - Tooltips propios en lugar de los nativos de Qt ]
+
 v1.04:
 
 Disk Space avisaba que un disco estaba lleno, pero no decía qué lo ocupaba ni dejaba liberar nada. Ahora

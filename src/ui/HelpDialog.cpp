@@ -82,7 +82,7 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     titleRow->addStretch(1);
     auto *close = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     Ui::setIcon(close, Icon::X, Theme::color(Theme::kIcon));
-    close->setToolTip(I18n::tr("Close"));
+    close->setAccessibleName(I18n::tr("Close"));
     titleRow->addWidget(close, 0, Qt::AlignVCenter);
     header->addLayout(titleRow);
     // En el canvas el bloque de abajo sube 8 sobre los 14 de separacion (quedan 6) sobre una fila de

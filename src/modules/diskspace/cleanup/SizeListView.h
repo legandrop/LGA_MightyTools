@@ -87,7 +87,6 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void leaveEvent(QEvent *event) override;
-    bool viewportEvent(QEvent *event) override;
 
 private:
     int rowAt(const QPoint &pos) const;
@@ -96,6 +95,8 @@ private:
     int columnsLeft() const;
     void updateScrollRange();
     void setHovered(int row);
+    // El tooltip de una fila (su ruta completa). `x`: donde apunta la flecha, en el viewport.
+    void updateRowTip(int row, int x);
 
     QString m_nameTitle;
     QList<SizeListColumn> m_columns;
@@ -103,6 +104,10 @@ private:
     QSet<QString> m_selected;
     QString m_emptyText;
     int m_hovered = -1;
+    int m_tipRow = -1;
+    // Widget invisible que ocupa la fila con tooltip: le da al tooltip un ancla del tamano de la fila
+    // (para ubicarse arriba o abajo de ELLA y ocultarse solo cuando el mouse la deja).
+    QWidget *m_tipAnchor = nullptr;
     bool m_interactive = true;
     bool m_tree = true;
 };

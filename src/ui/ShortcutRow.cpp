@@ -83,7 +83,6 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_editButton = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_editButton->setObjectName(QStringLiteral("editShortcut"));
     Ui::setIcon(m_editButton, Icon::Pencil, Theme::color(Theme::kIcon), 14);
-    m_editButton->setToolTip(I18n::tr("Change shortcut"));
     m_editButton->setAccessibleName(I18n::tr("Change shortcut"));
     // Mismo aire que entre las teclas (`.row` con gap 5 del canvas).
     row->addWidget(m_editButton, 0, Qt::AlignVCenter);

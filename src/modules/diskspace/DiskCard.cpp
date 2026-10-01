@@ -3,6 +3,7 @@
 
 #include "modules/diskspace/DiskState.h"
 #include "platform/SystemPaths.h"
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -79,10 +80,10 @@ void UsageBar::refreshInteraction()
     setMouseTracking(active);
     if (active) {
         setCursor(Qt::SizeHorCursor);
-        setToolTip(I18n::tr("Drag the mark to change the limit"));
+        CustomTooltip::instance()->setToolTip(this, I18n::tr("Drag the mark to change the limit"));
     } else {
         unsetCursor();
-        setToolTip(QString());
+        CustomTooltip::instance()->setToolTip(this, QString());
     }
 }
 
@@ -234,7 +235,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_value->setKeyboardTracking(false);
     m_value->setFixedSize(52, 24);
-    m_value->setToolTip(I18n::tr("Warn when free space is under this"));
+    CustomTooltip::instance()->setToolTip(m_value, I18n::tr("Warn when free space is under this"));
     controls->addWidget(m_value, 0, Qt::AlignVCenter);
 
     auto *segment = new QHBoxLayout();
@@ -249,8 +250,8 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     }
     m_gb->setProperty("pos", QStringLiteral("left"));
     m_percent->setProperty("pos", QStringLiteral("right"));
-    m_gb->setToolTip(I18n::tr("Warn under an amount of free space"));
-    m_percent->setToolTip(I18n::tr("Warn under a share of the drive"));
+    CustomTooltip::instance()->setToolTip(m_gb, I18n::tr("Warn under an amount of free space"));
+    CustomTooltip::instance()->setToolTip(m_percent, I18n::tr("Warn under a share of the drive"));
     controls->addLayout(segment);
 
     // "Que ocupa este disco": abre la ventana de limpieza en la lista de carpetas. Solo donde la
@@ -258,7 +259,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_explore = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_explore->setObjectName(QStringLiteral("exploreDrive"));
     Ui::setIcon(m_explore, Icon::List, Theme::color(Theme::kIcon), 13);
-    m_explore->setToolTip(I18n::tr("See what is using this drive"));
+    CustomTooltip::instance()->setToolTip(m_explore, I18n::tr("See what is using this drive"));
     m_explore->setAccessibleName(I18n::tr("See what is using this drive"));
     m_explore->setVisible(SystemPaths::cleanupSupported());
     controls->addWidget(m_explore, 0, Qt::AlignVCenter);
@@ -266,7 +267,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_remove->setObjectName(QStringLiteral("removeDrive"));
     Ui::setIcon(m_remove, Icon::X, Theme::color(Theme::kIcon), 12);
-    m_remove->setToolTip(I18n::tr("Stop watching"));
+    CustomTooltip::instance()->setToolTip(m_remove, I18n::tr("Stop watching"));
     m_remove->setAccessibleName(I18n::tr("Stop watching"));
     controls->addWidget(m_remove, 0, Qt::AlignVCenter);
     top->addLayout(controls);
@@ -515,8 +516,8 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
     m_remindButton = Ui::button(QString(), QString(), QString(), m_remindRow);
     m_remindButton->setObjectName(QStringLiteral("fieldButton"));
     Ui::setDropdownArrow(m_remindButton);
-    m_remindButton->setToolTip(I18n::tr("While a drive stays low. Drives are checked every %1 min.")
-                                   .arg(DiskSpace::kCheckMinutes));
+    CustomTooltip::instance()->setToolTip(m_remindButton, I18n::tr("While a drive stays low. Drives are checked every %1 min.")
+                                                              .arg(DiskSpace::kCheckMinutes));
     remind->addWidget(m_remindButton, 0, Qt::AlignVCenter);
     remind->addStretch(1);
     m_lastCheck = label(QString(), "meta", m_remindRow);

@@ -3,6 +3,7 @@
 #include "core/I18n.h"
 #include "modules/diskspace/DiskSpace.h"
 #include "modules/diskspace/cleanup/CleanupRules.h"
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -446,7 +447,7 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
     if (id.startsWith(QLatin1String("rule:"))) {
         auto *remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), row);
         Ui::setIcon(remove, Icon::X, Theme::color(Theme::kIcon), 12);
-        remove->setToolTip(I18n::tr("Remove this rule (deletes nothing)"));
+        CustomTooltip::instance()->setToolTip(remove, I18n::tr("Remove this rule (deletes nothing)"));
         remove->setAccessibleName(I18n::tr("Remove this rule (deletes nothing)"));
         remove->setEnabled(m_interactive);
         connect(remove, &QPushButton::clicked, this, [this, id]() { emit removeRuleRequested(id); });
@@ -504,7 +505,7 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
                                 "meta", itemRow);
         if (item.blocked) {
             age->setProperty("tone", QStringLiteral("warn"));
-            age->setToolTip(I18n::tr("Close it to clean this."));
+            CustomTooltip::instance()->setToolTip(age, I18n::tr("Close it to clean this."));
         }
         age->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
         age->setMinimumWidth(64);

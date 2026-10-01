@@ -58,7 +58,7 @@ public:
         setFocusPolicy(Qt::NoFocus);
         setCursor(Qt::PointingHandCursor);
         setAttribute(Qt::WA_Hover);
-        setToolTip(name);
+        // Sin tooltip: minimizar, cerrar y ayuda se entienden por su icono.
         setAccessibleName(name);
     }
 
@@ -97,7 +97,6 @@ public:
         setFixedSize(20, 20);
         setFocusPolicy(Qt::NoFocus);
         setAttribute(Qt::WA_Hover);
-        setToolTip(name);
         setAccessibleName(name);
     }
 

@@ -4,6 +4,7 @@
 #include "app/WindowParts.h"
 #include "core/I18n.h"
 #include "platform/AutoStart.h"
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -347,11 +348,13 @@ void GeneralPage::setAutoStart(bool enabled, bool installedCopy)
     m_autoStart->setChecked(enabled);
     m_autoStart->blockSignals(false);
 #ifdef Q_OS_MACOS
-    m_autoStart->setToolTip(installedCopy ? I18n::tr("Open LGA Mighty Tools when you log in")
-                                          : I18n::tr("Registers THIS development copy to open when you log in"));
+    CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
+                                                           ? I18n::tr("Open LGA Mighty Tools when you log in")
+                                                           : I18n::tr("Registers THIS development copy to open when you log in"));
 #else
-    m_autoStart->setToolTip(installedCopy ? I18n::tr("Start LGA Mighty Tools when you sign in to Windows")
-                                          : I18n::tr("Registers THIS development copy to start when you sign in"));
+    CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
+                                                           ? I18n::tr("Start LGA Mighty Tools when you sign in to Windows")
+                                                           : I18n::tr("Registers THIS development copy to start when you sign in"));
 #endif
 }
 

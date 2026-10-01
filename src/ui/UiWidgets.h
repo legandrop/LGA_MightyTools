@@ -59,7 +59,10 @@ public:
     QSize minimumSizeHint() const override;
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 private:
+    // El tooltip es el texto entero, y solo cuando no entra en el ancho que tiene.
+    void updateTip();
     QString m_text;
     Qt::TextElideMode m_mode = Qt::ElideRight;
 };

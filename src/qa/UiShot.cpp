@@ -9,6 +9,8 @@
 #include "core/I18n.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskState.h"
+#include "modules/diskspace/cleanup/SizeListView.h"
+#include "ui/CustomTooltip.h"
 #include "ui/HelpDialog.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
@@ -18,7 +20,10 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QCursor>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QEnterEvent>
 #include <QFileInfo>
 #include <QFontInfo>
 #include <QGuiApplication>
@@ -39,6 +44,7 @@
 #include <QSaveFile>
 #include <QScopedPointer>
 #include <QTextEdit>
+#include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <qpa/qwindowsysteminterface.h>
@@ -59,6 +65,8 @@ namespace {
 // Estados del host. Los de cada herramienta son "<id>:<estado>" con los de su captureStates().
 const QStringList kHostStates = {
     QStringLiteral("window"),            // forma A con la primera herramienta elegida (datos del canvas)
+    QStringLiteral("tooltip"),           // el tooltip propio, de una linea
+    QStringLiteral("tooltip-long"),      // el tooltip propio, con dos acciones y un atajo
     QStringLiteral("general"),           // General con herramientas prendidas
     QStringLiteral("general-checking"),  // "Check now" en curso (D-13)
     QStringLiteral("general-latest"),    // "vX is the latest version"
@@ -265,6 +273,18 @@ int runUiShot(const QStringList &args)
         || !QFileInfo(outPath).dir().exists()) {
         fprintf(stderr, "ui-shot: output must be a new .png in an existing folder (%s)\n", qPrintable(outPath));
         return 2;
+    }
+
+    // El tooltip propio (ui/CustomTooltip), suelto: es una ventana aparte y se captura a si mismo.
+    if (state == QLatin1String("tooltip") || state == QLatin1String("tooltip-long")) {
+        const QString text = state == QLatin1String("tooltip")
+                                 ? I18n::tr("See what is using this drive")
+                                 : QStringLiteral("<span style='color:#E8E8E8'><b>Click:</b></span> %1<sbr/>"
+                                                  "<span style='color:#E8E8E8'><b>Shift+Click:</b></span> %2"
+                                                  "<div align='center'><span style='color:#E8E8E8'><b>Ctrl+Alt+O</b></span></div>")
+                                       .arg(I18n::tr("While a drive stays low. Drives are checked every %1 min.").arg(15),
+                                            I18n::tr("Remove this rule (deletes nothing)"));
+        return CustomTooltip::instance()->debugGrabToFile(text, outPath) ? 0 : 1;
     }
 
     // "<id>:<estado>" de una herramienta, u "off:<id>[:<aviso>]".
@@ -820,6 +840,201 @@ int runThresholdDragProbe()
     return failures == 0 ? 0 : 1;
 }
 
+// --ui-probe tooltip-hover: el tooltip propio (ui/CustomTooltip) sobre controles reales, en offscreen. El
+// cursor que se mueve es el de la plataforma offscreen, nunca el del escritorio. Comprueba que aparece
+// recien despues de la demora, donde corresponde, que se oculta al salir y con un click, que el control
+// sigue recibiendo sus eventos, y que no queda ningun tooltip nativo.
+int runTooltipProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const auto wait = [](int msecs) {
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < msecs) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+            QThread::msleep(5);
+        }
+    };
+    const auto tip = []() -> QLabel * {
+        for (QWidget *widget : QApplication::topLevelWidgets()) {
+            if (widget->objectName() == QLatin1String("tooltipLabel")) {
+                return qobject_cast<QLabel *>(widget);
+            }
+        }
+        return nullptr;
+    };
+    const auto tipVisible = [&tip]() { return tip() && tip()->isVisible(); };
+    const auto enter = [](QWidget *widget) {
+        const QPointF local = widget->rect().center();
+        QCursor::setPos(widget->mapToGlobal(local.toPoint()));
+        QEnterEvent event(local, local, widget->mapToGlobal(local));
+        QCoreApplication::sendEvent(widget, &event);
+    };
+    const auto moveTo = [](QWidget *widget, const QPoint &local) {
+        QCursor::setPos(widget->mapToGlobal(local));
+        QMouseEvent event(QEvent::MouseMove, QPointF(local), QPointF(widget->mapToGlobal(local)), Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(widget, &event);
+    };
+
+    // Un widget que cuenta sus Enter: el filtro del tooltip no se los puede comer.
+    struct Counter : QWidget
+    {
+        using QWidget::QWidget;
+        int enters = 0;
+        void enterEvent(QEnterEvent *) override { ++enters; }
+    };
+
+    DiskState state(nullptr);
+    state.addDiskWatch(QStringLiteral("C:/"), QStringLiteral("Windows"));
+    state.setDriveReadings({probeDrive()}, QStringList(), true, QDateTime::currentDateTime());
+
+    QWidget host;
+    auto *layout = new QVBoxLayout(&host);
+    auto *card = new DiskCard(&state, true, &host);
+    layout->addWidget(card);
+    auto *counter = new Counter(&host);
+    counter->setFixedSize(60, 20);
+    layout->addWidget(counter);
+    auto *elided = new ElidedLabel(&host);
+    elided->setText(QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Packages\\Some.Long.Package_abcdef\\LocalCache\\Roaming\\App"));
+    layout->addWidget(elided);
+    auto *list = new SizeListView(&host);
+    list->setTree(false);
+    list->setColumns(QStringLiteral("Name"), {{QStringLiteral("Size"), 84, SizeListColumn::Kind::Size, true}});
+    QList<SizeListRow> rows;
+    for (int i = 0; i < 3; ++i) {
+        SizeListRow row;
+        row.id = QStringLiteral("r%1").arg(i);
+        row.name = QStringLiteral("file%1.bin").arg(i);
+        row.tooltip = i == 2 ? row.name : QStringLiteral("C:\\data\\file%1.bin").arg(i);
+        row.cells = {QStringLiteral("1.00 GB")};
+        rows.append(row);
+    }
+    list->setRows(rows);
+    list->setMinimumHeight(140);
+    layout->addWidget(list);
+    host.resize(440, 520);
+    host.show();
+    wait(50);
+
+    // ---- Ningun tooltip nativo en lo que se ve.
+    int native = 0;
+    for (QWidget *widget : host.findChildren<QWidget *>()) {
+        native += widget->toolTip().isEmpty() ? 0 : 1;
+    }
+    check(native == 0, QStringLiteral("ningun control tiene un tooltip nativo de Qt (%1)").arg(native));
+
+    // ---- Un boton con tooltip: aparece despues de la demora, debajo del boton y centrado.
+    auto *explore = card->findChild<QPushButton *>(QStringLiteral("exploreDrive"));
+    check(explore != nullptr, QStringLiteral("la fila del disco tiene el boton de lista"));
+    if (!explore) {
+        fprintf(stdout, "tooltip-hover FALLO: %d fallas\n", failures);
+        return 1;
+    }
+    enter(explore);
+    wait(250);
+    check(!tipVisible(), QStringLiteral("a los 250 ms todavia no aparece (hay demora)"));
+    wait(600);
+    check(tipVisible() && tip()->text().contains(I18n::tr("See what is using this drive")),
+          QStringLiteral("pasada la demora aparece, con su texto"));
+    if (tipVisible()) {
+        const QRect shown = tip()->geometry();
+        const QPoint anchor = explore->mapToGlobal(QPoint(explore->width() / 2, explore->height()));
+        // (Cerca del borde de la ventana el tooltip se corre para no salirse y la flecha lo compensa:
+        // lo que tiene que cumplirse es que el boton quede dentro de su ancho.)
+        check(shown.top() >= anchor.y() - 12 && shown.top() <= anchor.y() + 4 && shown.left() <= anchor.x() && anchor.x() <= shown.right(),
+              QStringLiteral("queda debajo del boton y apuntandole (tooltip %1,%2 %3x%4; ancla %5,%6)")
+                  .arg(shown.x()).arg(shown.y()).arg(shown.width()).arg(shown.height()).arg(anchor.x()).arg(anchor.y()));
+    }
+    // ---- Salir del boton lo oculta en el acto.
+    moveTo(&host, QPoint(5, 5));
+    wait(20);
+    check(!tipVisible(), QStringLiteral("al salir del boton se oculta en el acto"));
+    // ---- Un click lo oculta, y tambien cancela el que estaba por aparecer.
+    enter(explore);
+    wait(850);
+    const bool shownAgain = tipVisible();
+    {
+        const QPointF local = explore->rect().center();
+        QMouseEvent press(QEvent::MouseButtonPress, local, explore->mapToGlobal(local), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&host, &press);
+    }
+    wait(20);
+    check(shownAgain && !tipVisible(), QStringLiteral("un click lo oculta"));
+    enter(explore);
+    wait(200);
+    {
+        QKeyEvent key(QEvent::KeyPress, Qt::Key_Shift, Qt::NoModifier);
+        QCoreApplication::sendEvent(&host, &key);
+    }
+    wait(700);
+    check(!tipVisible(), QStringLiteral("una tecla durante la demora lo cancela"));
+    moveTo(&host, QPoint(5, 5));
+
+    // ---- El control sigue recibiendo su Enter.
+    CustomTooltip::instance()->setToolTip(counter, QStringLiteral("x"));
+    enter(counter);
+    wait(20);
+    // (Mover el cursor de la plataforma tambien genera un Enter: pueden llegar dos.)
+    check(counter->enters >= 1, QStringLiteral("el tooltip no se come el Enter del control (%1)").arg(counter->enters));
+    moveTo(&host, QPoint(5, 5));
+    CustomTooltip::instance()->setToolTip(counter, QString());
+
+    // ---- Texto recortado: tooltip con el texto entero; si entra, ninguno.
+    elided->setFixedWidth(120);
+    wait(20);
+    enter(elided);
+    wait(850);
+    check(tipVisible() && tip()->text().contains(QStringLiteral("LocalCache")), QStringLiteral("un texto recortado muestra el texto entero"));
+    moveTo(&host, QPoint(5, 5));
+    wait(20);
+    elided->setText(QStringLiteral("corto"));
+    wait(20);
+    enter(elided);
+    wait(850);
+    check(!tipVisible(), QStringLiteral("un texto que entra no lleva tooltip"));
+    moveTo(&host, QPoint(5, 5));
+
+    // ---- Filas de una lista: la ruta de la fila, anclada a la fila; otra fila, otro tooltip.
+    QWidget *viewport = list->viewport();
+    const int headerHeight = SizeListView::kHeaderHeight;
+    const int rowHeight = SizeListView::kRowHeight;
+    moveTo(viewport, QPoint(40, headerHeight + rowHeight / 2));
+    wait(850);
+    check(tipVisible() && tip()->text().contains(QStringLiteral("file0.bin")) && tip()->text().contains(QStringLiteral("data")),
+          QStringLiteral("la fila 0 muestra su ruta"));
+    if (tipVisible()) {
+        const int rowBottom = viewport->mapToGlobal(QPoint(0, headerHeight + rowHeight)).y();
+        check(qAbs(tip()->geometry().top() - rowBottom) <= 12,
+              QStringLiteral("el tooltip queda pegado a SU fila (tooltip %1, base de la fila %2)").arg(tip()->geometry().top()).arg(rowBottom));
+    }
+    moveTo(viewport, QPoint(40, headerHeight + rowHeight + rowHeight / 2));
+    wait(20);
+    check(!tipVisible(), QStringLiteral("al pasar a otra fila el anterior se oculta"));
+    wait(850);
+    check(tipVisible() && tip()->text().contains(QStringLiteral("file1.bin")), QStringLiteral("la fila 1 muestra la suya"));
+    moveTo(viewport, QPoint(40, headerHeight + 2 * rowHeight + rowHeight / 2));
+    wait(850);
+    check(!tipVisible(), QStringLiteral("una fila cuya ruta es lo mismo que ya dice no lleva tooltip"));
+    {
+        QEvent leave(QEvent::Leave);
+        QCoreApplication::sendEvent(viewport, &leave);
+    }
+    moveTo(&host, QPoint(5, 5));
+    wait(20);
+    check(!tipVisible(), QStringLiteral("al salir de la lista no queda ninguno"));
+
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "tooltip-hover ok" : "tooltip-hover FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -830,6 +1045,9 @@ int runUiProbe(const QStringList &args)
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
     if (probe == QLatin1String("threshold-drag")) {
         return runThresholdDragProbe();
+    }
+    if (probe == QLatin1String("tooltip-hover")) {
+        return runTooltipProbe();
     }
     if (probe == QLatin1String("rebuild-lang")) {
         return runRebuildProbe();

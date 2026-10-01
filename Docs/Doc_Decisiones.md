@@ -67,6 +67,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   FolderSwitch y Link Redirector se reemplazan por la de LGA Mighty Tools, que reutiliza la de Nuke
   Shortcuts (la app heredó su ícono). Se publica antes del release: muestra «Pronto» hasta que exista la
   descarga.
+- **D-33 · Tooltips propios** (2026-10-01). Ningún tooltip nativo de Qt: todos pasan por `CustomTooltip`,
+  el mismo de las demás apps LGA. Siempre prendidos y con demora; no se suman opciones a General. Única
+  excepción: el ícono de la bandeja, cuyo tooltip lo dibuja el sistema.
 
 ## Abiertas
 

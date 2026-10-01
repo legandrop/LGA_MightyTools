@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.04 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.05 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -140,6 +140,7 @@ set(SOURCES
     src/ui/Theme.cpp
     src/ui/TitleBar.cpp
     src/ui/UiWidgets.cpp
+    src/ui/CustomTooltip.cpp
     src/updates/UpdateDialog.cpp
 )
 
@@ -236,6 +237,7 @@ set(HEADERS
     src/ui/Theme.h
     src/ui/TitleBar.h
     src/ui/UiWidgets.h
+    src/ui/CustomTooltip.h
     src/updates/UpdateDialog.h
 )
 

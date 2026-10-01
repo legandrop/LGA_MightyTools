@@ -1,12 +1,11 @@
 #include "modules/diskspace/cleanup/SizeListView.h"
 
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 
-#include <QHelpEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QScrollBar>
-#include <QToolTip>
 
 namespace {
 
@@ -40,6 +39,10 @@ SizeListView::SizeListView(QWidget *parent)
     viewport()->setMouseTracking(true);
     viewport()->setAutoFillBackground(false);
     verticalScrollBar()->setSingleStep(kRowHeight);
+    m_tipAnchor = new QWidget(viewport());
+    m_tipAnchor->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_tipAnchor->setAttribute(Qt::WA_NoSystemBackground);
+    m_tipAnchor->setGeometry(0, 0, 0, 0);
 }
 
 void SizeListView::setColumns(const QString &nameTitle, const QList<SizeListColumn> &columns)
@@ -69,6 +72,7 @@ void SizeListView::setRows(const QList<SizeListRow> &rows)
     const bool changed = alive.size() != m_selected.size();
     m_selected = alive;
     m_hovered = -1;
+    updateRowTip(-1, 0);
     updateScrollRange();
     viewport()->update();
     if (changed) {
@@ -179,14 +183,40 @@ void SizeListView::setHovered(int row)
     viewport()->update();
 }
 
+void SizeListView::updateRowTip(int row, int x)
+{
+    if (row == m_tipRow) {
+        return;
+    }
+    m_tipRow = row;
+    CustomTooltip::instance()->hideToolTip();
+    if (row < 0 || row >= m_rows.size()) {
+        m_tipAnchor->setGeometry(0, 0, 0, 0);
+        return;
+    }
+    // Solo cuando agrega algo: la ruta entera de una fila que muestra nada mas que el nombre.
+    const SizeListRow &entry = m_rows.at(row);
+    if (entry.tooltip.isEmpty() || entry.tooltip == entry.name) {
+        m_tipAnchor->setGeometry(0, 0, 0, 0);
+        return;
+    }
+    const int top = kHeaderHeight + row * kRowHeight - verticalScrollBar()->value();
+    m_tipAnchor->setGeometry(0, top, viewport()->width(), kRowHeight);
+    CustomTooltip::instance()->requestToolTip(entry.tooltip.toHtmlEscaped(), m_tipAnchor,
+                                              m_tipAnchor->mapToGlobal(QPoint(x, kRowHeight)));
+}
+
 void SizeListView::mouseMoveEvent(QMouseEvent *event)
 {
-    setHovered(m_interactive ? rowAt(event->pos()) : -1);
+    const int row = m_interactive ? rowAt(event->pos()) : -1;
+    setHovered(row);
+    updateRowTip(row, event->pos().x());
 }
 
 void SizeListView::leaveEvent(QEvent *event)
 {
     setHovered(-1);
+    updateRowTip(-1, 0);
     QAbstractScrollArea::leaveEvent(event);
 }
 
@@ -233,21 +263,6 @@ void SizeListView::mouseDoubleClickEvent(QMouseEvent *event)
         emit selectionChanged();
     }
     emit activated(row.id);
-}
-
-bool SizeListView::viewportEvent(QEvent *event)
-{
-    if (event->type() == QEvent::ToolTip) {
-        auto *help = static_cast<QHelpEvent *>(event);
-        const int index = rowAt(help->pos());
-        if (index >= 0 && !m_rows.at(index).tooltip.isEmpty()) {
-            QToolTip::showText(help->globalPos(), m_rows.at(index).tooltip, viewport());
-        } else {
-            QToolTip::hideText();
-        }
-        return true;
-    }
-    return QAbstractScrollArea::viewportEvent(event);
 }
 
 void SizeListView::paintEvent(QPaintEvent *)

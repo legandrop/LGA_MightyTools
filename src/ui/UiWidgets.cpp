@@ -1,4 +1,5 @@
 #include "ui/UiWidgets.h"
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 
 #include <QBoxLayout>
@@ -286,9 +287,21 @@ void ElidedLabel::setText(const QString &text)
         return;
     }
     m_text = text;
-    setToolTip(text);
+    updateTip();
     updateGeometry();
     update();
+}
+
+void ElidedLabel::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateTip();
+}
+
+void ElidedLabel::updateTip()
+{
+    const bool cut = !m_text.isEmpty() && fontMetrics().horizontalAdvance(m_text) > width();
+    CustomTooltip::instance()->setToolTip(this, cut ? m_text.toHtmlEscaped() : QString());
 }
 
 void ElidedLabel::setElideMode(Qt::TextElideMode mode)
@@ -498,7 +511,7 @@ LinkLabel::LinkLabel(const QString &text, const QString &url, QWidget *parent)
     setObjectName(QStringLiteral("linkLabel"));
     setCursor(Qt::PointingHandCursor);
     setAttribute(Qt::WA_Hover);
-    setToolTip(url);
+    CustomTooltip::instance()->setToolTip(this, url.toHtmlEscaped());
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
 }
 
