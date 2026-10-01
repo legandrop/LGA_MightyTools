@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.07:
+
+No había forma de agrandar la interfaz: textos e íconos se veían chicos en un monitor grande. Ahora la
+página General tiene «Interface size», un switch con 0 (el tamaño del diseño), 1 y 2, que agrandan todo un
+10 % y un 20 %, ventanas incluidas; de fábrica viene en 1. Usa el factor de escala global de Qt, así que el
+diseño en píxeles lógicos no cambia y nada se corre; como Qt lo lee solo al arrancar, elegir otro tamaño
+reinicia la app y vuelve a abrir la ventana donde estaba. El factor no pasa a lo que la app lanza (NukeX
+también es de Qt). El ícono de la bandeja sale siempre del tamaño nativo. Se compararon todos los estados
+en los tres tamaños y los dos idiomas.
+[ General - Tamano de la interfaz: 0, 1 y 2 ]
+
 v1.06:
 
 Antes de borrar algo dudoso había que copiar rutas a mano para preguntarle a un asistente de IA si era

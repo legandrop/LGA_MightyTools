@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.06 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.07 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -87,6 +87,7 @@ set(SOURCES
     src/core/I18nSpanish.cpp
     src/core/LgaRegistry.cpp
     src/core/Shortcut.cpp
+    src/core/UiScale.cpp
     src/modules/diskspace/DiskCard.cpp
     src/modules/diskspace/DiskMonitor.cpp
     src/modules/diskspace/DiskSpace.cpp
@@ -169,6 +170,7 @@ set(HEADERS
     src/core/DebugFlags.h
     src/core/LgaRegistry.h
     src/core/Shortcut.h
+    src/core/UiScale.h
     src/modules/diskspace/DiskCard.h
     src/modules/diskspace/DiskMonitor.h
     src/modules/diskspace/DiskSpace.h

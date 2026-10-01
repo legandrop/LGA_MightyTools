@@ -6,6 +6,7 @@
 #include <QWidget>
 
 class Chip;
+class SegmentedSwitch;
 class ModuleHeader;
 class ModuleHost;
 class QCheckBox;
@@ -36,6 +37,8 @@ public:
     GeneralPage(ModuleHost *host, QWidget *parent = nullptr);
 
     void setFirstRun(bool firstRun);
+    // El switch de tamano vuelve al de esta sesion (el cambio no se pudo aplicar).
+    void showSessionUiSize();
     bool firstRun() const { return m_firstRun; }
     // Vuelve a leer que herramientas estan prendidas (tarjeta Tools e interruptores de la bienvenida).
     void refreshTools();
@@ -55,6 +58,8 @@ signals:
     void toolToggleRequested(const QString &id, bool on);
     // El usuario eligio otro idioma ("en" / "es").
     void languageChangeRequested(const QString &code);
+    // El usuario eligio otro tamano de interfaz (0..2): se aplica reiniciando la app.
+    void uiSizeChangeRequested(int level);
 
 private:
     void buildWelcome();
@@ -77,6 +82,7 @@ private:
     QLabel *m_updateResult = nullptr;
     QPushButton *m_updateButton = nullptr;
     QPushButton *m_languageButton = nullptr;
+    SegmentedSwitch *m_uiSizeSwitch = nullptr;
     UpdateRowState m_updateState;
 
     Chip *m_toolsChip = nullptr;

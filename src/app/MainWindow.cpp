@@ -348,9 +348,15 @@ void MainWindow::restorePosition()
     const int y = m_appStore->value(QStringLiteral("window/y")).toInt(&okY);
     // Solo si la barra de titulo cae en alguna pantalla de hoy: un monitor desenchufado no deja la
     // ventana afuera.
-    if (okX && okY && QGuiApplication::screenAt(QPoint(x + 60, y + 18))) {
-        move(x, y);
-        return;
+    if (okX && okY) {
+        if (const QScreen *screen = QGuiApplication::screenAt(QPoint(x + 60, y + 18))) {
+            // Entera adentro de esa pantalla: con otro tamano de interfaz (core/UiScale.h) la misma
+            // posicion logica puede dejar la ventana, mas grande, saliendo por un borde.
+            const QRect area = screen->availableGeometry();
+            move(qBound(area.left(), x, qMax(area.left(), area.right() + 1 - kWidth)),
+                 qBound(area.top(), y, qMax(area.top(), area.bottom() + 1 - kHeight)));
+            return;
+        }
     }
     if (const QScreen *screen = QGuiApplication::primaryScreen()) {
         const QRect area = screen->availableGeometry();

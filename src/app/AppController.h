@@ -71,6 +71,7 @@ private:
     // Conecta la pagina General (la de hoy: rebuildUi() arma otra) y le carga sus valores.
     void wireGeneralPage();
     void onLanguageChangeRequested(const QString &code);
+    void onUiSizeChangeRequested(int level);
     bool firstRunView() const;
     void quit();
 

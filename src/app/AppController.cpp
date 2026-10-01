@@ -8,7 +8,9 @@
 #include "app/TrayMenu.h"
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
+#include "core/AutomatedRun.h"
 #include "core/I18n.h"
+#include "core/UiScale.h"
 #include "platform/AutoStart.h"
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
@@ -25,6 +27,8 @@
 #include <QFileOpenEvent>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
+#include <QScreen>
 #include <QSystemTrayIcon>
 #include <QTimer>
 #include <QUrl>
@@ -276,6 +280,7 @@ void AppController::wireGeneralPage()
     connect(general, &GeneralPage::checkUpdatesAtStartupToggled, this,
             [this](bool check) { m_store->setValue(kCheckUpdates, check); });
     connect(general, &GeneralPage::languageChangeRequested, this, &AppController::onLanguageChangeRequested);
+    connect(general, &GeneralPage::uiSizeChangeRequested, this, &AppController::onUiSizeChangeRequested);
 #ifdef Q_OS_WIN
     if (m_updates) {
         connect(general, &GeneralPage::checkNowRequested, m_updates, &UpdateService::checkInline);
@@ -304,12 +309,48 @@ void AppController::onLanguageChangeRequested(const QString &code)
     });
 }
 
+void AppController::onUiSizeChangeRequested(int level)
+{
+    level = UiScale::clampLevel(level);
+    if (level == UiScale::sessionLevel()) {
+        return;
+    }
+    // Una corrida automatizada nunca relanza la app (no deberia llegar aca: no hay ventana real).
+    if (m_options.measurement || AutomatedRun::active()) {
+        return;
+    }
+    qInfo().noquote() << QStringLiteral("[AppController] Tamano de interfaz: %1 -> %2").arg(UiScale::sessionLevel()).arg(level);
+    // La posicion se guarda en pixeles logicos, que cambian de tamano con el factor: se convierte para
+    // que la ventana vuelva a abrir donde estaba (MainWindow::restorePosition la mete en la pantalla
+    // si no entra entera). Qt deja el origen de cada pantalla sin escalar: se escala solo la distancia
+    // a ese origen, asi tambien vale en un segundo monitor. Primero se oculta: al ocultarse la ventana
+    // guarda su posicion tal cual, y despues ya no la vuelve a guardar.
+    const qreal ratio = UiScale::factor(UiScale::sessionLevel()) / UiScale::factor(level);
+    const QPoint position = m_window->pos();
+    const QPoint origin = m_window->screen() ? m_window->screen()->geometry().topLeft() : QPoint();
+    // Qt lee el factor solo al arrancar: se lanza una copia nueva que espera a que esta suelte la
+    // instancia unica (--relaunch) y abre la ventana. El nivel se guarda ANTES: la copia nueva lo lee
+    // apenas arranca. Si no se pudo lanzar, se vuelve al de esta sesion y la app sigue como estaba.
+    m_store->setValue(UiScale::settingsKey(), level);
+    if (!QProcess::startDetached(QCoreApplication::applicationFilePath(), {QStringLiteral("--relaunch")})) {
+        qWarning() << "[AppController] No se pudo relanzar la app; se mantiene el tamano de interfaz actual";
+        m_store->setValue(UiScale::settingsKey(), UiScale::sessionLevel());
+        m_window->generalPage()->showSessionUiSize();
+        return;
+    }
+    m_window->hide();
+    const QPoint converted = origin + QPoint(qRound((position.x() - origin.x()) * ratio), qRound((position.y() - origin.y()) * ratio));
+    m_store->setValue(QStringLiteral("window/x"), converted.x());
+    m_store->setValue(QStringLiteral("window/y"), converted.y());
+    QTimer::singleShot(0, this, &AppController::quit);
+}
+
 void AppController::refreshTray()
 {
     if (!m_tray) {
         return;
     }
-    m_tray->setIcon(trayIcon(m_host->allPausedOrOff()));
+    m_tray->setIcon(systemTrayIcon(m_host->allPausedOrOff()));
     // El unico tooltip nativo de la app: el del icono de la bandeja lo dibuja el sistema.
     m_tray->setToolTip(trayTooltip(m_host));
 }

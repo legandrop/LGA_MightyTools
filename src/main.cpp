@@ -11,6 +11,7 @@
 #include "core/I18n.h"
 #include "core/DebugFlags.h"
 #include "core/LgaRegistry.h"
+#include "core/UiScale.h"
 #ifdef Q_OS_WIN
 #include "modules/openinnukex/win/OldClientMigration.h"
 #endif
@@ -78,6 +79,9 @@ void logStartupDiagnostics()
     qInfo() << "Inicio con la sesion:" << (AutoStart::isEnabled() ? "activo" : "inactivo")
             << "| valor en Run:" << (stored.isEmpty() ? QStringLiteral("(ninguno)") : stored)
             << "| deshabilitado en Task Manager:" << AutoStart::disabledByTaskManager();
+    qInfo() << "Tamano de interfaz:" << UiScale::sessionLevel() << "| factor:" << UiScale::factor(UiScale::sessionLevel())
+            << "| DPR de la pantalla principal:" << qApp->devicePixelRatio()
+            << "| settings:" << QDir::toNativeSeparators(AppSettings::filePath());
 }
 
 bool hasArg(int argc, char *argv[], const char *name)
@@ -88,6 +92,17 @@ bool hasArg(int argc, char *argv[], const char *name)
         }
     }
     return false;
+}
+
+// El valor que sigue a un argumento ("--ui-scale 2"), o vacio.
+QByteArray argValue(int argc, char *argv[], const char *name)
+{
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (qstrcmp(argv[i], name) == 0) {
+            return QByteArray(argv[i + 1]);
+        }
+    }
+    return QByteArray();
 }
 
 // --simulate-action <accion> [args] [--settings-file <ruta>]: la secuencia real de una herramienta
@@ -223,8 +238,18 @@ int main(int argc, char *argv[])
     qDebug() << kBuildVersionMarker;
     LgaBuildTree::warnIfInvalidOverride();
 
+    // Tamano de la interfaz (core/UiScale.h): Qt lo lee al crear la QApplication. La app lo lee de su
+    // settings.ini (los nombres van antes, para la ruta; sin nada guardado, el 1). Las capturas lo
+    // eligen con --ui-scale <0..2> y sin el flag van en 0, el tamano del diseno aprobado.
+    setNames();
+    if (automated) {
+        UiScale::applyBeforeApp(argValue(argc, argv, "--ui-scale").toInt());
+    } else {
+        UiScale::applyBeforeApp(UiScale::readSavedLevel());
+    }
     QApplication app(argc, argv);
     setNames();
+    UiScale::clearEnvironmentAfterApp();
     QApplication::setQuitOnLastWindowClosed(false);
 
     // Captura y medicion: salen antes del modo corto, de la instancia unica, de la bandeja, de los
@@ -275,7 +300,10 @@ int main(int argc, char *argv[])
     // Instancia unica. La segunda copia sin argumentos le pide a la residente que muestre la ventana.
     static QLockFile singleInstanceLock(QDir(QDir::tempPath()).filePath(QStringLiteral("com.lga.mightytools.singleton.lock")));
     const bool launchedByNotice = hasArg(argc, argv, "-Embedding") || hasArg(argc, argv, "--toast-activated");
-    if (!singleInstanceLock.tryLock(100)) {
+    // --relaunch: la lanzo la copia que se reinicia (otro tamano de interfaz). Espera a que esa copia
+    // termine de cerrar y suelte la instancia unica, y despues abre la ventana.
+    const bool relaunch = hasArg(argc, argv, "--relaunch");
+    if (!singleInstanceLock.tryLock(relaunch ? 20000 : 100)) {
         if (launchedByNotice) {
             // Windows lanzo esta copia por un click en un aviso, pero ya hay otra residente (de otro
             // exe: la anotacion apunta aca). El click se pierde; no se abre la ventana de la otra.
@@ -309,7 +337,7 @@ int main(int argc, char *argv[])
     // El canal de la instancia unica escucha desde ya, aunque la bandeja no este lista: un pedido de
     // otra copia en ese rato queda anotado y la ventana se abre apenas existe.
     AppController *controller = nullptr;
-    bool showPending = false;
+    bool showPending = relaunch;
     auto *server = new SingleInstanceServer(&app);
     QObject::connect(server, &SingleInstanceServer::showRequested, &app, [&controller, &showPending]() {
         if (controller) {

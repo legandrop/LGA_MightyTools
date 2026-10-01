@@ -3,6 +3,7 @@
 #include "app/ModuleHost.h"
 #include "app/WindowParts.h"
 #include "core/I18n.h"
+#include "core/UiScale.h"
 #include "platform/AutoStart.h"
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
@@ -189,21 +190,39 @@ QFrame *GeneralPage::buildAppCard()
     version->setContentsMargins(kCheckIndent, 3, 0, 0);
     layout->addWidget(version);
 
-    // Idioma de la interfaz: el mismo desplegable que "Remind me every" de Disk Space. Cada idioma
-    // con su nombre en su idioma. Elegir no cambia nada aca: lo aplica quien arma la ventana.
+    // Idioma y tamano de la interfaz: el mismo desplegable que "Remind me every" de Disk Space, en una
+    // grilla para que los dos desplegables arranquen en la misma columna. Cada idioma con su nombre en
+    // su idioma. Elegir no cambia nada aca: lo aplica quien arma la ventana.
     Ui::addDivider(layout, card);
-    auto *languageRow = new QWidget(card);
-    languageRow->setMinimumHeight(26);
-    auto *language = new QHBoxLayout(languageRow);
-    language->setContentsMargins(0, 0, 0, 0);
-    language->setSpacing(8);
-    language->addWidget(Ui::label(I18n::tr("Language"), "optionLabel", languageRow), 0, Qt::AlignVCenter);
-    m_languageButton = Ui::button(I18n::nativeName(I18n::language()), QString(), QString(), languageRow);
+    auto *optionsBox = new QWidget(card);
+    auto *options = new QGridLayout(optionsBox);
+    options->setContentsMargins(0, 0, 0, 0);
+    options->setHorizontalSpacing(8);
+    options->setVerticalSpacing(4);
+    options->setColumnStretch(2, 1);
+    options->setRowMinimumHeight(0, 26);
+    options->setRowMinimumHeight(1, 26);
+    options->addWidget(Ui::label(I18n::tr("Language"), "optionLabel", optionsBox), 0, 0, Qt::AlignVCenter);
+    m_languageButton = Ui::button(I18n::nativeName(I18n::language()), QString(), QString(), optionsBox);
     m_languageButton->setObjectName(QStringLiteral("fieldButton"));
     Ui::setDropdownArrow(m_languageButton);
-    language->addWidget(m_languageButton, 0, Qt::AlignVCenter);
-    language->addStretch(1);
-    layout->addWidget(languageRow);
+    // AlignAbsolute: el desplegable va en RightToLeft (la flecha a la derecha) y un AlignLeft comun lo
+    // daria vuelta, pegandolo al borde derecho de la columna.
+    options->addWidget(m_languageButton, 0, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
+    // Tamano de la interfaz (core/UiScale.h): 0, 1 y 2, como los piensa Lega, en un switch segmentado.
+    // Muestra el de esta sesion.
+    options->addWidget(Ui::label(I18n::tr("Interface size"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
+    QStringList levels;
+    for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
+        levels.append(QString::number(level));
+    }
+    m_uiSizeSwitch = new SegmentedSwitch(levels, UiScale::sessionLevel(), optionsBox);
+    options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
+    layout->addWidget(optionsBox);
+    QLabel *uiSizeCaption = Ui::caption(I18n::tr("1 is the default size. Changing it restarts the app."), card);
+    uiSizeCaption->setContentsMargins(0, 3, 0, 0);
+    layout->addWidget(uiSizeCaption);
+    connect(m_uiSizeSwitch, &SegmentedSwitch::currentChanged, this, &GeneralPage::uiSizeChangeRequested);
     connect(m_languageButton, &QPushButton::clicked, this, [this]() {
         QMenu menu(this);
         for (const I18n::Language option : {I18n::Language::English, I18n::Language::Spanish}) {
@@ -280,6 +299,11 @@ QFrame *GeneralPage::buildAboutCard()
     layout->addWidget(new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), card));
     connect(help, &QPushButton::clicked, this, &GeneralPage::helpRequested);
     return card;
+}
+
+void GeneralPage::showSessionUiSize()
+{
+    m_uiSizeSwitch->setCurrent(UiScale::sessionLevel());
 }
 
 void GeneralPage::setFirstRun(bool firstRun)

@@ -5,6 +5,7 @@
 #include <QFrame>
 #include <QIcon>
 #include <QLabel>
+#include <QStringList>
 #include <QWidget>
 
 class QBoxLayout;
@@ -142,6 +143,29 @@ public:
     QSize sizeHint() const override;
 protected:
     void paintEvent(QPaintEvent *event) override;
+};
+
+// Switch segmentado: varias opciones, una sola elegida. Es un campo como el desplegable (#fieldButton):
+// mismo fondo, mismo borde de 1 px, radio 3 y 24 de alto, para que conviva con el resto de la ventana. El
+// segmento elegido usa los tokens de "Elegido" (kChosen*), no el violeta de la accion principal. La idea
+// viene del switch Studio/Client de HieroTools. QSS #segmentSwitch / #segment en Theme.cpp. No toma foco
+// de teclado.
+class SegmentedSwitch : public QWidget
+{
+    Q_OBJECT
+public:
+    SegmentedSwitch(const QStringList &labels, int current, QWidget *parent = nullptr);
+    int current() const { return m_current; }
+    void setCurrent(int index);
+    QPushButton *segment(int index) const { return m_segments.value(index); }
+
+signals:
+    // El usuario eligio otra opcion (un click en la elegida no avisa nada).
+    void currentChanged(int index);
+
+private:
+    QList<QPushButton *> m_segments;
+    int m_current = -1;
 };
 
 // Punto de estado dibujado: lleno con el tono (ok, paused, warn, err) o hueco con borde (off).

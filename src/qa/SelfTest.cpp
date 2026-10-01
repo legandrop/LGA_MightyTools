@@ -10,6 +10,7 @@
 #include "core/AppPaths.h"
 #include "core/BuildTree.h"
 #include "core/I18n.h"
+#include "core/UiScale.h"
 #include "modules/openinnukex/OpenInNukeXOperations.h"
 #include "platform/ForegroundWatcher.h"
 #include "platform/ProcessStats.h"
@@ -738,6 +739,31 @@ void testOperations(const Check &check)
 }
 #endif
 
+// Tamano de la interfaz (core/UiScale.h): niveles, factores y la variable de entorno que solo vive
+// hasta que existe la QApplication.
+void testUiScale(const Check &check)
+{
+    check(qFuzzyCompare(UiScale::factor(0), 1.0) && qFuzzyCompare(UiScale::factor(1), 1.1) && qFuzzyCompare(UiScale::factor(2), 1.2),
+          QStringLiteral("tamano de interfaz: 0, 1 y 2 valen 1.0, 1.1 y 1.2"));
+    check(UiScale::clampLevel(-1) == 1 && UiScale::clampLevel(3) == 1 && qFuzzyCompare(UiScale::factor(7), 1.1),
+          QStringLiteral("tamano de interfaz: un nivel fuera de rango vale como el de fabrica (1)"));
+    check(UiScale::readSavedLevel() == UiScale::kDefaultLevel && UiScale::kDefaultLevel == 1, QStringLiteral("tamano de interfaz: sin settings.ini (en memoria) arranca en 1"));
+    const int before = UiScale::sessionLevel();
+    const bool hadEnv = qEnvironmentVariableIsSet("QT_SCALE_FACTOR");
+    if (!hadEnv) {
+        UiScale::applyBeforeApp(2);
+        check(qgetenv("QT_SCALE_FACTOR") == "1.20" && UiScale::sessionLevel() == 2,
+              QStringLiteral("tamano de interfaz: el 2 fija QT_SCALE_FACTOR=1.20 antes de la app"));
+        UiScale::clearEnvironmentAfterApp();
+        check(!qEnvironmentVariableIsSet("QT_SCALE_FACTOR") && UiScale::sessionLevel() == 2,
+              QStringLiteral("tamano de interfaz: la variable se saca (no la heredan NukeX ni el navegador) y el nivel queda"));
+        UiScale::applyBeforeApp(0);
+        check(!qEnvironmentVariableIsSet("QT_SCALE_FACTOR"), QStringLiteral("tamano de interfaz: el 0 no toca el entorno"));
+        UiScale::applyBeforeApp(before);
+        UiScale::clearEnvironmentAfterApp();
+    }
+}
+
 void testI18n(const Check &check)
 {
     const I18n::Language before = I18n::language();
@@ -880,6 +906,7 @@ int run()
     testSharedForeground(check);
     testNotifier(check);
     testI18n(check);
+    testUiScale(check);
 #ifdef Q_OS_WIN
     testOperations(check);
 #endif

@@ -4,6 +4,7 @@
 #include "app/ModuleHost.h"
 
 #include <QAction>
+#include <QIconEngine>
 #include <QLabel>
 #include <QMenu>
 #include <QPainter>
@@ -122,4 +123,53 @@ QIcon trayIcon(bool dimmed)
         icon.addPixmap(faded);
     }
     return icon;
+}
+
+namespace {
+
+// Ver systemTrayIcon() en TrayMenu.h. QIcon::pixmap(size) con DPR > 1 llama a scaledPixmap(size * dpr,
+// ..., dpr) y antes actualSize(size * dpr): dividir por la escala recupera el tamano que pidio Windows.
+class NativeSizeIconEngine : public QIconEngine
+{
+public:
+    explicit NativeSizeIconEngine(const QIcon &source) : m_source(source) {}
+
+    QSize actualSize(const QSize &size, QIcon::Mode, QIcon::State) override { return size; }
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state) override { return pick(size, mode, state); }
+    QPixmap scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state, qreal scale) override
+    {
+        const qreal s = scale > 0 ? scale : 1.0;
+        return pick(QSize(qRound(size.width() / s), qRound(size.height() / s)), mode, state);
+    }
+    void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        painter->drawPixmap(rect, pick(rect.size(), mode, state));
+    }
+    QIconEngine *clone() const override { return new NativeSizeIconEngine(m_source); }
+
+private:
+    // El PNG de ese tamano si existe (16, 20, 24, 32, 40, 48); si no, el mas cercano achicado.
+    QPixmap pick(const QSize &size, QIcon::Mode mode, QIcon::State state) const
+    {
+        QPixmap pixmap = m_source.pixmap(size, 1.0, mode, state);
+        if (pixmap.size() != size && !pixmap.isNull()) {
+            pixmap = pixmap.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+        pixmap.setDevicePixelRatio(1.0);
+        return pixmap;
+    }
+
+    QIcon m_source;
+};
+
+} // namespace
+
+QIcon systemTrayIcon(bool dimmed)
+{
+#ifdef Q_OS_WIN
+    return QIcon(new NativeSizeIconEngine(trayIcon(dimmed)));
+#else
+    // macOS: la barra de menu pide el tamano con su escala bien; no hace falta.
+    return trayIcon(dimmed);
+#endif
 }

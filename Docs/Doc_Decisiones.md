@@ -76,6 +76,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   guarda el archivo. La interfaz dice «your AI assistant», sin nombrar marcas. El aviso de privacidad
   (lleva nombres de carpetas y de archivos, no su contenido) va en la letra chica del cartel, sin
   casilla ni opción de ocultar nombres.
+- **D-35 · Tamaño de la interfaz** (2026-10-01, pedido de Lega). Opción general «Interface size» con 0,
+  1 y 2 (factor 1,0, 1,1 y 1,2), en un switch segmentado con el mismo campo que el desplegable de Idioma (borde, radio, alto y letra; el elegido con los tokens de «Elegido»), y **1 de
+  fábrica**. Las capturas de QA siguen en 0 (el tamaño del diseño aprobado) salvo `--ui-scale`. Aplicada con el factor de escala global de Qt (`QT_SCALE_FACTOR`, fijado
+  antes de crear la app y borrado enseguida para que no lo herede NukeX). No se reescalan las medidas a
+  mano: con el factor de Qt todo crece parejo y el layout no cambia. Elegir otro tamaño reinicia la app.
 
 ## Abiertas
 

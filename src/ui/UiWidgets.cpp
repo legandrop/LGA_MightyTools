@@ -541,6 +541,57 @@ void LinkLabel::mouseReleaseEvent(QMouseEvent *event)
     QLabel::mouseReleaseEvent(event);
 }
 
+// ------------------------------------------------------------------ SegmentedSwitch
+
+SegmentedSwitch::SegmentedSwitch(const QStringList &labels, int current, QWidget *parent)
+    : QWidget(parent)
+{
+    setObjectName(QStringLiteral("segmentSwitch"));
+    // Sin esto un QWidget comun no pinta el fondo, el borde ni el radio de la hoja de estilo.
+    setAttribute(Qt::WA_StyledBackground, true);
+    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
+    // 24 de alto como el desplegable: borde de 1, aire de 1 y segmentos de 20.
+    setFixedHeight(24);
+    auto *row = new QHBoxLayout(this);
+    row->setContentsMargins(2, 2, 2, 2);
+    row->setSpacing(1);
+    for (int i = 0; i < labels.size(); ++i) {
+        auto *segment = new QPushButton(labels.at(i), this);
+        segment->setObjectName(QStringLiteral("segment"));
+        segment->setCheckable(true);
+        segment->setFocusPolicy(Qt::NoFocus);
+        segment->setCursor(Qt::PointingHandCursor);
+        row->addWidget(segment);
+        m_segments.append(segment);
+        connect(segment, &QPushButton::clicked, this, [this, i]() {
+            if (i == m_current) {
+                // Un click en la elegida la destildaria: queda como estaba.
+                m_segments.at(i)->setChecked(true);
+                return;
+            }
+            setCurrent(i);
+            emit currentChanged(i);
+        });
+    }
+    // Todos del ancho del mas ancho: con digitos ("0", "1", "2") cada uno mediria distinto.
+    int widest = 0;
+    for (QPushButton *segment : m_segments) {
+        widest = qMax(widest, segment->sizeHint().width());
+    }
+    for (QPushButton *segment : m_segments) {
+        segment->setMinimumWidth(widest);
+    }
+    setCurrent(current);
+}
+
+void SegmentedSwitch::setCurrent(int index)
+{
+    m_current = index;
+    for (int i = 0; i < m_segments.size(); ++i) {
+        m_segments.at(i)->setChecked(i == index);
+    }
+}
+
 // ------------------------------------------------------------------ ToggleSwitch
 
 ToggleSwitch::ToggleSwitch(QWidget *parent)

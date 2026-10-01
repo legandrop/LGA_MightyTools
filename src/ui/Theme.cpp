@@ -164,6 +164,15 @@ QPushButton#segButton[pos="right"] { border-top-right-radius: 4px; border-bottom
 QPushButton#segButton:hover { background-color: #333333; }
 QPushButton#segButton:checked { background-color: #393455; border: 1px solid #4c4770; color: #DDDBEE; }
 QPushButton#segButton[pos="right"]:checked { border-left: 1px solid #4c4770; }
+/* Switch segmentado (SegmentedSwitch): el mismo campo que #fieldButton (fondo, borde, radio, 24 de alto,
+   letra). Adentro, segmentos de 20 con radio 2; el elegido con los tokens de "Elegido". */
+QWidget#segmentSwitch { background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; }
+QPushButton#segment {
+    background-color: transparent; color: @textMuted; border: 1px solid transparent; border-radius: 2px;
+    padding: 0px 9px; min-height: 18px; max-height: 18px; font-size: @fs12_5; font-weight: 400;
+}
+QPushButton#segment:hover { color: @textStrong; }
+QPushButton#segment:checked { background-color: @chosenBg; border: 1px solid @chosenBorder; color: @chosenText; }
 QPushButton#fieldButton {
     background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; color: @textStrong;
     padding: 0px 8px 0px 8px; min-height: 22px; max-height: 22px; font-size: @fs12_5; font-weight: 400;

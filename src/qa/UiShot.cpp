@@ -7,6 +7,7 @@
 #include "app/SettingsStore.h"
 #include "app/TrayMenu.h"
 #include "core/I18n.h"
+#include "core/UiScale.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
@@ -255,7 +256,7 @@ int runUiShot(const QStringList &args)
         return 0;
     }
     if (index < 0 || index + 2 >= args.size()) {
-        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>]\n");
+        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>]\n");
         return 2;
     }
     const QString outPath = QFileInfo(args.at(index + 2)).absoluteFilePath();
@@ -269,6 +270,10 @@ int runUiShot(const QStringList &args)
             return 2;
         }
     }
+    // --ui-scale (lo aplica main antes de la QApplication, core/UiScale.h): la pantalla de la captura
+    // ya tiene ese factor; la imagen se dibuja con el mismo, como la ve el usuario.
+    const int uiScale = UiScale::sessionLevel();
+    dpr *= UiScale::factor(uiScale);
     if (!outPath.endsWith(QLatin1String(".png"), Qt::CaseInsensitive) || QFileInfo::exists(outPath)
         || !QFileInfo(outPath).dir().exists()) {
         fprintf(stderr, "ui-shot: output must be a new .png in an existing folder (%s)\n", qPrintable(outPath));
@@ -468,6 +473,8 @@ int runUiShot(const QStringList &args)
     QJsonObject descriptor;
     descriptor.insert(QStringLiteral("state"), state);
     descriptor.insert(QStringLiteral("dpr"), dpr);
+    descriptor.insert(QStringLiteral("uiScale"), uiScale);
+    descriptor.insert(QStringLiteral("screenDpr"), qApp->devicePixelRatio());
     descriptor.insert(QStringLiteral("logical"), QJsonArray{logical.width(), logical.height()});
     descriptor.insert(QStringLiteral("physical"), QJsonArray{check.width(), check.height()});
     descriptor.insert(QStringLiteral("pid"), qint64(QCoreApplication::applicationPid()));
@@ -515,8 +522,8 @@ int runUiShot(const QStringList &args)
         fprintf(stderr, "ui-shot: font resolved to '%s', expected Inter\n", qPrintable(windowFont.family()));
         return 1;
     }
-    fprintf(stdout, "ui-shot ok state=%s size=%dx%d dpr=%.2f font=%s\n", qPrintable(state), logical.width(),
-            logical.height(), dpr, qPrintable(windowFont.family()));
+    fprintf(stdout, "ui-shot ok state=%s size=%dx%d dpr=%.2f uiScale=%d font=%s\n", qPrintable(state),
+            logical.width(), logical.height(), dpr, uiScale, qPrintable(windowFont.family()));
     return 0;
 }
 
@@ -582,6 +589,38 @@ int runMatchWordsProbe()
     check(edit->toPlainText().contains(QStringLiteral("abc")),
           QStringLiteral("lo tipeado entra en el campo (texto: '%1')").arg(edit->toPlainText()));
     fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "ui-probe ok" : "ui-probe FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// El icono de la bandeja con otro tamano de interfaz (correr con --ui-scale 0, 1 y 2): repite lo que hace
+// el plugin de Windows de Qt 6.5 (QWindowsSystemTrayIcon::createIcon) y exige un pixmap del tamano nativo
+// exacto. trayIcon() solo, por el mismo camino, es el control que muestra que la guarda puede fallar.
+int runTrayIconProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const qreal dpr = qApp->devicePixelRatio();
+    const auto viaQt = [](const QIcon &icon, int native) {
+        const QSize size = icon.actualSize(QSize(native, native));
+        return icon.pixmap(size).size();
+    };
+    for (const int native : {16, 20, 24, 32}) {
+        for (const bool dimmed : {false, true}) {
+            const QSize got = viaQt(systemTrayIcon(dimmed), native);
+            check(got == QSize(native, native), QStringLiteral("bandeja %1 px%2 con DPR %3: pixmap de %4x%5")
+                                                    .arg(native).arg(dimmed ? QStringLiteral(" atenuado") : QString())
+                                                    .arg(dpr).arg(got.width()).arg(got.height()));
+        }
+    }
+    const QSize plain = viaQt(trayIcon(false), 16);
+    fprintf(stdout, "info trayIcon() sin el motor, 16 px con DPR %.2f: %dx%d (%s)\n", dpr, plain.width(), plain.height(),
+            plain == QSize(16, 16) ? "igual" : "distinto: el problema que corrige systemTrayIcon");
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "tray-icon ok" : "tray-icon FALLO", failures);
     return failures == 0 ? 0 : 1;
 }
 
@@ -1087,6 +1126,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("match-words-typing")) {
         return runMatchWordsProbe();
+    }
+    if (probe == QLatin1String("tray-icon")) {
+        return runTrayIconProbe();
     }
     if (probe != QLatin1String("threshold-focus")) {
         fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));

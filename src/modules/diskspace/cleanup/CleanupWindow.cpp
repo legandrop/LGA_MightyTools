@@ -1824,7 +1824,10 @@ void CleanupWindow::showEvent(QShowEvent *event)
         m_nativeFrameApplied = WindowFrame::apply(this);
         if (const QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen()) {
             const QRect area = screen->availableGeometry();
-            move(area.center() - QPoint(kWidth / 2, kHeight / 2));
+            // Centrada, pero nunca con la barra de titulo arriba del borde: con un tamano de interfaz
+            // grande (core/UiScale.h) en una pantalla chica la ventana puede no entrar entera.
+            const QPoint centered = area.center() - QPoint(kWidth / 2, kHeight / 2);
+            move(qMax(area.left(), centered.x()), qMax(area.top(), centered.y()));
         }
     }
     QWidget::showEvent(event);
