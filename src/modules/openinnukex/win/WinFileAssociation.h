@@ -81,6 +81,9 @@ bool releaseAssociation(QString *error);
 /// El valor propio de RegisteredApplications (`LGA_MightyTools_NukeScripts`).
 QString registeredApplicationValue();
 
+/// DefaultIcon de los .nk: el documento de Nuke embebido en este exe (`"<exe>",-101`).
+QString nukeScriptIcon();
+
 /// ProgID + Capabilities + RegisteredApplications + `Classes\.nk`, sin UserChoice, sin aviso al
 /// shell y sin selector. Migra el valor `LGA_MightyTools` de versiones anteriores si todavia apunta
 /// a estas Capabilities. Lo usan apply() y el self-test con hive privado. `issues`: codigos (ApplyIssue.h).

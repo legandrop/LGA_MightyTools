@@ -1,5 +1,14 @@
 # Changelog — LGA Mighty Tools
 
+v1.09:
+
+Con los .nk asociados a Mighty Tools, el Explorador los mostraba con el ícono de la app, que no se lee
+como un script de Nuke. El ProgID apuntaba al primer ícono del exe. Ahora el exe trae embebido, como segundo
+ícono (ID 101), el documento de Nuke que usaba Open in NukeX, y el `DefaultIcon` de los .nk lo nombra por
+ese ID. No hay archivo suelto que instalar ni que borrar: se va con el ProgID al soltar o desinstalar. Una
+asociación hecha con una versión anterior toma el ícono nuevo al volver a aplicarla.
+[ Open in NukeX - Icono de documento de Nuke para los .nk ]
+
 v1.08:
 
 En una pantalla chica el tamaño de interfaz 2 dejaba la ventana con el borde de abajo cortado: con

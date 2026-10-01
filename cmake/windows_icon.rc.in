@@ -2,6 +2,11 @@
 
 IDI_ICON1 ICON "@APP_ICON_RESOURCE_WINDOWS@"
 
+// Icono de los .nk (el documento de Nuke que usaba Open in NukeX). Con ID numerico: el ProgID lo nombra
+// como "<exe>",-101 (WinFileAssociation::nukeScriptIconRef), que no depende del orden de los recursos, y
+// los recursos con nombre van antes, asi IDI_ICON1 sigue siendo el icono del exe.
+101 ICON "@NK_ICON_RESOURCE_WINDOWS@"
+
 // Recurso de version: Windows toma de aca el nombre que muestra en el encabezado de las
 // notificaciones, en el Administrador de tareas y en Propiedades del exe. CMake completa la version
 // desde project(VERSION) (sin numeros a mano).

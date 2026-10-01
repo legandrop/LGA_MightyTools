@@ -90,6 +90,12 @@ bool isOurProgIdName(const QString &value)
 
 // ─── Registro de la app ──────────────────────────────────────────────────────
 
+QString nukeScriptIconRef()
+{
+    // 101: el ID del icono de los .nk en cmake/windows_icon.rc.in. Negativo = por ID de recurso.
+    return QStringLiteral("\"%1\",-101").arg(RegistryHelper::ownExePath());
+}
+
 bool registerProgId()
 {
     const QString exePath = RegistryHelper::ownExePath();
@@ -98,10 +104,11 @@ bool registerProgId()
     ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey(), QString(), QStringLiteral("Nuke Script File"));
     ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey() + QStringLiteral("\\shell\\open\\command"),
                                       QString(), QStringLiteral("\"%1\" \"%2\"").arg(exePath, QStringLiteral("%1")));
-    // El icono de los .nk: sin esto queda el DefaultIcon del cliente viejo (su app_icon.ico, que ya no
-    // existe si se desinstalo). Vive dentro del ProgID: se va con el al soltar o desinstalar.
+    // El icono de los .nk: el documento de Nuke de Open in NukeX, embebido en este exe (no el icono de la
+    // app). Sin esto queda el DefaultIcon del cliente viejo (su app_icon.ico, que ya no existe si se
+    // desinstalo). Vive dentro del ProgID: se va con el al soltar o desinstalar.
     ok &= RegistryHelper::writeString(HKEY_CURRENT_USER, progIdKey() + QStringLiteral("\\DefaultIcon"), QString(),
-                                      QStringLiteral("\"%1\",0").arg(exePath));
+                                      nukeScriptIconRef());
     return ok;
 }
 
@@ -269,6 +276,11 @@ QString progId()
 QString registeredApplicationValue()
 {
     return w(kRegisteredAppValue);
+}
+
+QString nukeScriptIcon()
+{
+    return nukeScriptIconRef();
 }
 
 QString currentNkProgId()

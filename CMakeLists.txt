@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.08 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.09 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,7 @@ set(RESOURCES
 
 if(WIN32)
     set(APP_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/LGA_MightyTools.ico")
+    set(NK_ICON_RESOURCE_WINDOWS "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/NukeScript.ico")
     # Version del recurso de Windows en numeros ("0.04" -> 0,4,0,0): sin ceros a la izquierda, que el
     # compilador de recursos leeria como octal ("08" no existe).
     string(REGEX REPLACE "^0+([0-9])" "\\1" APP_VERSION_MAJOR_NUM "${PROJECT_VERSION_MAJOR}")
@@ -58,7 +59,7 @@ if(WIN32)
     # El .rc solo NOMBRA al .ico: sin OBJECT_DEPENDS, cambiar el icono no recompila el .rc y el exe
     # se queda con el icono viejo.
     set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/windows_icon.rc"
-        PROPERTIES OBJECT_DEPENDS "${APP_ICON_RESOURCE_WINDOWS}")
+        PROPERTIES OBJECT_DEPENDS "${APP_ICON_RESOURCE_WINDOWS};${NK_ICON_RESOURCE_WINDOWS}")
     list(APPEND RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/windows_icon.rc")
 endif()
 

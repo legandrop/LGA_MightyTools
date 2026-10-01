@@ -488,8 +488,8 @@ void scenarioOwnInstall(HiveSession &session, const Check &check)
               && RegistryHelper::commandPointsTo(readSz(hive, kRun, QStringLiteral("LGA_MightyTools")), own),
           QStringLiteral("1 siembra: lo propio quedo en el hive con dos valores de RegisteredApplications (A1)"));
     check(WinFileAssociation::isNkAssociatedWithUs(), QStringLiteral("1 siembra: .nk asociado con este exe segun el hive"));
-    check(readSz(hive, kNkProgId + QStringLiteral("\\DefaultIcon")) == quoted(own) + QStringLiteral(",0"),
-          QStringLiteral("1 siembra: el ProgID trae DefaultIcon con el icono de este exe (no el .ico del cliente viejo)"));
+    check(readSz(hive, kNkProgId + QStringLiteral("\\DefaultIcon")) == WinFileAssociation::nukeScriptIcon(),
+          QStringLiteral("1 siembra: el ProgID trae DefaultIcon con el documento de Nuke embebido en este exe (-101)"));
 
     const UninstallCleanup::Report report = UninstallCleanup::run(ModuleRegistry::all());
     check(report.failures == 0,
@@ -881,7 +881,7 @@ void scenarioOldClientMigration(HiveSession &cuSession, HiveSession &lmSession, 
     check(!f.setting(QStringLiteral("app/autoStartDecided")).isValid() && readSz(f.cu(), kRun, QStringLiteral("LGA_MightyTools")).isEmpty(),
           QStringLiteral("5a sin tocar el inicio con Windows (ni Run ni app/autoStartDecided)"));
     check(RegistryHelper::commandPointsTo(readSz(f.cu(), nkCommand), own)
-              && readSz(f.cu(), kNkProgId + QStringLiteral("\\DefaultIcon")) == quoted(own) + QStringLiteral(",0")
+              && readSz(f.cu(), kNkProgId + QStringLiteral("\\DefaultIcon")) == WinFileAssociation::nukeScriptIcon()
               && readSz(f.cu(), kNkClass) == kNkProgIdName
               && readSz(f.cu(), kNkCaps, QStringLiteral("ApplicationName")) == QLatin1String("Open in NukeX")
               && readSz(f.cu(), kRegApps, WinFileAssociation::registeredApplicationValue()) == kNkCaps,
