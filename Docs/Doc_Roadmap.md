@@ -21,6 +21,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      de carpetas no abre con «no seguir enlaces», así que un programa que cambie una carpeta por un
      enlace justo durante el borrado podría desviarlo. El self-test no cubre nombres cortos, archivos de
      solo lectura, cancelar a mitad ni los flujos de la ventana.
+   - **Tooltips propios (v1.05) y «Export for AI...» (v1.06), para probar Lega:** que el tooltip aparezca
+     y se oculte bien con el mouse de verdad (también con las dos ventanas abiertas y en el borde de una
+     fila), y copiar y guardar una exportación desde las tres pestañas.
+   - **Tooltips, observaciones de la auditoría:** una ruta muy larga puede dar un tooltip más ancho que
+     la ventana (el tope de ancho es el de la Base, 1800 px); en macOS el reemplazo de atajos también toca
+     rutas y URLs; `check_tooltips.ps1` se corre a mano, nada lo llama solo.
    - **Sitio (D-32):** el día del primer release, dar de alta el repo en `LGA_Updates` y regenerar el
      sitio para que la tarjeta pase de «Pronto» a la descarga.
 2. **Observaciones abiertas, antes del release:**
