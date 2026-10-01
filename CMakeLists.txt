@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.09 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.10 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -413,6 +413,14 @@ elseif(APPLE)
         MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
         MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     )
+endif()
+
+# Icono de los .nk en macOS (Info.plist, CFBundleTypeIconFile): el documento de Nuke de Open in NukeX,
+# el mismo dibujo que resources/icons/NukeScript.ico de Windows (512 y 1024 ampliados desde el de 256).
+if(APPLE)
+    set(NK_ICON_RESOURCE_MAC "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/NukeScript.icns")
+    target_sources(${PROJECT_NAME} PRIVATE "${NK_ICON_RESOURCE_MAC}")
+    set_source_files_properties("${NK_ICON_RESOURCE_MAC}" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
 # El plugin offscreen va al lado del exe: sin el, una corrida con QT_QPA_PLATFORM=offscreen

@@ -1,5 +1,14 @@
 # Changelog — LGA Mighty Tools
 
+v1.10:
+
+En macOS la app no declaraba los .nk como documento: Finder no tenía ícono para ellos y macOS podía no
+ofrecerla para abrirlos. El `Info.plist` ahora declara el tipo (importado, porque es de Foundry) con el
+mismo ícono de documento de Nuke que en Windows, en `NukeScript.icns` dentro del bundle. Con rango
+«Alternate» aparece en «Abrir con» pero no se queda con los .nk al instalarse: el doble click lo toma
+solo con «Apply». Falta compilarlo y probarlo en una Mac.
+[ Open in NukeX - Tipo .nk con icono en macOS ]
+
 v1.09:
 
 Con los .nk asociados a Mighty Tools, el Explorador los mostraba con el ícono de la app, que no se lee

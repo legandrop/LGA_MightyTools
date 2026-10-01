@@ -39,6 +39,50 @@
     <string>public.app-category.utilities</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <!-- Los .nk (Open in NukeX). Sin esta declaracion macOS no muestra la app como una que los abre y
+         Finder no tiene icono para ellos. Rango Alternate: aparece en "Abrir con" pero no se queda con
+         los .nk por instalarse (D-06); el doble click lo toma solo con "Apply" (MacFileAssociation). El
+         icono es el documento de Nuke de Open in NukeX, el mismo de Windows (NukeScript.icns). -->
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Nuke Script</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>CFBundleTypeIconFile</key>
+            <string>NukeScript.icns</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.foundry.nuke.script</string>
+            </array>
+        </dict>
+    </array>
+    <!-- El tipo .nk es de Foundry: se IMPORTA (no se exporta). Si Nuke declara el suyo, manda el de Nuke. -->
+    <key>UTImportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.foundry.nuke.script</string>
+            <key>UTTypeDescription</key>
+            <string>Nuke Script</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.plain-text</string>
+            </array>
+            <key>UTTypeIconFile</key>
+            <string>NukeScript.icns</string>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>nk</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
     <key>NSHumanReadableCopyright</key>
     <string>Lega Pugliese</string>
 </dict>
