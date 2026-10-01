@@ -69,6 +69,10 @@ struct NoticeChoice
     QString defaultId;                      ///< el preseleccionado
     QString button;                         ///< "Remind me"
     QString action;                         ///< lo que recibe noticeAction ("snooze")
+    // Segundo boton, sin desplegable ("Free up space"). Vacio: no hay. Llega como
+    // noticeAction(extraAction, key, ...).
+    QString extraButton;
+    QString extraAction;
     bool persistent = false;                ///< queda en pantalla hasta que se elige algo
 };
 

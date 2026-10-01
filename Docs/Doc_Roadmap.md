@@ -5,6 +5,24 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 1. **Prueba de Lega de las fases 2 a 6** en su máquina (atajos, calibrador, discos, cambio de carpeta en
    diálogos reales, links, doble click en `.nk`, Apply de la asociación, instalación del Nuke Bridge),
    con las apps viejas cerradas y fuera del inicio con Windows.
+   - **Ventana de limpieza de Disk Space (v1.04):** el borrado real, la Papelera, el botón «Free up
+     space» del aviso y el escaneo de un disco externo los prueba Lega; las pruebas automatizadas solo
+     borran dentro de una carpeta propia. Empezar por una regla de carpeta chica y por «Move to Recycle
+     Bin».
+   - **Limpieza, lo que sigue:** ventana redimensionable; lo que pide administrador (restos de Windows
+     Update, volcado de memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que
+     quedaron afuera (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco
+     frío; macOS (el borrado está deshabilitado hasta probarlo en una Mac); aceptar o corregir los
+     desvíos del diseño (D-31).
+   - **Limpieza, observaciones de la auditoría (no frenan):** un programa extraído en la carpeta
+     temporal hace más de 7 días y todavía corriendo puede perder sus archivos de datos (la sonda de «en
+     uso» no ve un exe cargado): saltear todo hijo que contenga la imagen de un proceso vivo. Al terminar
+     el escaneo, el resumen y la medición corren en el hilo de la ventana (del orden de 1 s). El listado
+     de carpetas no abre con «no seguir enlaces», así que un programa que cambie una carpeta por un
+     enlace justo durante el borrado podría desviarlo. El self-test no cubre nombres cortos, archivos de
+     solo lectura, cancelar a mitad ni los flujos de la ventana.
+   - **Sitio (D-32):** el día del primer release, dar de alta el repo en `LGA_Updates` y regenerar el
+     sitio para que la tarjeta pase de «Pronto» a la descarga.
 2. **Observaciones abiertas, antes del release:**
    - Textos 4-8 % más anchos que el diseño en los tamaños fraccionarios (11,5 y 12,5 px): Qt redondea el
      tamaño de letra a píxel entero y aplica hinting. Medido con `--measure-fonts`; toca la tipografía de

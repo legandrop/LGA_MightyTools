@@ -120,6 +120,16 @@ private:
 } // namespace
 
 TitleBar::TitleBar(QWidget *parent)
+    : TitleBar(QStringLiteral("LGA Mighty Tools"), true, parent)
+{
+}
+
+void TitleBar::setTitle(const QString &title)
+{
+    m_title->setText(title);
+}
+
+TitleBar::TitleBar(const QString &titleText, bool withHelp, QWidget *parent)
     : QWidget(parent)
 {
     setObjectName(QStringLiteral("titleBar"));
@@ -137,14 +147,17 @@ TitleBar::TitleBar(QWidget *parent)
     macLayout->addWidget(closeLight, 0, Qt::AlignVCenter);
     macLayout->addWidget(minimizeLight, 0, Qt::AlignVCenter);
     macLayout->addSpacing(10);
-    auto *macTitle = new QLabel(QStringLiteral("LGA Mighty Tools"), this);
+    auto *macTitle = new QLabel(titleText, this);
     macTitle->setObjectName(QStringLiteral("titleBarTitle"));
     macTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_title = macTitle;
     macLayout->addWidget(macTitle, 0, Qt::AlignVCenter);
     macLayout->addStretch(1);
-    auto *macHelp = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
-    macLayout->addWidget(macHelp, 0, Qt::AlignVCenter);
-    connect(macHelp, &QAbstractButton::clicked, this, &TitleBar::helpClicked);
+    if (withHelp) {
+        auto *macHelp = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
+        macLayout->addWidget(macHelp, 0, Qt::AlignVCenter);
+        connect(macHelp, &QAbstractButton::clicked, this, &TitleBar::helpClicked);
+    }
     connect(minimizeLight, &QAbstractButton::clicked, this, [this]() { window()->showMinimized(); });
     connect(closeLight, &QAbstractButton::clicked, this, [this]() { window()->close(); });
     return;
@@ -155,21 +168,25 @@ TitleBar::TitleBar(QWidget *parent)
     layout->setSpacing(0);
     layout->addWidget(new AppIcon(this), 0, Qt::AlignVCenter);
     layout->addSpacing(9);
-    auto *title = new QLabel(QStringLiteral("LGA Mighty Tools"), this);
+    auto *title = new QLabel(titleText, this);
     title->setObjectName(QStringLiteral("titleBarTitle"));
     title->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_title = title;
     layout->addWidget(title, 0, Qt::AlignVCenter);
     layout->addStretch(1);
 
-    auto *help = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
-    layout->addWidget(help, 0, Qt::AlignVCenter);
+    if (withHelp) {
+        auto *help = new TitleButton(Icon::Help, QSize(34, 34), 16, Theme::kIcon, 5, I18n::tr("Help"), this);
+        layout->addWidget(help, 0, Qt::AlignVCenter);
+        connect(help, &QAbstractButton::clicked, this, &TitleBar::helpClicked);
 
-    layout->addSpacing(4);
-    auto *separator = new QFrame(this);
-    separator->setObjectName(QStringLiteral("titleBarSeparator"));
-    separator->setFixedSize(1, 16);
-    layout->addWidget(separator, 0, Qt::AlignVCenter);
-    layout->addSpacing(4);
+        layout->addSpacing(4);
+        auto *separator = new QFrame(this);
+        separator->setObjectName(QStringLiteral("titleBarSeparator"));
+        separator->setFixedSize(1, 16);
+        layout->addWidget(separator, 0, Qt::AlignVCenter);
+        layout->addSpacing(4);
+    }
 
     auto *minimize = new TitleButton(Icon::Minimize, QSize(40, kButtonHeight), 10, Theme::kTextMuted, 0,
                                      I18n::tr("Minimize"), this);
@@ -178,7 +195,6 @@ TitleBar::TitleBar(QWidget *parent)
                                   I18n::tr("Close"), this);
     layout->addWidget(close, 0, Qt::AlignTop);
 
-    connect(help, &QAbstractButton::clicked, this, &TitleBar::helpClicked);
     connect(minimize, &QAbstractButton::clicked, this, [this]() { window()->showMinimized(); });
     connect(close, &QAbstractButton::clicked, this, [this]() { window()->close(); });
 }

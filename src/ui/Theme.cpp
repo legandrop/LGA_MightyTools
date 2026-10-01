@@ -193,6 +193,7 @@ QPushButton:disabled { background-color: #232323; color: #5a5a5a; }
 QPushButton[variant="primary"] { background-color: #443a91; color: #DDDBEE; font-weight: 600; }
 QPushButton[variant="primary"]:hover { background-color: #5243a8; }
 QPushButton[variant="primary"]:pressed { background-color: #3b3280; }
+QPushButton[variant="primary"]:disabled { background-color: #262245; color: #74728a; }
 QPushButton[variant="ghost"] { background-color: transparent; color: @textMuted; padding: 0px 8px; }
 QPushButton[variant="ghost"]:hover { background-color: #2a2a2a; color: @textStrong; }
 QPushButton[btnSize="sm"] { min-height: 26px; max-height: 26px; font-size: @fs12_5; padding: 0px 10px; }
@@ -300,6 +301,52 @@ QLabel#meta[tone="warn"] { color: @warn; }
 QLabel#linkLabel { color: @link; font-size: @fs13; font-weight: 500; text-decoration: underline; }
 QLabel#linkLabel[hover="true"] { color: #C9C0F5; }
 QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 14px; min-height: 22px; max-height: 22px; background: transparent; }
+
+/* Ventana de limpieza de Disk Space (canvas "Mighty Tools Disk Cleanup"). */
+QWidget#cleanupWindow { background-color: @window; }
+QScrollArea#cleanScroll, QWidget#cleanContent { background-color: @window; border: none; }
+QLabel#meterText { color: @textFaint; font-size: @fs12_5; }
+QFrame#actionBar { background-color: @side; border: none; border-top: 1px solid @divider; }
+QLabel#actionText { color: @text; font-size: @fs13; }
+QPushButton[variant="danger"] {
+    background-color: @errBg; color: @error; border: 1px solid @errBorder;
+    min-height: 28px; max-height: 28px; padding: 0px 11px;
+}
+QPushButton[variant="danger"][btnSize="sm"] { min-height: 24px; max-height: 24px; padding: 0px 9px; }
+QPushButton[variant="danger"]:hover { background-color: #45292a; }
+QPushButton[variant="danger"]:pressed { background-color: #2e1c1b; }
+QPushButton[variant="danger"]:disabled { background-color: #232323; color: #5a5a5a; border: 1px solid #232323; }
+QPushButton#filterChip {
+    background-color: transparent; border: 1px solid #383838; border-radius: 12px; color: @textMuted;
+    padding: 0px 9px; min-height: 22px; max-height: 22px; font-size: @fs12; font-weight: 500;
+}
+QPushButton#filterChip:hover { color: @textStrong; }
+QPushButton#filterChip:checked { background-color: @chosenBg; border: 1px solid @chosenBorder; color: @chosenText; }
+QLabel#cleanName { color: @textStrong; font-size: @fs13_5; font-weight: 500; }
+QLabel#cleanCaption { color: @textFaint; font-size: @fs12; }
+QLabel#cleanGroupCaption { color: @textFaint; font-size: @fs12_5; }
+QLabel#cleanSize { color: @textStrong; font-size: @fs13; font-weight: 500; }
+QLabel#cleanSize[dim="true"] { color: @textFaint; font-weight: 400; }
+QLabel#itemSize { color: @textStrong; font-size: @fs13; }
+QLabel#itemSize[dim="true"] { color: @textFaint; }
+QLabel#itemName { color: @text; font-size: @fs13; }
+QLabel#itemName[off="true"] { color: @textFaint; }
+ElidedLabel#itemPath { color: @textFaint; font-size: @fs12; }
+QWidget#cleanItem { border-radius: 4px; background-color: transparent; }
+QWidget#cleanItem:hover { background-color: #1b1b1b; }
+QFrame#okBanner { background-color: @okBg; border: 1px solid @okBorder; border-radius: 6px; }
+QLabel#bannerText { color: @ok; font-size: @fs13; font-weight: 500; }
+QLabel#dialogLine { color: @text; font-size: @fs13; }
+QLabel#dialogValue { color: @text; font-size: @fs13; }
+ElidedLabel#dialogPath { color: @textStrong; font-family: "JetBrains Mono", Consolas, monospace; font-size: @fs12; }
+QScrollArea#dialogScroll, QScrollArea#dialogScroll > QWidget > QWidget { background: transparent; border: none; }
+QLineEdit#ruleField {
+    background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; color: @textStrong;
+    padding: 0px 8px; min-height: 26px; max-height: 26px; font-size: @fs13;
+    selection-background-color: #393455; selection-color: @textBright;
+}
+QLineEdit#ruleField:focus { border-color: @accent; }
+QLineEdit#ruleField:disabled { color: @textPlaceholder; }
 )QSS");
 
     const QList<QPair<const char *, QString>> tokens = {
@@ -307,6 +354,7 @@ QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 
         {"@modIconBg", kModIconBg}, {"@modIconBorder", kModIconBorder}, {"@platBorder", kPlatBorder},
         {"@miniCard", kMiniCard}, {"@aboutName", kAboutName}, {"@dotPaused", kDotPaused},
         {"@chosenBg", kChosenBg}, {"@chosenBorder", kChosenBorder}, {"@chosenText", kChosenText},
+        {"@okBg", kOkBg}, {"@okBorder", kOkBorder}, {"@errBg", kErrBg}, {"@errBorder", kErrBorder},
         {"@window", kWindow}, {"@card", kCard}, {"@tile", kTile}, {"@fieldBorder", kFieldBorder},
         {"@field", kField}, {"@border", kBorder}, {"@divider", kDivider}, {"@dialog", kDialog},
         {"@textStrong", kTextStrong}, {"@textBright", kTextBright}, {"@textMuted", kTextMuted},

@@ -7,6 +7,7 @@
 
 #include <QPointer>
 
+class CleanupWindow;
 class DiskCard;
 class DiskMonitor;
 class DiskState;
@@ -16,6 +17,10 @@ class DiskState;
 //
 // Todo lo que consume nace en start() y muere en stop(): el DiskMonitor (su timer y la lectura de
 // los discos). El estado (DiskState) vive con el objeto del modulo; el panel, solo mientras se ve.
+//
+// La ventana de limpieza (cleanup/CleanupWindow: que ocupa un disco y que se puede borrar) se abre
+// desde el panel o desde el aviso de disco bajo. Vive solo mientras esta abierta: con ella nacen y
+// mueren el motor de escaneo, el arbol en memoria y su timer. stop() la cierra.
 class DiskSpaceModule : public Module
 {
     Q_OBJECT
@@ -40,11 +45,14 @@ public:
 
 private:
     void notifyLowSpace(const DriveInfo &drive, const DiskWatch &watch);
+    // tab: 0 Clean up, 1 Folders (los valores de CleanupWindow::Tab).
+    void openCleanup(const QString &root, int tab);
 
     DiskState *m_state = nullptr;
     DiskMonitor *m_monitor = nullptr;
     QPointer<QWidget> m_panel;
     QPointer<DiskCard> m_card;
+    QPointer<CleanupWindow> m_cleanup;
 };
 
 ModuleDescriptor diskSpaceDescriptor();

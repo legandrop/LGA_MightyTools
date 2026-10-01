@@ -96,6 +96,45 @@ QString formatBytes(qint64 bytes)
     return QString::number(qRound(gib * 1024.0)) + QStringLiteral(" MB");
 }
 
+QString formatSize(qint64 bytes)
+{
+    const double value = double(qMax<qint64>(0, bytes));
+    const double gib = value / double(kGiB);
+    if (gib >= 1000.0) {
+        return QString::number(gib / 1024.0, 'f', 2) + QStringLiteral(" TB");
+    }
+    if (gib >= 100.0) {
+        return QString::number(qRound(gib)) + QStringLiteral(" GB");
+    }
+    if (gib >= 10.0) {
+        return QString::number(gib, 'f', 1) + QStringLiteral(" GB");
+    }
+    if (gib >= 1.0) {
+        return QString::number(gib, 'f', 2) + QStringLiteral(" GB");
+    }
+    const double mib = value / (1024.0 * 1024.0);
+    if (mib >= 1.0) {
+        return QString::number(qRound(mib)) + QStringLiteral(" MB");
+    }
+    // Un archivo de pocos bytes igual ocupa algo: nunca "0 KB" salvo que este vacio.
+    return QString::number(bytes <= 0 ? 0 : qMax(1, qRound(value / 1024.0))) + QStringLiteral(" KB");
+}
+
+QString ageText(qint64 modifiedSecs, const QDateTime &now)
+{
+    if (modifiedSecs <= 0) {
+        return QString();
+    }
+    const qint64 days = qMax<qint64>(0, (now.toSecsSinceEpoch() - modifiedSecs) / 86400);
+    if (days < 1) {
+        return I18n::trc("age", "today");
+    }
+    if (days < 365) {
+        return I18n::trc("age", "%1 d").arg(days);
+    }
+    return I18n::trc("age", "%1 y").arg(QString::number(double(days) / 365.0, 'f', 1));
+}
+
 QString thresholdText(const DiskWatch &watch)
 {
     const int value = clampValue(watch.value, watch.unit);

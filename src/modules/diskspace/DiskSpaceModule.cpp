@@ -8,7 +8,11 @@
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskMonitor.h"
 #include "modules/diskspace/DiskState.h"
+#include "modules/diskspace/cleanup/CleanupDialogs.h"
+#include "modules/diskspace/cleanup/CleanupQa.h"
+#include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "platform/LocalDrives.h"
+#include "platform/SystemPaths.h"
 #include "ui/Theme.h"
 
 #include <QAction>
@@ -17,6 +21,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 namespace {
@@ -436,6 +441,24 @@ void DiskSpaceModule::stop()
     // El timer y la lectura de discos mueren con el monitor.
     delete m_monitor;
     m_monitor = nullptr;
+    // La ventana de limpieza se va con la herramienta. Sus hilos no se esperan (terminan solos apenas
+    // vuelve la llamada del sistema en curso); se les da un momento para que lo normal sea salir en cero.
+    if (m_cleanup) {
+        delete m_cleanup.data();
+        CleanupThreads::waitForNone(400);
+    }
+}
+
+void DiskSpaceModule::openCleanup(const QString &root, int tab)
+{
+    if (!SystemPaths::cleanupSupported() || context().captureMode()) {
+        return;
+    }
+    if (!m_cleanup) {
+        // Sin padre: es una ventana propia, con su lugar en la barra de tareas.
+        m_cleanup = new CleanupWindow(m_state, &context(), false);
+    }
+    m_cleanup->openOn(root, static_cast<CleanupWindow::Tab>(tab));
 }
 
 ModuleStatus DiskSpaceModule::status() const
@@ -474,6 +497,8 @@ QWidget *DiskSpaceModule::createPanel(QWidget *parent)
                 m_monitor->refreshAll();
             }
         });
+        connect(m_card, &DiskCard::exploreRequested, this, [this](const QString &root) { openCleanup(root, CleanupWindow::Folders); });
+        connect(m_card, &DiskCard::cleanupRequested, this, [this](const QString &root) { openCleanup(root, CleanupWindow::CleanUp); });
     }
     m_panel = panel;
     return panel;
@@ -514,6 +539,11 @@ void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &wa
     choice.defaultId = QString::number(m_state->remindMinutes());
     choice.button = I18n::tr("Remind me");
     choice.action = QStringLiteral("snooze");
+    // Segundo boton: abre la ventana de limpieza de ese disco, en Clean up.
+    if (SystemPaths::cleanupSupported()) {
+        choice.extraButton = I18n::tr("Free up space");
+        choice.extraAction = QStringLiteral("cleanup");
+    }
     choice.persistent = true;
     // Lo libre va en el titulo: el texto de un aviso de Windows no admite negrita, pero el titulo sale
     // en negrita (pedido de Lega: resaltar cuanto queda).
@@ -526,6 +556,13 @@ void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &wa
 
 void DiskSpaceModule::noticeAction(const QString &action, const QString &key, const QString &choice)
 {
+    if (action == QLatin1String("cleanup")) {
+        // "Free up space" del aviso. Solo un disco que se vigila: la key viaja por Windows y vuelve.
+        if (m_state->isWatched(key)) {
+            openCleanup(key, CleanupWindow::CleanUp);
+        }
+        return;
+    }
     if (action != QLatin1String("snooze")) {
         return;
     }
@@ -539,8 +576,15 @@ QStringList DiskSpaceModule::captureStates() const
 {
     // Canvas, secciones 2, 3 y 5: estado normal, uno y dos discos bajos, uno desenchufado, sin
     // discos, y los dos menus de la tarjeta.
-    return {QStringLiteral("good"),  QStringLiteral("low"),      QStringLiteral("low2"),         QStringLiteral("missing"),
-            QStringLiteral("empty"), QStringLiteral("add-menu"), QStringLiteral("remind-menu")};
+    QStringList states = {QStringLiteral("good"),  QStringLiteral("low"),      QStringLiteral("low2"),         QStringLiteral("missing"),
+                          QStringLiteral("empty"), QStringLiteral("add-menu"), QStringLiteral("remind-menu")};
+    // La ventana de limpieza y sus carteles (canvas "Mighty Tools Disk Cleanup").
+    for (const QString &state : CleanupWindow::fixtureStates()) {
+        states << state;
+    }
+    states << QStringLiteral("cleanup-confirm") << QStringLiteral("cleanup-confirm-all") << QStringLiteral("cleanup-delete")
+           << QStringLiteral("cleanup-rule");
+    return states;
 }
 
 bool DiskSpaceModule::applyCaptureState(const QString &state)
@@ -552,12 +596,55 @@ bool DiskSpaceModule::applyCaptureState(const QString &state)
     for (const DiskWatch &watch : m_state->diskWatches()) {
         m_state->removeDiskWatch(watch.root);
     }
-    applyFixture(*m_state, state);
+    // Los estados de la ventana de limpieza llevan el panel con C: bajo, como cuando se la abre.
+    const bool cleanup = state.startsWith(QLatin1String("cleanup")) || CleanupWindow::fixtureStates().contains(state);
+    applyFixture(*m_state, cleanup ? QStringLiteral("good") : state);
     return true;
 }
 
 QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *parent)
 {
+    // La ventana de limpieza con datos fijos: sin motor, sin disco y sin nada conectado.
+    if (CleanupWindow::fixtureStates().contains(state)) {
+        auto *window = new CleanupWindow(m_state, nullptr, true, parent);
+        window->applyFixture(state);
+        return window;
+    }
+    if (state == QLatin1String("cleanup-confirm") || state == QLatin1String("cleanup-confirm-all")) {
+        // "-all": con el link "N more" ya desplegado.
+        QList<QPair<QString, QString>> rest;
+        if (state == QLatin1String("cleanup-confirm-all")) {
+            const char *names[] = {"Brave", "Cargo registry", "Chrome", "Adobe Media Cache", "npm cache", "ClickUp", "Acrobat", "Todoist",
+                                   "Spark Desktop", "Edge", "discord"};
+            const char *sizes[] = {"2.24 GB", "2.18 GB", "1.48 GB", "1.33 GB", "604 MB", "553 MB", "358 MB", "307 MB", "215 MB", "184 MB", "184 MB"};
+            for (int i = 0; i < 11; ++i) {
+                rest.append({QString::fromLatin1(names[i]), QString::fromLatin1(sizes[i])});
+            }
+        }
+        QDialog *dialog = CleanupDialogs::confirmCleanup(parent, QStringLiteral("C:"), QStringLiteral("60.2 GB"),
+                                                         {{QStringLiteral("uv cache"), QStringLiteral("21.6 GB")},
+                                                          {QStringLiteral("pip cache"), QStringLiteral("10.3 GB")},
+                                                          {I18n::tr("Recycle Bin"), QStringLiteral("9.06 GB")}},
+                                                         rest, rest.isEmpty() ? 27 : int(rest.size()), QStringLiteral("19.3 GB"),
+                                                         QStringLiteral("32.3 GB"), QStringLiteral("92.5 GB"));
+        if (!rest.isEmpty()) {
+            if (auto *link = dialog->findChild<QPushButton *>(QStringLiteral("linkButton"))) {
+                link->click();
+            }
+        }
+        return dialog;
+    }
+    if (state == QLatin1String("cleanup-delete")) {
+        return CleanupDialogs::confirmDelete(parent,
+                                             {{QStringLiteral("C:\\temp"), QStringLiteral("7.30 GB")},
+                                              {QStringLiteral("C:\\Portable\\LGA_SceneBuilder\\tmp"), QStringLiteral("14.1 GB")}},
+                                             0, 12817, true, CleanupDialogs::DeleteKind::Folders);
+    }
+    if (state == QLatin1String("cleanup-rule")) {
+        auto *dialog = new FolderRuleDialog(QStringLiteral("C:\\"), parent);
+        dialog->setExample(QStringLiteral("C:\\Portable"), QStringLiteral("build"));
+        return dialog;
+    }
     if (state != QLatin1String("add-menu") && state != QLatin1String("remind-menu")) {
         return nullptr;
     }
@@ -581,14 +668,25 @@ ModuleDescriptor diskSpaceDescriptor()
     ModuleDescriptor d;
     d.id = kId;
     d.title = QStringLiteral("Disk Space");
-    d.description = I18n::tr("Watches your local drives and warns you when one runs low.");
+    // Donde la limpieza esta habilitada (hoy, Windows) la herramienta hace dos cosas: vigilar y liberar.
+    const bool cleanup = SystemPaths::cleanupSupported();
+    d.description = cleanup ? I18n::tr("Watches your local drives, warns you when one runs low and shows what is filling it, "
+                                       "so you can free up space.")
+                            : I18n::tr("Watches your local drives and warns you when one runs low.");
     d.offBullets = {I18n::tr("Checks only the drives you pick, every 15 min"),
                     I18n::tr("Warns with a notification and a line in the tray menu"),
                     I18n::tr("Each drive has its own limit, in GB or %")};
+    if (cleanup) {
+        d.offBullets.append(I18n::tr("Scans a drive only when you ask, to list what fills it and clean it up"));
+    }
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintDiskIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> { return std::make_unique<DiskSpaceModule>(context); };
-    d.selfTest = &selfTest;
+    d.selfTest = [](const std::function<void(bool, const QString &)> &check) {
+        selfTest(check);
+        CleanupQa::selfTest(check);
+    };
+    d.simulateAction = &CleanupQa::simulate;
     return d;
 }
 
@@ -598,6 +696,11 @@ HelpSection diskSpaceHelp(const SettingsReader &)
     section.title = QStringLiteral("Disk Space");
     section.steps = {I18n::tr("Add the drives to watch and set when each one should warn you, in %1 or %2.")
                          .arg(HelpSection::strong(QStringLiteral("GB")), HelpSection::strong(QStringLiteral("%")))};
+    if (SystemPaths::cleanupSupported()) {
+        section.steps.append(I18n::tr("To see what fills a drive and delete caches, folders or files, use the list button "
+                                      "of that drive, or %1 when it is low.")
+                                 .arg(HelpSection::strong(I18n::tr("Free up space"))));
+    }
     section.note = I18n::tr("You get a notification when a drive goes under its limit, and a reminder while it stays "
                                   "low (every 15 min by default). The notification lets you postpone the next one.");
     return section;

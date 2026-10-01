@@ -362,6 +362,10 @@ void AppController::notifyWithChoice(const QString &moduleId, const QString &tit
     notice.choiceDefault = choice.defaultId;
     notice.button = choice.button;
     notice.buttonArguments = noticeArguments(moduleId, choice.action, choice.key);
+    if (!choice.extraButton.isEmpty()) {
+        notice.extraButton = choice.extraButton;
+        notice.extraButtonArguments = noticeArguments(moduleId, choice.extraAction, choice.key);
+    }
     m_notifier->show(notice);
 }
 

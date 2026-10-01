@@ -123,6 +123,70 @@ IconSpec buildIcon(Icon icon)
         p.moveTo(3.4, 12.6); p.lineTo(4.8, 11.2);
         p.moveTo(11.2, 4.8); p.lineTo(12.6, 3.4);
         break;
+    case Icon::TreeClosed:
+        // Flecha de una fila que se puede desplegar.
+        s.viewBox = 16; s.stroke = 1.8;
+        p.moveTo(6, 3.5); p.lineTo(10.5, 8); p.lineTo(6, 12.5);
+        break;
+    case Icon::TreeOpen:
+        s.viewBox = 16; s.stroke = 1.8;
+        p.moveTo(3.5, 6); p.lineTo(8, 10.5); p.lineTo(12.5, 6);
+        break;
+    case Icon::File:
+        s.viewBox = 16; s.stroke = 1.3;
+        p.moveTo(4, 1.8); p.lineTo(9.2, 1.8); p.lineTo(12.2, 4.8); p.lineTo(12.2, 14.2); p.lineTo(4, 14.2);
+        p.closeSubpath();
+        p.moveTo(9, 1.8); p.lineTo(9, 5.1); p.lineTo(12.2, 5.1);
+        break;
+    case Icon::Trash:
+        s.viewBox = 16; s.stroke = 1.4;
+        p.moveTo(2.8, 4.3); p.lineTo(13.2, 4.3);
+        p.moveTo(6.3, 4.3); p.lineTo(6.3, 2.8); p.lineTo(9.7, 2.8); p.lineTo(9.7, 4.3);
+        p.moveTo(4.2, 4.3); p.lineTo(4.8, 13.2); p.lineTo(11.2, 13.2); p.lineTo(11.8, 4.3);
+        break;
+    case Icon::Reveal:
+        // "Show in Explorer": un cuadro con una flecha que sale.
+        s.viewBox = 16; s.stroke = 1.4;
+        p.moveTo(9, 2.5); p.lineTo(13.5, 2.5); p.lineTo(13.5, 7);
+        p.moveTo(13.5, 2.5); p.lineTo(7.5, 8.5);
+        p.moveTo(11.5, 9.5); p.lineTo(11.5, 12.7);
+        p.cubicTo(11.5, 13.1, 11.1, 13.5, 10.7, 13.5);
+        p.lineTo(3.3, 13.5);
+        p.cubicTo(2.9, 13.5, 2.5, 13.1, 2.5, 12.7);
+        p.lineTo(2.5, 5.3);
+        p.cubicTo(2.5, 4.9, 2.9, 4.5, 3.3, 4.5);
+        p.lineTo(6.5, 4.5);
+        break;
+    case Icon::Refresh:
+        // "Rescan": un arco casi cerrado con su punta.
+        s.viewBox = 16; s.stroke = 1.4;
+        p.moveTo(13, 8);
+        p.arcTo(QRectF(3, 3, 10, 10), 0, -314);
+        p.moveTo(13, 2.3); p.lineTo(13, 5.5); p.lineTo(9.8, 5.5);
+        break;
+    case Icon::Shield:
+        s.viewBox = 16; s.stroke = 1.4;
+        p.moveTo(8, 1.8); p.lineTo(13, 3.6); p.lineTo(13, 7.8);
+        p.cubicTo(13, 10.8, 10.9, 13, 8, 14.2);
+        p.cubicTo(5.1, 13, 3, 10.8, 3, 7.8);
+        p.lineTo(3, 3.6);
+        p.closeSubpath();
+        break;
+    case Icon::List:
+        // Tres rayas de mayor a menor: una lista ordenada por peso.
+        s.viewBox = 16; s.stroke = 1.4;
+        p.moveTo(2.5, 4); p.lineTo(13.5, 4);
+        p.moveTo(2.5, 8); p.lineTo(10, 8);
+        p.moveTo(2.5, 12); p.lineTo(7, 12);
+        break;
+    case Icon::Check:
+        s.viewBox = 16; s.stroke = 2.0;
+        p.moveTo(3.5, 8.3); p.lineTo(6.6, 11.3); p.lineTo(12.5, 4.8);
+        break;
+    case Icon::Dash:
+        s.viewBox = 16; s.stroke = 2.0;
+        p.moveTo(4, 8); p.lineTo(12, 8);
+        break;
     }
     return s;
 }

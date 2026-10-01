@@ -43,8 +43,54 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   Dope Sheet y Explorer; las pantallas de Windows y macOS se citan con su nombre real en español. Los
   tamaños siguen con punto decimal. El título de la bienvenida es «LGA Mighty Tools» en los dos idiomas.
   El instalador, lo que se escribe en el registro y el plugin de Nuke quedan en inglés.
+- **D-24 · Limpieza de discos: motor propio, sin administrador, sin gráficos** (2026-09-30). Disk Space
+  abre una ventana aparte por disco, desde el aviso de disco bajo y desde su panel. El escaneo es propio
+  (lista carpeta por carpeta en paralelo, sin leer la MFT), así no pide administrador. Nada de mapas de
+  bloques: listas ordenadas por peso, en pestañas (Clean up, Folders, Largest files, What changed). La
+  variante de dos columnas quedó descartada.
+- **D-25 · Qué borra «Clean up»** (2026-09-30). Exactamente lo tildado, de forma definitiva, con una
+  confirmación que lo lista. «Safe to delete» (cachés que se regeneran, Papelera incluida) arranca
+  tildado; «Yours to decide» (cosas del usuario) arranca destildado. Cada categoría se abre y se elige
+  renglón por renglón; la casilla de la categoría tiene tres estados.
+- **D-26 · Borrado a mano** (2026-09-30). En Folders y Largest files, lo elegido va a la Papelera por
+  defecto; «Delete permanently» es un botón aparte. Si la Papelera no lo acepta, no se borra.
+- **D-27 · Lo que pide administrador, en una segunda etapa** (2026-09-30). Por ahora la ventana informa
+  cuánto pesa y ofrece abrir la limpieza de Windows; no eleva permisos.
+- **D-28 · Reglas de carpetas del usuario** (2026-09-30). «Add a folder rule» declara descartable una
+  carpeta, o toda carpeta con cierto nombre dentro de otra (los `build` de `C:\Portable`). Aparecen en
+  «Yours to decide», sin tildar.
+- **D-29 · «What changed»** (2026-09-30). Cada escaneo completo guarda un resumen (carpetas de 100 MB o
+  más) y la pestaña muestra qué creció o se achicó desde el anterior.
+- **D-30 · Las reglas de limpieza nombran la app que limpian** (2026-09-30). Decir de qué programa es una
+  caché es parte del producto; no tiene que ver con la regla de no mencionar herramientas de desarrollo.
+- **D-32 · En el sitio, una sola tarjeta** (2026-09-30). Las tarjetas de Nuke Shortcuts, OpenInNukeX,
+  FolderSwitch y Link Redirector se reemplazan por la de LGA Mighty Tools, que reutiliza la de Nuke
+  Shortcuts (la app heredó su ícono). Se publica antes del release: muestra «Pronto» hasta que exista la
+  descarga.
 
 ## Abiertas
+
+- **D-31 · Desvíos de la ventana de limpieza respecto del diseño aprobado.** Mientras tanto, lo
+  implementado:
+  - El grupo de administrador solo informa (D-27).
+  - Ventana de tamaño fijo, 960×620 (el diseño la dibuja de 577 de alto).
+  - Una categoría de más de 12 renglones muestra «Show N more»; en Folders se listan todas las
+    subcarpetas, sin el renglón «smaller items».
+  - Después de limpiar, lo limpiado desaparece y queda el cartel verde, sin etiquetas «Cleaned».
+  - Las reglas de carpetas se titulan «Folders named build» (no «Build folders»), y cada una tiene una
+    «×» para quitarla, que el diseño no dibuja. `C:\temp` no viene de fábrica: se agrega como regla.
+  - Las previews de Adobe Bridge están en «Yours to decide» porque purgarlas puede perder etiquetas.
+  - No hay reglas para DaVinci Resolve, NuGet, conda, las miniaturas ni los logs de Windows. La
+    categoría es «Shader caches and crash dumps».
+  - Categoría nueva «Folders marked as cache» (carpetas que su programa marca con `CACHEDIR.TAG`).
+  - Una caché de uv que no está en su lugar de fábrica ni en `UV_CACHE_DIR` se muestra con las de
+    Python pero arranca destildada (el diseño la trae tildada): puede ser la caché privada del runtime
+    de otra herramienta.
+  - Las imágenes de máquina virtual avisan que se pierde lo que las sesiones guardaron adentro.
+  - Los temporales se limpian a los 7 días sin cambios y los volcados a los 30; un renglón cuyo
+    programa está abierto queda bloqueado.
+  - Las leyendas de Codex, de los parches de Windows Installer y del volcado de memoria dicen lo que la
+    app hace hoy, no lo del diseño.
 
 - **D-02 · Numeración.** Versión continua de a centésimos desde 0.01, con 1.00 como primer release
   público. Mientras tanto: esa.

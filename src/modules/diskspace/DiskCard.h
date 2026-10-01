@@ -80,6 +80,9 @@ public:
 signals:
     void thresholdChanged(const QString &root, int value, DiskWatch::Unit unit);
     void removeRequested(const QString &root);
+    // Abrir la ventana "que ocupa este disco": en Folders (el boton) o en Clean up (el link del disco bajo).
+    void exploreRequested(const QString &root);
+    void cleanupRequested(const QString &root);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -107,6 +110,8 @@ private:
     QPushButton *m_gb = nullptr;
     QPushButton *m_percent = nullptr;
     QPushButton *m_remove = nullptr;
+    QPushButton *m_explore = nullptr;
+    QPushButton *m_cleanup = nullptr;
     UsageBar *m_bar = nullptr;
     QLabel *m_free = nullptr;
     QLabel *m_threshold = nullptr;
@@ -134,6 +139,9 @@ public:
 signals:
     // Antes de abrir el menu de discos: el modulo (que tiene el sistema) lista los discos.
     void drivesRefreshRequested();
+    // Los pedidos de una fila, que el modulo atiende abriendo la ventana de limpieza.
+    void exploreRequested(const QString &root);
+    void cleanupRequested(const QString &root);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

@@ -49,6 +49,15 @@ inline constexpr const char *kError = "#e8836f";
 // Barra de uso de un disco: lo ocupado, y la marca del umbral cuando el disco esta bajo.
 inline constexpr const char *kBarFill = "#4e4e4e";
 inline constexpr const char *kWarnMark = "#e6c56b";
+// Fondos y bordes de los estados (canvas: --ok-bg, --ok-border, --err-bg, --err-border): el cartel de
+// "Freed..." y el boton de borrar definitivo de la ventana de limpieza.
+inline constexpr const char *kOkBg = "#1f2a17";
+inline constexpr const char *kOkBorder = "#3a4d27";
+inline constexpr const char *kErrBg = "#35211f";
+inline constexpr const char *kErrBorder = "#5c3330";
+// Casilla (canvas: --chk-off-bg, --chk-off-border): la sin tildar. La tildada usa kChosenBg / kChosenBorder.
+inline constexpr const char *kCheckOffBg = "#2a2832";
+inline constexpr const char *kCheckOffBorder = "#3a3744";
 
 // Ventana de herramientas (forma A del canvas): barra lateral, filas, encabezado del panel.
 inline constexpr const char *kSide = "#131313";

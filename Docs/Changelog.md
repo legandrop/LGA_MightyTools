@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.04:
+
+Disk Space avisaba que un disco estaba lleno, pero no decía qué lo ocupaba ni dejaba liberar nada. Ahora
+el aviso de Windows trae «Free up space», y la fila de cada disco, un botón para explorarlo (y el mismo
+link cuando está bajo). Abren una ventana que escanea el volumen entero sin administrador, con un motor
+propio en paralelo (4,7 M de archivos en unos 7 s), y lo muestra en cuatro pestañas: Clean up, Folders,
+Largest files y What changed. Clean up agrupa las cachés conocidas, ya tildadas, y las cosas del usuario,
+sin tildar; cada categoría se abre para elegir renglón por renglón y se pueden agregar reglas de carpetas
+propias. Todo borrado pasa por guardas sobre la ruta real: no sigue enlaces ni toca Windows, los
+programas, el perfil o lo que está en uso. En macOS queda deshabilitado.
+[ Disk Space - Ventana de limpieza: escaneo del disco, caches y carpetas por peso ]
+
 v1.03:
 
 En Disk Space el espacio libre no se destacaba y el límite de aviso solo se cambiaba escribiendo el número.

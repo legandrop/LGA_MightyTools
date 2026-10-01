@@ -2,6 +2,7 @@
 #include "core/I18n.h"
 
 #include "modules/diskspace/DiskState.h"
+#include "platform/SystemPaths.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -181,6 +182,10 @@ void UsageBar::paintEvent(QPaintEvent *)
         painter.setBrush(Theme::color(m_low ? Theme::kWarn : Theme::kBarFill));
         painter.drawRoundedRect(fill, 2, 2);
     }
+    // Sin marca (un disco que no se vigila, en la ventana de limpieza).
+    if (m_mark < 0.0) {
+        return;
+    }
     // Marca del umbral: 2 x 10, dentro del ancho aunque el umbral caiga en un extremo.
     const double x = qBound(1.0, track.width() * m_mark, track.width() - 1.0);
     painter.setBrush(Theme::color(m_low ? Theme::kWarnMark : Theme::kTextMuted));
@@ -248,6 +253,16 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_percent->setToolTip(I18n::tr("Warn under a share of the drive"));
     controls->addLayout(segment);
 
+    // "Que ocupa este disco": abre la ventana de limpieza en la lista de carpetas. Solo donde la
+    // limpieza esta habilitada (hoy, Windows).
+    m_explore = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
+    m_explore->setObjectName(QStringLiteral("exploreDrive"));
+    Ui::setIcon(m_explore, Icon::List, Theme::color(Theme::kIcon), 13);
+    m_explore->setToolTip(I18n::tr("See what is using this drive"));
+    m_explore->setAccessibleName(I18n::tr("See what is using this drive"));
+    m_explore->setVisible(SystemPaths::cleanupSupported());
+    controls->addWidget(m_explore, 0, Qt::AlignVCenter);
+
     m_remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_remove->setObjectName(QStringLiteral("removeDrive"));
     Ui::setIcon(m_remove, Icon::X, Theme::color(Theme::kIcon), 12);
@@ -271,6 +286,11 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     foot->addWidget(m_free, 1);
     m_threshold = label(QString(), "meta", this);
     foot->addWidget(m_threshold, 0);
+    // Con el disco bajo, en el lugar de "warn under": el camino corto a liberar espacio.
+    m_cleanup = Ui::button(I18n::tr("Free up space"), QString(), QString(), this);
+    m_cleanup->setObjectName(QStringLiteral("linkButton"));
+    m_cleanup->hide();
+    foot->addWidget(m_cleanup, 0, Qt::AlignVCenter);
     // La linea de abajo es una `.row` de 22 de alto en el canvas.
     auto *footStrut = new QWidget(this);
     footStrut->setFixedSize(0, 22);
@@ -282,6 +302,8 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     connect(m_gb, &QPushButton::clicked, this, [this]() { onUnitClicked(DiskWatch::Unit::GB); });
     connect(m_percent, &QPushButton::clicked, this, [this]() { onUnitClicked(DiskWatch::Unit::Percent); });
     connect(m_remove, &QPushButton::clicked, this, [this]() { emit removeRequested(m_root); });
+    connect(m_explore, &QPushButton::clicked, this, [this]() { emit exploreRequested(m_root); });
+    connect(m_cleanup, &QPushButton::clicked, this, [this]() { emit cleanupRequested(m_root); });
 
     // Enter confirma el numero (keyboardTracking false: recien ahi se guarda) y suelta el campo, como
     // un "aceptar": sin esto el cursor queda titilando adentro. Salir del campo por cualquier otro
@@ -422,12 +444,14 @@ void DriveRow::render(int value)
     const DriveInfo *drive = connected ? &m_drive : nullptr;
     const bool low = connected && DiskSpace::isLow(watch, *drive);
 
+    m_explore->setVisible(connected && SystemPaths::cleanupSupported());
     if (!connected) {
         m_bar->set(false, 0, 0, false);
         m_free->setText(I18n::tr("Skipped until it is plugged in."));
         Ui::setStyleProperty(m_free, "tone", QString());
         m_threshold->setText(I18n::tr("warn under %1").arg(DiskSpace::thresholdText(watch)));
         m_threshold->setVisible(true);
+        m_cleanup->setVisible(false);
         return;
     }
     const qint64 threshold = DiskSpace::thresholdBytes(watch, drive->totalBytes);
@@ -445,6 +469,7 @@ void DriveRow::render(int value)
     Ui::setStyleProperty(m_free, "tone", low ? QStringLiteral("warn") : QString());
     m_threshold->setText(I18n::tr("warn under %1").arg(DiskSpace::thresholdText(watch)));
     m_threshold->setVisible(!low);
+    m_cleanup->setVisible(low && SystemPaths::cleanupSupported());
 }
 
 // ------------------------------------------------------------------ DiskCard
@@ -588,6 +613,8 @@ void DiskCard::rebuildRows(const QList<DiskWatch> &watches)
         if (m_interactive) {
             connect(row, &DriveRow::thresholdChanged, m_state, &DiskState::setDiskThreshold);
             connect(row, &DriveRow::removeRequested, m_state, &DiskState::removeDiskWatch);
+            connect(row, &DriveRow::exploreRequested, this, &DiskCard::exploreRequested);
+            connect(row, &DriveRow::cleanupRequested, this, &DiskCard::cleanupRequested);
         }
     }
     // El layout de la tarjeta guarda el alto del contenedor de filas de cuando estaba vacio, y el

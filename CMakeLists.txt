@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.03 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.04 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,6 +80,7 @@ set(SOURCES
     src/app/WindowParts.cpp
     src/core/AppPaths.cpp
     src/core/AppSettings.cpp
+    src/core/AutomatedRun.cpp
     src/core/BuildTree.cpp
     src/core/DebugFlags.cpp
     src/core/I18n.cpp
@@ -91,6 +92,19 @@ set(SOURCES
     src/modules/diskspace/DiskSpace.cpp
     src/modules/diskspace/DiskSpaceModule.cpp
     src/modules/diskspace/DiskState.cpp
+    src/modules/diskspace/cleanup/CleanupJob.cpp
+    src/modules/diskspace/cleanup/CleanupDialogs.cpp
+    src/modules/diskspace/cleanup/CleanupFixture.cpp
+    src/modules/diskspace/cleanup/CleanupPane.cpp
+    src/modules/diskspace/cleanup/CleanupWindow.cpp
+    src/modules/diskspace/cleanup/ScanSnapshot.cpp
+    src/modules/diskspace/cleanup/SizeListView.cpp
+    src/modules/diskspace/cleanup/CleanupRules.cpp
+    src/modules/diskspace/cleanup/DeleteGuard.cpp
+    src/modules/diskspace/cleanup/CleanupQa.cpp
+    src/modules/diskspace/cleanup/CleanupSelfTest.cpp
+    src/modules/diskspace/cleanup/ScanEngine.cpp
+    src/modules/diskspace/cleanup/ScanTree.cpp
     src/modules/linkredirector/BrowserDetectionCommon.cpp
     src/modules/linkredirector/LinkRedirectorDescriptor.cpp
     src/modules/linkredirector/LinkRedirectorExternal.cpp
@@ -148,6 +162,7 @@ set(HEADERS
     src/app/WindowParts.h
     src/core/AppPaths.h
     src/core/AppSettings.h
+    src/core/AutomatedRun.h
     src/core/BuildTree.h
     src/core/DebugFlags.h
     src/core/LgaRegistry.h
@@ -157,6 +172,19 @@ set(HEADERS
     src/modules/diskspace/DiskSpace.h
     src/modules/diskspace/DiskSpaceModule.h
     src/modules/diskspace/DiskState.h
+    src/modules/diskspace/cleanup/CleanupJob.h
+    src/modules/diskspace/cleanup/CleanupDialogs.h
+    src/modules/diskspace/cleanup/CleanupFixture.h
+    src/modules/diskspace/cleanup/CleanupPane.h
+    src/modules/diskspace/cleanup/CleanupWindow.h
+    src/modules/diskspace/cleanup/ScanSnapshot.h
+    src/modules/diskspace/cleanup/SizeListView.h
+    src/modules/diskspace/cleanup/CleanupModel.h
+    src/modules/diskspace/cleanup/CleanupRules.h
+    src/modules/diskspace/cleanup/DeleteGuard.h
+    src/modules/diskspace/cleanup/CleanupQa.h
+    src/modules/diskspace/cleanup/ScanEngine.h
+    src/modules/diskspace/cleanup/ScanTree.h
     src/modules/linkredirector/BrowserDetection.h
     src/modules/linkredirector/BrowserRegistration.h
     src/modules/linkredirector/LinkRedirectorDescriptor.h
@@ -184,6 +212,10 @@ set(HEADERS
     src/modules/openinnukex/OpenInNukeXPanel.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
+    src/platform/DirEnumerator.h
+    src/platform/FileSystemOps.h
+    src/platform/RecycleBin.h
+    src/platform/SystemPaths.h
     src/platform/ForegroundWatcher.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
@@ -218,6 +250,11 @@ if(WIN32)
         src/modules/openinnukex/win/WinFileAssociation.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
+        src/platform/win/DirEnumeratorWin.cpp
+        src/platform/win/FileSystemOpsWin.cpp
+        src/platform/win/RecycleBinWin.cpp
+        src/platform/win/SystemPathsWin.cpp
+        src/modules/diskspace/cleanup/win/CleanupRulesWin.cpp
         src/platform/win/ForegroundWatcherWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
@@ -273,6 +310,11 @@ elseif(APPLE)
         src/modules/openinnukex/mac/MacFileAssociation.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
+        src/platform/mac/DirEnumeratorMac.cpp
+        src/platform/mac/FileSystemOpsMac.cpp
+        src/platform/mac/RecycleBinMac.cpp
+        src/platform/mac/SystemPathsMac.cpp
+        src/modules/diskspace/cleanup/mac/CleanupRulesMac.cpp
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/HotkeyServiceMac.cpp
         src/platform/mac/InputInjectorMac.cpp

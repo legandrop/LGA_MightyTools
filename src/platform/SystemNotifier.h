@@ -47,6 +47,9 @@ public:
         QString choiceDefault;                   ///< id preseleccionado
         QString button;                          ///< "Remind me"
         QString buttonArguments;                 ///< lo que llega en la activacion del boton
+        // Segundo boton, al lado del primero ("Free up space"). Sin texto, no hay.
+        QString extraButton;
+        QString extraButtonArguments;
     };
     // Id del desplegable en el XML: la activacion trae inputs["choice"].
     static QString choiceInputId() { return QStringLiteral("choice"); }

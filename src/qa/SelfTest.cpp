@@ -836,8 +836,8 @@ void testI18n(const Check &check)
         I18n::setLanguage(I18n::Language::Spanish);
         host.refreshDescriptorTexts(ModuleRegistry::all());
         disk = host.descriptor(QStringLiteral("diskSpace"));
-        check(disk && before == QLatin1String("Watches your local drives and warns you when one runs low.")
-                  && disk->description == QStringLiteral("Vigila los discos locales y avisa cuando uno se queda con poco espacio."),
+        check(disk && before.startsWith(QLatin1String("Watches your local drives"))
+                  && disk->description.startsWith(QStringLiteral("Vigila los discos locales")),
               QStringLiteral("idioma: el host retoma los textos de los descriptores al cambiar de idioma"));
 #ifdef Q_OS_WIN
         const ModuleDescriptor *folder = host.descriptor(QStringLiteral("folderSwitch"));

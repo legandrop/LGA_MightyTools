@@ -16,7 +16,11 @@ class QPushButton;
 // uiwidgets.h de LGA_VideoDownloader (mismos trazos y medidas). Todo se pinta con QPainter a la
 // escala real del dispositivo, sin mapas de bits reescalados ni SVG (el deploy no lleva qsvg).
 
-enum class Icon { Help, Folder, X, Minimize, Close, Pencil, Plus, ChevronDown, General };
+enum class Icon {
+    Help, Folder, X, Minimize, Close, Pencil, Plus, ChevronDown, General,
+    // Ventana de limpieza de Disk Space (trazos del canvas, caja de 16).
+    TreeClosed, TreeOpen, File, Trash, Reveal, Refresh, Shield, List, Check, Dash,
+};
 
 namespace Icons {
 // Pinta el icono dentro de rect (se escala desde su viewBox original).

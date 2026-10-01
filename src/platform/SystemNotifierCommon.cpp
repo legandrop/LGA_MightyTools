@@ -49,6 +49,10 @@ QString SystemNotifier::toastXml(const Notice &notice, const QString &imagePath)
         }
         xml += QStringLiteral("</input><action content=\"%1\" arguments=\"%2\" activationType=\"foreground\"/>")
                    .arg(esc(notice.button), esc(notice.buttonArguments));
+        if (!notice.extraButton.isEmpty()) {
+            xml += QStringLiteral("<action content=\"%1\" arguments=\"%2\" activationType=\"foreground\"/>")
+                       .arg(esc(notice.extraButton), esc(notice.extraButtonArguments));
+        }
         xml += QStringLiteral("<action content=\"%1\" arguments=\"dismiss\" activationType=\"system\"/></actions>")
                    .arg(esc(I18n::tr("Dismiss")));
     }

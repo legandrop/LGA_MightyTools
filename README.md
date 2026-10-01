@@ -7,7 +7,7 @@ shortcuts, no system hooks.
 | Tool | What it does | Platforms |
 | --- | --- | --- |
 | **Nuke Shortcuts** | Two shortcuts for Nuke: set a key on the knob under the pointer, and frame every key in the Dope Sheet. | Windows, macOS |
-| **Disk Space** | Watches your local drives and warns you when one runs low. | Windows, macOS |
+| **Disk Space** | Watches your local drives and warns you when one runs low. On Windows it also shows what fills a drive, sorted by size, and frees space: caches, folders and files. | Windows, macOS |
 | **Open in NukeX** | Double-click a `.nk` file to open it in the NukeX you already have open, or in your preferred version. | Windows, macOS |
 | **Folder Switch** | Open and Save dialogs jump to the folder you have open in Explorer or XYplorer. | Windows |
 | **Link Redirector** | Opens each link in the right browser: links with your keywords go to an alternative browser. | Windows, macOS |

@@ -1,0 +1,216 @@
+#ifndef MIGHTYTOOLS_CLEANUPWINDOW_H
+#define MIGHTYTOOLS_CLEANUPWINDOW_H
+
+#include "modules/diskspace/DiskSpace.h"
+#include "modules/diskspace/cleanup/CleanupJob.h"
+#include "modules/diskspace/cleanup/CleanupModel.h"
+#include "modules/diskspace/cleanup/DeleteGuard.h"
+#include "modules/diskspace/cleanup/ScanEngine.h"
+#include "modules/diskspace/cleanup/ScanSnapshot.h"
+
+#include <QDateTime>
+#include <QHash>
+#include <QList>
+#include <QSet>
+#include <QWidget>
+
+class CleanupPane;
+class DiskState;
+class ModuleContext;
+class QAbstractButton;
+class QLabel;
+class QPushButton;
+class QStackedWidget;
+class QTimer;
+class SizeListView;
+class TitleBar;
+class UsageBar;
+
+// Las pestanas de la ventana: una fila de titulos con la elegida subrayada en violeta.
+class TabStrip : public QWidget
+{
+    Q_OBJECT
+
+public:
+    explicit TabStrip(QWidget *parent = nullptr);
+    void setTabs(const QStringList &titles);
+    void setCurrent(int index);
+    int current() const { return m_current; }
+    // Dato chico al lado del titulo ("Clean up  60.2 GB").
+    void setBadge(int index, const QString &text);
+
+signals:
+    void currentChanged(int index);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
+
+private:
+    QRect tabRect(int index) const;
+    int tabAt(const QPoint &pos) const;
+
+    QStringList m_titles;
+    QHash<int, QString> m_badges;
+    int m_current = 0;
+    int m_hovered = -1;
+};
+
+// La ventana "Disk Space · C:": que ocupa un disco, como lista ordenada por peso, y que se puede
+// limpiar. Es una ventana aparte de la de herramientas; la abre y la posee DiskSpaceModule (apagar la
+// herramienta la cierra).
+//
+// Lo apagado no consume: el motor de escaneo, el trabajo de borrado, el arbol en memoria y el timer
+// nacen con la ventana y mueren con ella. Cerrarla no espera a ningun hilo (ver ScanEngine).
+//
+// En modo captura (QA) no hay motor ni disco: applyFixture() carga datos fijos y nada responde al click.
+class CleanupWindow : public QWidget
+{
+    Q_OBJECT
+
+public:
+    enum Tab { CleanUp = 0, Folders = 1, Files = 2, Changes = 3 };
+
+    static constexpr int kWidth = 960;
+    static constexpr int kHeight = 620;
+
+    // `state` y `context` son del modulo y viven mas que la ventana. `capture`: sin motor ni borrado.
+    CleanupWindow(DiskState *state, ModuleContext *context, bool capture, QWidget *parent = nullptr);
+    ~CleanupWindow() override;
+
+    // Abre (o cambia a) ese disco y esa pestana, y escanea si hace falta. `root`: "C:/".
+    void openOn(const QString &root, Tab tab);
+    QString root() const { return m_root; }
+
+    // ---- QA
+    static QStringList fixtureStates();
+    // Carga un estado fijo (los del canvas). false si no lo conoce.
+    bool applyFixture(const QString &state);
+
+protected:
+    void showEvent(QShowEvent *event) override;
+    void closeEvent(QCloseEvent *event) override;
+    bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
+
+private:
+    enum class ScanState { Idle, Scanning, Complete, Stopped };
+    enum class JobKind { None, CleanUp, Manual };
+
+    // Una fila elegida de Folders o de Largest files.
+    struct Picked
+    {
+        bool isDir = false;
+        ScanTree::Index dir = ScanTree::kNone; ///< la carpeta, o la que contiene al archivo
+        QString name;                          ///< archivo
+        QString path;
+        qint64 bytes = 0;
+        qint64 files = 0;
+    };
+    struct FileRow
+    {
+        ScanEngine::TopFile file;
+        QString dirPath;
+    };
+
+    void buildUi();
+    void startScan();
+    void stopScan();
+    void poll();
+    void onScanFinished();
+    void onJobFinished();
+
+    void refreshHeader();
+    void refreshTabs();
+    void refreshActionBar();
+    void refreshFolders();
+    void refreshFiles();
+    void refreshChanges();
+    void refreshCategories();
+    // Vuelve a armar y a medir las reglas contra el arbol (con el escaneo completo).
+    void remeasure();
+    void reloadDrive();
+
+    void setTab(int tab);
+    void showDriveMenu();
+    void showCompareMenu();
+    // Compara el escaneo recien hecho contra ese resumen (vacio: nada con que comparar).
+    void applyBaseline(const ScanSnapshot &baseline);
+    void setFolderColumns(bool scanning);
+    void toggleFolder(const QString &rowId);
+    QList<Picked> pickedItems() const;
+    void revealPicked();
+    void deletePicked(bool toTrash);
+    void runCleanup();
+    void addFolderRule();
+    void removeFolderRule(const QString &categoryId);
+    QList<Cleanup::FolderRule> loadFolderRules() const;
+    void saveFolderRules(const QList<Cleanup::FolderRule> &rules);
+    void reviewPath(const QString &path);
+    bool busy() const;
+
+    DiskState *m_state = nullptr;
+    ModuleContext *m_context = nullptr;
+    bool m_capture = false;
+
+    QString m_root;       ///< "C:/", como lo nombra DiskState
+    QString m_scanRoot;   ///< la ruta real que se escanea ("C:\")
+    DriveInfo m_drive;
+    bool m_driveKnown = false;
+    DeleteGuard m_guard;
+
+    ScanEngine m_engine;
+    CleanupJob m_job;
+    QTimer *m_poll = nullptr;
+    ScanState m_scanState = ScanState::Idle;
+    bool m_fullScan = false; ///< la pasada en curso es un escaneo completo (no una relectura)
+    QDateTime m_scannedAt;
+    ScanEngine::Progress m_progress;
+
+    QList<Cleanup::Category> m_categories;
+    QList<Cleanup::Category> m_tickSource; ///< las del escaneo anterior: de ahi sale lo tildado tras un Rescan
+    QString m_banner;
+    JobKind m_jobKind = JobKind::None;
+    QList<CleanupJob::Request> m_requests;
+    QList<Picked> m_jobItems; ///< borrado a mano: lo elegido, en el orden de los pedidos
+    qint64 m_freeBeforeJob = 0;
+    QString m_notice; ///< resultado del ultimo borrado a mano, en la barra de abajo
+
+    QSet<ScanTree::Index> m_expanded;
+    QHash<ScanTree::Index, ScanEngine::FileListing> m_listings;
+    QHash<QString, Picked> m_folderRows; ///< id de fila -> que es
+    QList<FileRow> m_fileRows;
+    int m_fileFilter = 0;
+    ScanSnapshot m_baseline;            ///< el resumen con el que se compara
+    ScanSnapshot m_snapshot;            ///< el del escaneo recien hecho
+    QList<ScanSnapshot> m_baselines;    ///< los anteriores disponibles ("Compare with...")
+    QSet<ScanTree::Index> m_fixtureCounting; ///< captura: carpetas que se muestran a medio contar
+    int m_folderColumns = -1;           ///< 0 completas, 1 escaneando (para no rearmarlas en cada refresco)
+    QList<ScanSnapshot::Change> m_changes;
+    qint64 m_usedDelta = 0;
+
+    TitleBar *m_titleBar = nullptr;
+    QAbstractButton *m_driveButton = nullptr;
+    QLabel *m_freeLabel = nullptr;
+    QLabel *m_scanLabel = nullptr;
+    UsageBar *m_bar = nullptr;
+    QPushButton *m_rescan = nullptr;
+    QWidget *m_scanLine = nullptr;
+    TabStrip *m_tabs = nullptr;
+    QStackedWidget *m_stack = nullptr;
+    CleanupPane *m_cleanPane = nullptr;
+    SizeListView *m_folders = nullptr;
+    SizeListView *m_files = nullptr;
+    SizeListView *m_changesList = nullptr;
+    QList<QPushButton *> m_filterChips;
+    QLabel *m_actionText = nullptr;
+    QPushButton *m_actionPrimary = nullptr;
+    QPushButton *m_actionReveal = nullptr;
+    QPushButton *m_actionTrash = nullptr;
+    QPushButton *m_actionDelete = nullptr;
+    QPushButton *m_actionCompare = nullptr;
+    bool m_nativeFrameApplied = false;
+};
+
+#endif // MIGHTYTOOLS_CLEANUPWINDOW_H

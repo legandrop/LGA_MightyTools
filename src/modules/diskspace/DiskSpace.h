@@ -76,6 +76,11 @@ qint64 thresholdBytes(const DiskWatch &watch, qint64 totalBytes);
 bool isLow(const DiskWatch &watch, const DriveInfo &drive);
 
 QString formatBytes(qint64 bytes);             ///< "182 GB", "1.82 TB", "512 MB"
+// Para las columnas de la ventana de limpieza: siempre tres cifras a la vista, para que una lista
+// ordenada por peso se lea de un vistazo ("229 GB", "29.0 GB", "7.70 GB", "584 MB", "12 KB").
+QString formatSize(qint64 bytes);
+// Antiguedad de una fecha para una columna angosta: "today", "13 d", "1.3 y". Vacio si no hay fecha.
+QString ageText(qint64 modifiedSecs, const QDateTime &now);
 QString thresholdText(const DiskWatch &watch); ///< "100 GB", "15%"
 // Keycap de un disco que no esta enchufado: la letra en Windows, el nombre guardado en mac.
 QString labelForRoot(const QString &root, const QString &storedName);

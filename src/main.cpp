@@ -6,6 +6,7 @@
 #include "app/UninstallCleanup.h"
 #include "core/AppPaths.h"
 #include "core/AppSettings.h"
+#include "core/AutomatedRun.h"
 #include "core/BuildTree.h"
 #include "core/I18n.h"
 #include "core/DebugFlags.h"
@@ -191,12 +192,15 @@ int main(int argc, char *argv[])
 
     // Arneses sin pantalla: QCoreApplication, sin plugin de plataforma, sin log a archivo.
     if (hasArg(argc, argv, "--self-test")) {
+        // Antes que nada: lo que borra o abre algo del sistema queda inerte (core/AutomatedRun.h).
+        AutomatedRun::enable();
         QCoreApplication app(argc, argv);
         setNames();
         AppSettings::useMemoryOnly();
         return SelfTest::run();
     }
     if (hasArg(argc, argv, "--simulate-action")) {
+        AutomatedRun::enable();
         QCoreApplication app(argc, argv);
         setNames();
         return runSimulateAction(app.arguments());
@@ -211,7 +215,9 @@ int main(int argc, char *argv[])
     const bool measureFonts = hasArg(argc, argv, "--measure-fonts");
     const bool notifyPreview = hasArg(argc, argv, "--notify-preview");
     const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measureFonts || notifyPreview;
-    if (!automated) {
+    if (automated) {
+        AutomatedRun::enable();
+    } else {
         qInstallMessageHandler(fileMessageHandler);
     }
     qDebug() << kBuildVersionMarker;
