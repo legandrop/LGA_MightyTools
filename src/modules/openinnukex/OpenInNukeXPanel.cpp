@@ -896,5 +896,3 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
                                         : I18n::tr("Install manually instead..."));
     return true;
 }
-
-#include "OpenInNukeXPanel.moc"

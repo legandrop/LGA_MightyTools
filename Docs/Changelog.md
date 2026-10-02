@@ -1,5 +1,12 @@
 # Changelog — LGA Mighty Tools
 
+v1.21:
+
+Cada compilación mostraba un aviso de AutoMoc: `OpenInNukeXPanel.cpp` incluía `OpenInNukeXPanel.moc`
+aunque ya no tenía ninguna clase con `Q_OBJECT` (se sacó en la tanda del idioma y la línea quedó). Se
+borró el include. Sin cambios para el usuario.
+[ Build - Sin el aviso de AutoMoc de Open in NukeX ]
+
 v1.20:
 
 Frame Dope Sheet era un macro: click en el punto calibrado del Dope Sheet, Ctrl+A y F. Fallaba si el
