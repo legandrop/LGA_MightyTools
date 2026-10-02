@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.14:
+
+«Add keyframe» fallaba con el campo del knob en foco: hacía clic derecho, flecha y Enter, y con el campo
+en edición el clic derecho abre el menú de texto. Ahora lo resuelve Nuke: el plugin (bridge 1.84, archivo
+nuevo `LGA_KeyframeToggle.py`) registra el atajo dentro de Nuke, busca el knob bajo el mouse (o el de la
+etiqueta, o el que tiene el foco) y pone la key en el frame actual, o la borra si ya hay una. Un knob con
+un solo campo queda colapsado; uno abierto por canal recibe la key solo en ese canal. El atajo y el
+prendido se leen del settings de la app y se aplican al cambiar. La app no toma el atajo en un Nuke con el
+plugin; sin plugin sigue el macro de antes. Además, el bridge no se instalaba en una `.nuke` versionada
+con git: ahora solo se frena si la carpeta del plugin es un repo o la `.nuke` es código fuente.
+[ Nuke Shortcuts - Add keyframe resuelto dentro de Nuke ]
+
 v1.13:
 
 Al terminar, `instalador.bat` preguntaba «Desea continuar y ofrecer la publicacion de release igualmente?»

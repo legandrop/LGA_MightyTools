@@ -70,7 +70,7 @@ Status inspect(const QString &nukeDir);
 enum class Error {
     None,
     DirMissing,     ///< la carpeta elegida no existe
-    SourceRepo,     ///< es un repo (QtClient/CMakeLists.txt o .git): instalar ahi lo pisaria
+    SourceRepo,     ///< la carpeta del plugin es un repo, o la .nuke es codigo fuente: instalar ahi lo pisaria
     PayloadMissing, ///< este build no trae el payload embebido
     WriteFailed,    ///< no se pudo copiar, crear la carpeta o tocar el init.py
 };

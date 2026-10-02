@@ -10,7 +10,17 @@ NukeWatcher::NukeWatcher(ForegroundWatcher *foreground, QObject *parent)
 {
     // Sin hook propio (el `g_instance` de antes): lo decide el nombre del exe que avisa el servicio.
     connect(foreground, &ForegroundWatcher::foregroundChanged, this,
-            [this](quintptr, quint32, const QString &exeName) { setNukeInFront(isNukeExecutable(exeName)); });
+            [this](quintptr, quint32 pid, const QString &exeName) {
+                const bool nuke = isNukeExecutable(exeName);
+                // De un Nuke a otro no cambia nukeInFront, pero uno puede tener el plugin del
+                // keyframe y el otro no.
+                const bool switched = nuke && m_nukeInFront && pid != m_frontPid;
+                m_frontPid = nuke ? pid : 0;
+                setNukeInFront(nuke);
+                if (switched) {
+                    emit frontNukeSwitched();
+                }
+            });
     m_nukeInFront = isNukeExecutable(foreground->foregroundExeName());
     qInfo() << "[NukeWatcher] Nuke al frente al arrancar:" << m_nukeInFront;
 }

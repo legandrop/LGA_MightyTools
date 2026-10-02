@@ -28,7 +28,9 @@ public:
     bool isBusy() const { return m_busy; }
 
     // Click derecho donde esta el puntero, flecha abajo y Enter: el primer item del menu contextual
-    // de un knob es "Set key". False si ya habia una secuencia corriendo.
+    // de un knob es "Set key". Es el respaldo para un Nuke sin el plugin (KeyframePlugin.h): con el
+    // campo del knob en foco el click derecho abre el menu de texto y falla. False si ya habia una
+    // secuencia corriendo.
     bool runAddKeyframe();
 
     // Click en el punto calibrado del Dope Sheet, Ctrl+A (Cmd+A en mac), F, y el puntero vuelve a

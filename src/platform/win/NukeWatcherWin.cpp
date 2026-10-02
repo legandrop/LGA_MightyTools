@@ -2,6 +2,7 @@
 
 #include <QDebug>
 #include <QFileInfo>
+#include <QTimeZone>
 
 #include <iterator>
 
@@ -60,6 +61,31 @@ bool isNukeWindow(HWND hwnd)
 bool NukeWatcher::isNukeInFrontNow() const
 {
     return isNukeWindow(GetForegroundWindow());
+}
+
+NukeWatcher::FrontProcess NukeWatcher::frontNukeProcess() const
+{
+    FrontProcess result;
+    const HWND foreground = GetForegroundWindow();
+    if (!isNukeWindow(foreground)) {
+        return result;
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(foreground, &pid);
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) {
+        return result;
+    }
+    FILETIME created{}, exited{}, kernel{}, user{};
+    if (GetProcessTimes(process, &created, &exited, &kernel, &user)) {
+        // FILETIME: intervalos de 100 ns desde 1601-01-01 UTC.
+        const qint64 ticks = (static_cast<qint64>(created.dwHighDateTime) << 32) | created.dwLowDateTime;
+        constexpr qint64 kEpochDiff = 116444736000000000LL;
+        result.pid = pid;
+        result.started = QDateTime::fromMSecsSinceEpoch((ticks - kEpochDiff) / 10000, QTimeZone::UTC);
+    }
+    CloseHandle(process);
+    return result;
 }
 
 QRect NukeWatcher::frontNukeFrame() const

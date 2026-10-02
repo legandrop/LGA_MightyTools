@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.13 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.14 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -42,7 +42,7 @@ find_package(Qt6 COMPONENTS Core Gui Widgets Network REQUIRED)
 
 set(RESOURCES
     resources/resources.qrc
-    # Payload del Nuke Bridge (init.py, LGA_QtAdapter_OpenInNukeX.py, VERSION), embebido en el exe
+    # Payload del Nuke Bridge (init.py, menu.py, los .py y VERSION), embebido en el exe
     # con su propia version (D-04). Ver nuke_plugin/OpenInNukeXBridge.qrc.
     nuke_plugin/OpenInNukeXBridge.qrc
 )
@@ -117,6 +117,7 @@ set(SOURCES
     src/modules/nukeshortcuts/ActionRunner.cpp
     src/modules/nukeshortcuts/CalibrationDialog.cpp
     src/modules/nukeshortcuts/CalibrationSession.cpp
+    src/modules/nukeshortcuts/KeyframePlugin.cpp
     src/modules/nukeshortcuts/NukeShortcutsModule.cpp
     src/modules/nukeshortcuts/NukeShortcutsPanel.cpp
     src/modules/nukeshortcuts/NukeShortcutsState.cpp
@@ -203,6 +204,7 @@ set(HEADERS
     src/modules/nukeshortcuts/ActionRunner.h
     src/modules/nukeshortcuts/CalibrationDialog.h
     src/modules/nukeshortcuts/CalibrationSession.h
+    src/modules/nukeshortcuts/KeyframePlugin.h
     src/modules/nukeshortcuts/NukeShortcutsModule.h
     src/modules/nukeshortcuts/NukeShortcutsPanel.h
     src/modules/nukeshortcuts/NukeShortcutsState.h

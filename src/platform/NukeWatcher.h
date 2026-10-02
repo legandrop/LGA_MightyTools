@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_NUKEWATCHER_H
 #define MIGHTYTOOLS_NUKEWATCHER_H
 
+#include <QDateTime>
 #include <QObject>
 #include <QPoint>
 #include <QRect>
@@ -37,6 +38,14 @@ public:
     // actuar: si el usuario acaba de salir de Nuke, el aviso todavia puede no haber llegado.
     bool isNukeInFrontNow() const;
 
+    // El proceso de Nuke que esta al frente AHORA: pid y hora de arranque (UTC). pid 0 si el frente
+    // no es Nuke. La hora sirve para no confundir un pid reciclado con el Nuke que lo uso antes.
+    struct FrontProcess {
+        qint64 pid = 0;
+        QDateTime started;
+    };
+    FrontProcess frontNukeProcess() const;
+
     // Marco de la ventana principal de Nuke que esta al frente. Vacio si Nuke no esta al frente.
     QRect frontNukeFrame() const;
     // Marco de la ventana principal de Nuke que contiene `nativePoint`. Vacio si en ese punto no
@@ -49,11 +58,14 @@ public:
 
 signals:
     void nukeInFrontChanged(bool inFront);
+    // Paso directo de una ventana de un Nuke a la de otro proceso de Nuke.
+    void frontNukeSwitched();
 
 private:
     void setNukeInFront(bool inFront);
 
     bool m_nukeInFront = false;
+    quint32 m_frontPid = 0;
 };
 
 #endif // MIGHTYTOOLS_NUKEWATCHER_H

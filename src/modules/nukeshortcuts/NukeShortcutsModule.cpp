@@ -9,6 +9,7 @@
 #include "modules/nukeshortcuts/ActionRunner.h"
 #include "modules/nukeshortcuts/CalibrationDialog.h"
 #include "modules/nukeshortcuts/CalibrationSession.h"
+#include "modules/nukeshortcuts/KeyframePlugin.h"
 #include "modules/nukeshortcuts/NukeShortcutsPanel.h"
 #include "platform/InputInjector.h"
 #include "platform/NukeWatcher.h"
@@ -19,6 +20,9 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDesktopServices>
+#include <QDir>
+#include <QFile>
+#include <QTemporaryDir>
 #include <QEventLoop>
 #include <QMenu>
 #include <QPainter>
@@ -125,6 +129,21 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     for (const char *no : {"LGA_MightyTools.exe", "NukeShortcuts.exe", "NukeX.exe", "Nuke15.1.exe.bak", "explorer.exe",
                            "Nukeitall.exe", ""}) {
         check(!NukeWatcher::isNukeExecutable(QString::fromLatin1(no)), QStringLiteral("no es Nuke: '%1'").arg(QLatin1String(no)));
+    }
+
+    // Marca del plugin de Nuke (Add keyframe dentro de Nuke).
+    {
+        QTemporaryDir dir;
+        const QDateTime before = QDateTime::currentDateTimeUtc().addSecs(-60);
+        QFile marker(QDir(dir.path()).filePath(QStringLiteral("4242")));
+        check(dir.isValid() && marker.open(QIODevice::WriteOnly) && marker.write("Ctrl+Shift+D") > 0,
+              QStringLiteral("plugin: marca de prueba escrita"));
+        marker.close();
+        check(KeyframePlugin::handles(dir.path(), 4242, before), QStringLiteral("plugin: marca del pid y posterior al arranque"));
+        check(!KeyframePlugin::handles(dir.path(), 4243, before), QStringLiteral("plugin: otro pid no tiene marca"));
+        check(!KeyframePlugin::handles(dir.path(), 4242, QDateTime::currentDateTimeUtc().addSecs(60)),
+              QStringLiteral("plugin: marca anterior al arranque (pid reciclado) no cuenta"));
+        check(!KeyframePlugin::handles(dir.path(), 0, before), QStringLiteral("plugin: sin Nuke al frente no cuenta"));
     }
 
     // Atajos: ida y vuelta por el texto del .ini, y textos invalidos.
@@ -256,6 +275,7 @@ void NukeShortcutsModule::start()
     m_runner = new ActionRunner(context().injector(), this);
     connect(context().hotkeys(), &ModuleHotkeys::activated, this, &NukeShortcutsModule::onHotkey);
     connect(m_watcher, &NukeWatcher::nukeInFrontChanged, m_state, &NukeShortcutsState::setNukeInFront);
+    connect(m_watcher, &NukeWatcher::frontNukeSwitched, this, &NukeShortcutsModule::updateRegistrations);
 
     refreshAccessibility();
     if (SystemInput::needsAccessibilityPermission()) {
@@ -343,6 +363,18 @@ void NukeShortcutsModule::updateRegistrations()
             registered = Shortcut();
             continue;
         }
+        if (wanted && action == ShortcutAction::AddKeyframe && frontNukeHasKeyframePlugin()) {
+            // Este Nuke tiene el plugin: el atajo lo atiende Nuke y el global no se registra.
+            if (hotkeys->isRegistered(id)) {
+                hotkeys->unregisterHotkey(id);
+            }
+            registered = Shortcut();
+            if (m_state->registration(action) != NukeShortcutsState::Registration::Registered) {
+                qInfo() << "[NukeShortcuts] Add keyframe lo atiende el plugin de Nuke";
+            }
+            m_state->setRegistration(action, NukeShortcutsState::Registration::Registered);
+            continue;
+        }
         if (!wanted) {
             if (hotkeys->isRegistered(id)) {
                 hotkeys->unregisterHotkey(id);
@@ -363,6 +395,17 @@ void NukeShortcutsModule::updateRegistrations()
                                             : NukeShortcutsState::Registration::Failed);
     }
     m_updating = false;
+}
+
+bool NukeShortcutsModule::frontNukeHasKeyframePlugin() const
+{
+    // Una corrida automatizada no mira el escritorio ni la carpeta real: el resultado no puede
+    // depender de que Lega tenga un Nuke con el plugin al frente.
+    if (context().automatedRun()) {
+        return false;
+    }
+    const NukeWatcher::FrontProcess front = m_watcher->frontNukeProcess();
+    return KeyframePlugin::handles(KeyframePlugin::markerDir(), front.pid, front.started);
 }
 
 QString NukeShortcutsModule::validateShortcut(ShortcutAction action, const Shortcut &shortcut) const
@@ -405,6 +448,19 @@ void NukeShortcutsModule::onHotkey(int localId)
         return;
     }
     if (localId == kAddKeyframeId) {
+        // El plugin pudo activarse con Nuke ya al frente (se carga al arrancar Nuke, o se recargo):
+        // el atajo global seguia tomado. Se suelta y se le devuelve la combinacion a Nuke.
+        if (frontNukeHasKeyframePlugin()) {
+            qInfo() << "[NukeShortcuts] Add keyframe: este Nuke tiene el plugin, se le devuelve el atajo";
+            const Shortcut shortcut = m_state->shortcut(ShortcutAction::AddKeyframe);
+            context().hotkeys()->unregisterHotkey(kAddKeyframeId);
+            m_registeredAddKeyframe = Shortcut();
+            m_state->setRegistration(ShortcutAction::AddKeyframe, NukeShortcutsState::Registration::Registered);
+            if (!context().dryRunInput()) {
+                context().hotkeys()->passThrough(shortcut);
+            }
+            return;
+        }
         m_runner->runAddKeyframe();
         return;
     }

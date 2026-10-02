@@ -5,7 +5,8 @@
   `<.nuke>/LGA_OpenInNukeX/` (D-04, plan seccion 2 y Doc_Decisiones D-04): vive dentro de este
   repo, viaja adentro del exe via este .qrc, y conserva su PROPIA version (el archivo VERSION de
   esta carpeta, no la de la app). El origen es `~/.nuke/LGA_OpenInNukeX` (repo LGA_OpenInNukeX,
-  que se archiva); estos tres archivos se copiaron sin cambios de contenido.
+  que se archiva); init.py y el adaptador se copiaron sin cambios de contenido. menu.py y
+  LGA_KeyframeToggle.py (1.84) son de este repo: el atajo "Add keyframe" resuelto dentro de Nuke.
 
   Los recursos quedan bajo el prefijo "/bridge", asi que en runtime se leen como
   ":/bridge/init.py", ":/bridge/LGA_QtAdapter_OpenInNukeX.py" y ":/bridge/VERSION"
@@ -15,6 +16,8 @@
     <qresource prefix="/bridge">
         <file alias="init.py">LGA_OpenInNukeX/init.py</file>
         <file alias="LGA_QtAdapter_OpenInNukeX.py">LGA_OpenInNukeX/LGA_QtAdapter_OpenInNukeX.py</file>
+        <file alias="menu.py">LGA_OpenInNukeX/menu.py</file>
+        <file alias="LGA_KeyframeToggle.py">LGA_OpenInNukeX/LGA_KeyframeToggle.py</file>
         <file alias="VERSION">LGA_OpenInNukeX/VERSION</file>
     </qresource>
 </RCC>

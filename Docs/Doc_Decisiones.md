@@ -92,6 +92,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   un click en el título de cualquier columna; el segundo click invierte. Una columna nueva arranca por lo
   más grande (o lo más nuevo, o lo que más creció) y el nombre de la A a la Z. Cada lista recuerda su
   orden.
+- **D-37 · «Add keyframe» dentro de Nuke** (2026-10-02, elegido y probado por Lega). El plugin de Nuke
+  (bridge 1.84, `LGA_KeyframeToggle.py`) registra el atajo dentro de Nuke y pone o borra la key del
+  knob bajo el mouse, o del que tiene el foco; con el knob abierto en varios campos, solo la del canal
+  del campo. El atajo y el prendido salen del settings de la app. La app no toma el atajo en un Nuke que
+  tenga el plugin activo (marca `nuke_set_key/<pid>`); en uno sin plugin sigue el clic derecho + Enter.
 
 ## Abiertas
 

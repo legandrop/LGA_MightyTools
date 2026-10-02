@@ -1,6 +1,7 @@
 #include "platform/NukeWatcher.h"
 
 #include <QDebug>
+#include <QDateTime>
 #include <QString>
 
 #import <AppKit/AppKit.h>
@@ -59,6 +60,18 @@ QRect mainWindowFrame(pid_t pid)
 bool NukeWatcher::isNukeInFrontNow() const
 {
     return isNukeApp([[NSWorkspace sharedWorkspace] frontmostApplication]);
+}
+
+NukeWatcher::FrontProcess NukeWatcher::frontNukeProcess() const
+{
+    FrontProcess result;
+    NSRunningApplication *front = [[NSWorkspace sharedWorkspace] frontmostApplication];
+    if (!isNukeApp(front) || !front.launchDate) {
+        return result;
+    }
+    result.pid = front.processIdentifier;
+    result.started = QDateTime::fromNSDate(front.launchDate).toUTC();
+    return result;
 }
 
 QRect NukeWatcher::frontNukeFrame() const

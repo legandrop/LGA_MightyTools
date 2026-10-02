@@ -145,6 +145,32 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
               QStringLiteral("bridge: rechaza instalar sobre una carpeta con QtClient/CMakeLists.txt"));
     }
     {
+        // La carpeta del plugin es un repo (el caso de la maquina de Lega hasta 2026-10-02).
+        QTemporaryDir tmp;
+        QDir(tmp.path()).mkpath(QStringLiteral("LGA_OpenInNukeX"));
+        QFile gitMarker(QDir(tmp.path()).filePath(QStringLiteral("LGA_OpenInNukeX/.git")));
+        gitMarker.open(QIODevice::WriteOnly);
+        gitMarker.close();
+
+        QString detail;
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
+        check(err == NukeBridge::Error::SourceRepo,
+              QStringLiteral("bridge: rechaza instalar sobre una carpeta del plugin con .git (guarda D-04)"));
+    }
+    {
+        // Un clon de Mighty Tools elegido como .nuke.
+        QTemporaryDir tmp;
+        QDir(tmp.path()).mkpath(QStringLiteral("nuke_plugin"));
+        QFile qrc(QDir(tmp.path()).filePath(QStringLiteral("nuke_plugin/OpenInNukeXBridge.qrc")));
+        qrc.open(QIODevice::WriteOnly);
+        qrc.close();
+
+        QString detail;
+        const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
+        check(err == NukeBridge::Error::SourceRepo, QStringLiteral("bridge: rechaza instalar en un clon de Mighty Tools"));
+    }
+    {
+        // Una .nuke versionada con git (la de Lega): se instala.
         QTemporaryDir tmp;
         QFile gitMarker(QDir(tmp.path()).filePath(QStringLiteral(".git")));
         gitMarker.open(QIODevice::WriteOnly);
@@ -152,8 +178,8 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
 
         QString detail;
         const NukeBridge::Error err = NukeBridge::install(tmp.path(), &detail, true);
-        check(err == NukeBridge::Error::SourceRepo,
-              QStringLiteral("bridge: rechaza instalar sobre una carpeta con .git (guarda D-04)"));
+        check(err == NukeBridge::Error::None,
+              QStringLiteral("bridge: instala en una .nuke versionada con git (detalle: %1)").arg(detail));
     }
     {
         QTemporaryDir tmp; // carpeta limpia: ni CMakeLists.txt ni .git
@@ -284,6 +310,9 @@ void testEmbeddedPayload(const std::function<void(bool, const QString &)> &check
     check(QFileInfo::exists(QStringLiteral(":/bridge/init.py")), QStringLiteral("payload: init.py embebido presente"));
     check(QFileInfo::exists(QStringLiteral(":/bridge/LGA_QtAdapter_OpenInNukeX.py")),
           QStringLiteral("payload: LGA_QtAdapter_OpenInNukeX.py embebido presente"));
+    check(QFileInfo::exists(QStringLiteral(":/bridge/menu.py")), QStringLiteral("payload: menu.py embebido presente"));
+    check(QFileInfo::exists(QStringLiteral(":/bridge/LGA_KeyframeToggle.py")),
+          QStringLiteral("payload: LGA_KeyframeToggle.py embebido presente"));
     check(!NukeBridge::bundledVersion().isEmpty(), QStringLiteral("payload: VERSION embebido legible y no vacio"));
 }
 

@@ -13,7 +13,17 @@
 
 namespace {
 
+// Lo que se copia a `<.nuke>/LGA_OpenInNukeX/`.
 const QStringList kPayloadFiles = {
+    QStringLiteral("init.py"),
+    QStringLiteral("LGA_QtAdapter_OpenInNukeX.py"),
+    QStringLiteral("menu.py"),
+    QStringLiteral("LGA_KeyframeToggle.py"),
+};
+
+// Lo que tiene que estar para que inspect() lo de por instalado. Una instalacion anterior a la 1.84
+// (sin menu.py ni LGA_KeyframeToggle.py) cuenta como instalada y su VERSION ofrece actualizar.
+const QStringList kRequiredFiles = {
     QStringLiteral("init.py"),
     QStringLiteral("LGA_QtAdapter_OpenInNukeX.py"),
 };
@@ -41,6 +51,15 @@ bool looksLikeSourceRepo(const QString &dirPath)
 {
     return QFileInfo::exists(QDir(dirPath).filePath(QStringLiteral("QtClient/CMakeLists.txt")))
         || QFileInfo::exists(QDir(dirPath).filePath(QStringLiteral(".git")));
+}
+
+/// La carpeta elegida como `.nuke` es el codigo fuente del plugin (el repo de origen) o un clon de
+/// Mighty Tools. Un `.git` solo NO cuenta: hay usuarios que versionan su `.nuke` entera con git (la de
+/// Lega es el repo LGA_Nuke_Win) y ahi el bridge se instala como en cualquier otra.
+bool looksLikeSourceTreeRoot(const QString &dirPath)
+{
+    return QFileInfo::exists(QDir(dirPath).filePath(QStringLiteral("QtClient/CMakeLists.txt")))
+        || QFileInfo::exists(QDir(dirPath).filePath(QStringLiteral("nuke_plugin/OpenInNukeXBridge.qrc")));
 }
 
 /// Si el `init.py` tiene una linea ACTIVA (no comentada) que agrega la carpeta del plugin al
@@ -229,7 +248,7 @@ Status inspect(const QString &nukeDir)
     status.folderPresent = QFileInfo(pluginDir).isDir();
     if (status.folderPresent) {
         status.filesPresent = true;
-        for (const QString &name : kPayloadFiles) {
+        for (const QString &name : kRequiredFiles) {
             if (!QFileInfo::exists(QDir(pluginDir).filePath(name))) {
                 status.filesPresent = false;
                 break;
@@ -264,7 +283,7 @@ Error install(const QString &nukeDir, QString *detailForLog, bool automatedRun, 
     }
 
     const QString pluginDir = QDir(clean).filePath(pluginFolderName());
-    if (looksLikeSourceRepo(pluginDir) || looksLikeSourceRepo(clean)) {
+    if (looksLikeSourceRepo(pluginDir) || looksLikeSourceTreeRoot(clean)) {
         detail = QStringLiteral("Es un repositorio (QtClient/CMakeLists.txt o .git): %1").arg(pluginDir);
         return Error::SourceRepo;
     }
@@ -315,7 +334,7 @@ Error exportPayload(const QString &destDir, QString *detailForLog)
     }
 
     const QString targetDir = QDir(clean).filePath(pluginFolderName());
-    if (looksLikeSourceRepo(targetDir) || looksLikeSourceRepo(clean)) {
+    if (looksLikeSourceRepo(targetDir) || looksLikeSourceTreeRoot(clean)) {
         detail = QStringLiteral("Es un repositorio (QtClient/CMakeLists.txt o .git): %1").arg(targetDir);
         return Error::SourceRepo;
     }
