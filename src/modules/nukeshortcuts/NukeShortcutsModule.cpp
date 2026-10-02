@@ -674,7 +674,11 @@ QWidget *NukeShortcutsModule::createPanel(QWidget *parent)
     }
     if (!interactive) {
         // Las capturas nunca leen la .nuke real.
+#ifdef Q_OS_WIN
         const QString fixtureDir = QStringLiteral("C:/Users/you/.nuke");
+#else
+        const QString fixtureDir = QStringLiteral("/Users/you/.nuke");
+#endif
         if (m_captureState == QLatin1String("plugin-missing")) {
             panel->showPluginFixture(NukePlugin::ChipState::NotInstalled, QString(), fixtureDir);
         } else if (m_captureState == QLatin1String("plugin-update")) {

@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.19:
+
+Las v1.17 y v1.18 probadas en la Mac: el bridge 1.85 borró el keyframe que había dejado la 1.84 en
+`LGA_OpenInNukeX`, Nuke Shortcuts instaló `LGA_NukeShortcuts` con una sola línea en el `init.py`, y el
+atajo, la pausa y los chips anduvieron (Lega). Lo único que fallaba era de las capturas: en mac la `.nuke`
+de prueba de los paneles de Nuke Shortcuts y Open in NukeX salía con forma de Windows
+(`C:/Users/you/.nuke`). Ahora cada plataforma usa la suya (`/Users/<usuario>/.nuke` en mac); la app real ya
+mostraba bien la ruta.
+[ Nuke Shortcuts - Capturas con la .nuke de cada plataforma ]
+
 v1.18:
 
 Nuke Shortcuts y Open in NukeX figuraban «Activa» y «Asociado» aunque faltara su plugin dentro de Nuke, y

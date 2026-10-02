@@ -47,6 +47,15 @@ const QStringList kFixtureStates = {
     QStringLiteral("bridge-unknown"),     QStringLiteral("bridge-installed"),
 };
 
+// La .nuke de las capturas, con la forma de cada plataforma.
+QString fixtureNukeDir()
+{
+#ifdef Q_OS_WIN
+    return QStringLiteral("C:\\Users\\lega\\.nuke");
+#else
+    return QStringLiteral("/Users/lega/.nuke");
+#endif
+}
 
 QString oldClientCaption()
 {
@@ -861,7 +870,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
         buttonVariant = QStringLiteral("primary");
         hintVisible = true;
         hintText = I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.")
-                       .arg(QStringLiteral("C:\\Users\\lega\\.nuke"));
+                       .arg(fixtureNukeDir());
     } else if (state == QStringLiteral("no-nuke-manual-open")) {
         chipTone = QStringLiteral("warn"); // falta un paso, como «Not associated»
         chipText = I18n::tr("Not installed");
@@ -879,7 +888,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     m_bridgeHint->setVisible(hintVisible);
     m_nukeDirField->setText(state == QStringLiteral("no-nuke-manual-open") || state == QStringLiteral("first-time")
                                 ? QString()
-                                : QStringLiteral("C:\\Users\\lega\\.nuke"));
+                                : fixtureNukeDir());
 
     m_manualOpen = state == QStringLiteral("no-nuke-manual-open");
     m_manualPanel->setVisible(m_manualOpen);
