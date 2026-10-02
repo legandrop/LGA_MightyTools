@@ -67,7 +67,26 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 4. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
    los links contra Link Redirector.
 5. **Fase 7:** instalador, updater, alta en LGA_Updates y en el sitio; release 1.00 de Windows.
-6. **Fase 8:** macOS. Los avisos siguen por `osascript`, sin click ni desplegable: el «Remind me again
-   in» de Disk Space pide `UNUserNotificationCenter` con acciones (macOS las agrupa en «Options»).
-7. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+6. **Fase 8: macOS, en curso desde la Mac de Lega (2026-10-02).** Hecho y probado por Lega en la Mac (v1.15): la
+   app compila, se instala con `deploy.sh` (D-38) y andan Nuke Shortcuts (con el Nuke Bridge), Disk Space
+   (vigilancia y avisos), Open in NukeX y Link Redirector. Falta, en este orden:
+   - **Folder Switch** (no existe en mac; D-40): leer la carpeta del Finder, detectar el panel
+     Abrir/Guardar nativo y el navegador de Nuke por Accesibilidad, y llevarles la carpeta. Reemplaza a
+     Default Folder X.
+   - **Disk Space completo:** la ventana de limpieza está apagada en mac (`cleanupSupported()`): reglas
+     propias de mac, Papelera (`RecycleBinMac`), «Show in Finder»; y estirar la ventana
+     (`WindowFrameMac`).
+   - **Avisos nativos:** hoy van por `osascript`, sin click ni desplegable: el «Remind me again in» de Disk
+     Space pide `UNUserNotificationCenter` con acciones (macOS las agrupa en «Options»).
+   - **Updater y release de mac:** DMG/ZIP, alta en LGA_Updates; General dice «up to date» sin updater.
+   - **Retiro de lo viejo en la Mac:** `/Applications/LGA Link Redirector.app` (con su LaunchAgent
+     `com.lga.linkredirector.autostart`), `/Applications/LGA OpenInNukeX.app` y el clon
+     `~/Desktop/Codin/LGA_LinkRedirector`. El clon `~/.nuke/LGA_OpenInNukeX` ya está en la Papelera.
+7. **«Frame Dope Sheet» sin macro, después de la fase 8 (pedido de Lega, 2026-10-02).** Hoy el atajo
+   (Ctrl+Alt+Shift+D en Windows) sigue siendo un macro (`ActionRunner::runFrameDopeSheet`): click en
+   el punto calibrado del Dope Sheet, Ctrl+A y F, y devuelve el puntero. Buscar cómo resolverlo dentro
+   de Nuke, como «Add keyframe» en la v1.14 (el plugin registra el atajo y lo resuelve con la API de
+   Nuke; D-37), para que deje de depender del mouse y de la calibración. Va después de portar todas
+   las herramientas a macOS.
+8. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.

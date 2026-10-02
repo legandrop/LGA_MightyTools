@@ -28,13 +28,20 @@ jobs:
       - name: Build
         run: cmake --build build -j 4
 
-      - name: Self-test
-        run: '"build/LGA Mighty Tools.app/Contents/MacOS/LGA Mighty Tools" --self-test'
-
+      # El Release no lleva ruta al Qt (solo @executable_path/../Frameworks): el self-test corre sobre el
+      # bundle ya armado por macdeployqt, que es ademas lo que se publica.
       - name: Bundle
         run: |
           cd build
           macdeployqt "LGA Mighty Tools.app"
+          python3 ../tools/macos/podar_bundle.py "LGA Mighty Tools.app"
+
+      - name: Self-test
+        run: QT_QPA_PLATFORM=offscreen "build/LGA Mighty Tools.app/Contents/MacOS/LGA Mighty Tools" --self-test
+
+      - name: Zip
+        run: |
+          cd build
           ditto -c -k --keepParent "LGA Mighty Tools.app" LGA_MightyTools_Mac.zip
 
       - name: Upload

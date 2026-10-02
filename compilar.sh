@@ -1,7 +1,6 @@
 #!/bin/bash
 # Motor de compilacion de macOS para LGA Mighty Tools (Debug en build/, Release en build-release/).
-# Estructura tomada de LGA_VideoDownloader/compilar.sh. Qt sale de Homebrew (/opt/homebrew), igual
-# que en las otras apps LGA de la Mac.
+# Estructura tomada de LGA_VideoDownloader/compilar.sh. Qt: el oficial 6.5.3 (ver QT_PREFIX abajo).
 #
 # CONVENCION LGA: la app se lanza en BACKGROUND y el script termina enseguida. Dejarla en
 # foreground retiene la terminal hasta que alguien la cierre a mano. --wait recupera el foreground.
@@ -58,14 +57,33 @@ fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-QT_PREFIX="/opt/homebrew"
+# Qt oficial 6.5.3 (~/Qt/6.5.3/macos), el mismo de Windows y del CI de mac: su macdeployqt arma un
+# bundle autocontenido. El de Homebrew deja afuera dependencias reales (QtDBus, brotli) que siguen
+# apuntando a /opt/homebrew. Homebrew queda de respaldo si no esta el oficial; QT_PREFIX lo cambia.
+if [ -z "${QT_PREFIX:-}" ]; then
+    if [ -f "$HOME/Qt/6.5.3/macos/lib/cmake/Qt6/Qt6Config.cmake" ]; then
+        QT_PREFIX="$HOME/Qt/6.5.3/macos"
+    else
+        QT_PREFIX="/opt/homebrew"
+    fi
+fi
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 
 # Se reconfigura si falta el cache o si el build type cacheado no es el pedido: si no, pedir Release
 # sobre un arbol en Debug compilaria Debug en silencio.
 CACHED_TYPE=""
+CACHED_PREFIX=""
 if [ -f CMakeCache.txt ]; then
     CACHED_TYPE="$(grep -E '^CMAKE_BUILD_TYPE:' CMakeCache.txt | cut -d= -f2)"
+    CACHED_PREFIX="$(grep -E '^CMAKE_PREFIX_PATH:' CMakeCache.txt | cut -d= -f2)"
+fi
+# Cambiar de Qt sobre un arbol ya configurado mezcla los dos: se empieza de cero.
+if [ -f CMakeCache.txt ] && [ "$CACHED_PREFIX" != "$QT_PREFIX" ]; then
+    echo "El arbol estaba configurado con otro Qt ($CACHED_PREFIX): se limpia."
+    cd "$APP_ROOT"
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+    cd "$BUILD_DIR"
 fi
 if [ ! -f CMakeCache.txt ] || [ "$CACHED_TYPE" != "$BUILD_TYPE" ]; then
     echo "Configurando CMake ($BUILD_TYPE)..."
@@ -83,6 +101,21 @@ cd "$APP_ROOT"
 if [ ! -x "$APP_BIN" ]; then
     echo "ERROR: no se genero $APP_BIN"
     exit 1
+fi
+
+# Firma con una identidad ESTABLE, si existe en el llavero (bloque de LGA_Base_QT_C_Py/compilar.sh).
+# Con la firma del linker la identidad del bundle para los permisos de macOS (TCC: Accesibilidad,
+# Automatizacion) es el cdhash, que cambia en CADA compilacion: el permiso concedido deja de coincidir
+# y Nuke Shortcuts y Folder Switch lo vuelven a pedir despues de cada build. Con un certificado de Code
+# Signing (alcanza el self-signed "LGA Code Signing", ver LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md) el
+# requisito pasa a ser identifier + certificado y el permiso sobrevive. Sin identidad no se firma.
+CODESIGN_IDENTITY="${LGA_CODESIGN_IDENTITY:-LGA Code Signing}"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CODESIGN_IDENTITY\""; then
+    if codesign --force --deep --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE" 2>/dev/null; then
+        echo "Firmado con la identidad '$CODESIGN_IDENTITY' (permisos de macOS estables entre builds)."
+    else
+        echo "AVISO: no se pudo firmar con '$CODESIGN_IDENTITY'; queda la firma del linker."
+    fi
 fi
 
 # Refrescar el cache de iconos del bundle (Dock/Finder pueden seguir mostrando el viejo).

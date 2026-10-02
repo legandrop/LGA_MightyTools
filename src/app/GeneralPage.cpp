@@ -245,6 +245,25 @@ QFrame *GeneralPage::buildAppCard()
                                             : I18n::tr("Up to %1 fits on this screen.").arg(maxLevel);
         layout->addWidget(Ui::caption(limit, card));
     }
+#ifdef Q_OS_MACOS
+    // macOS: el click en la barra de menu abre esta ventana (sin menu, pedido de Lega 2026-10-02), asi que
+    // salir de la app vive aca. En Windows sigue en el menu de la bandeja.
+    Ui::addDivider(layout, card);
+    auto *quitRow = new QHBoxLayout();
+    quitRow->setContentsMargins(0, 0, 0, 0);
+    quitRow->setSpacing(12);
+    auto *quitText = new QVBoxLayout();
+    quitText->setContentsMargins(0, 0, 0, 0);
+    quitText->setSpacing(2);
+    quitText->addWidget(Ui::label(I18n::tr("Quit LGA Mighty Tools"), "optionLabel", card));
+    quitText->addWidget(Ui::caption(I18n::tr("Every tool stops until you open the app again."), card));
+    quitRow->addLayout(quitText, 1);
+    QPushButton *quitButton = Ui::button(I18n::tr("Quit"), QString(), QStringLiteral("sm"), card);
+    quitButton->setObjectName(QStringLiteral("quitButton"));
+    quitRow->addWidget(quitButton, 0, Qt::AlignVCenter);
+    layout->addLayout(quitRow);
+    connect(quitButton, &QPushButton::clicked, this, &GeneralPage::quitRequested);
+#endif
     connect(m_uiSizeSwitch, &SegmentedSwitch::currentChanged, this, &GeneralPage::uiSizeChangeRequested);
     connect(m_languageButton, &QPushButton::clicked, this, [this]() {
         QMenu menu(this);

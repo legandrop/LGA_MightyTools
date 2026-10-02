@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.15:
+
+En macOS la app no compilaba (el updater de Windows quedaba afuera del `#ifdef`) y, compilada, fallaba
+en lo básico: Link Redirector no podía ser navegador (el bundle no declaraba http/https), Disk Space no
+veía el disco del sistema (el `/` sellado es de solo lectura), abrirla desde Finder con la copia corriendo
+no hacía nada, un `.nk` o un link que la lanzaba cerrada se perdía y no tenía ícono. Corregido todo, y en
+mac se prueba instalada (D-38): `deploy.sh` nuevo con el Qt oficial 6.5.3, bundle autocontenido y firma
+estable para que el permiso de Accesibilidad sobreviva a cada versión. El click en la barra de menú abre
+la ventana y salir es «Quit» en General (D-39). «Open Settings» de Accesibilidad hace un solo paso.
+[ macOS - La app compila, se instala y anda en la Mac ]
+
 v1.14:
 
 «Add keyframe» fallaba con el campo del knob en foco: hacía clic derecho, flecha y Enter, y con el campo

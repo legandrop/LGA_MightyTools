@@ -482,6 +482,8 @@ void testNotifier(const Check &check)
     const SystemNotifier::Last last = notifier.last();
     check(!last.launched && !notifier.workerRunning(),
           QStringLiteral("notificaciones: en corrida automatizada no se lanza PowerShell ni se crea el hilo"));
+#ifdef Q_OS_WIN
+    // El PNG del icono es del toast de Windows; en macOS el aviso lleva el icono que pone el sistema.
     QImageReader reader(QStringLiteral(":/icons/LGA_MightyTools.ico"));
     int largest = 0;
     for (int i = 0; i < qMax(1, reader.imageCount()); ++i) {
@@ -496,6 +498,7 @@ void testNotifier(const Check &check)
               .arg(largest).arg(last.icon.frames).arg(written.width()));
     notifier.show(QStringLiteral("Again"), QStringLiteral("Body"));
     check(notifier.last().icon.reused, QStringLiteral("notificaciones: el PNG reciente se reusa"));
+#endif
     check(SystemNotifier::escapeForScript(QStringLiteral("It's")) == QLatin1String("It''s"),
           QStringLiteral("notificaciones: las comillas simples se duplican para PowerShell"));
     check(SystemNotifier::escapeForScript(QStringLiteral("It’s")) == QStringLiteral("It’’s"),

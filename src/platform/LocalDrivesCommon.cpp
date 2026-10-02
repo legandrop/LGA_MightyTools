@@ -29,7 +29,10 @@ QList<DriveInfo> list()
     QList<DriveInfo> drives;
     for (const QStorageInfo &storage : QStorageInfo::mountedVolumes()) {
         DriveInfo drive;
-        if (!storage.isReadOnly() && isLocalVolume(storage) && read(storage, &drive)) {
+        // El volumen del sistema de macOS ("/") esta montado de solo lectura (sellado), pero comparte
+        // el espacio con el de datos: es el disco que el usuario mira y se lista igual.
+        const bool systemRoot = storage.rootPath() == QLatin1String("/");
+        if ((!storage.isReadOnly() || systemRoot) && isLocalVolume(storage) && read(storage, &drive)) {
             drives.append(drive);
         }
     }

@@ -14,6 +14,7 @@
 #include "platform/AutoStart.h"
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
+#include "platform/WindowActivation.h"
 #include "ui/HelpDialog.h"
 
 #ifdef Q_OS_WIN
@@ -95,6 +96,15 @@ AppController::AppController(const Options &options, QObject *parent)
         dialog.execOver(m_window);
     });
     connect(m_window, &MainWindow::rebuilt, this, &AppController::wireGeneralPage);
+#ifdef Q_OS_MACOS
+    // Cmd+Q con la ventana al frente sale de la app, como en cualquier app de mac (no hay barra de menu
+    // propia: LSUIElement).
+    auto *quitAction = new QAction(m_window);
+    quitAction->setShortcut(QKeySequence::Quit);
+    quitAction->setShortcutContext(Qt::WindowShortcut);
+    connect(quitAction, &QAction::triggered, this, &AppController::quit);
+    m_window->addAction(quitAction);
+#endif
 
     connect(m_host, &ModuleHost::moduleToggled, this, [this]() { refreshTray(); });
     connect(m_host, &ModuleHost::moduleStatusChanged, this, [this]() { refreshTray(); });
@@ -109,13 +119,15 @@ AppController::AppController(const Options &options, QObject *parent)
         m_menu = new QMenu();
         connect(m_menu, &QMenu::aboutToShow, this, &AppController::rebuildMenu);
         m_tray = new QSystemTrayIcon(this);
+#ifdef Q_OS_MACOS
+        // macOS (pedido de Lega, 2026-10-02): el click en la barra de menu abre la ventana, sin menu.
+        // Pausar, calibrar y salir viven en la ventana (Quit en General).
+#else
         m_tray->setContextMenu(m_menu);
+#endif
         connect(m_tray, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
             if (reason == QSystemTrayIcon::DoubleClick || reason == QSystemTrayIcon::Trigger) {
-#ifndef Q_OS_MACOS
-                // En la barra de menu de macOS el click abre el menu; no hay doble click.
                 showSettings();
-#endif
             }
         });
         // El click en una notificacion abre la ventana en la herramienta que aviso.
@@ -128,8 +140,11 @@ AppController::AppController(const Options &options, QObject *parent)
         });
 
         // El canal de la instancia unica lo abre main() desde el arranque, antes de la bandeja.
-        // mac: los .nk y los links llegan a la residente como QFileOpenEvent.
+        // mac: los .nk y los links llegan a la residente como QFileOpenEvent (los que llegaron antes
+        // de este punto los guarda main() y los pasa por openExternal).
         qApp->installEventFilter(this);
+        // mac: abrir la app desde Finder o Spotlight con esta copia corriendo abre la ventana.
+        WindowActivation::onReopenRequested([this]() { showSettings(); });
     }
 
 #ifdef Q_OS_WIN
@@ -170,6 +185,7 @@ AppController::AppController(const Options &options, QObject *parent)
         });
     }
 
+#ifdef Q_OS_WIN
     if (m_updates) {
         if (checkUpdates) {
             m_updates->scheduleAutomaticCheck();
@@ -177,6 +193,9 @@ AppController::AppController(const Options &options, QObject *parent)
             qInfo() << "[AppController] Chequeo de updates al arrancar: desactivado por el usuario";
         }
     }
+#else
+    Q_UNUSED(checkUpdates);
+#endif
 
     if (!m_options.measurement) {
         // La ventana se abre sola SOLO en el primer arranque de la copia instalada (D-06, canvas
@@ -281,6 +300,7 @@ void AppController::wireGeneralPage()
             [this](bool check) { m_store->setValue(kCheckUpdates, check); });
     connect(general, &GeneralPage::languageChangeRequested, this, &AppController::onLanguageChangeRequested);
     connect(general, &GeneralPage::uiSizeChangeRequested, this, &AppController::onUiSizeChangeRequested);
+    connect(general, &GeneralPage::quitRequested, this, &AppController::quit);
 #ifdef Q_OS_WIN
     if (m_updates) {
         connect(general, &GeneralPage::checkNowRequested, m_updates, &UpdateService::checkInline);
@@ -475,27 +495,35 @@ void AppController::showSettings()
 bool AppController::eventFilter(QObject *watched, QEvent *event)
 {
     if (event->type() == QEvent::FileOpen) {
-        // mac: un .nk o un link que llega a la app residente. Se despacha al modulo prendido, o al
-        // paso directo del descriptor si esta apagado (D-05). La app nunca sale por esto.
+        // mac: un .nk o un link que llega a la app residente.
         auto *open = static_cast<QFileOpenEvent *>(event);
-        const QString argument = open->url().isLocalFile() ? open->file() : open->url().toString();
-        const ModuleDescriptor *d = ExternalDispatch::claimant(m_host->descriptors(), argument);
-        if (d) {
-            ExternalRequest request;
-            request.argument = argument;
-            request.resident = true;
-            request.moduleEnabled = m_host->isRunning(d->id);
-            request.value = m_host->reader(d->id);
-            request.finished = [](int) {};
-            if (Module *module = m_host->module(d->id)) {
-                module->handleExternal(request);
-            } else {
-                d->runExternal(request);
-            }
+        if (openExternal(open->url().isLocalFile() ? open->file() : open->url().toString())) {
             return true;
         }
     }
     return QObject::eventFilter(watched, event);
+}
+
+bool AppController::openExternal(const QString &argument)
+{
+    // Se despacha al modulo prendido, o al paso directo del descriptor si esta apagado (D-05). La app
+    // nunca sale por esto.
+    const ModuleDescriptor *d = ExternalDispatch::claimant(m_host->descriptors(), argument);
+    if (!d) {
+        return false;
+    }
+    ExternalRequest request;
+    request.argument = argument;
+    request.resident = true;
+    request.moduleEnabled = m_host->isRunning(d->id);
+    request.value = m_host->reader(d->id);
+    request.finished = [](int) {};
+    if (Module *module = m_host->module(d->id)) {
+        module->handleExternal(request);
+    } else {
+        d->runExternal(request);
+    }
+    return true;
 }
 
 void AppController::quit()

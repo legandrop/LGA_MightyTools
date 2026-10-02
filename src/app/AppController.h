@@ -54,6 +54,9 @@ public:
 
 public slots:
     void showSettings();
+    // Un .nk o un link que llega a la residente (mac: QFileOpenEvent). false si ninguna herramienta lo
+    // reclama.
+    bool openExternal(const QString &argument);
     // Salir de la app: «Quit» de la bandeja, y el --quit de otra copia (instalador.bat).
     void quit();
 

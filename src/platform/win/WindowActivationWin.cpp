@@ -11,4 +11,8 @@ void allowAnyProcessToActivate()
     AllowSetForegroundWindow(ASFW_ANY);
 }
 
+void onReopenRequested(std::function<void()>)
+{
+}
+
 } // namespace WindowActivation

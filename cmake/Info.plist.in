@@ -21,8 +21,8 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <!-- Icono: CFBundleIconName apunta al icono moderno de Assets.car (Icon Composer) y
-         CFBundleIconFile al .icns de compatibilidad. Los dos salen del sistema de iconos LGA
-         (pendiente en el roadmap); mientras no esten, macOS muestra el icono generico. -->
+         CFBundleIconFile al .icns de compatibilidad. Los dos salen de
+         resources/icons/Alta/LGA_MightyTools.icon (ver CMakeLists.txt). -->
     <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>CFBundleIconFile</key>
@@ -43,8 +43,41 @@
          Finder no tiene icono para ellos. Rango Alternate: aparece en "Abrir con" pero no se queda con
          los .nk por instalarse (D-06); el doble click lo toma solo con "Apply" (MacFileAssociation). El
          icono es el documento de Nuke de Open in NukeX, el mismo de Windows (NukeScript.icns). -->
+    <!-- Los links (Link Redirector). Sin declarar http y https macOS nunca ofrece la app como navegador
+         y "Make default" no hace nada. Declararlos no cambia el navegador: eso lo confirma el usuario en
+         el cartel del sistema. Mismo bloque que el Link Redirector viejo. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.lga.mightytools.http</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Default</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>http</string>
+                <string>https</string>
+            </array>
+        </dict>
+    </array>
     <key>CFBundleDocumentTypes</key>
     <array>
+        <!-- Los .html locales que se abren "como navegador". Rango Alternate: aparece en "Abrir con" pero
+             no se queda con los .html por instalarse (D-06); los toma al ser el navegador por defecto. -->
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>HTML Document</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.html</string>
+            </array>
+        </dict>
         <dict>
             <key>CFBundleTypeName</key>
             <string>Nuke Script</string>

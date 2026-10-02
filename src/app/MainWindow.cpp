@@ -425,7 +425,7 @@ void MainWindow::hideEvent(QHideEvent *event)
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
-    // No se cierra la app: se oculta a la bandeja. Salir solo desde "Quit" del menu.
+    // No se cierra la app: se oculta a la bandeja. Salir solo desde "Quit" del menu (mac: el boton Quit de General, D-39).
     hide();
     event->ignore();
 }

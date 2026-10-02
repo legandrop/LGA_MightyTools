@@ -60,6 +60,8 @@ signals:
     void languageChangeRequested(const QString &code);
     // El usuario eligio otro tamano de interfaz (0..2): se aplica reiniciando la app.
     void uiSizeChangeRequested(int level);
+    // macOS: el boton Quit de la tarjeta App (ahi no hay menu en la barra).
+    void quitRequested();
 
 private:
     void buildWelcome();

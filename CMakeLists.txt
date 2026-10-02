@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.14 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.15 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,6 +18,10 @@ if(APPLE)
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_INSTALL_RPATH "@executable_path/../Frameworks")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+    # AGL (OpenGL legacy) ya no esta en los SDK nuevos y Qt 6.5 lo pide: que FindOpenGL no lo proponga
+    # (mismo arreglo que LGA_Base_QT_C_Py y LGA_LinkRedirector; ver tambien despues de find_package).
+    set(OPENGL_agl_LIBRARY "" CACHE STRING "AGL library" FORCE)
+    set(OPENGL_AGL_INCLUDE_DIR "" CACHE PATH "AGL include dir" FORCE)
 endif()
 
 if(WIN32 AND NOT MSVC)
@@ -34,11 +38,26 @@ if(NOT CMAKE_PREFIX_PATH)
     if(WIN32)
         set(CMAKE_PREFIX_PATH "C:/Qt/6.5.3/mingw_64")
     elseif(APPLE)
-        set(CMAKE_PREFIX_PATH "/opt/homebrew")
+        set(CMAKE_PREFIX_PATH "$ENV{HOME}/Qt/6.5.3/macos")
     endif()
 endif()
 
 find_package(Qt6 COMPONENTS Core Gui Widgets Network REQUIRED)
+
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    # El FindWrapOpenGL de Qt 6.5 agrega "-framework AGL" aunque no lo encuentre: se saca de la interfaz
+    # para que ningun consumidor de Qt6::Gui lo arrastre al link.
+    get_target_property(_wo_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if(_wo_libs)
+        set(_wo_new_libs "")
+        foreach(_wo_lib ${_wo_libs})
+            if(NOT "${_wo_lib}" MATCHES "(^|/)AGL(\\.framework)?$" AND NOT "${_wo_lib}" MATCHES "-framework[ \t]+AGL")
+                list(APPEND _wo_new_libs "${_wo_lib}")
+            endif()
+        endforeach()
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES INTERFACE_LINK_LIBRARIES "${_wo_new_libs}")
+    endif()
+endif()
 
 set(RESOURCES
     resources/resources.qrc
@@ -336,7 +355,7 @@ elseif(APPLE)
         src/platform/mac/SystemInputMac.cpp
         src/platform/mac/SystemNotifierMac.cpp
         src/platform/mac/ToastActivationMac.cpp
-        src/platform/mac/WindowActivationMac.cpp
+        src/platform/mac/WindowActivationMac.mm
         src/platform/mac/WindowFrameMac.cpp
     )
     list(APPEND HEADERS
@@ -378,6 +397,9 @@ elseif(APPLE)
         "-framework ApplicationServices"
         "-framework Carbon"
         "-framework ServiceManagement"
+        # UTType (Open in NukeX, MacFileAssociation.mm). El QtCore de Homebrew lo traia de arrastre; el
+        # oficial no.
+        "-framework UniformTypeIdentifiers"
     )
     # Los .mm con ARC: sin retain/release a mano.
     set_source_files_properties(
@@ -385,6 +407,7 @@ elseif(APPLE)
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm
+        src/platform/mac/WindowActivationMac.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 
@@ -417,12 +440,35 @@ elseif(APPLE)
     )
 endif()
 
+# macOS, build de desarrollo (no Release): el bundle de build/ no lleva Qt adentro (eso lo hace
+# deploy.sh con macdeployqt), asi que ademas de @executable_path/../Frameworks busca los frameworks en
+# el Qt con el que se compilo. El Release que se instala no lleva esta ruta.
+if(APPLE AND NOT CMAKE_BUILD_TYPE STREQUAL "Release")
+    get_target_property(_qtcore_location Qt6::Core LOCATION)
+    # .../lib/QtCore.framework/Versions/A/QtCore -> .../lib
+    string(REGEX REPLACE "/QtCore\\.framework/.*$" "" _qt_lib_dir "${_qtcore_location}")
+    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY INSTALL_RPATH "${_qt_lib_dir}")
+endif()
+
 # Icono de los .nk en macOS (Info.plist, CFBundleTypeIconFile): el documento de Nuke de Open in NukeX,
 # el mismo dibujo que resources/icons/NukeScript.ico de Windows (512 y 1024 ampliados desde el de 256).
 if(APPLE)
     set(NK_ICON_RESOURCE_MAC "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/NukeScript.icns")
     target_sources(${PROJECT_NAME} PRIVATE "${NK_ICON_RESOURCE_MAC}")
     set_source_files_properties("${NK_ICON_RESOURCE_MAC}" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+    # Icono de la app en macOS, como en LGA_FrameRev: el .icon de Icon Composer
+    # (resources/icons/Alta/LGA_MightyTools.icon, con el maestro aprobado adentro) compilado con actool
+    # a los DOS recursos del bundle. Assets.car es el icono moderno (CFBundleIconName) y AppIcon.icns el
+    # de compatibilidad (CFBundleIconFile), con --standalone-icon-behavior all para los 10 tamanos:
+    #   xcrun actool AppIcon.icon --compile <out> --platform macosx --minimum-deployment-target 26.0 \
+    #       --app-icon AppIcon --standalone-icon-behavior all --output-partial-info-plist <out>/p.plist
+    # (copiar antes el .icon como AppIcon.icon: actool nombra el asset por el archivo).
+    set(APP_ICON_MACOS_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/AppIcon.icns"
+        "${CMAKE_CURRENT_SOURCE_DIR}/resources/icons/Assets.car")
+    target_sources(${PROJECT_NAME} PRIVATE ${APP_ICON_MACOS_FILES})
+    set_source_files_properties(${APP_ICON_MACOS_FILES} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 endif()
 
 # El plugin offscreen va al lado del exe: sin el, una corrida con QT_QPA_PLATFORM=offscreen

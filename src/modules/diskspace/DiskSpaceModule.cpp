@@ -693,7 +693,11 @@ ModuleDescriptor diskSpaceDescriptor()
                                        "so you can free up space.")
                             : I18n::tr("Watches your local drives and warns you when one runs low.");
     d.offBullets = {I18n::tr("Checks only the drives you pick, every 15 min"),
+#ifdef Q_OS_MACOS
+                    I18n::tr("Warns with a notification"), // sin menu en la barra (D-39)
+#else
                     I18n::tr("Warns with a notification and a line in the tray menu"),
+#endif
                     I18n::tr("Each drive has its own limit, in GB or %")};
     if (cleanup) {
         d.offBullets.append(I18n::tr("Scans a drive only when you ask, to list what fills it and clean it up"));

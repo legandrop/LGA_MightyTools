@@ -31,6 +31,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileOpenEvent>
 #include <QIcon>
 #include <QLockFile>
 #include <QSystemTrayIcon>
@@ -176,6 +177,25 @@ void setNames()
     QCoreApplication::setApplicationName(QStringLiteral("LGA_MightyTools"));
     QCoreApplication::setApplicationVersion(QStringLiteral(MIGHTYTOOLS_VERSION));
 }
+
+// mac: un .nk o un link que lanza la app cerrada llega como QFileOpenEvent apenas arranca el event loop,
+// antes de que exista AppController (que espera la barra de menu). Sin esto se perderia: se guarda y
+// AppController lo atiende al crearse.
+class EarlyFileOpens : public QObject
+{
+public:
+    QStringList pending;
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::FileOpen) {
+            auto *open = static_cast<QFileOpenEvent *>(event);
+            pending << (open->url().isLocalFile() ? open->file() : open->url().toString());
+            return true;
+        }
+        return QObject::eventFilter(watched, event);
+    }
+};
 
 } // namespace
 
@@ -374,6 +394,8 @@ int main(int argc, char *argv[])
     // otra copia en ese rato queda anotado y la ventana se abre apenas existe.
     AppController *controller = nullptr;
     bool showPending = relaunch;
+    EarlyFileOpens earlyFileOpens;
+    app.installEventFilter(&earlyFileOpens);
     auto *server = new SingleInstanceServer(&app);
     QObject::connect(server, &SingleInstanceServer::showRequested, &app, [&controller, &showPending]() {
         if (controller) {
@@ -398,7 +420,7 @@ int main(int argc, char *argv[])
     constexpr int kTrayPollMs = 500;
     int trayWaitedMs = 0;
     std::function<void()> pollTray;
-    pollTray = [&app, &trayWaitedMs, &pollTray, options, &controller, &showPending]() {
+    pollTray = [&app, &trayWaitedMs, &pollTray, options, &controller, &showPending, &earlyFileOpens]() {
         const bool trayReady = QSystemTrayIcon::isSystemTrayAvailable();
         if (trayReady || trayWaitedMs >= kTrayWaitMs) {
             AppController::Options start = options;
@@ -416,6 +438,12 @@ int main(int argc, char *argv[])
             }
             start.openWindow = start.openWindow || showPending;
             controller = new AppController(start, &app);
+            app.removeEventFilter(&earlyFileOpens);
+            for (const QString &argument : std::as_const(earlyFileOpens.pending)) {
+                const bool claimed = controller->openExternal(argument);
+                qInfo() << "Archivo o link llegado durante el arranque:" << (claimed ? "atendido" : "ninguna herramienta lo reclama");
+            }
+            earlyFileOpens.pending.clear();
             qInfo() << "LGA_MightyTools" << MIGHTYTOOLS_VERSION << "iniciado.";
             logStartupDiagnostics();
             return;

@@ -470,7 +470,12 @@ void NukeShortcutsModule::onHotkey(int localId)
     if (!m_state->hasDopeSheetSpot()) {
         qInfo() << "[NukeShortcuts] Frame Dope Sheet sin calibrar";
         context().notify(I18n::tr("Frame Dope Sheet"),
+#ifdef Q_OS_MACOS
+                         // En mac la barra de menu no tiene menu (D-39): se calibra desde el panel.
+                         I18n::tr("Calibrate the Dope Sheet first: one click, with Calibrate... in Mighty Tools."),
+#else
                          I18n::tr("Calibrate the Dope Sheet first: one click, from the tray menu."),
+#endif
                          ModuleContext::NoticeIcon::Info, 6000);
         return;
     }
@@ -528,9 +533,16 @@ void NukeShortcutsModule::openAccessibilitySettings()
         qInfo() << "[NukeShortcuts] (automatizada) se abriria Ajustes > Accesibilidad";
         return;
     }
-    // El cartel del sistema agrega la app a la lista (apagada); el panel de Ajustes es donde se
-    // prende.
-    SystemInput::accessibilityTrusted(true);
+    // UN solo paso por click (Lega vio los dos juntos: Ajustes ya abierto y encima el cartel del sistema
+    // ofreciendo abrirlo). La primera vez, el cartel del sistema: agrega la app a la lista de
+    // Accesibilidad (apagada) y trae su propio boton para abrir Ajustes. Despues, Ajustes directo: la app
+    // ya esta en la lista y macOS no repite el cartel.
+    const QString promptedKey = QStringLiteral("accessibilityPrompted");
+    if (!context().value(promptedKey, false).toBool()) {
+        context().setValue(promptedKey, true);
+        SystemInput::accessibilityTrusted(true);
+        return;
+    }
     QDesktopServices::openUrl(QUrl(QStringLiteral("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")));
 }
 

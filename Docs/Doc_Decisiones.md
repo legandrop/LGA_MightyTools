@@ -98,6 +98,20 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   del campo. El atajo y el prendido salen del settings de la app. La app no toma el atajo en un Nuke que
   tenga el plugin activo (marca `nuke_set_key/<pid>`); en uno sin plugin sigue el clic derecho + Enter.
 
+- **D-38 · macOS: se prueba instalada** (2026-10-02, Lega). En mac la app se prueba siempre desde
+  `/Applications`, con `deploy.sh` (Release, Qt oficial 6.5.3, bundle autocontenido, firma «LGA Code
+  Signing»): el inicio con la sesión, los `.nk`, el navegador por defecto y el permiso de Accesibilidad
+  dependen de la ruta y la firma de la copia instalada.
+- **D-39 · macOS: la barra de menú abre la ventana, sin menú** (2026-10-02, Lega: las opciones del menú
+  «no tienen sentido» ahí). Un click en el ícono abre la ventana; salir es el botón «Quit» de la tarjeta
+  App en General (y Cmd+Q con la ventana al frente). Pausar y calibrar viven en el panel de cada
+  herramienta. En Windows el menú de la bandeja sigue igual.
+
+- **D-40 · Folder Switch en macOS** (2026-10-02, Lega). Se porta completo (cambio automático, atajo
+  manual y recientes) y reemplaza a Default Folder X, que Lega apaga al probarlo. Toma la carpeta solo
+  del Finder. Lleva la carpeta a los diálogos nativos de macOS (Abrir/Guardar de cualquier app) y al
+  navegador de archivos de Nuke (Qt).
+
 ## Abiertas
 
 - **D-31 · Desvíos de la ventana de limpieza respecto del diseño aprobado.** Mientras tanto, lo
