@@ -368,6 +368,7 @@ const QHash<QString, QString> &spanishTable()
         E("1 smaller file", "1 archivo más chico"),
         E("%1 smaller files", "%1 archivos más chicos"),
         E("Not readable without administrator", "No legible sin administrador"),
+        E("System data and folders not readable", "Datos del sistema y carpetas que no se pueden leer"),
         E("Scanning…", "Escaneando…"),
         E("Scanning… %1 files · %2 s", "Escaneando… %1 archivos · %2 s"),
         E("Scanned %1 · %2 files · %3 s", "Escaneado %1 · %2 archivos · %3 s"),

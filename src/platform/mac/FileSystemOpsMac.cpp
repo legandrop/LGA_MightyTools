@@ -177,10 +177,10 @@ std::shared_ptr<const std::unordered_set<std::string>> openFilesSnapshot()
 
 bool isInUse(const DirEnumerator::NativeString &path)
 {
-    // El sistema da las rutas reales (/private/var/..., no /var/...): se compara con la real.
-    char resolved[PATH_MAX];
-    const std::string real = realpath(path.c_str(), resolved) ? std::string(resolved) : std::string(path);
-    return openFilesSnapshot()->count(real) > 0;
+    // El sistema da las rutas reales (/private/var/..., no /var/...). Quien pregunta ya trae una ruta real
+    // (la limpieza trabaja sobre rutas reales y no entra en enlaces): sin realpath por archivo, que era la
+    // mitad del tiempo de revisar una carpeta grande.
+    return openFilesSnapshot()->count(std::string(path)) > 0;
 }
 
 bool isCloudPlaceholder(const DirEnumerator::NativeString &path)

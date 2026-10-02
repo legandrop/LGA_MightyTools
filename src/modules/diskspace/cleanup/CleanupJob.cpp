@@ -396,6 +396,13 @@ void CleanupJob::Shared::execute(const Request &request, Outcome &outcome, const
             skip(outcome, native, 1, 0);
             return;
         }
+#ifdef Q_OS_MACOS
+        // En mac borrar un archivo abierto no falla (en Windows el sistema lo impide): se saltea.
+        if (FileSystemOps::isInUse(native)) {
+            skip(outcome, native, 1, size);
+            return;
+        }
+#endif
         const FileSystemOps::Result result = FileSystemOps::removeFile(native);
         if (result == FileSystemOps::Result::Removed) {
             outcome.removedEntirely = true;

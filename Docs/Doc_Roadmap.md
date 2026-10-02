@@ -77,10 +77,13 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    1. **Disk Space completo en mac: HECHO (v1.23 escaneo, v1.24 limpieza), falta la prueba de Lega**: el
       borrado real, la Papelera (medirla y vaciarla), «Show in Finder», estirar la ventana desde los bordes
       y la franja de acceso total al disco (que no salga NINGÚN cartel de privacidad sin ese permiso; la
-      sesión que lo hizo tenía el permiso y no pudo comprobarlo). Observaciones de la auditoría que quedan:
-      normalizar Unicode (NFC) en `DeleteGuard::clean`; excluir cualquier `*.photoslibrary` (hoy solo la de
-      Imágenes); la Papelera de iCloud Drive no se vacía (el Finder sí); «otro volumen» se mira por
-      `st_dev` solo en las reglas, no en cada `DeleteGuard::check`.
+      sesión que lo hizo tenía el permiso y no pudo comprobarlo). Observaciones de las auditorías que
+      quedan: normalizar Unicode (NFC) en `DeleteGuard::clean`; excluir cualquier `*.photoslibrary` (hoy
+      solo la de Imágenes); la Papelera de iCloud Drive no se vacía (el Finder sí); «otro volumen» se mira
+      por `st_dev` solo en las reglas, no en cada `DeleteGuard::check`; en los temporales, una librería
+      mapeada sin fd abierto (un `_MEI*` de PyInstaller) no cuenta como «en uso»; mandar a la Papelera no
+      mira si algo está abierto (el Finder se niega); el encabezado de «Other app caches» tilda todo de un
+      click; hay una carrera (un proceso del usuario que cambie una carpeta ya listada por un enlace).
    2. **Avisos nativos.** Hoy van por `osascript` (`platform/mac/SystemNotifierMac.cpp`): sin ícono propio,
       sin click que vuelva a la app (`ToastActivationMac.cpp` es un stub) y sin el desplegable «Remind me
       again in» de Disk Space. Pasar a `UNUserNotificationCenter` con acciones (macOS las agrupa en

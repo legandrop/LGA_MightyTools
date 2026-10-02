@@ -153,7 +153,8 @@ QStringList protectedTrees()
     // fotos, cuentas. Desde la ventana se puede borrar definitivo: no se ofrece nada de esto.
     for (const char *name : {"Applications", "Library/Keychains", "Library/Mail", "Library/Messages", "Library/Mobile Documents",
                              "Library/Group Containers/group.com.apple.notes", "Library/Calendars",
-                             "Library/Application Support/AddressBook", "Library/Safari", "Library/Photos", "Library/Accounts"}) {
+                             "Library/Application Support/AddressBook", "Library/Safari", "Library/Photos", "Library/Accounts",
+                             "Pictures/Photos Library.photoslibrary", "Music/Music", "Movies/TV"}) {
         add(list, home(name));
     }
     // Las hermanas de la carpeta temporal del usuario (/private/var/folders/xx/yyy/C y /0): caches del sistema.
@@ -171,11 +172,9 @@ QStringList cloudFolders()
 {
     QStringList list;
     add(list, home("Library/Mobile Documents")); // iCloud Drive
-    // Google Drive, Dropbox, OneDrive y los demas de File Provider: una carpeta por cuenta.
-    const QDir cloudStorage(home("Library/CloudStorage"));
-    for (const QString &name : cloudStorage.entryList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks)) {
-        add(list, cloudStorage.filePath(name));
-    }
+    // Google Drive, Dropbox, OneDrive y los demas de File Provider: toda la carpeta (una subcarpeta por
+    // cuenta). Sin listarla: sin acceso total al disco, listarla mostraria un cartel (D-43).
+    add(list, home("Library/CloudStorage"));
     // Las carpetas de sincronizacion de antes de File Provider, en la carpeta del usuario.
     const QDir homeDir(QDir::homePath());
     for (const QString &name : homeDir.entryList({QStringLiteral("Dropbox*"), QStringLiteral("OneDrive*"),
@@ -183,10 +182,13 @@ QStringList cloudFolders()
                                                  QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks)) {
         add(list, homeDir.filePath(name));
     }
-    // Escritorio y Documentos sincronizados con iCloud.
-    for (const char *name : {"Desktop", "Documents"}) {
-        if (hasFileProviderMark(home(name))) {
-            add(list, home(name));
+    // Escritorio y Documentos sincronizados con iCloud. Sin acceso total al disco no se pregunta (seria tocar
+    // carpetas privadas); igual el escaneo no entra y no se pueden elegir (DeleteGuard::forVolume).
+    if (hasFullDiskAccess()) {
+        for (const char *name : {"Desktop", "Documents"}) {
+            if (hasFileProviderMark(home(name))) {
+                add(list, home(name));
+            }
         }
     }
     return list;

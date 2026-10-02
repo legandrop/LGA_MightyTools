@@ -63,6 +63,9 @@ DeleteGuard DeleteGuard::forVolume(const QString &volumeRoot)
     guard.protectedFolders = SystemPaths::protectedFolders();
     guard.protectedTrees = SystemPaths::protectedTrees();
     guard.cloudFolders = SystemPaths::cloudFolders();
+    // Lo que el escaneo no lee (macOS sin acceso total al disco, D-43) tampoco se borra ni se exporta desde
+    // la ventana: se ve como "sin acceso" y nada mas.
+    guard.protectedTrees.append(SystemPaths::scanExclusions());
     // Del propio volumen: la Papelera (se vacia por su API) y lo que guarda el sistema.
     const QChar separator = QDir::separator();
     QString base = guard.volumeRoot;

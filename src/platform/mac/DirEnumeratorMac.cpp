@@ -124,8 +124,13 @@ bool enumerate(const NativeString &dir, std::vector<char> &scratch, const Visito
     if (scratch.size() < kBufferBytes) {
         scratch.resize(kBufferBytes);
     }
-    // O_NOFOLLOW: si la carpeta misma es un enlace, no se lista lo que hay del otro lado.
-    const int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
+    // O_NOFOLLOW: si la carpeta misma es un enlace (por ejemplo, la cambiaron por uno despues de listarla),
+    // no se lista lo que hay del otro lado. Va sin la barra final: con ella el sistema sigue el enlace igual.
+    NativeString bare = dir;
+    while (bare.size() > 1 && bare.back() == '/') {
+        bare.pop_back();
+    }
+    const int fd = open(bare.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         return false;
     }

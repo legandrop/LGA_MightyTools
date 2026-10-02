@@ -34,11 +34,13 @@ QString join(const QString &dir, const QString &name)
     return dir.isEmpty() ? QString() : (dir.endsWith(QLatin1Char('/')) ? dir + name : dir + QLatin1Char('/') + name);
 }
 
-// Lo que el escaneo no mira sin acceso total al disco (SystemPaths::scanExclusions).
+// Lo que el escaneo no mira sin acceso total al disco (SystemPaths::scanExclusions). Se vuelve a pedir en
+// cada armado de las reglas: el permiso puede llegar con la app abierta.
+QStringList g_exclusions;
+
 bool excluded(const QString &path)
 {
-    static const QStringList exclusions = SystemPaths::scanExclusions();
-    for (const QString &exclusion : exclusions) {
+    for (const QString &exclusion : g_exclusions) {
         if (DeleteGuard::samePath(path, exclusion) || DeleteGuard::isInside(path, exclusion)) {
             return true;
         }
@@ -165,6 +167,7 @@ namespace CleanupRules {
 QList<Cleanup::Category> systemCategories(const Context &context)
 {
     const SystemPaths::CleanupBases &b = context.bases;
+    g_exclusions = SystemPaths::scanExclusions();
     QList<Cleanup::Category> categories;
     // Todo destino que alguna regla ya cubre: la de "otras caches" no los vuelve a ofrecer.
     QStringList covered;

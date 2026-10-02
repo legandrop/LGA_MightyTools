@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.25:
+
+La auditoría del resultado de la v1.24 la aprobó sin bloqueantes; se corrigieron sus observaciones antes
+de la prueba de Lega. Sin acceso total al disco, armar las guardas leía el xattr de Escritorio y
+Documentos y listaba `~/Library/CloudStorage`, que son carpetas privadas (podía salir un cartel): ahora no
+se tocan, y lo que el escaneo no lee tampoco se puede borrar ni exportar. La biblioteca de Fotos, la de
+Música y la de TV quedan protegidas. Borrar definitivo un archivo abierto ya no pasa en mac. `O_NOFOLLOW`
+no hacía nada con la barra final de la ruta. La fila de lo no legible decía «sin administrador»; en mac
+habla de datos del sistema. Las exclusiones de las reglas se piden en cada armado, y «en uso» no hace
+`realpath` por archivo (la mitad del tiempo en una carpeta grande).
+[ Disk Space - Correcciones de la auditoría de la Mac ]
+
 v1.24:
 
 La ventana de limpieza de Disk Space no existía en la Mac: el borrado, la Papelera, las rutas protegidas

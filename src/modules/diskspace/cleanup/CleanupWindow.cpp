@@ -1170,7 +1170,12 @@ void CleanupWindow::refreshFolders()
             row.hasIcon = false;
             row.muted = true;
             row.selectable = false;
+#ifdef Q_OS_MACOS
+            // Lo del sistema (snapshots, memoria virtual, otros volumenes del contenedor) y lo privado.
+            row.name = I18n::tr("System data and folders not readable");
+#else
             row.name = I18n::tr("Not readable without administrator");
+#endif
             row.cells = {DiskSpace::formatSize(hidden), QString(), QString(), QString()};
             rows.append(row);
         }
