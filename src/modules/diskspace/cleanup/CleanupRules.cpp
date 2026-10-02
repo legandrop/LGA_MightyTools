@@ -20,7 +20,9 @@
 
 namespace {
 
-#ifdef Q_OS_WIN
+// Windows y macOS (APFS y HFS+ por defecto) no distinguen mayusculas en las rutas. En un volumen de mac
+// que si las distingue, comparar sin distinguir solo hace las guardas mas amplias.
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseInsensitive;
 #else
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseSensitive;
@@ -166,6 +168,13 @@ QString usableDir(const QString &path, const Context &context)
     if (!DeleteGuard::isInside(real, context.volumeRoot)) {
         return QString();
     }
+#ifdef Q_OS_MACOS
+    // En mac todo cuelga de "/": otro disco montado en /Volumes tambien "esta adentro". Se compara el
+    // volumen de verdad.
+    if (FileSystemOps::identity(real).volume != FileSystemOps::identity(context.volumeRoot).volume) {
+        return QString();
+    }
+#endif
     return real;
 }
 

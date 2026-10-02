@@ -503,6 +503,30 @@ bool CleanupWindow::busy() const
     return m_jobKind != JobKind::None || m_scanState == ScanState::Scanning;
 }
 
+void CleanupWindow::refreshAccessStrip()
+{
+#ifdef Q_OS_MACOS
+    m_accessStrip->setVisible(m_capture ? m_captureAccessStrip : !SystemPaths::hasFullDiskAccess());
+#else
+    m_accessStrip->setVisible(false);
+#endif
+}
+
+void CleanupWindow::showAccessStripForCapture()
+{
+    m_captureAccessStrip = true;
+    refreshAccessStrip();
+}
+
+void CleanupWindow::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+    // Al volver de Ajustes: si ya se dio el permiso, la franja se va (el proximo Rescan ve todo).
+    if (event->type() == QEvent::ActivationChange && isActiveWindow() && !m_capture) {
+        refreshAccessStrip();
+    }
+}
+
 void CleanupWindow::buildUi()
 {
     auto *root = new QVBoxLayout(this);
@@ -546,6 +570,22 @@ void CleanupWindow::buildUi()
 
     m_scanLine = new ScanLine(this);
     root->addWidget(m_scanLine);
+
+    m_accessStrip = new QFrame(this);
+    m_accessStrip->setObjectName(QStringLiteral("accessStrip"));
+    auto *access = new QHBoxLayout(m_accessStrip);
+    access->setContentsMargins(16, 7, 16, 7);
+    access->setSpacing(10);
+    QLabel *accessText = Ui::label(I18n::tr("Private folders of macOS (Desktop, Documents, other apps' data...) are not "
+                                            "scanned. Give Full Disk Access to see everything."),
+                                   "accessText", m_accessStrip);
+    accessText->setWordWrap(true);
+    access->addWidget(accessText, 1);
+    auto *accessButton = Ui::button(I18n::tr("Open Settings"), QString(), QStringLiteral("sm"), m_accessStrip);
+    access->addWidget(accessButton, 0, Qt::AlignVCenter);
+    connect(accessButton, &QPushButton::clicked, this, []() { SystemPaths::openFullDiskAccessSettings(); });
+    m_accessStrip->setVisible(false);
+    root->addWidget(m_accessStrip);
 
     m_tabs = new TabStrip(this);
     m_tabs->setTabs({I18n::tr("Clean up"), I18n::tr("Folders"), I18n::tr("Largest files"), I18n::tr("What changed")});
@@ -618,9 +658,17 @@ void CleanupWindow::buildUi()
     // Lo elegido para borrar, para preguntarle a un asistente de IA antes de hacerlo.
     // (Sin tooltip: lo que hace lo explica el cartel que abre.)
     m_actionExport = Ui::button(I18n::tr("Export for AI..."), QString(), QStringLiteral("sm"), bar);
+#ifdef Q_OS_MACOS
+    m_actionReveal = Ui::button(I18n::tr("Show in Finder"), QString(), QStringLiteral("sm"), bar);
+#else
     m_actionReveal = Ui::button(I18n::tr("Show in Explorer"), QString(), QStringLiteral("sm"), bar);
+#endif
     Ui::setIcon(m_actionReveal, Icon::Reveal, Theme::color(Theme::kText), 13);
+#ifdef Q_OS_MACOS
+    m_actionTrash = Ui::button(I18n::tr("Move to Trash"), QString(), QStringLiteral("sm"), bar);
+#else
     m_actionTrash = Ui::button(I18n::tr("Move to Recycle Bin"), QString(), QStringLiteral("sm"), bar);
+#endif
     Ui::setIcon(m_actionTrash, Icon::Trash, Theme::color(Theme::kText), 13);
     m_actionDelete = Ui::button(I18n::tr("Delete permanently"), QStringLiteral("danger"), QStringLiteral("sm"), bar);
     // "Compare with... v": el texto y, a su derecha, la flecha.
@@ -773,7 +821,7 @@ void CleanupWindow::startScan()
     context.volumeRoot = m_guard.volumeRoot;
     m_categories = CleanupRules::build(context);
 
-    m_engine.start(m_scanRoot);
+    m_engine.start(m_scanRoot, SystemPaths::scanExclusions());
     m_fullScan = true;
     m_scanState = ScanState::Scanning;
     m_progress = m_engine.progress();
@@ -1287,7 +1335,11 @@ void CleanupWindow::refreshActionBar()
     } else {
         const QList<Picked> items = pickedItems();
         if (items.isEmpty()) {
+#ifdef Q_OS_MACOS
+            QString hint = I18n::tr("Select folders or files to delete them. Double click opens a folder in Finder.");
+#else
             QString hint = I18n::tr("Select folders or files to delete them. Double click opens a folder in Explorer.");
+#endif
             if (!m_notice.isEmpty()) {
                 hint = m_notice;
             } else if (tab == Folders && m_scanState == ScanState::Scanning && m_fullScan) {
@@ -1311,7 +1363,11 @@ void CleanupWindow::refreshActionBar()
             if (viewOnly) {
                 text += QStringLiteral(" <span style=\"color:%1\">· %2</span>")
                             .arg(QLatin1String(Theme::kTextFaint),
+#ifdef Q_OS_MACOS
+                                 I18n::tr("Protected: macOS and installed apps are not deleted from here."));
+#else
                                  I18n::tr("Protected: Windows and installed programs are not deleted from here."));
+#endif
             }
             const bool ready = m_capture || m_scanState == ScanState::Complete;
             reveal = true;
@@ -1905,7 +1961,11 @@ void CleanupWindow::onJobFinished()
         if (failed > 0) {
             m_notice = I18n::tr("%1 of %2 could not be deleted: in use, protected or not allowed.").arg(failed).arg(failed + done);
         } else if (trashed) {
+#ifdef Q_OS_MACOS
+            m_notice = I18n::tr("Moved to the Trash. The space is freed when the Trash is emptied, in Clean up.");
+#else
             m_notice = I18n::tr("Moved to the Recycle Bin. The space is freed when the bin is emptied, in Clean up.");
+#endif
         } else {
             m_notice = I18n::tr("Deleted. %1 has %2 free.").arg(m_drive.label, DiskSpace::formatSize(m_drive.freeBytes));
         }
@@ -2071,6 +2131,7 @@ void CleanupWindow::showEvent(QShowEvent *event)
         // La bandera va ANTES de apply(), como en MainWindow (WM_NCCALCSIZE llega en el acto).
         m_nativeFrameApplied = true;
         m_nativeFrameApplied = WindowFrame::apply(this, true);
+        refreshAccessStrip();
         restoreSize();
         if (const QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen()) {
             const QRect area = screen->availableGeometry();
@@ -2111,8 +2172,8 @@ bool CleanupWindow::applyFixture(const QString &state)
         return false;
     }
     CleanupFixture::Data data = CleanupFixture::build(state, m_engine);
-    m_root = QStringLiteral("C:/");
-    m_scanRoot = QStringLiteral("C:\\");
+    m_root = data.drive.root;
+    m_scanRoot = data.guard.volumeRoot;
     m_drive = data.drive;
     m_driveKnown = true;
     m_guard = data.guard;

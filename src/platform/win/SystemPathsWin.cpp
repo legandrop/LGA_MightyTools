@@ -142,6 +142,20 @@ QSet<QString> runningPrograms()
     return names;
 }
 
+QStringList scanExclusions()
+{
+    return {};
+}
+
+bool hasFullDiskAccess()
+{
+    return true;
+}
+
+void openFullDiskAccessSettings()
+{
+}
+
 void revealInFileManager(const QString &path)
 {
     if (AutomatedRun::active()) {

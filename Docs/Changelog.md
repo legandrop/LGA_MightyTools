@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.24:
+
+La ventana de limpieza de Disk Space no existía en la Mac: el borrado, la Papelera, las rutas protegidas
+y las reglas eran solo de Windows. Ahora anda en macOS. Borrado con `unlink`/`rmdir` y la guarda de
+corrida automatizada; como en mac borrar un archivo abierto no falla, antes de vaciar una carpeta se mira
+con libproc si algo de adentro está abierto y, si lo está, se saltea entera. Papelera propia (`~/.Trash`,
+`.Trashes/<uid>`), solo si es una carpeta de verdad del usuario. Reglas de mac (navegadores de los dos
+lados, apps Electron, actualizaciones bajadas, pip, npm, Homebrew, Xcode) con bloqueo por identificador de
+app; el resto de `~/Library/Caches` va destildado en «Yours» porque ahí también hay datos. Acceso total al
+disco (D-43): sin él, no se entra a lo privado y sale una franja con el botón a Ajustes. «Show in Finder»,
+ventana estirable, textos de mac. Propuesta auditada (3 bloqueantes corregidos), self-test de mac.
+[ Disk Space - Ventana de limpieza en la Mac ]
+
 v1.23:
 
 En la Mac, el escaneo de Disk Space tardaba 3,5 minutos en el disco entero y contaba los datos del

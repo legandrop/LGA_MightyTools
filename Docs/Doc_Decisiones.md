@@ -122,8 +122,21 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   calibrar. Con el Dope Sheet escondido no hace nada (opción a de Lega). Cada atajo deja su propia marca,
   así un plugin 1.00 no apaga el macro del Dope Sheet. Con el plugin 1.01 instalado no se muestra la
   calibración. Sin plugin queda el macro calibrado de respaldo.
+- **D-43 · Disk Space en macOS: acceso total al disco** (2026-10-02, Lega). Para escanear la Mac entera,
+  la ventana de limpieza pide una vez el acceso total al disco con una tarjeta y un botón que abre
+  Ajustes en el lugar justo (como DaisyDisk). Sin ese permiso escanea igual lo que no está protegido, sin
+  carteles carpeta por carpeta, y lo protegido queda como «sin acceso».
 
 ## Abiertas
+
+- **D-44 · Reglas de limpieza en macOS** (2026-10-02, tomadas por la sesión y auditadas; esperan a Lega).
+  - Las actualizaciones que las apps ya bajaron (`*.ShipIt`, Sparkle, `*-updater/pending`,
+    `Mozilla/updates`) van en «Safe», tildadas.
+  - Cada hijo de `~/Library/Caches` que ninguna regla cubre va en «Yours» («Other app caches»),
+    destildado: ahí también hay datos (PipeSync, Spark, JetBrains). Nunca los de Apple ni `LGA`.
+  - Sin grupo de administrador en mac. Los informes de fallos de más de 30 días van en «Safe».
+  - Un archivo trabado desde el Finder («Locked») no se borra (en Windows se le saca el solo-lectura).
+  - Las copias de iPhone y iPad solo se informan, con «Review»; se administran en el Finder.
 
 - **D-31 · Desvíos de la ventana de limpieza respecto del diseño aprobado.** Mientras tanto, lo
   implementado:

@@ -10,10 +10,11 @@
 // explorador de archivos.
 //  - Windows (platform/win/SystemPathsWin.cpp): SHGetKnownFolderPath (las carpetas reales, aunque esten
 //    movidas a otro disco o a OneDrive), toolhelp, SHOpenFolderAndSelectItems.
-//  - macOS (platform/mac/SystemPathsMac.cpp): cleanupSupported() devuelve false; lo demas, vacio.
+//  - macOS (platform/mac/SystemPathsMac.cpp): las carpetas de ~/Library, libproc, `open -R`, y el acceso
+//    total al disco (D-43): sin el, el escaneo no entra a lo que protege la privacidad de macOS.
 namespace SystemPaths {
 
-// La limpieza esta disponible en esta plataforma. En macOS todavia no: el borrado no se probo.
+// La limpieza esta disponible en esta plataforma.
 bool cleanupSupported();
 
 // Bases de las reglas de limpieza. Rutas con los separadores del sistema; vacia la que no existe.
@@ -24,6 +25,10 @@ struct CleanupBases
     QString roamingAppData; ///< ...\AppData\Roaming
     QString temp;           ///< la carpeta temporal del usuario
     QString systemRoot;     ///< C:\Windows
+    // macOS (vacias en Windows)
+    QString library;    ///< ~/Library
+    QString caches;     ///< ~/Library/Caches
+    QString appSupport; ///< ~/Library/Application Support
     // Carpetas de cache que el usuario movio con una variable de entorno (vacias si no).
     QString uvCacheDir;   ///< UV_CACHE_DIR
     QString pipCacheDir;  ///< PIP_CACHE_DIR
@@ -43,6 +48,15 @@ QStringList cloudFolders();
 
 // Nombres de los programas que corren, en minusculas y sin ".exe".
 QSet<QString> runningPrograms();
+
+// Carpetas en las que el escaneo no entra (cuentan como "sin acceso"). En macOS, sin acceso total al
+// disco, las que protege la privacidad del sistema: entrar mostraria un cartel por carpeta (D-43). En
+// Windows, ninguna.
+QStringList scanExclusions();
+// macOS: la app tiene acceso total al disco. En Windows siempre true.
+bool hasFullDiskAccess();
+// macOS: abre Ajustes en Privacidad > Acceso total al disco. Inerte en una corrida automatizada.
+void openFullDiskAccessSettings();
 
 // Abre el explorador de archivos con ese item seleccionado. Inerte en una corrida automatizada.
 void revealInFileManager(const QString &path);

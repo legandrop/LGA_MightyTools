@@ -29,7 +29,7 @@ int simulateScan(const QStringList &args)
         return 2;
     }
     ScanEngine engine;
-    engine.start(root);
+    engine.start(root, SystemPaths::scanExclusions());
     while (engine.isRunning()) {
         QThread::msleep(50);
     }
@@ -52,8 +52,8 @@ int simulateScan(const QStringList &args)
     const QList<ScanEngine::TopFile> files = engine.topFiles();
     for (int i = 0; i < files.size() && i < 8; ++i) {
         const auto lock = engine.lock();
-        std::printf("  file %10s  %s\\%s\n", qPrintable(DiskSpace::formatSize(qint64(files.at(i).bytes))),
-                    qPrintable(engine.tree().path(files.at(i).dir)), qPrintable(files.at(i).name));
+        std::printf("  file %10s  %s%s%s\n", qPrintable(DiskSpace::formatSize(qint64(files.at(i).bytes))),
+                    qPrintable(engine.tree().path(files.at(i).dir)), qPrintable(QString(QDir::separator())), qPrintable(files.at(i).name));
     }
     std::printf("  cache-tagged dirs: %d, top files kept: %d\n", int(engine.cacheTaggedDirs().size()), int(files.size()));
     return progress.complete ? 0 : 1;
@@ -81,7 +81,7 @@ int simulatePlan(const QStringList &args)
         return 2;
     }
     ScanEngine engine;
-    engine.start(root);
+    engine.start(root, SystemPaths::scanExclusions());
     while (engine.isRunning()) {
         QThread::msleep(50);
     }
@@ -147,7 +147,7 @@ int simulateExport(const QStringList &args)
         return 2;
     }
     ScanEngine engine;
-    engine.start(root);
+    engine.start(root, SystemPaths::scanExclusions());
     while (engine.isRunning()) {
         QThread::msleep(50);
     }
@@ -160,7 +160,11 @@ int simulateExport(const QStringList &args)
     request.entries = CleanupExport::entriesForChecked(categories);
     CleanupExport::detail(request.entries, engine);
     const QStorageInfo storage(root);
+#ifdef Q_OS_MACOS
+    request.driveLabel = storage.displayName();
+#else
     request.driveLabel = QDir::toNativeSeparators(root).left(2);
+#endif
     request.system = QSysInfo::prettyProductName();
     request.freeBytes = storage.bytesAvailable();
     request.totalBytes = storage.bytesTotal();

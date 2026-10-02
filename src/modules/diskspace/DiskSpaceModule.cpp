@@ -587,6 +587,10 @@ QStringList DiskSpaceModule::captureStates() const
            << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
     // La ventana al tamano minimo (con lo elegido: la barra de abajo mas cargada) y Folders ordenada por nombre.
     states << QStringLiteral("cleanup-min") << QStringLiteral("cleanup-sorted");
+#ifdef Q_OS_MACOS
+    // La franja que pide el acceso total al disco (D-43).
+    states << QStringLiteral("cleanup-access");
+#endif
     return states;
 }
 
@@ -611,6 +615,12 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
     if (CleanupWindow::fixtureStates().contains(state)) {
         auto *window = new CleanupWindow(m_state, nullptr, true, parent);
         window->applyFixture(state);
+        return window;
+    }
+    if (state == QLatin1String("cleanup-access")) {
+        auto *window = new CleanupWindow(m_state, nullptr, true, parent);
+        window->applyFixture(QStringLiteral("cleanup"));
+        window->showAccessStripForCapture();
         return window;
     }
     if (state == QLatin1String("cleanup-min")) {

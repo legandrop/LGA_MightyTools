@@ -18,6 +18,11 @@
 #include <QTemporaryDir>
 #include <QThread>
 
+#ifdef Q_OS_MACOS
+#include <sys/attr.h>
+#include <unistd.h>
+#endif
+
 // Self-test de la limpieza sobre una carpeta de pruebas PROPIA en %TEMP%.
 //
 // Es la unica excepcion a "en una corrida automatizada nunca se ejecuta una accion real" de este
@@ -47,7 +52,18 @@ bool writeFile(const QString &path, int bytes = kFileBytes)
 bool ageFile(QFile &file, int days)
 {
     const QDateTime when = QDateTime::currentDateTime().addDays(-days);
-    return file.setFileTime(when, QFileDevice::FileBirthTime) && file.setFileTime(when, QFileDevice::FileModificationTime);
+#ifdef Q_OS_MACOS
+    // Qt no cambia la fecha de creacion fuera de Windows: en mac va por setattrlist (APFS la acepta).
+    attrlist request {};
+    request.bitmapcount = ATTR_BIT_MAP_COUNT;
+    request.commonattr = ATTR_CMN_CRTIME;
+    timespec created {};
+    created.tv_sec = time_t(when.toSecsSinceEpoch());
+    const bool birth = setattrlist(QFile::encodeName(file.fileName()).constData(), &request, &created, sizeof(created), 0) == 0;
+#else
+    const bool birth = file.setFileTime(when, QFileDevice::FileBirthTime);
+#endif
+    return birth && file.setFileTime(when, QFileDevice::FileModificationTime);
 }
 
 bool runJob(const QList<CleanupJob::Request> &requests, const DeleteGuard &guard, QList<CleanupJob::Outcome> *outcomes)
@@ -94,7 +110,7 @@ namespace CleanupQa {
 
 void selfTestSandbox(const Check &check)
 {
-    // Donde la limpieza no esta habilitada (macOS) el borrado no hace nada: no hay nada que probar.
+    // Donde la limpieza no esta habilitada el borrado no hace nada: no hay nada que probar.
     if (!SystemPaths::cleanupSupported()) {
         return;
     }
@@ -214,11 +230,17 @@ void selfTestSandbox(const Check &check)
     check(guard.check(vol + sep + QStringLiteral("withlink") + sep + QStringLiteral("f.bin"), DeleteGuard::Scope::Entire, false) == DeleteGuard::Verdict::CloudFolder
               && guard.check(vol + sep + QStringLiteral("withlink") + sep + QStringLiteral("f.bin"), DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::Ok,
           QStringLiteral("guarda: dentro de una carpeta de nube, solo a la Papelera"));
+#ifdef Q_OS_WIN
     check(guard.check(vol + sep + QStringLiteral("cache") + sep + QStringLiteral("informe."), DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::BadNameForTrash,
           QStringLiteral("guarda: un nombre terminado en punto no va a la Papelera"));
+#else
+    check(guard.check(vol + sep + QStringLiteral("cache") + sep + QStringLiteral("informe."), DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::Ok,
+          QStringLiteral("guarda: en mac un nombre terminado en punto es un nombre comun"));
+#endif
     guard.protectedTrees.clear();
     guard.protectedFolders.clear();
     guard.cloudFolders.clear();
+#ifdef Q_OS_WIN
     {
         // Con las raices del sistema de verdad (solo se pregunta, no se borra nada).
         const SystemPaths::CleanupBases bases = SystemPaths::cleanupBases();
@@ -240,6 +262,37 @@ void selfTestSandbox(const Check &check)
                   && real.check(QCoreApplication::applicationDirPath(), DeleteGuard::Scope::Entire, false) != DeleteGuard::Verdict::Ok,
               QStringLiteral("guarda: la memoria virtual y la carpeta de la app estan protegidas"));
     }
+#else
+    {
+        // Con las raices del sistema de verdad (solo se pregunta, no se borra nada).
+        const SystemPaths::CleanupBases bases = SystemPaths::cleanupBases();
+        const DeleteGuard real = DeleteGuard::forVolume(QStringLiteral("/"));
+        const QString finder = FileSystemOps::canonicalPath(QStringLiteral("/SYSTEM/library/CoreServices/Finder.app"));
+        check(!finder.isEmpty() && real.check(finder, DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::ProtectedTree,
+              QStringLiteral("guarda: el Finder, escrito con otras mayusculas, cae dentro de /System (%1)").arg(finder));
+        check(real.check(QStringLiteral("/Applications/Safari.app"), DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::ProtectedTree
+                  && real.check(QStringLiteral("/Library/Preferences"), DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::ProtectedTree,
+              QStringLiteral("guarda: las apps instaladas y /Library estan protegidas"));
+        check(real.check(bases.profile, DeleteGuard::Scope::Entire, true) != DeleteGuard::Verdict::Ok
+                  && real.check(QStringLiteral("/Users"), DeleteGuard::Scope::Entire, true) != DeleteGuard::Verdict::Ok
+                  && real.check(bases.library, DeleteGuard::Scope::Contents, false) != DeleteGuard::Verdict::Ok
+                  && real.check(bases.caches, DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::Protected
+                  && real.check(QStringLiteral("/"), DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::Protected,
+              QStringLiteral("guarda: el disco, la carpeta del usuario, /Users, ~/Library y ~/Library/Caches no se borran ni se vacian"));
+        check(real.check(bases.temp, DeleteGuard::Scope::Children, false) == DeleteGuard::Verdict::Ok
+                  && real.check(bases.temp, DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::Protected,
+              QStringLiteral("guarda: de la carpeta temporal se sacan hijos, pero no se vacia entera (%1)").arg(bases.temp));
+        check(real.check(QDir::homePath() + QStringLiteral("/.Trash"), DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::ProtectedTree
+                  && real.check(QStringLiteral("/.Spotlight-V100"), DeleteGuard::Scope::Entire, false) == DeleteGuard::Verdict::ProtectedTree
+                  && real.check(QCoreApplication::applicationDirPath(), DeleteGuard::Scope::Entire, false) != DeleteGuard::Verdict::Ok,
+              QStringLiteral("guarda: la Papelera, el indice de Spotlight y la app estan protegidos"));
+        const QString keychains = QDir::homePath() + QStringLiteral("/Library/Keychains");
+        check(real.check(keychains, DeleteGuard::Scope::Entire, true) == DeleteGuard::Verdict::ProtectedTree,
+              QStringLiteral("guarda: los llaveros del usuario estan protegidos"));
+        check(FileSystemOps::kind(QStringLiteral("/System/Volumes/Data")) == FileSystemOps::Kind::Link,
+              QStringLiteral("guarda: el volumen de datos montado en /System/Volumes/Data cuenta como enlace"));
+    }
+#endif
 
     // ---- El trabajo de borrado.
     const QString temp = vol + sep + QStringLiteral("temp");
@@ -280,7 +333,7 @@ void selfTestSandbox(const Check &check)
                                  return r;
                              }(),
                              request(4, canary, Cleanup::Action::Entire), request(5, vol, Cleanup::Action::Entire), trash, blocked,
-                             request(8, QStringLiteral("C:/"), Cleanup::Action::RecycleBin),
+                             request(8, QDir::rootPath(), Cleanup::Action::RecycleBin),
                              request(9, vol + sep + QStringLiteral("linkdir2"), Cleanup::Action::Contents)},
                             guard, &outcomes);
     check(ran && outcomes.size() == 10, QStringLiteral("borrado: el trabajo termina y deja un resultado por pedido (%1)").arg(outcomes.size()));
@@ -326,8 +379,34 @@ void selfTestSandbox(const Check &check)
                   && QFileInfo::exists(linkTarget + sep + QStringLiteral("precious.bin")),
               QStringLiteral("borrado: vaciar a traves de un enlace se rechaza y el destino queda"));
     }
+#ifdef Q_OS_MACOS
+    {
+        // En mac borrar un archivo abierto no falla: la carpeta con algo abierto adentro se queda entera.
+        const QString busy = vol + sep + QStringLiteral("busy");
+        writeFile(busy + sep + QStringLiteral("open.bin"));
+        writeFile(busy + sep + QStringLiteral("sub") + sep + QStringLiteral("closed.bin"));
+        QFile open(busy + sep + QStringLiteral("open.bin"));
+        open.open(QIODevice::ReadOnly);
+        QThread::msleep(2100); // la foto de archivos abiertos dura 2 s
+        QList<CleanupJob::Outcome> busyOutcomes;
+        runJob({request(0, busy, Cleanup::Action::Contents)}, guard, &busyOutcomes);
+        open.close();
+        check(busyOutcomes.size() == 1 && busyOutcomes.first().deletedFiles == 0 && busyOutcomes.first().skippedFiles >= 1
+                  && QFileInfo::exists(busy + sep + QStringLiteral("open.bin"))
+                  && QFileInfo::exists(busy + sep + QStringLiteral("sub") + sep + QStringLiteral("closed.bin")),
+              QStringLiteral("borrado: una carpeta con un archivo abierto adentro no se vacia (ni lo que no esta abierto)"));
+        // Una Papelera de volumen que es un enlace no se lee ni se vacia: podria llevar a otro lado.
+        const QString trashes = vol + sep + QStringLiteral(".Trashes");
+        QDir().mkpath(trashes);
+        FileSystemOps::createDirLink(trashes + sep + QString::number(getuid()), linkTarget);
+        closer.links.append(trashes + sep + QString::number(getuid()));
+        check(!RecycleBin::query(vol).ok && QFileInfo::exists(linkTarget + sep + QStringLiteral("precious.bin")),
+              QStringLiteral("papelera: una Papelera que es un enlace no se lee"));
+    }
+#endif
     checkNoThreads(check, QStringLiteral("borrado: al terminar no queda ningun hilo vivo"));
 
+#ifdef Q_OS_WIN
     // ---- Reglas contra un perfil de mentira: solo las carpetas hijas de la lista blanca.
     const QString profile = vol + sep + QStringLiteral("Users") + sep + QStringLiteral("u");
     const QString local = profile + sep + QStringLiteral("AppData") + sep + QStringLiteral("Local");
@@ -349,6 +428,39 @@ void selfTestSandbox(const Check &check)
     writeFile(roaming + sep + QStringLiteral("OtherApp") + sep + QStringLiteral("Cache") + sep + QStringLiteral("mine.db"));
     writeFile(local + sep + QStringLiteral("pip") + sep + QStringLiteral("cache") + sep + QStringLiteral("http") + sep + QStringLiteral("p1"));
     writeFile(local + sep + QStringLiteral("Temp") + sep + QStringLiteral("fresh.tmp"));
+#else
+    // ---- Reglas contra un perfil de mentira con la forma de mac: el perfil del navegador en Application
+    // Support y su cache en Caches; ~/Library/Caches con cosas que NO son cache (bases de PipeSync, CloudKit).
+    const QString profile = vol + sep + QStringLiteral("Users") + sep + QStringLiteral("u");
+    const QString library = profile + sep + QStringLiteral("Library");
+    const QString support = library + sep + QStringLiteral("Application Support");
+    const QString caches = library + sep + QStringLiteral("Caches");
+    const QString local = caches; // donde vive la cache de pip
+    const QString roaming = support; // donde viven las apps de escritorio
+    const QString chromeProfile = support + sep + QStringLiteral("Google") + sep + QStringLiteral("Chrome") + sep + QStringLiteral("Default");
+    const QString chromeCache = caches + sep + QStringLiteral("Google") + sep + QStringLiteral("Chrome") + sep + QStringLiteral("Default");
+    writeFile(chromeProfile + sep + QStringLiteral("Preferences"), 100);
+    writeFile(chromeProfile + sep + QStringLiteral("Cookies"));
+    writeFile(chromeProfile + sep + QStringLiteral("Local Storage") + sep + QStringLiteral("x.ldb"));
+    writeFile(chromeProfile + sep + QStringLiteral("GPUCache") + sep + QStringLiteral("g_0001"));
+    writeFile(chromeCache + sep + QStringLiteral("Cache") + sep + QStringLiteral("Cache_Data") + sep + QStringLiteral("f_0001"));
+    writeFile(chromeCache + sep + QStringLiteral("Code Cache") + sep + QStringLiteral("js") + sep + QStringLiteral("c_0001"));
+    const QString app = support + sep + QStringLiteral("SomeApp");
+    writeFile(app + sep + QStringLiteral("Preferences"), 100);
+    writeFile(app + sep + QStringLiteral("Local Storage") + sep + QStringLiteral("keep.ldb"));
+    writeFile(app + sep + QStringLiteral("Code Cache") + sep + QStringLiteral("c1"));
+    writeFile(app + sep + QStringLiteral("Cache") + sep + QStringLiteral("Cache_Data") + sep + QStringLiteral("d1"));
+    writeFile(app + sep + QStringLiteral("vm_bundles") + sep + QStringLiteral("image.vhdx"));
+    // Una app con una carpeta "Cache" que NO es de Chromium: no se toca.
+    writeFile(support + sep + QStringLiteral("OtherApp") + sep + QStringLiteral("Cache") + sep + QStringLiteral("mine.db"));
+    writeFile(caches + sep + QStringLiteral("pip") + sep + QStringLiteral("cache") + sep + QStringLiteral("http") + sep + QStringLiteral("p1"));
+    writeFile(caches + sep + QStringLiteral("com.example.App.ShipIt") + sep + QStringLiteral("update.zip"));
+    writeFile(caches + sep + QStringLiteral("SomeTool") + sep + QStringLiteral("data.db"));
+    writeFile(caches + sep + QStringLiteral("LGA") + sep + QStringLiteral("PipeSync") + sep + QStringLiteral("pipesync.db"));
+    writeFile(caches + sep + QStringLiteral("CloudKit") + sep + QStringLiteral("cloudd_db"));
+    writeFile(caches + sep + QStringLiteral("com.apple.Something") + sep + QStringLiteral("x.db"));
+    writeFile(profile + sep + QStringLiteral("tmp") + sep + QStringLiteral("fresh.tmp"));
+#endif
     // Carpetas marcadas como cache: una comun, y un entorno virtual que tambien lleva la marca.
     const QString tagged = vol + sep + QStringLiteral("proj") + sep + QStringLiteral("target");
     const QString venv = vol + sep + QStringLiteral("proj") + sep + QStringLiteral(".venv");
@@ -382,9 +494,16 @@ void selfTestSandbox(const Check &check)
     CleanupRules::Context context;
     context.volumeRoot = guard.volumeRoot;
     context.bases.profile = profile;
+#ifdef Q_OS_WIN
     context.bases.localAppData = local;
     context.bases.roamingAppData = roaming;
     context.bases.temp = local + sep + QStringLiteral("Temp");
+#else
+    context.bases.library = library;
+    context.bases.caches = caches;
+    context.bases.appSupport = support;
+    context.bases.temp = profile + sep + QStringLiteral("tmp");
+#endif
     context.folderRules = {Cleanup::FolderRule{QString(), vol + sep + QStringLiteral("work"), QStringLiteral("build")}};
     ScanEngine engine;
     engine.start(vol);
@@ -430,6 +549,7 @@ void selfTestSandbox(const Check &check)
         }
         return false;
     };
+#ifdef Q_OS_WIN
     check(ids.contains(QStringLiteral("browsers")) && ids.contains(QStringLiteral("apps")) && ids.contains(QStringLiteral("python"))
               && ids.contains(QStringLiteral("vm")) && ids.contains(QStringLiteral("rule:0")) && ids.contains(QStringLiteral("tagged")),
           QStringLiteral("reglas: navegadores, apps, Python, maquinas virtuales, la regla del usuario y lo marcado (%1)").arg(ids.join(QLatin1Char(' '))));
@@ -439,6 +559,39 @@ void selfTestSandbox(const Check &check)
     check(!touches(QStringLiteral("Cookies")) && !touches(QStringLiteral("Local Storage")) && !touches(QStringLiteral("Preferences"))
               && !touches(QStringLiteral("OtherApp")) && !touches(QStringLiteral(".venv")) && !targets.contains(app) && !targets.contains(chromeProfile),
           QStringLiteral("reglas: nunca cookies, Local Storage, la carpeta raiz de una app, una Cache ajena ni un entorno virtual"));
+#else
+    check(ids.contains(QStringLiteral("browsers")) && ids.contains(QStringLiteral("apps")) && ids.contains(QStringLiteral("python"))
+              && ids.contains(QStringLiteral("vm")) && ids.contains(QStringLiteral("rule:0")) && ids.contains(QStringLiteral("tagged"))
+              && ids.contains(QStringLiteral("updates")) && ids.contains(QStringLiteral("appcaches")),
+          QStringLiteral("reglas: navegadores, apps, Python, actualizaciones, otras caches, maquinas virtuales, la regla del usuario y lo marcado (%1)")
+              .arg(ids.join(QLatin1Char(' '))));
+    check(touches(QStringLiteral("Cache_Data")) == false && touches(QStringLiteral("Caches/Google/Chrome/Default/Cache"))
+              && touches(QStringLiteral("Caches/Google/Chrome/Default/Code Cache")) && touches(QStringLiteral("Chrome/Default/GPUCache"))
+              && touches(QStringLiteral("SomeApp/Code Cache")) && touches(QStringLiteral("Caches/pip"))
+              && touches(QStringLiteral("com.example.App.ShipIt")),
+          QStringLiteral("reglas: los destinos son las carpetas de cache conocidas, de los dos lados del navegador"));
+    check(!touches(QStringLiteral("Cookies")) && !touches(QStringLiteral("Local Storage")) && !touches(QStringLiteral("Preferences"))
+              && !touches(QStringLiteral("OtherApp")) && !touches(QStringLiteral(".venv")) && !targets.contains(app) && !targets.contains(chromeProfile)
+              && !touches(QStringLiteral("Caches/LGA")) && !touches(QStringLiteral("CloudKit")) && !touches(QStringLiteral("com.apple.")),
+          QStringLiteral("reglas: nunca cookies, Local Storage, la carpeta raiz de una app, una Cache ajena, un entorno virtual, LGA ni lo de Apple"));
+    {
+        bool otherOffered = false;
+        bool otherUnchecked = true;
+        for (const Cleanup::Category &category : categories) {
+            if (category.id != QLatin1String("appcaches")) {
+                continue;
+            }
+            for (const Cleanup::Item &item : category.items) {
+                otherOffered = otherOffered || item.path.endsWith(QStringLiteral("SomeTool"));
+                otherUnchecked = otherUnchecked && !item.checked;
+                // Lo que ya cubre otra regla no se ofrece de nuevo.
+                otherUnchecked = otherUnchecked && !item.path.endsWith(QStringLiteral("pip")) && !item.path.endsWith(QStringLiteral("Google"));
+            }
+        }
+        check(otherOffered && otherUnchecked,
+              QStringLiteral("reglas: las otras caches de ~/Library/Caches van en Yours, destildadas, sin repetir las de otras reglas"));
+    }
+#endif
     check(yoursUnchecked && safeChecked, QStringLiteral("reglas: lo seguro arranca tildado y lo del usuario, destildado"));
     check(uvOptionalUnchecked, QStringLiteral("reglas: una cache de uv fuera de su lugar de fabrica va con las de Python, sin tildar"));
     for (const Cleanup::Category &category : categories) {
@@ -458,14 +611,25 @@ void selfTestSandbox(const Check &check)
               && QFileInfo::exists(app + sep + QStringLiteral("Local Storage") + sep + QStringLiteral("keep.ldb"))
               && QFileInfo::exists(app + sep + QStringLiteral("vm_bundles") + sep + QStringLiteral("image.vhdx"))
               && QFileInfo::exists(roaming + sep + QStringLiteral("OtherApp") + sep + QStringLiteral("Cache") + sep + QStringLiteral("mine.db"))
+#ifdef Q_OS_WIN
               && QFileInfo::exists(local + sep + QStringLiteral("Temp") + sep + QStringLiteral("fresh.tmp"))
+#else
+              && QFileInfo::exists(profile + sep + QStringLiteral("tmp") + sep + QStringLiteral("fresh.tmp"))
+              && QFileInfo::exists(caches + sep + QStringLiteral("SomeTool") + sep + QStringLiteral("data.db"))
+              && QFileInfo::exists(caches + sep + QStringLiteral("LGA") + sep + QStringLiteral("PipeSync") + sep + QStringLiteral("pipesync.db"))
+              && QFileInfo::exists(caches + sep + QStringLiteral("CloudKit") + sep + QStringLiteral("cloudd_db"))
+              && QFileInfo::exists(chromeProfile + sep + QStringLiteral("Cookies"))
+#endif
               && QFileInfo::exists(venv + sep + QStringLiteral("big.bin")) && QFileInfo::exists(tagged + sep + QStringLiteral("big.bin"))
               && QFileInfo::exists(uvCache + sep + QStringLiteral("wheels-v5") + sep + QStringLiteral("w.whl")),
           QStringLiteral("reglas: despues de limpiar lo seguro SOBREVIVE todo lo que no es cache (cookies, ajustes, lo del usuario, lo nuevo)"));
-    check(!QFileInfo::exists(chromeProfile + sep + QStringLiteral("Cache") + sep + QStringLiteral("Cache_Data") + sep + QStringLiteral("f_0001"))
+#ifdef Q_OS_WIN
+    const QString chromeCache = chromeProfile;
+#endif
+    check(!QFileInfo::exists(chromeCache + sep + QStringLiteral("Cache") + sep + QStringLiteral("Cache_Data") + sep + QStringLiteral("f_0001"))
               && !QFileInfo::exists(app + sep + QStringLiteral("Code Cache") + sep + QStringLiteral("c1"))
               && !QFileInfo::exists(local + sep + QStringLiteral("pip") + sep + QStringLiteral("cache") + sep + QStringLiteral("http") + sep + QStringLiteral("p1"))
-              && QFileInfo(chromeProfile + sep + QStringLiteral("Cache")).isDir(),
+              && QFileInfo(chromeCache + sep + QStringLiteral("Cache")).isDir(),
           QStringLiteral("reglas: las caches quedan vacias y sus carpetas siguen estando"));
     engine.cancel();
 
@@ -474,21 +638,22 @@ void selfTestSandbox(const Check &check)
     ScanSnapshot before;
     before.root = vol;
     before.takenAt = QDateTime::currentDateTime().addDays(-1);
-    before.dirs = {{QStringLiteral("C:\\A"), 1000 * mb}, {QStringLiteral("C:\\A\\B"), 900 * mb}, {QStringLiteral("C:\\C"), 500 * mb}};
+    // Rutas con la forma de esta plataforma: el resumen mira "adentro de" con su separador.
+    const auto at = [](const char *path) { return QDir::toNativeSeparators(QDir::rootPath() + QLatin1String(path)); };
+    before.dirs = {{at("A"), 1000 * mb}, {at("A/B"), 900 * mb}, {at("C"), 500 * mb}};
     ScanSnapshot after = before;
     after.takenAt = QDateTime::currentDateTime();
-    after.dirs = {{QStringLiteral("C:\\A"), 1500 * mb}, {QStringLiteral("C:\\A\\B"), 1400 * mb}, {QStringLiteral("C:\\C"), 200 * mb},
-                  {QStringLiteral("C:\\D"), 150 * mb}};
+    after.dirs = {{at("A"), 1500 * mb}, {at("A/B"), 1400 * mb}, {at("C"), 200 * mb}, {at("D"), 150 * mb}};
     const QList<ScanSnapshot::Change> changes = ScanSnapshot::diff(before, after, 100 * mb);
-    check(changes.size() == 3 && changes.at(0).path == QLatin1String("C:\\A\\B") && changes.at(0).delta == 500 * mb
-              && changes.at(1).path == QLatin1String("C:\\D") && changes.at(2).path == QLatin1String("C:\\C") && changes.at(2).delta == -300 * mb,
+    check(changes.size() == 3 && changes.at(0).path == at("A/B") && changes.at(0).delta == 500 * mb
+              && changes.at(1).path == at("D") && changes.at(2).path == at("C") && changes.at(2).delta == -300 * mb,
           QStringLiteral("resumen: lo que cambio, con la carpeta mas profunda que lo explica (%1 cambios)").arg(changes.size()));
     const QString store = sandbox + sep + QStringLiteral("scans");
     check(!ScanSnapshot::store(before) && ScanSnapshot::store(before, true, store) && ScanSnapshot::store(after, true, store),
           QStringLiteral("resumen: en una corrida automatizada no se escribe en los ajustes del usuario; en la carpeta de prueba, si"));
     const ScanSnapshot current = ScanSnapshot::loadCurrent(vol, store);
     const ScanSnapshot previous = ScanSnapshot::loadPrevious(vol, store);
-    check(current.dirs.value(QStringLiteral("C:\\D")) == 150 * mb && previous.dirs.size() == 3 && !previous.dirs.contains(QStringLiteral("C:\\D")),
+    check(current.dirs.value(at("D")) == 150 * mb && previous.dirs.size() == 3 && !previous.dirs.contains(at("D")),
           QStringLiteral("resumen: el nuevo queda como actual y el que habia pasa a anterior"));
 
     check(QFileInfo::exists(canary) && QFileInfo::exists(linkTarget + sep + QStringLiteral("precious.bin")),

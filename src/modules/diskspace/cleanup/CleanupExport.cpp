@@ -72,7 +72,11 @@ QString howText(const Cleanup::Target &target)
     case Cleanup::Action::RecycleBin:
         break;
     }
+#ifdef Q_OS_MACOS
+    return I18n::tr("The Trash of this drive is emptied");
+#else
     return I18n::tr("The Recycle Bin of this drive is emptied");
+#endif
 }
 
 // Lo mas pesado que hay adentro de `dir`: subcarpetas (del arbol) y archivos (del disco), juntos.
@@ -168,8 +172,13 @@ Entry entryForPath(const QString &path, bool isDir, qint64 bytes, qint64 files, 
     entry.files = files;
     entry.newest = newest;
     entry.isDir = isDir;
+#ifdef Q_OS_MACOS
+    entry.how = isDir ? I18n::tr("The whole folder: to the Trash or deleted for good, I choose when deleting")
+                      : I18n::tr("The file: to the Trash or deleted for good, I choose when deleting");
+#else
     entry.how = isDir ? I18n::tr("The whole folder: to the Recycle Bin or deleted for good, I choose when deleting")
                       : I18n::tr("The file: to the Recycle Bin or deleted for good, I choose when deleting");
+#endif
     return entry;
 }
 

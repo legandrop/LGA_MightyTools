@@ -346,6 +346,8 @@ ElidedLabel#itemPath { color: @textFaint; font-size: @fs12; }
 QWidget#cleanItem { border-radius: 4px; background-color: transparent; }
 QWidget#cleanItem:hover { background-color: #1b1b1b; }
 QFrame#okBanner { background-color: @okBg; border: 1px solid @okBorder; border-radius: 6px; }
+QFrame#accessStrip { background-color: #2d2614; border: none; border-bottom: 1px solid #4d4020; }
+QLabel#accessText { color: @warn; font-size: @fs12_5; }
 QLabel#bannerText { color: @ok; font-size: @fs13; font-weight: 500; }
 QLabel#dialogLine { color: @text; font-size: @fs13; }
 QLabel#dialogValue { color: @text; font-size: @fs13; }

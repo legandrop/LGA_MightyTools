@@ -68,7 +68,9 @@ public:
     ScanEngine &operator=(const ScanEngine &) = delete;
 
     // Escaneo completo de `rootPath` ("C:/", "C:\") sobre un arbol nuevo. Corta el que estuviera en curso.
-    void start(const QString &rootPath);
+    // En las carpetas de `exclusions` (rutas reales) no se entra: quedan como "sin acceso"
+    // (SystemPaths::scanExclusions, D-43).
+    void start(const QString &rootPath, const QStringList &exclusions = {});
     // Vuelve a leer solo esas carpetas y lo que cuelga de ellas (despues de borrar adentro). No hace
     // nada, y devuelve false, si hay una pasada en curso.
     bool rescan(const QList<ScanTree::Index> &nodes);

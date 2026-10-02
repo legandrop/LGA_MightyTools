@@ -63,7 +63,11 @@ QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QStrin
     auto *dialog = new QDialog(parent);
     dialog->setWindowTitle(I18n::tr("Clean up"));
     QVBoxLayout *layout = dialogLayout(dialog, I18n::tr("Clean up %1 on %2?").arg(total, driveLabel), 440);
+#ifdef Q_OS_MACOS
+    QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Trash:"), "dialogLine", dialog);
+#else
     QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Recycle Bin:"), "dialogLine", dialog);
+#endif
     intro->setWordWrap(true);
     layout->addWidget(intro);
     auto *list = new QVBoxLayout();
@@ -171,7 +175,11 @@ QDialog *confirmDelete(QWidget *parent, const QList<QPair<QString, QString>> &pa
     buttons->addWidget(cancel);
     QObject::connect(cancel, &QPushButton::clicked, dialog, [dialog]() { dialog->done(Cancel); });
     if (offerRecycleBin) {
+#ifdef Q_OS_MACOS
+        auto *bin = Ui::button(I18n::tr("Move to Trash"), QString(), QString(), dialog);
+#else
         auto *bin = Ui::button(I18n::tr("Move to Recycle Bin"), QString(), QString(), dialog);
+#endif
         buttons->addWidget(bin);
         QObject::connect(bin, &QPushButton::clicked, dialog, [dialog]() { dialog->done(ToRecycleBin); });
     }

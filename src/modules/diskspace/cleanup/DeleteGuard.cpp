@@ -7,7 +7,9 @@
 
 namespace {
 
-#ifdef Q_OS_WIN
+// Windows y macOS (APFS y HFS+ por defecto) no distinguen mayusculas en las rutas. En un volumen de mac
+// que si las distingue, comparar sin distinguir solo hace las guardas mas amplias.
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseInsensitive;
 #else
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseSensitive;
@@ -67,12 +69,23 @@ DeleteGuard DeleteGuard::forVolume(const QString &volumeRoot)
     if (!base.endsWith(separator)) {
         base += separator;
     }
+#ifdef Q_OS_WIN
     // Tambien los archivos que Windows tiene en la raiz (memoria virtual, hibernacion, arranque).
     for (const char *name : {"$Recycle.Bin", "$RECYCLE.BIN", "System Volume Information", "Recovery", ".Trashes", "pagefile.sys",
                              "hiberfil.sys", "swapfile.sys", "DumpStack.log.tmp", "DumpStack.log", "bootmgr", "BOOTNXT", "Boot",
                              "EFI", "$WinREAgent"}) {
         guard.protectedTrees.append(base + QLatin1String(name));
     }
+#else
+    // Lo que macOS guarda en la raiz de cada volumen: indice de Spotlight, registro de cambios, versiones
+    // de documentos, la Papelera del volumen y las copias de Time Machine.
+    for (const char *name : {".Spotlight-V100", ".fseventsd", ".DocumentRevisions-V100", ".Trashes", ".TemporaryItems",
+                             ".MobileBackups", "Backups.backupdb", ".PKInstallSandboxManager", ".PKInstallSandboxManager-SystemSoftware"}) {
+        guard.protectedTrees.append(base + QLatin1String(name));
+    }
+    // La Papelera del usuario en el disco de arranque se vacia por RecycleBin, no a mano.
+    guard.protectedTrees.append(clean(QDir::homePath() + QStringLiteral("/.Trash")));
+#endif
     return guard;
 }
 
@@ -119,6 +132,7 @@ DeleteGuard::Verdict DeleteGuard::check(const QString &path, Scope scope, bool t
             return Verdict::CloudFolder;
         }
     }
+#ifdef Q_OS_WIN
     if (toTrash) {
         // La Shell normaliza los nombres: "informe." o "informe " pueden terminar apuntando a "informe".
         const QStringList parts = target.split(QDir::separator(), Qt::SkipEmptyParts);
@@ -128,6 +142,7 @@ DeleteGuard::Verdict DeleteGuard::check(const QString &path, Scope scope, bool t
             }
         }
     }
+#endif
     return Verdict::Ok;
 }
 

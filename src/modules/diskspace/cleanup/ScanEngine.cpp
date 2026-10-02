@@ -100,6 +100,9 @@ struct ScanEngine::Shared
     int active = 0;
     bool passDone = true;
 
+    // Carpetas en las que no se entra, nativas y terminadas en separador (como Task::path).
+    std::vector<DirEnumerator::NativeString> exclusions;
+
     std::atomic<int> workers{0};
     std::atomic<bool> cancel{false};
     std::chrono::steady_clock::time_point started;
@@ -186,6 +189,17 @@ void ScanEngine::Shared::workerLoop()
                 offset += size_t(nameLengths[i]);
             }
             tree.setListed(task.node, ownBytes, ownFiles, newest, !opened, cacheTagged);
+            // Una carpeta excluida queda en el arbol como "sin acceso", sin leerla.
+            if (!exclusions.empty()) {
+                for (size_t i = 0; i < children.size();) {
+                    if (std::find(exclusions.begin(), exclusions.end(), children[i].path) != exclusions.end()) {
+                        tree.setListed(children[i].node, 0, 0, 0, true, false);
+                        children.erase(children.begin() + qsizetype(i));
+                    } else {
+                        ++i;
+                    }
+                }
+            }
         }
 
         bool wake = !children.empty();
@@ -280,7 +294,7 @@ void ScanEngine::cancel()
     s.queueSignal.notify_all();
 }
 
-void ScanEngine::start(const QString &rootPath)
+void ScanEngine::start(const QString &rootPath, const QStringList &exclusions)
 {
     // Los hilos de una pasada anterior pueden seguir un instante mas: se quedan con SU estado, y esta
     // pasada arranca con uno nuevo.
@@ -289,6 +303,9 @@ void ScanEngine::start(const QString &rootPath)
     Shared &s = *m_shared;
     s.tree.reset(DirEnumerator::toDisplay(DirEnumerator::nativeDir(rootPath)));
     s.queue.push_back(Task{s.tree.root(), DirEnumerator::nativeDir(rootPath)});
+    for (const QString &path : exclusions) {
+        s.exclusions.push_back(DirEnumerator::nativeDir(path));
+    }
     s.passDone = false;
     const int cores = int(std::thread::hardware_concurrency());
     launch(qBound(2, cores, kMaxThreads));

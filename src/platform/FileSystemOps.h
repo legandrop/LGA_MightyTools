@@ -9,7 +9,7 @@
 // que hace falta: saber si una ruta es un enlace SIN seguirlo, borrar un archivo o una carpeta vacia (o
 // el enlace mismo, nunca su destino), y la ruta e identidad reales de algo que existe.
 //  - Windows: platform/win/FileSystemOpsWin.cpp (rutas \\?\, DeleteFileW, RemoveDirectoryW).
-//  - macOS:   platform/mac/FileSystemOpsMac.cpp (lstat, unlink, rmdir).
+//  - macOS:   platform/mac/FileSystemOpsMac.cpp (lstat, unlink, rmdir, libproc para "en uso").
 namespace FileSystemOps {
 
 enum class Kind {
@@ -31,9 +31,10 @@ enum class Result {
 };
 // Ruta nativa de un archivo o de un enlace (sin separador final), para removeFile / removeDir.
 DirEnumerator::NativeString nativePath(const QString &path);
-// Borra un archivo o un enlace de archivo. Le saca el solo-lectura si hace falta.
+// Borra un archivo o un enlace de archivo. En Windows le saca el solo-lectura si hace falta; en macOS un
+// archivo trabado desde el Finder se queda (Denied).
 // En una corrida automatizada solo actua dentro de la carpeta de pruebas (core/AutomatedRun.h): fuera
-// de ella devuelve Denied sin tocar nada. En macOS el borrado esta deshabilitado (sin probar): Failed.
+// de ella devuelve Denied sin tocar nada.
 Result removeFile(const DirEnumerator::NativeString &path);
 // Borra una carpeta VACIA, o un enlace de carpeta (el enlace: lo que hay del otro lado no se toca).
 // Misma guarda de corrida automatizada que removeFile.

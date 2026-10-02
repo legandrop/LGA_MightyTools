@@ -7,7 +7,9 @@
 //  - Windows (platform/win/RecycleBinWin.cpp): SHQueryRecycleBinW / SHEmptyRecycleBinW, sin carteles ni
 //    sonido. Mandar a la Papelera: QFile::moveToTrash (IFileOperation), que ABORTA si Windows fuera a
 //    borrar definitivo porque el item no entra en la Papelera: nunca se degrada a un borrado definitivo.
-//  - macOS (platform/mac/RecycleBinMac.cpp): deshabilitado (sin probar); todo responde que no.
+//  - macOS (platform/mac/RecycleBinMac.cpp): la carpeta de la Papelera del volumen (~/.Trash o
+//    <volumen>/.Trashes/<uid>), medida y vaciada recorriendola sin seguir enlaces. Mandar a la Papelera:
+//    QFile::moveToTrash (NSFileManager), que falla en vez de borrar definitivo.
 //
 // En una corrida automatizada (core/AutomatedRun.h) vaciar y mandar a la Papelera son inertes: anotan
 // lo que harian y devuelven false. Preguntar el tamano es solo lectura.

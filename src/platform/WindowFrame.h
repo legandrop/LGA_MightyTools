@@ -11,8 +11,8 @@ class QWidget;
 //    sin esquinas redondeadas y sin minimizar desde la barra de tareas. Se le devuelven los estilos
 //    de una ventana con titulo y WM_NCCALCSIZE deja el area no-cliente en cero. La que se estira
 //    (`resizable`) responde WM_NCHITTEST con los bordes y las esquinas de una franja interior.
-//  - macOS (platform/mac/WindowFrameMac.cpp): nada; la ventana sin marco ya tiene sombra. (Estirarla
-//    desde los bordes esta sin hacer en mac.)
+//  - macOS (platform/mac/WindowFrameMac.mm): la ventana sin marco ya tiene sombra; la que se estira
+//    suma NSWindowStyleMaskResizable y macOS hace el resto (bordes, esquinas y cursores).
 namespace WindowFrame {
 
 // Franja interior que estira una ventana `resizable`, en pixeles a 96 ppp (toda la ventana es cliente,

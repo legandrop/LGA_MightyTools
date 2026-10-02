@@ -116,6 +116,7 @@ struct CleanupJob::Shared
     void run();
     void execute(const Request &request, Outcome &outcome, const QSet<QString> &programs, std::vector<char> &scratch);
     bool deleteTree(const NativeString &dir, Outcome &outcome, std::vector<char> &scratch);
+    bool openInside(const NativeString &dir, Outcome &outcome, std::vector<char> &scratch);
     bool removeEntry(const NativeString &path, const ChildEntry &entry, Outcome &outcome, std::vector<char> &scratch);
     void deleteOldChildren(const NativeString &dir, int minAgeDays, Outcome &outcome, std::vector<char> &scratch);
     void skip(Outcome &outcome, const NativeString &path, qint64 files, qint64 bytes);
@@ -162,6 +163,16 @@ bool CleanupJob::Shared::removeEntry(const NativeString &path, const ChildEntry 
         skip(outcome, path, 1, 0);
         return false;
     }
+    if (entry.isLink) {
+        // Un enlace de archivo (o un symlink de mac, que no dice a que apunta): se borra el enlace y no
+        // cuenta como archivo, igual que en inspect().
+        const FileSystemOps::Result result = FileSystemOps::removeFile(path);
+        if (result == FileSystemOps::Result::Removed || result == FileSystemOps::Result::Missing) {
+            return true;
+        }
+        skip(outcome, path, 1, 0);
+        return false;
+    }
     const FileSystemOps::Result result = FileSystemOps::removeFile(path);
     if (result == FileSystemOps::Result::Removed) {
         ++outcome.deletedFiles;
@@ -174,6 +185,26 @@ bool CleanupJob::Shared::removeEntry(const NativeString &path, const ChildEntry 
         return true;
     }
     skip(outcome, path, 1, qint64(entry.allocated));
+    return false;
+}
+
+// macOS: borrar un archivo abierto NO falla (en Windows el sistema lo impide y el archivo se saltea
+// solo). Antes de vaciar o borrar una carpeta se mira si algo de adentro esta abierto; si lo esta, la
+// carpeta entera se queda: vaciar a medias la cache de un programa que esta trabajando la rompe.
+bool CleanupJob::Shared::openInside(const NativeString &dir, Outcome &outcome, std::vector<char> &scratch)
+{
+#ifdef Q_OS_MACOS
+    Inspection probe;
+    inspect(dir, scratch, probe, true, &cancel);
+    if (probe.inUse) {
+        skip(outcome, dir, qMax<qint64>(1, probe.files), probe.bytes);
+        return true;
+    }
+#else
+    Q_UNUSED(dir);
+    Q_UNUSED(outcome);
+    Q_UNUSED(scratch);
+#endif
     return false;
 }
 
@@ -320,6 +351,9 @@ void CleanupJob::Shared::execute(const Request &request, Outcome &outcome, const
         }
         const NativeString dir = DirEnumerator::nativeDir(real);
         if (request.action == Cleanup::Action::Contents) {
+            if (openInside(dir, outcome, scratch)) {
+                return;
+            }
             deleteTree(dir, outcome, scratch);
         } else {
             deleteOldChildren(dir, request.minAgeDays, outcome, scratch);
@@ -375,6 +409,9 @@ void CleanupJob::Shared::execute(const Request &request, Outcome &outcome, const
         return;
     }
     case FileSystemOps::Kind::Dir: {
+        if (openInside(DirEnumerator::nativeDir(real), outcome, scratch)) {
+            return;
+        }
         if (deleteTree(DirEnumerator::nativeDir(real), outcome, scratch)) {
             const FileSystemOps::Result result = FileSystemOps::removeDir(native);
             outcome.removedEntirely = result == FileSystemOps::Result::Removed || result == FileSystemOps::Result::Missing;

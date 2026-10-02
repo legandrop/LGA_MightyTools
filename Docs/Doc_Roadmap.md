@@ -74,14 +74,13 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    `LGA OpenInNukeX.app`, su configuración vieja y los clones `~/.nuke/LGA_OpenInNukeX` y
    `~/Desktop/Codin/LGA_LinkRedirector`; links, `.html` y `.nk` los atiende Mighty Tools. Falta, en
    este orden:
-   1. **Disk Space completo en mac.** El escaneo ya está (v1.23: `getattrlistbulk`, 19 s para 4,2 M
-      de archivos, sin contar dos veces el volumen de datos). La ventana de limpieza está apagada en mac
-      (`SystemPaths::cleanupSupported()` en `platform/mac/SystemPathsMac.cpp`): reglas propias de mac
-      (`diskspace/cleanup/mac/CleanupRulesMac.cpp`, hoy vacía: cachés de `~/Library/Caches`, logs, etc.),
-      borrado (`FileSystemOpsMac.cpp`: `removeFile/removeDir` deshabilitados), Papelera
-      (`RecycleBinMac.cpp`, con `NSFileManager trashItemAtURL`), «Show in Finder»
-      (`SystemPaths::revealInFileManager`) y estirar la ventana (`platform/mac/WindowFrameMac.cpp`). Los
-      self-tests de la limpieza usan rutas de Windows: sumar casos de mac.
+   1. **Disk Space completo en mac: HECHO (v1.23 escaneo, v1.24 limpieza), falta la prueba de Lega**: el
+      borrado real, la Papelera (medirla y vaciarla), «Show in Finder», estirar la ventana desde los bordes
+      y la franja de acceso total al disco (que no salga NINGÚN cartel de privacidad sin ese permiso; la
+      sesión que lo hizo tenía el permiso y no pudo comprobarlo). Observaciones de la auditoría que quedan:
+      normalizar Unicode (NFC) en `DeleteGuard::clean`; excluir cualquier `*.photoslibrary` (hoy solo la de
+      Imágenes); la Papelera de iCloud Drive no se vacía (el Finder sí); «otro volumen» se mira por
+      `st_dev` solo en las reglas, no en cada `DeleteGuard::check`.
    2. **Avisos nativos.** Hoy van por `osascript` (`platform/mac/SystemNotifierMac.cpp`): sin ícono propio,
       sin click que vuelva a la app (`ToastActivationMac.cpp` es un stub) y sin el desplegable «Remind me
       again in» de Disk Space. Pasar a `UNUserNotificationCenter` con acciones (macOS las agrupa en

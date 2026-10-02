@@ -19,6 +19,7 @@ class DiskState;
 class ElidedLabel;
 class ModuleContext;
 class QAbstractButton;
+class QFrame;
 class QLabel;
 class QPushButton;
 class QStackedWidget;
@@ -93,6 +94,8 @@ public:
 
     // ---- QA
     static QStringList fixtureStates();
+    // Captura: la franja de acceso total al disco a la vista (macOS, D-43).
+    void showAccessStripForCapture();
     // Carga un estado fijo (los del canvas). false si no lo conoce.
     bool applyFixture(const QString &state);
     // Ordena la lista de esa pestana como si se hubiera hecho click en el titulo de `column`
@@ -102,6 +105,7 @@ public:
 
 protected:
     void showEvent(QShowEvent *event) override;
+    void changeEvent(QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
@@ -233,6 +237,10 @@ private:
     UsageBar *m_bar = nullptr;
     QPushButton *m_rescan = nullptr;
     QWidget *m_scanLine = nullptr;
+    // macOS sin acceso total al disco (D-43): avisa que lo privado no se escaneo y lleva a Ajustes.
+    QFrame *m_accessStrip = nullptr;
+    bool m_captureAccessStrip = false; ///< captura: la franja a la vista
+    void refreshAccessStrip();
     TabStrip *m_tabs = nullptr;
     QStackedWidget *m_stack = nullptr;
     CleanupPane *m_cleanPane = nullptr;

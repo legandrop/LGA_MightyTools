@@ -12,7 +12,9 @@ std::atomic<bool> g_active{false};
 QMutex g_mutex;
 QString g_sandbox; // nativa, sin separador final
 
-#ifdef Q_OS_WIN
+// Windows y macOS (APFS y HFS+ por defecto) no distinguen mayusculas en las rutas. En un volumen de mac
+// que si las distingue, comparar sin distinguir solo hace las guardas mas amplias.
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseInsensitive;
 #else
 constexpr Qt::CaseSensitivity kPathCase = Qt::CaseSensitive;

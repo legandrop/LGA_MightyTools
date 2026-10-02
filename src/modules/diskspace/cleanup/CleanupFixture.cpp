@@ -25,6 +25,40 @@ struct Dir
     int days;
 };
 
+#ifdef Q_OS_MACOS
+// macOS: el disco de arranque visto desde "/", con el volumen de datos entrando por /Users, /Applications...
+const Dir kDirs[] = {
+    {0, u"Users", 612.0, 2990600, 0},
+    {1, u"lega", 611.2, 2989700, 0},
+    {2, u"Library", 318.4, 1500300, 0},
+    {3, u"Application Support", 151.6, 610400, 0},
+    {4, u"Studio", 14.5, 60210, 0},
+    {4, u"Google", 9.8, 40042, 0},
+    {4, u"BraveSoftware", 6.2, 30877, 0},
+    {4, u"Blackmagic Design", 5.1, 292, 5},
+    {3, u"Caches", 12.0, 90120, 0},
+    {4, u"com.openai.codex", 1.6, 4332, 2},
+    {4, u"BraveSoftware", 1.6, 30120, 0},
+    {4, u"Google", 1.5, 9230, 0},
+    {4, u"pip", 0.5, 40, 13},
+    {3, u"Containers", 40.2, 201400, 0},
+    {2, u"Desktop", 95.3, 160142, 1},
+    {2, u"Movies", 60.1, 3004, 3},
+    {2, u".nuke", 29.0, 91507, 0},
+    {2, u"Downloads", 25.2, 3120, 1},
+    {2, u".codex", 12.5, 17444, 0},
+    {2, u"Documents", 6.3, 29250, 0},
+    {2, u".cache", 3.6, 22736, 4},
+    {0, u"Applications", 72.8, 594358, 0},
+    {1, u"Nuke17.0v1", 8.9, 40210, 40},
+    {1, u"DaVinci Resolve", 6.0, 20311, 30},
+    {0, u"Library", 30.9, 137466, 0},
+    {0, u"System", 28.9, 309019, 0},
+    {0, u"private", 11.7, 12933, 0},
+    {0, u"opt", 4.6, 93869, 0},
+    {0, u"usr", 1.7, 23240, 0},
+};
+#else
 const Dir kDirs[] = {
     {0, u"Users", 228.8, 1009800, 0},
     {1, u"lega", 221.2, 1003700, 0},
@@ -65,6 +99,7 @@ const Dir kDirs[] = {
     {0, u"$Recycle.Bin", 9.1, 861, 0},
     {0, u"temp", 7.3, 4245, 15},
 };
+#endif
 constexpr int kDirCount = int(sizeof(kDirs) / sizeof(kDirs[0]));
 
 // Agrega las carpetas de `kDirs` que cuelgan de `parent` (las del nivel `depth` a partir de `index`).
@@ -129,6 +164,79 @@ Cleanup::Category category(const QString &id, Cleanup::Group group, const QStrin
     return c;
 }
 
+#ifdef Q_OS_MACOS
+QList<Cleanup::Category> categories(const QString &state, qint64 now)
+{
+    const QString home = QStringLiteral("/Users/lega");
+    const QString codin = home + QStringLiteral("/Desktop/Codin");
+    QList<Cleanup::Category> list;
+    const bool pick = state == QLatin1String("cleanup-pick");
+    const bool result = state == QLatin1String("cleanup-result");
+
+    if (!pick && !result) {
+        list.append(category(QStringLiteral("bin"), Cleanup::Group::Safe, I18n::tr("Trash"),
+                             I18n::tr("%1 items already deleted once.").arg(QStringLiteral("25")),
+                             {item(I18n::tr("Trash"), QStringLiteral("/"), 2.49, 0, true, now)}, true));
+        list.append(category(QStringLiteral("python"), Cleanup::Group::Safe, I18n::tr("Python package caches"),
+                             I18n::tr("Downloads kept by pip and uv. Installing a package fetches it again."),
+                             {item(QStringLiteral("uv cache"), home + QStringLiteral("/.cache/uv"), 3.21, 4, true, now),
+                              item(QStringLiteral("pip cache"), home + QStringLiteral("/Library/Caches/pip"), 0.47, 13, true, now)}));
+        list.append(category(QStringLiteral("dev"), Cleanup::Group::Safe, I18n::tr("Developer caches"),
+                             I18n::tr("Package downloads. Fetched again by the next install or build."),
+                             {item(QStringLiteral("npm cache"), home + QStringLiteral("/.npm/_cacache"), 0.16, 0, true, now),
+                              item(QStringLiteral("Homebrew downloads"), home + QStringLiteral("/Library/Caches/Homebrew"), 0.04, 0, true, now)}));
+        list.append(category(QStringLiteral("browsers"), Cleanup::Group::Safe, I18n::tr("Browser caches"),
+                             I18n::tr("Cache only: history, cookies and logins stay."),
+                             {item(QStringLiteral("Brave"), home + QStringLiteral("/Library/Application Support/BraveSoftware/Brave-Browser"), 1.61, 0, true, now),
+                              item(QStringLiteral("Chrome"), home + QStringLiteral("/Library/Application Support/Google/Chrome"), 1.36, 0, true, now),
+                              item(QStringLiteral("Firefox"), home + QStringLiteral("/Library/Caches/Firefox/Profiles"), 0.10, 14, true, now)}));
+        list.append(category(QStringLiteral("apps"), Cleanup::Group::Safe, I18n::tr("App caches"),
+                             I18n::tr("Cache folders of desktop apps. Settings and logins stay."),
+                             {item(QStringLiteral("Studio"), home + QStringLiteral("/Library/Application Support/Studio"), 1.52, 0, true, now),
+                              item(QStringLiteral("Akiflow"), home + QStringLiteral("/Library/Application Support/Akiflow"), 0.24, 0, true, now),
+                              item(QStringLiteral("Spark Desktop"), home + QStringLiteral("/Library/Application Support/Spark Desktop"), 0.23, 0, true, now),
+                              item(QStringLiteral("Code"), home + QStringLiteral("/Library/Application Support/Code"), 0.09, 0, true, now)}));
+        list.append(category(QStringLiteral("updates"), Cleanup::Group::Safe, I18n::tr("App update downloads"),
+                             I18n::tr("Updates apps already downloaded. They download them again if they need them."),
+                             {item(QStringLiteral("com.openai.codex"), home + QStringLiteral("/Library/Caches/com.openai.codex/org.sparkle-project.Sparkle"), 1.65, 2, true, now),
+                              item(QStringLiteral("com.microsoft.VSCode"), home + QStringLiteral("/Library/Caches/com.microsoft.VSCode.ShipIt"), 0.87, 1, true, now),
+                              item(QStringLiteral("com.brave.Browser"), home + QStringLiteral("/Library/Caches/com.brave.Browser/org.sparkle-project.Sparkle"), 0.79, 5, true, now),
+                              item(QStringLiteral("Firefox"), home + QStringLiteral("/Library/Caches/Mozilla/updates"), 0.65, 14, true, now)}));
+        list.append(category(QStringLiteral("temp"), Cleanup::Group::Safe, I18n::tr("Temporary files"),
+                             I18n::tr("Older than 7 days and not in use.") + QLatin1Char(' ')
+                                 + I18n::tr("%1 newer or in use are left alone.").arg(QStringLiteral("1.91 GB")),
+                             {item(I18n::tr("Temporary files"), QStringLiteral("/private/var/folders/cx/qtyt758157x8qm7xl4fdjmqc0000gn/T"), 0.41, 9, true, now)},
+                             true));
+    }
+
+    // ---- Yours to decide: las reglas de carpetas del usuario y lo demas.
+    QList<Cleanup::Item> builds = {
+        item(QStringLiteral("LGA_PipeSync_2"), codin + QStringLiteral("/LGA_PipeSync_2/build"), 5.46, 0, false, now),
+        item(QStringLiteral("LGA_MightyTools"), codin + QStringLiteral("/LGA_MightyTools/build"), 2.10, 8, pick, now),
+        item(QStringLiteral("LGA_FileManagerS3"), codin + QStringLiteral("/LGA_FileManagerS3/build"), 1.72, 0, false, now),
+        item(QStringLiteral("LGA_MediaTools_v2"), codin + QStringLiteral("/LGA_MediaTools_v2/build"), 1.29, 8, pick, now),
+        item(QStringLiteral("LGA_FrameRev"), codin + QStringLiteral("/LGA_FrameRev/build"), 0.75, 0, false, now),
+    };
+    list.append(category(QStringLiteral("rule:0"), Cleanup::Group::Yours, I18n::tr("Folders named %1").arg(QStringLiteral("build")),
+                         I18n::tr("%1 folders named %2 in %3.").arg(5).arg(QStringLiteral("build"), codin), builds));
+    if (!pick) {
+        list.append(category(QStringLiteral("vm"), Cleanup::Group::Yours, I18n::tr("Virtual machine images"),
+                             I18n::tr("Kept by desktop apps, one copy per profile. The app downloads the image again; what its sessions saved inside is lost."),
+                             {item(QStringLiteral("Studio"), home + QStringLiteral("/Library/Application Support/Studio/vm_bundles"), 9.26, 1, false, now)}));
+        list.append(category(QStringLiteral("codex"), Cleanup::Group::Yours, I18n::tr("Codex archived sessions"),
+                             I18n::tr("Old conversations kept by Codex."),
+                             {item(I18n::tr("Codex archived sessions"), home + QStringLiteral("/.codex/archived_sessions"), 0.03, 6, false, now)},
+                             true));
+        list.append(category(QStringLiteral("appcaches"), Cleanup::Group::Yours, I18n::tr("Other app caches"),
+                             I18n::tr("Most rebuild themselves, but some apps keep their own data here too. Tick only what you know."),
+                             {item(QStringLiteral("Adobe"), home + QStringLiteral("/Library/Caches/Adobe"), 0.47, 13, false, now),
+                              item(QStringLiteral("Spark Desktop"), home + QStringLiteral("/Library/Caches/Spark Desktop"), 0.27, 0, false, now),
+                              item(QStringLiteral("vscode-cpptools"), home + QStringLiteral("/Library/Caches/vscode-cpptools"), 0.24, 0, false, now)}));
+    }
+    return list;
+}
+
+#else
 QList<Cleanup::Category> categories(const QString &state, qint64 now)
 {
     const QString home = QStringLiteral("C:\\Users\\lega");
@@ -220,6 +328,8 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
     return list;
 }
 
+#endif
+
 } // namespace
 
 namespace CleanupFixture {
@@ -235,6 +345,19 @@ Data build(const QString &state, ScanEngine &engine)
     Data data;
     const qint64 now = QDateTime::currentSecsSinceEpoch();
     data.scanning = state == QLatin1String("scanning");
+#ifdef Q_OS_MACOS
+    data.drive.root = QStringLiteral("/");
+    data.drive.label = QStringLiteral("Macintosh HD");
+    data.drive.name = QString();
+    data.drive.totalBytes = gb(926.4);
+    data.drive.freeBytes = state == QLatin1String("cleanup-result") ? gb(146.2) : gb(31.8);
+
+    data.guard.volumeRoot = QStringLiteral("/");
+    data.guard.protectedTrees = {QStringLiteral("/System"), QStringLiteral("/Applications"), QStringLiteral("/Library"),
+                                 QStringLiteral("/usr"), QStringLiteral("/private/var/db"), QStringLiteral("/opt")};
+    data.guard.protectedFolders = {QStringLiteral("/Users"), QStringLiteral("/Users/lega"), QStringLiteral("/Users/lega/Library"),
+                                   QStringLiteral("/Users/lega/Desktop"), QStringLiteral("/Users/lega/Documents")};
+#else
     data.drive.root = QStringLiteral("C:/");
     data.drive.label = QStringLiteral("C:");
     data.drive.name = QStringLiteral("Windows");
@@ -246,6 +369,7 @@ Data build(const QString &state, ScanEngine &engine)
                                  QStringLiteral("C:\\ProgramData"), QStringLiteral("C:\\pagefile.sys"), QStringLiteral("C:\\$Recycle.Bin")};
     data.guard.protectedFolders = {QStringLiteral("C:\\Users"), QStringLiteral("C:\\Users\\lega"), QStringLiteral("C:\\Users\\lega\\AppData"),
                                    QStringLiteral("C:\\Users\\lega\\Desktop"), QStringLiteral("C:\\Users\\lega\\Documents")};
+#endif
 
     ScanTree::Index users = ScanTree::kNone;
     ScanTree::Index lega = ScanTree::kNone;
@@ -253,6 +377,16 @@ Data build(const QString &state, ScanEngine &engine)
     {
         const auto lock = engine.lock();
         ScanTree &tree = engine.tree();
+#ifdef Q_OS_MACOS
+        tree.reset(QStringLiteral("/"));
+        qint64 bytes = 0;
+        int files = 0;
+        addLevel(tree, tree.root(), 0, 0, now, &bytes, &files);
+        tree.setListed(tree.root(), 0, 0, now - kDay, false, false);
+        users = tree.find(QStringLiteral("/Users"));
+        lega = tree.find(QStringLiteral("/Users/lega"));
+        desktop = tree.find(QStringLiteral("/Users/lega/Desktop"));
+#else
         tree.reset(QStringLiteral("C:\\"));
         qint64 bytes = 0;
         int files = 0;
@@ -262,10 +396,15 @@ Data build(const QString &state, ScanEngine &engine)
         users = tree.find(QStringLiteral("C:\\Users"));
         lega = tree.find(QStringLiteral("C:\\Users\\lega"));
         desktop = tree.find(QStringLiteral("C:\\Users\\lega\\Desktop"));
+#endif
     }
+#ifdef Q_OS_MACOS
+    data.listings.insert(0, ScanEngine::FileListing());
+#else
     ScanEngine::FileListing rootFiles;
     rootFiles.largest.append(ScanEngine::FileEntry{QStringLiteral("pagefile.sys"), quint64(gb(32.0)), now - kDay});
     data.listings.insert(0, rootFiles);
+#endif
 
     QList<ScanEngine::TopFile> top;
     const auto addTop = [&](double gib, ScanTree::Index dir, const QString &name, int days) {
@@ -279,6 +418,17 @@ Data build(const QString &state, ScanEngine &engine)
     {
         const auto lock = engine.lock();
         const ScanTree &tree = engine.tree();
+#ifdef Q_OS_MACOS
+        addTop(13.0, desktop, QStringLiteral("Allemaal Familie - Ventana Ciudad Dia 01.mov"), 21);
+        addTop(9.12, tree.find(QStringLiteral("/Users/lega/Library/Application Support/Studio")), QStringLiteral("rootfs.img"), 1);
+        addTop(8.58, tree.find(QStringLiteral("/Users/lega/Movies")), QStringLiteral("IMG_0020.mov"), 30);
+        addTop(6.51, tree.find(QStringLiteral("/Users/lega/Downloads")), QStringLiteral("DaVinci_Resolve_Studio_20.2.2_Mac.dmg"), 60);
+        addTop(4.37, tree.find(QStringLiteral("/Users/lega/Movies")), QStringLiteral("berlin-symphony-of-a-great-city_1928.mp4"), 90);
+        addTop(3.98, tree.find(QStringLiteral("/Users/lega/Library/Application Support/Google")), QStringLiteral("weights.bin"), 40);
+        addTop(3.30, tree.find(QStringLiteral("/Users/lega/.nuke")), QStringLiteral("pack-d6bf6beee809.pack"), 136);
+        addTop(3.07, desktop, QStringLiteral("LS83_Prensa.mp4"), 8);
+        addTop(2.93, tree.find(QStringLiteral("/Applications/Nuke17.0v1")), QStringLiteral("libtorch_cpu.dylib"), 40);
+#else
         addTop(32.0, tree.root(), QStringLiteral("pagefile.sys"), 1);
         addTop(8.74, desktop, QStringLiteral("InviziGrain Demo Vintage Stock.mov"), 13);
         addTop(8.24, tree.find(QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Packages")), QStringLiteral("rootfs.vhdx"), 1);
@@ -292,6 +442,7 @@ Data build(const QString &state, ScanEngine &engine)
         addTop(3.09, tree.find(QStringLiteral("C:\\Users\\lega\\AppData\\Roaming\\Blackmagic Design")), QStringLiteral("Project.db"), 766);
         addTop(3.04, tree.find(QStringLiteral("C:\\ProgramData")), QStringLiteral("nlstats.db"), 0);
         addTop(2.93, tree.find(QStringLiteral("C:\\Portable\\LGA_ShotPlayer")), QStringLiteral("pack-9c30c762fe5e.pack"), 3);
+#endif
     }
     engine.setTopFilesForCapture(top);
 
@@ -308,7 +459,11 @@ Data build(const QString &state, ScanEngine &engine)
         data.openCategories = {QStringLiteral("rule:0")};
     } else if (state == QLatin1String("cleanup-result")) {
         data.openCategories.clear();
+#ifdef Q_OS_MACOS
+        data.banner = I18n::tr("Freed %1. %2 has %3 free.").arg(QStringLiteral("114.4 GB"), QStringLiteral("Macintosh HD"), QStringLiteral("146.2 GB"));
+#else
         data.banner = I18n::tr("Freed %1. %2 has %3 free.").arg(QStringLiteral("59.3 GB"), QStringLiteral("C:"), QStringLiteral("91.6 GB"));
+#endif
         data.skippedSummary = I18n::tr("%1 files · %2").arg(QStringLiteral("212"), QStringLiteral("922 MB"));
         data.skipped = {{I18n::tr("Browser caches") + QStringLiteral(" · Brave"), I18n::tr("%1 is open").arg(QStringLiteral("Brave"))},
                         {I18n::tr("Temporary files"), I18n::tr("%1 files in use").arg(64)}};
@@ -316,19 +471,39 @@ Data build(const QString &state, ScanEngine &engine)
         // Como en el canvas: solo el primer nivel, con varias carpetas todavia contandose.
         data.tab = 1;
         const auto lock = engine.lock();
+#ifdef Q_OS_MACOS
+        for (const char16_t *name : {u"/Users", u"/Applications", u"/Library", u"/System"}) {
+#else
         for (const char16_t *name : {u"C:\\Users", u"C:\\Program Files", u"C:\\Portable", u"C:\\ProgramData", u"C:\\Qt"}) {
+#endif
             data.counting.insert(engine.tree().find(QString::fromUtf16(name)));
         }
     } else if (state == QLatin1String("folders") || state == QLatin1String("folders-selected")) {
         data.tab = 1;
         data.expanded = {users, lega};
         if (state == QLatin1String("folders-selected")) {
+#ifdef Q_OS_MACOS
+            data.selectedPaths = {QStringLiteral("/Users/lega/.cache"), QStringLiteral("/Users/lega/Downloads")};
+#else
             data.selectedPaths = {QStringLiteral("C:\\Users\\lega\\.cache"), QStringLiteral("C:\\Users\\lega\\miniconda3")};
+#endif
         }
     } else if (state == QLatin1String("files")) {
         data.tab = 2;
     } else if (state == QLatin1String("changes")) {
         data.tab = 3;
+#ifdef Q_OS_MACOS
+        data.baseline.root = QStringLiteral("/");
+        data.baseline.takenAt = QDateTime(QDate::currentDate().addDays(-1), QTime(18, 10));
+        data.usedDelta = gb(6.4);
+        data.changes = {{QStringLiteral("/private/var/folders/cx/qtyt758157x8qm7xl4fdjmqc0000gn/T"), gb(3.1), gb(5.0)},
+                        {QStringLiteral("/Users/lega/.codex"), gb(1.9), gb(12.5)},
+                        {QStringLiteral("/Users/lega/Desktop/Codin/LGA_PipeSync_2/build"), gb(1.2), gb(5.5)},
+                        {QStringLiteral("/Users/lega/Library/Caches/com.openai.codex"), gb(0.6), gb(1.6)},
+                        {QStringLiteral("/Users/lega/Library/Caches/pip"), gb(0.5), gb(0.5)},
+                        {QStringLiteral("/Users/lega/.Trash"), -gb(0.4), gb(2.5)},
+                        {QStringLiteral("/Users/lega/Desktop"), -gb(0.5), gb(95.3)}};
+#else
         data.baseline.root = QStringLiteral("C:\\");
         data.baseline.takenAt = QDateTime(QDate::currentDate().addDays(-1), QTime(18, 10));
         data.usedDelta = gb(6.4);
@@ -339,6 +514,7 @@ Data build(const QString &state, ScanEngine &engine)
                         {QStringLiteral("C:\\Users\\lega\\AppData\\Local\\pip"), gb(0.5), gb(10.4)},
                         {QStringLiteral("C:\\$Recycle.Bin"), -gb(0.4), gb(9.1)},
                         {QStringLiteral("C:\\Users\\lega\\Desktop"), -gb(0.5), gb(25.2)}};
+#endif
     }
     return data;
 }

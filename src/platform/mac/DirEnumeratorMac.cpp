@@ -82,7 +82,8 @@ bool enumerateSlow(int fd, const NativeString &dir, const Visitor &visit)
             continue;
         }
         struct stat info;
-        if (fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) != 0) {
+        if (fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) != 0 || S_ISSOCK(info.st_mode) || S_ISFIFO(info.st_mode)
+            || S_ISCHR(info.st_mode) || S_ISBLK(info.st_mode)) {
             continue;
         }
         Entry entry;
@@ -123,7 +124,8 @@ bool enumerate(const NativeString &dir, std::vector<char> &scratch, const Visito
     if (scratch.size() < kBufferBytes) {
         scratch.resize(kBufferBytes);
     }
-    const int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    // O_NOFOLLOW: si la carpeta misma es un enlace, no se lista lo que hay del otro lado.
+    const int fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         return false;
     }
@@ -171,7 +173,9 @@ bool enumerate(const NativeString &dir, std::vector<char> &scratch, const Visito
             const uint32_t mountStatus = (returned.dirattr & ATTR_DIR_MOUNTSTATUS) ? take<uint32_t>(field) : 0;
             const off_t totalSize = (returned.fileattr & ATTR_FILE_TOTALSIZE) ? take<off_t>(field) : 0;
             const off_t allocSize = (returned.fileattr & ATTR_FILE_ALLOCSIZE) ? take<off_t>(field) : 0;
-            if (nameLength <= 0 || isRootAlias(dir, name)) {
+            // Sockets, FIFOs y dispositivos no ocupan lugar y no son de nadie para borrar (un socket de
+            // una app abierta vive en la carpeta temporal).
+            if (nameLength <= 0 || isRootAlias(dir, name) || type == VSOCK || type == VFIFO || type == VCHR || type == VBLK) {
                 continue;
             }
 
