@@ -317,6 +317,13 @@ if not defined INTERACTIVE (
 if defined OFFER_LOCAL (
     choice /C YN /M "Desea ejecutar el instalador ahora mismo (instalar local)?"
     if !errorlevel! EQU 1 (
+        REM Antes, la copia abierta, sea la de build, la instalada u otra: primero se le pide que salga
+        REM como desde Quit de la bandeja, asi se lleva su icono; un cierre forzado lo deja como
+        REM fantasma y parecen dos copias. Lo pide el exe recien armado en deploy, que conoce --quit.
+        REM Si la que esta abierta es vieja y no lo entiende, se cierra por ruta, todas las copias.
+        echo Cerrando la copia de Mighty Tools que este abierta...
+        "%~dp0deploy\LGA_MightyTools.exe" --quit
+        powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "%~dp0tools\close_by_path.ps1" -ExeName LGA_MightyTools.exe -AllInstances
         echo Ejecutando el instalador...
         "%OUTPUT_EXE%"
     ) else (

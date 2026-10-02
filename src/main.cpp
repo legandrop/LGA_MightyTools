@@ -101,6 +101,12 @@ bool hasArg(int argc, char *argv[], const char *name)
     return false;
 }
 
+// El candado de la instancia unica (lo comparten la residente y --quit).
+QString singletonLockPath()
+{
+    return QDir(QDir::tempPath()).filePath(QStringLiteral("com.lga.mightytools.singleton.lock"));
+}
+
 // El valor que sigue a un argumento ("--ui-scale 2"), o vacio.
 QByteArray argValue(int argc, char *argv[], const char *name)
 {
@@ -190,6 +196,24 @@ int main(int argc, char *argv[])
             qInstallMessageHandler(fileMessageHandler);
         }
         return UninstallCleanup::runFromCommandLine();
+    }
+
+    // --quit (lo usa instalador.bat antes de instalar): le pide a la copia residente, sea cual sea su exe,
+    // que salga como desde «Quit» de la bandeja, y espera a que suelte la instancia unica. Modo corto:
+    // sin ventanas, sin registro LGA, sin settings. Sale 0 si no queda ninguna copia corriendo y 1 si
+    // la residente sigue ahi (una version vieja que no entiende el pedido: la cierra el instalador).
+    if (hasArg(argc, argv, "--quit")) {
+        QCoreApplication app(argc, argv);
+        QLockFile lock(singletonLockPath());
+        if (lock.tryLock(0)) {
+            return 0; // no habia ninguna
+        }
+        SingleInstance::askResidentToQuit();
+        const bool gone = lock.tryLock(5000);
+        if (gone) {
+            lock.unlock();
+        }
+        return gone ? 0 : 1;
     }
 
     // Mudanza del cliente viejo de Open in NukeX (plan seccion 9). Los llama el instalador: mismo modo
@@ -310,7 +334,7 @@ int main(int argc, char *argv[])
     }
 
     // Instancia unica. La segunda copia sin argumentos le pide a la residente que muestre la ventana.
-    static QLockFile singleInstanceLock(QDir(QDir::tempPath()).filePath(QStringLiteral("com.lga.mightytools.singleton.lock")));
+    static QLockFile singleInstanceLock(singletonLockPath());
     const bool launchedByNotice = hasArg(argc, argv, "-Embedding") || hasArg(argc, argv, "--toast-activated");
     // --relaunch: la lanzo la copia que se reinicia (otro tamano de interfaz). Espera a que esa copia
     // termine de cerrar y suelte la instancia unica, y despues abre la ventana.
@@ -356,6 +380,14 @@ int main(int argc, char *argv[])
             controller->showSettings();
         } else {
             showPending = true;
+        }
+    });
+    // --quit de otra copia: la misma salida que «Quit» de la bandeja (se lleva el icono de la bandeja).
+    QObject::connect(server, &SingleInstanceServer::quitRequested, &app, [&controller]() {
+        if (controller) {
+            controller->quit();
+        } else {
+            QCoreApplication::quit();
         }
     });
 

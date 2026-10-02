@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.12:
+
+Al ejecutar el instalador desde `instalador.bat` con la copia de `build\` abierta, quedaban dos íconos
+en la bandeja: el instalador cierra las copias abiertas a la fuerza, y Windows no saca el ícono de un
+proceso terminado así hasta que el mouse pasa por encima. Ahora, antes de ejecutar el instalador,
+`instalador.bat` le pide a la copia abierta que salga sola, como desde «Quit», con el argumento nuevo
+`--quit` (por el canal de la instancia única; espera hasta 5 s a que suelte el candado). Si la abierta es
+una versión vieja que no lo entiende, se cierran todas las copias por ruta, como antes.
+[ Instalador - Cerrar la copia abierta antes de instalar ]
+
 v1.11:
 
 La ventana de Disk Space tenía el tamaño fijo del diseño y sus listas venían siempre ordenadas por peso.

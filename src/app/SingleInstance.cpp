@@ -9,6 +9,21 @@
 namespace {
 
 constexpr char kShowCommand[] = "show\n";
+constexpr char kQuitCommand[] = "quit\n";
+
+bool sendToResident(const char *command, int timeoutMs)
+{
+    QLocalSocket socket;
+    socket.connectToServer(SingleInstance::serverName());
+    if (!socket.waitForConnected(timeoutMs)) {
+        qWarning() << "[SingleInstance] La residente no contesto:" << socket.errorString();
+        return false;
+    }
+    socket.write(command);
+    const bool written = socket.waitForBytesWritten(timeoutMs);
+    socket.disconnectFromServer();
+    return written;
+}
 
 } // namespace
 
@@ -24,16 +39,12 @@ QString serverName()
 
 bool askResidentToShow(int timeoutMs)
 {
-    QLocalSocket socket;
-    socket.connectToServer(serverName());
-    if (!socket.waitForConnected(timeoutMs)) {
-        qWarning() << "[SingleInstance] La residente no contesto:" << socket.errorString();
-        return false;
-    }
-    socket.write(kShowCommand);
-    const bool written = socket.waitForBytesWritten(timeoutMs);
-    socket.disconnectFromServer();
-    return written;
+    return sendToResident(kShowCommand, timeoutMs);
+}
+
+bool askResidentToQuit(int timeoutMs)
+{
+    return sendToResident(kQuitCommand, timeoutMs);
 }
 
 } // namespace SingleInstance
@@ -57,6 +68,9 @@ SingleInstanceServer::SingleInstanceServer(QObject *parent)
                 if (line.startsWith("show")) {
                     qInfo() << "[SingleInstance] Otra copia pidio mostrar la ventana";
                     emit showRequested();
+                } else if (line.startsWith("quit")) {
+                    qInfo() << "[SingleInstance] Otra copia pidio salir (--quit)";
+                    emit quitRequested();
                 }
             });
         }

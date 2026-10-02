@@ -54,6 +54,8 @@ public:
 
 public slots:
     void showSettings();
+    // Salir de la app: «Quit» de la bandeja, y el --quit de otra copia (instalador.bat).
+    void quit();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -73,7 +75,6 @@ private:
     void onLanguageChangeRequested(const QString &code);
     void onUiSizeChangeRequested(int level);
     bool firstRunView() const;
-    void quit();
 
     Options m_options;
     std::unique_ptr<SettingsStore> m_store;
