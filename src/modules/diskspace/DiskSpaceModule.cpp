@@ -100,6 +100,29 @@ DriveInfo fixtureDrive(const char *root, const char *label, const char *name, do
 void applyFixture(DiskState &state, const QString &name)
 {
     const bool low = name == QLatin1String("low") || name == QLatin1String("low2");
+#ifdef Q_OS_MACOS
+    // macOS: sin letras; el keycap lleva el nombre del volumen y no hay nombre aparte (LocalDrivesMac).
+    QList<DriveInfo> drives = {
+        fixtureDrive("/", "Macintosh HD", "", 926, 126),
+        fixtureDrive("/Volumes/Cache", "Cache", "", 1863, low ? 42 : 640),
+        fixtureDrive("/Volumes/Renders", "Renders", "", 3726, name == QLatin1String("low2") ? 298 : 1208),
+        fixtureDrive("/Volumes/Backup", "Backup", "", 7452, 3103),
+    };
+    if (name == QLatin1String("missing")) {
+        drives.removeAt(2); // Renders desenchufado
+    }
+    if (name == QLatin1String("empty")) {
+        return;
+    }
+    state.addDiskWatch(QStringLiteral("/"), QString());
+    state.setDiskThreshold(QStringLiteral("/"), 77, DiskWatch::Unit::GB);
+    state.addDiskWatch(QStringLiteral("/Volumes/Cache"), QString());
+    state.setDiskThreshold(QStringLiteral("/Volumes/Cache"), 100, DiskWatch::Unit::GB);
+    if (name != QLatin1String("good") && name != QLatin1String("add-menu") && name != QLatin1String("remind-menu")) {
+        state.addDiskWatch(QStringLiteral("/Volumes/Renders"), QString());
+        state.setDiskThreshold(QStringLiteral("/Volumes/Renders"), 15, DiskWatch::Unit::Percent);
+    }
+#else
     QList<DriveInfo> drives = {
         fixtureDrive("C:/", "C:", "Windows", 931, 182),
         fixtureDrive("D:/", "D:", "Cache", 1863, low ? 42 : 640),
@@ -120,6 +143,7 @@ void applyFixture(DiskState &state, const QString &name)
         state.addDiskWatch(QStringLiteral("E:/"), QStringLiteral("Renders"));
         state.setDiskThreshold(QStringLiteral("E:/"), 15, DiskWatch::Unit::Percent);
     }
+#endif
     state.setDriveReadings(drives, QStringList(), true, QDateTime(QDate(2026, 9, 24), QTime(12, 41)));
 }
 

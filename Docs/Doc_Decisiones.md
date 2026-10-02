@@ -126,6 +126,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   la ventana de limpieza pide una vez el acceso total al disco con una tarjeta y un botón que abre
   Ajustes en el lugar justo (como DaisyDisk). Sin ese permiso escanea igual lo que no está protegido, sin
   carteles carpeta por carpeta, y lo protegido queda como «sin acceso».
+- **D-45 · macOS: sin «Interface size»** (2026-10-02, Lega). En la Mac la app va siempre al tamaño del
+  diseño (el 0) y General no muestra el control. Qt en macOS dibuja mal el texto con una escala
+  fraccionaria (el 1 de fábrica da 2,2 en una Retina: perdía la negrita y dejaba una línea de texto
+  cortada debajo de lo libre en Disk Space); macOS ya tiene su escala en Ajustes > Pantallas. Windows
+  sigue con 0, 1 y 2 (D-35).
 
 ## Abiertas
 

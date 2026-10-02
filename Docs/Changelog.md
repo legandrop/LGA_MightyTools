@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.26:
+
+En la Mac, el panel de Disk Space mostraba una línea de texto cortada debajo de «126 GB free of 926 GB»
+y el «free» sin negrita (Lega). No era ningún widget: `grab()` de la tarjeta salía perfecta. Era el
+tamaño de interfaz 1 (D-35), que fija `QT_SCALE_FACTOR=1.1`: en una Retina eso da una escala de 2,2 y Qt
+en macOS pinta mal el texto con escalas fraccionarias. Con el 0 se ve bien (comprobado en la app
+instalada). Ahora en macOS el tamaño de interfaz no se ofrece y la app va siempre al tamaño del diseño
+(D-45, `UiScale::supported()`); en Windows nada cambia. También: el fixture del panel de Disk Space usa
+discos con forma de mac en las capturas de mac.
+[ General - Sin tamaño de interfaz en la Mac ]
+
 v1.25:
 
 La auditoría del resultado de la v1.24 la aprobó sin bloqueantes; se corrigieron sus observaciones antes

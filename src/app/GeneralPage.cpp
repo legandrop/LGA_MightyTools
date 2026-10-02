@@ -213,37 +213,44 @@ QFrame *GeneralPage::buildAppCard()
     options->addWidget(m_languageButton, 0, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
     // Tamano de la interfaz (core/UiScale.h): 0, 1 y 2, como los piensa Lega, en un switch segmentado.
     // Muestra el de esta sesion.
-    options->addWidget(Ui::label(I18n::tr("Interface size"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
     QStringList levels;
     for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
         levels.append(QString::number(level));
     }
     m_uiSizeSwitch = new SegmentedSwitch(levels, UiScale::sessionLevel(), optionsBox);
-    options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
-    layout->addWidget(optionsBox);
-    // Limite por pantalla (D-35): lo que no entra en la pantalla principal queda apagado. Qt da el area en
-    // pixeles logicos de esta sesion; por el factor vuelve a la escala del sistema, la misma que usa main.
-    // En una corrida automatizada, la pantalla que eligio la prueba (UiScale::overrideScreenArea).
-    QSize unscaledArea;
-    if (UiScale::screenAreaOverridden()) {
-        unscaledArea = UiScale::overriddenScreenArea();
-    } else if (const QScreen *screen = QGuiApplication::primaryScreen()) {
-        const qreal f = UiScale::factor(UiScale::sessionLevel());
-        const QSize area = screen->availableGeometry().size();
-        unscaledArea = QSize(qRound(area.width() * f), qRound(area.height() * f));
-    }
-    const int maxLevel = UiScale::maxFittingLevel(unscaledArea);
-    for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
-        m_uiSizeSwitch->setSegmentEnabled(level, level <= maxLevel);
-    }
-    QLabel *uiSizeCaption = Ui::caption(I18n::tr("1 is the default size. Changing it restarts the app."), card);
-    uiSizeCaption->setContentsMargins(0, 3, 0, 0);
-    layout->addWidget(uiSizeCaption);
-    // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
-    if (maxLevel < UiScale::kMaxLevel) {
-        const QString limit = maxLevel == 0 ? I18n::tr("Only 0 fits on this screen.")
-                                            : I18n::tr("Up to %1 fits on this screen.").arg(maxLevel);
-        layout->addWidget(Ui::caption(limit, card));
+    if (!UiScale::supported()) {
+        // macOS (D-45): sin tamano de interfaz. El switch existe (lo usan las senales) pero no se muestra.
+        m_uiSizeSwitch->hide();
+        options->setRowMinimumHeight(1, 0);
+        layout->addWidget(optionsBox);
+    } else {
+        options->addWidget(Ui::label(I18n::tr("Interface size"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
+        options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
+        layout->addWidget(optionsBox);
+        // Limite por pantalla (D-35): lo que no entra en la pantalla principal queda apagado. Qt da el area en
+        // pixeles logicos de esta sesion; por el factor vuelve a la escala del sistema, la misma que usa main.
+        // En una corrida automatizada, la pantalla que eligio la prueba (UiScale::overrideScreenArea).
+        QSize unscaledArea;
+        if (UiScale::screenAreaOverridden()) {
+            unscaledArea = UiScale::overriddenScreenArea();
+        } else if (const QScreen *screen = QGuiApplication::primaryScreen()) {
+            const qreal f = UiScale::factor(UiScale::sessionLevel());
+            const QSize area = screen->availableGeometry().size();
+            unscaledArea = QSize(qRound(area.width() * f), qRound(area.height() * f));
+        }
+        const int maxLevel = UiScale::maxFittingLevel(unscaledArea);
+        for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
+            m_uiSizeSwitch->setSegmentEnabled(level, level <= maxLevel);
+        }
+        QLabel *uiSizeCaption = Ui::caption(I18n::tr("1 is the default size. Changing it restarts the app."), card);
+        uiSizeCaption->setContentsMargins(0, 3, 0, 0);
+        layout->addWidget(uiSizeCaption);
+        // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
+        if (maxLevel < UiScale::kMaxLevel) {
+            const QString limit = maxLevel == 0 ? I18n::tr("Only 0 fits on this screen.")
+                                                : I18n::tr("Up to %1 fits on this screen.").arg(maxLevel);
+            layout->addWidget(Ui::caption(limit, card));
+        }
     }
 #ifdef Q_OS_MACOS
     // macOS: el click en la barra de menu abre esta ventana (sin menu, pedido de Lega 2026-10-02), asi que

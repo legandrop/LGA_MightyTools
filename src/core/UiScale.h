@@ -21,6 +21,12 @@ inline constexpr int kDefaultLevel = 1;
 // Clave en settings.ini (seccion [app]).
 QString settingsKey();
 
+// Si la app ofrece el tamano de interfaz en esta plataforma. En macOS no (D-45): Qt en mac dibuja mal el
+// texto con una escala de pantalla fraccionaria (1.1 da 2.2 en una Retina: pierde la negrita y deja
+// restos de texto), y macOS ya tiene su propia escala en Ajustes > Pantallas. Ahi la app va siempre al
+// tamano del diseno (el 0) y applyBeforeApp no toca nada.
+bool supported();
+
 // 1.0, 1.1, 1.2. Un nivel fuera de rango vale como el de fabrica.
 qreal factor(int level);
 int clampLevel(int level);

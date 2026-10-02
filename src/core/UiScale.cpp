@@ -24,6 +24,15 @@ QString settingsKey()
     return QStringLiteral("app/uiSize");
 }
 
+bool supported()
+{
+#ifdef Q_OS_MACOS
+    return false;
+#else
+    return true;
+#endif
+}
+
 int clampLevel(int level)
 {
     return level >= 0 && level <= kMaxLevel ? level : kDefaultLevel;
@@ -87,7 +96,7 @@ int readSavedLevel()
 
 void applyBeforeApp(int level)
 {
-    g_sessionLevel = clampLevel(level);
+    g_sessionLevel = supported() ? clampLevel(level) : 0;
     if (g_sessionLevel == 0) {
         return;
     }

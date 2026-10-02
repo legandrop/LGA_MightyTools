@@ -780,7 +780,13 @@ void testUiScale(const Check &check)
           QStringLiteral("tamano de interfaz: ninguna ventana es mas grande que largestWindow()"));
     const int before = UiScale::sessionLevel();
     const bool hadEnv = qEnvironmentVariableIsSet("QT_SCALE_FACTOR");
-    if (!hadEnv) {
+    if (!UiScale::supported()) {
+        // macOS (D-45): ningun nivel toca el entorno y la sesion queda en el tamano del diseno.
+        UiScale::applyBeforeApp(2);
+        check(!qEnvironmentVariableIsSet("QT_SCALE_FACTOR") && UiScale::sessionLevel() == 0,
+              QStringLiteral("tamano de interfaz: en la Mac no se ofrece y ningun nivel fija QT_SCALE_FACTOR"));
+        UiScale::clearEnvironmentAfterApp();
+    } else if (!hadEnv) {
         UiScale::applyBeforeApp(2);
         check(qgetenv("QT_SCALE_FACTOR") == "1.20" && UiScale::sessionLevel() == 2,
               QStringLiteral("tamano de interfaz: el 2 fija QT_SCALE_FACTOR=1.20 antes de la app"));
