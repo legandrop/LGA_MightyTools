@@ -67,24 +67,35 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 4. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
    los links contra Link Redirector.
 5. **Fase 7:** instalador, updater, alta en LGA_Updates y en el sitio; release 1.00 de Windows.
-6. **Fase 8: macOS, en curso desde la Mac de Lega (2026-10-02).** Hecho y probado por Lega en la Mac (v1.15): la
-   app compila, se instala con `deploy.sh` (D-38) y andan Nuke Shortcuts (con el Nuke Bridge), Disk Space
-   (vigilancia y avisos), Open in NukeX y Link Redirector. Falta, en este orden:
-   - **Folder Switch en mac (v1.16, D-40): hecho y probado** con Nuke 17 y TextEdit (automático, manual
-     y recientes). Falta: que Lega apague Default Folder X y lo use en el día a día; sin probar todavía el
-     cartel del permiso de Automatización por la ruta nueva (en otro hilo), el Guardar como hoja y el
-     popup con click afuera. El ícono, las viñetas y los atajos configurados del descriptor están
-     copiados entre `FolderSwitchModule.cpp` (Windows) y `mac/FolderSwitchMacModule.cpp`: unificarlos en
-     un archivo común la próxima vez que se compile en Windows.
-   - **Disk Space completo:** la ventana de limpieza está apagada en mac (`cleanupSupported()`): reglas
-     propias de mac, Papelera (`RecycleBinMac`), «Show in Finder»; y estirar la ventana
-     (`WindowFrameMac`).
-   - **Avisos nativos:** hoy van por `osascript`, sin click ni desplegable: el «Remind me again in» de Disk
-     Space pide `UNUserNotificationCenter` con acciones (macOS las agrupa en «Options»).
-   - **Updater y release de mac:** DMG/ZIP, alta en LGA_Updates; General dice «up to date» sin updater.
-   - **Retiro de lo viejo en la Mac:** `/Applications/LGA Link Redirector.app` (con su LaunchAgent
-     `com.lga.linkredirector.autostart`), `/Applications/LGA OpenInNukeX.app` y el clon
-     `~/Desktop/Codin/LGA_LinkRedirector`. El clon `~/.nuke/LGA_OpenInNukeX` ya está en la Papelera.
+6. **Fase 8: macOS (desde la Mac de Lega, 2026-10-02).** Hecho y probado por Lega en la Mac: la app
+   compila y se instala con `deploy.sh` (v1.15, D-38); andan Nuke Shortcuts (con el Nuke Bridge), Disk
+   Space (vigilancia y avisos), Open in NukeX, Link Redirector y Folder Switch (v1.16, D-40). Lo viejo de
+   la Mac ya se retiró (2026-10-02, a la Papelera): `LGA Link Redirector.app` con su LaunchAgent,
+   `LGA OpenInNukeX.app`, su configuración vieja y los clones `~/.nuke/LGA_OpenInNukeX` y
+   `~/Desktop/Codin/LGA_LinkRedirector`; links, `.html` y `.nk` los atiende Mighty Tools. Falta, en
+   este orden:
+   1. **Disk Space completo en mac.** La ventana de limpieza está apagada en mac
+      (`SystemPaths::cleanupSupported()` en `platform/mac/SystemPathsMac.cpp`): reglas propias de mac
+      (`diskspace/cleanup/mac/CleanupRulesMac.cpp`, hoy vacía: cachés de `~/Library/Caches`, logs, etc.),
+      borrado (`FileSystemOpsMac.cpp`: `removeFile/removeDir` deshabilitados), Papelera
+      (`RecycleBinMac.cpp`, con `NSFileManager trashItemAtURL`), «Show in Finder»
+      (`SystemPaths::revealInFileManager`) y estirar la ventana (`platform/mac/WindowFrameMac.cpp`). Los
+      self-tests de la limpieza usan rutas de Windows: sumar casos de mac.
+   2. **Avisos nativos.** Hoy van por `osascript` (`platform/mac/SystemNotifierMac.cpp`): sin ícono propio,
+      sin click que vuelva a la app (`ToastActivationMac.cpp` es un stub) y sin el desplegable «Remind me
+      again in» de Disk Space. Pasar a `UNUserNotificationCenter` con acciones (macOS las agrupa en
+      «Options») y pedir el permiso de notificaciones.
+   3. **Updater y release de mac.** `UpdateService` es solo Windows (`CMakeLists.txt`, `#ifdef Q_OS_WIN` en
+      `AppController`), y en mac General dice «up to date» sin buscar nada. Hace falta: ZIP firmado con
+      `ditto` + DMG (ver `LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md` y `deploy.sh` de la Base), el updater
+      de mac (baja el ZIP, verifica `codesign`, reemplaza el bundle), la entrada de mac en `LGA_Updates`,
+      y la mudanza de los usuarios de mac del OpenInNukeX viejo. Recién ahí `LGA_OpenInNukeX` puede pasar
+      a privado (la fila `lga_openinnukex` de PipeSync en mac depende de ese release).
+   Pendientes chicos de mac: Folder Switch sin probar con el Guardar como hoja ni el popup con click
+   afuera; Lega apaga Default Folder X y usa Folder Switch en el día a día; el ícono, las viñetas y los
+   atajos del descriptor de Folder Switch están copiados entre `FolderSwitchModule.cpp` y
+   `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez que se compile en Windows); el CI de mac
+   (`.github/workflows/build-macos.yml`) no se corrió después del cambio de orden de sus pasos.
 7. **«Frame Dope Sheet» sin macro, después de la fase 8 (pedido de Lega, 2026-10-02).** Hoy el atajo
    (Ctrl+Alt+Shift+D en Windows) sigue siendo un macro (`ActionRunner::runFrameDopeSheet`): click en
    el punto calibrado del Dope Sheet, Ctrl+A y F, y devuelve el puntero. Buscar cómo resolverlo dentro
