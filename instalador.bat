@@ -391,14 +391,9 @@ if "!HAS_INSTALLER_CHANGES!"=="true" (
         echo No se ofrecera publicar release para evitar taggear un estado no commiteado.
         set "RELEASE_ALLOWED=false"
     )
-) else (
-    echo No hay cambios nuevos para commitear.
-    echo.
-    choice /C YN /M "Desea continuar y ofrecer la publicacion de release igualmente?"
-    if !errorlevel! NEQ 1 (
-        set "RELEASE_ALLOWED=false"
-    )
 )
+REM Sin cambios no se pregunta nada: lo normal es que el arbol ya este commiteado y pusheado, y la
+REM pregunta que sigue (subir la release) ya deja decir que no.
 
 if /i "!COMMIT_CREATED!"=="true" (
     echo Haciendo push a origin/!CURRENT_BRANCH!...

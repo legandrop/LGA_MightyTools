@@ -1,5 +1,13 @@
 # Changelog — LGA Mighty Tools
 
+v1.13:
+
+Al terminar, `instalador.bat` preguntaba «Desea continuar y ofrecer la publicacion de release igualmente?»
+cuando no había nada nuevo para commitear, que es el caso normal: el árbol ya está commiteado y pusheado
+antes de armar el instalador. La pregunta sobraba, porque la siguiente («Desea subir el instalador como
+release?») ya deja decir que no. Ahora, sin cambios, el script pasa directo a esa pregunta.
+[ Instalador - Sin pregunta extra cuando no hay cambios ]
+
 v1.12:
 
 Al ejecutar el instalador desde `instalador.bat` con la copia de `build\` abierta, quedaban dos íconos
