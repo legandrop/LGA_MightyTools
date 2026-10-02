@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.16 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.17 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -61,9 +61,11 @@ endif()
 
 set(RESOURCES
     resources/resources.qrc
-    # Payload del Nuke Bridge (init.py, menu.py, los .py y VERSION), embebido en el exe
+    # Payload del Nuke Bridge (init.py, el adaptador y VERSION), embebido en el exe
     # con su propia version (D-04). Ver nuke_plugin/OpenInNukeXBridge.qrc.
     nuke_plugin/OpenInNukeXBridge.qrc
+    # Plugin de Nuke de Nuke Shortcuts (el keyframe), en su carpeta propia de la .nuke (D-41).
+    nuke_plugin/NukeShortcutsPlugin.qrc
 )
 
 if(WIN32)
@@ -106,6 +108,7 @@ set(SOURCES
     src/core/I18n.cpp
     src/core/I18nSpanish.cpp
     src/core/LgaRegistry.cpp
+    src/core/NukePlugin.cpp
     src/core/Shortcut.cpp
     src/core/UiScale.cpp
     src/modules/diskspace/DiskCard.cpp
@@ -190,6 +193,7 @@ set(HEADERS
     src/core/BuildTree.h
     src/core/DebugFlags.h
     src/core/LgaRegistry.h
+    src/core/NukePlugin.h
     src/core/Shortcut.h
     src/core/UiScale.h
     src/modules/diskspace/DiskCard.h

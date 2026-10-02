@@ -1,14 +1,18 @@
 #include "modules/nukeshortcuts/NukeShortcutsPanel.h"
 #include "core/I18n.h"
+#include "modules/nukeshortcuts/KeyframePlugin.h"
 
 #include "ui/ShortcutRow.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
+#include <QDir>
 #include <QEvent>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPainter>
 #include <QPen>
 #include <QPushButton>
@@ -87,7 +91,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     shortcuts->addWidget(shortcutsTitle);
     shortcuts->addSpacing(8);
     m_addKeyframeRow = new ShortcutRow(NukeShortcutsState::actionTitle(ShortcutAction::AddKeyframe),
-                                       I18n::tr("Sets a key on the knob under the pointer."), shortcutsCard);
+                                       I18n::tr("Sets or removes a key on the knob under the pointer."), shortcutsCard);
     shortcuts->addWidget(m_addKeyframeRow);
     Ui::addDivider(shortcuts, shortcutsCard);
     m_frameRow = new ShortcutRow(NukeShortcutsState::actionTitle(ShortcutAction::FrameDopeSheet),
@@ -95,7 +99,48 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     shortcuts->addWidget(m_frameRow);
     layout->addWidget(shortcutsCard);
 
-    // ---------- Tarjeta 3: punto del Dope Sheet ----------
+    // ---------- Tarjeta 3: plugin de Nuke ----------
+    QFrame *pluginCard = Ui::card(this);
+    auto *plugin = new QVBoxLayout(pluginCard);
+    plugin->setContentsMargins(14, 12, 14, 12);
+    plugin->setSpacing(8);
+    auto *pluginHead = new QHBoxLayout();
+    pluginHead->setSpacing(6);
+    QLabel *pluginTitle = Ui::label(I18n::tr("Nuke plugin"), "cardTitle", pluginCard);
+    pluginTitle->setMinimumHeight(22);
+    pluginHead->addWidget(pluginTitle, 1);
+    m_pluginChip = new Chip(pluginCard);
+    pluginHead->addWidget(m_pluginChip, 0, Qt::AlignVCenter);
+    plugin->addLayout(pluginHead);
+    QLabel *pluginCaption = Ui::caption(
+        I18n::tr("With the plugin, Nuke itself sets the key, even with the knob field in focus. Without it, "
+                 "Add keyframe right-clicks the knob."),
+        pluginCard);
+    pluginCaption->setWordWrap(true);
+    plugin->addWidget(pluginCaption);
+    // La misma fila que la tarjeta "Nuke Bridge" de Open in NukeX: la .nuke, Browse e Install. El campo
+    // solo muestra (se cambia con Browse): no toma foco.
+    auto *pluginRow = new QHBoxLayout();
+    pluginRow->setSpacing(6);
+    m_pluginDirField = new QLineEdit(pluginCard);
+    m_pluginDirField->setObjectName(QStringLiteral("pathField"));
+    m_pluginDirField->setReadOnly(true);
+    m_pluginDirField->setFocusPolicy(Qt::NoFocus);
+    m_pluginDirField->setPlaceholderText(I18n::tr("Path to your .nuke folder"));
+    pluginRow->addWidget(m_pluginDirField, 1);
+    m_pluginBrowseButton = Ui::button(I18n::tr("Browse..."), QString(), QString(), pluginCard);
+    pluginRow->addWidget(m_pluginBrowseButton);
+    m_pluginInstallButton = Ui::button(I18n::tr("Install"), QStringLiteral("primary"), QString(), pluginCard);
+    pluginRow->addWidget(m_pluginInstallButton);
+    plugin->addLayout(pluginRow);
+    // Texto enriquecido (la carpeta va en negrita), con el mismo objectName que un caption.
+    m_pluginHint = new RichLineLabel(QString(), 17, pluginCard);
+    m_pluginHint->setObjectName(QStringLiteral("caption"));
+    m_pluginHint->setWordWrap(true);
+    plugin->addWidget(m_pluginHint);
+    layout->addWidget(pluginCard);
+
+    // ---------- Tarjeta 4: punto del Dope Sheet ----------
     QFrame *spotCard = Ui::card(this);
     auto *spot = new QVBoxLayout(spotCard);
     spot->setContentsMargins(14, 12, 14, 12);
@@ -133,6 +178,9 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
         connect(m_frameRow, &ShortcutRow::shortcutRecorded, this,
                 [this](const Shortcut &shortcut) { m_state->setShortcut(ShortcutAction::FrameDopeSheet, shortcut); });
         connect(m_calibrateButton, &QPushButton::clicked, this, &NukeShortcutsPanel::calibrateRequested);
+        connect(m_pluginBrowseButton, &QPushButton::clicked, this, &NukeShortcutsPanel::onBrowseNukeDirClicked);
+        connect(m_pluginInstallButton, &QPushButton::clicked, this,
+                [this]() { emit installPluginRequested(m_nukeDir); });
         // Si la ventana pierde el frente mientras una fila graba, la grabacion se corta: si no, la
         // siguiente combinacion que el usuario apriete en OTRA app terminaria guardada como atajo.
         if (QWidget *top = window()) {
@@ -140,6 +188,89 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
         }
     }
     refresh();
+}
+
+void NukeShortcutsPanel::setNukeDirectory(const QString &nukeDir)
+{
+    m_nukeDir = nukeDir;
+    refreshPlugin();
+}
+
+void NukeShortcutsPanel::refreshPlugin()
+{
+    if (m_pluginFixture) {
+        return;
+    }
+    const NukePlugin::Status status = NukePlugin::inspect(KeyframePlugin::plugin(), m_nukeDir);
+    applyPluginView(NukePlugin::chipState(KeyframePlugin::plugin(), status), status.installedVersion);
+}
+
+void NukeShortcutsPanel::showPluginFixture(NukePlugin::ChipState chip, const QString &installedVersion,
+                                           const QString &nukeDir)
+{
+    m_pluginFixture = true;
+    m_nukeDir = nukeDir;
+    applyPluginView(chip, installedVersion);
+}
+
+void NukeShortcutsPanel::applyPluginView(NukePlugin::ChipState chip, const QString &installedVersion)
+{
+    QString tone;
+    QString text;
+    QString buttonText = I18n::tr("Reinstall");
+    QString buttonVariant = QStringLiteral("primary");
+    switch (chip) {
+    case NukePlugin::ChipState::NotInstalled:
+        tone = QStringLiteral("warn"); // falta un paso, como «Not associated» de Open in NukeX
+        text = I18n::tr("Not installed");
+        buttonText = I18n::tr("Install");
+        break;
+    case NukePlugin::ChipState::Installed:
+        tone = QStringLiteral("ok");
+        text = I18n::tr("Installed · v%1").arg(installedVersion);
+        buttonVariant.clear();
+        break;
+    case NukePlugin::ChipState::UpdateAvailable:
+        tone = QStringLiteral("warn");
+        text = I18n::tr("Update available · v%1").arg(NukePlugin::bundledVersion(KeyframePlugin::plugin()));
+        break;
+    case NukePlugin::ChipState::InstalledUnknownVersion:
+        tone = QStringLiteral("warn");
+        text = I18n::tr("Installed · unknown version");
+        break;
+    }
+    m_pluginChip->set(tone, text);
+    m_pluginInstallButton->setText(buttonText);
+    Ui::setStyleProperty(m_pluginInstallButton, "variant", buttonVariant);
+    m_pluginInstallButton->setEnabled(!m_nukeDir.isEmpty());
+    m_pluginDirField->setText(QDir::toNativeSeparators(m_nukeDir));
+    m_pluginDirField->setCursorPosition(0);
+
+    if (m_nukeDir.isEmpty()) {
+        m_pluginHint->setText(I18n::tr("No Nuke folder found. Pick the one you use."));
+        Ui::setStyleProperty(m_pluginHint, "tone", QStringLiteral("warn"));
+    } else {
+        m_pluginHint->setText(I18n::tr("Goes in its own <b>%1</b> folder, with its own line in init.py.")
+                                  .arg(KeyframePlugin::plugin().folderName));
+        Ui::setStyleProperty(m_pluginHint, "tone", QString());
+    }
+}
+
+void NukeShortcutsPanel::showPluginMessage(const QString &text, bool warn)
+{
+    m_pluginHint->setText(text.toHtmlEscaped());
+    Ui::setStyleProperty(m_pluginHint, "tone", warn ? QStringLiteral("warn") : QString());
+}
+
+void NukeShortcutsPanel::onBrowseNukeDirClicked()
+{
+    const QString start = m_nukeDir.isEmpty() ? QDir::homePath() : m_nukeDir;
+    QFileDialog dialog(this, I18n::tr("Path to your .nuke folder"), start);
+    dialog.setFileMode(QFileDialog::Directory);
+    dialog.setOption(QFileDialog::ShowDirsOnly, false); // la .nuke es oculta en mac
+    if (dialog.exec() == QDialog::Accepted && !dialog.selectedFiles().isEmpty()) {
+        setNukeDirectory(QDir::cleanPath(dialog.selectedFiles().first()));
+    }
 }
 
 ShortcutRow *NukeShortcutsPanel::shortcutRow(ShortcutAction action) const

@@ -1,6 +1,8 @@
 #ifndef MIGHTYTOOLS_OPENINNUKEX_NUKEBRIDGE_H
 #define MIGHTYTOOLS_OPENINNUKEX_NUKEBRIDGE_H
 
+#include "core/NukePlugin.h"
+
 #include <QString>
 #include <QStringList>
 
@@ -22,6 +24,11 @@
 // que otras apps (PipeSync) la vean.
 namespace NukeBridge {
 
+/// La descripcion del plugin para core/NukePlugin: carpeta `LGA_OpenInNukeX` (contrato con Nuke,
+/// Hiero y PipeSync), payload `:/bridge/*`, y los restos de la 1.84 (el keyframe de Nuke Shortcuts,
+/// que desde la 1.85 tiene su carpeta) que se borran al actualizar.
+const NukePlugin::Spec &plugin();
+
 /// Nombre de la carpeta del plugin adentro de `.nuke`. No es configurable: el propio `init.py`
 /// asume que se llama asi.
 QString pluginFolderName();
@@ -33,28 +40,11 @@ QString pluginAddPathLine();
 /// app. Vacio si el recurso no esta (build incompleto: ver Error::PayloadMissing).
 QString bundledVersion();
 
-struct Status
-{
-    bool folderPresent = false;  ///< existe `<.nuke>/LGA_OpenInNukeX/`
-    bool filesPresent = false;   ///< y adentro estan los `.py` que hacen falta
-    bool pathRegistered = false; ///< el `init.py` de `.nuke` ya tiene la linea activa
-    QString installedVersion;    ///< contenido de `<.nuke>/LGA_OpenInNukeX/VERSION` (vacio si no hay o es ilegible)
+using Status = NukePlugin::Status;
+using ChipState = NukePlugin::ChipState;
+using Error = NukePlugin::Error;
 
-    /// Instalado de verdad: los archivos estan Y Nuke los va a cargar.
-    bool installed() const { return filesPresent && pathRegistered; }
-};
-
-/// El estado del chip del panel (inventario, "Nuke Bridge — Estados visibles"). Se calcula
-/// comparando `status.installedVersion` contra `bundledVersion()`.
-enum class ChipState {
-    NotInstalled,           ///< "Not installed"
-    Installed,              ///< "Installed · v%1" (misma version)
-    UpdateAvailable,        ///< "Update available · v%1" (la instalada es MENOR que la embebida)
-    InstalledUnknownVersion ///< "Installed · unknown version" (VERSION ilegible, ausente o no numerica)
-};
-
-/// No mira el disco: es una funcion pura sobre `status` y la version embebida, para que el
-/// self-test la pruebe sin instalar nada.
+/// El estado del chip del panel. Funcion pura sobre `status` y la version embebida.
 ChipState chipState(const Status &status);
 
 /// `~/.nuke` si existe; QString() si no.
@@ -66,14 +56,6 @@ QString currentNukeDirectory();
 
 /// Estado del bridge en esa carpeta. Con `nukeDir` vacio devuelve todo en false.
 Status inspect(const QString &nukeDir);
-
-enum class Error {
-    None,
-    DirMissing,     ///< la carpeta elegida no existe
-    SourceRepo,     ///< la carpeta del plugin es un repo, o la .nuke es codigo fuente: instalar ahi lo pisaria
-    PayloadMissing, ///< este build no trae el payload embebido
-    WriteFailed,    ///< no se pudo copiar, crear la carpeta o tocar el init.py
-};
 
 /// Publica `nukeDir` en el registro LGA compartido de verdad (`LgaRegistry::saveNukeDirectory`).
 /// `install()` la llama por default; el self-test la reemplaza por una de prueba para poder

@@ -111,6 +111,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   manual y recientes) y reemplaza a Default Folder X, que Lega apaga al probarlo. Toma la carpeta solo
   del Finder. Lleva la carpeta a los diálogos nativos de macOS (Abrir/Guardar de cualquier app) y al
   navegador de archivos de Nuke (Qt).
+- **D-41 · Cada herramienta, su carpeta en la `.nuke`** (2026-10-02, Lega: «deberíamos ser prolijos, como
+  eran Open in NukeX y los toolpacks»). Open in NukeX instala `LGA_OpenInNukeX` (el servidor de `.nk`) y
+  Nuke Shortcuts instala `LGA_NukeShortcuts` (el keyframe), cada una con su línea en el `init.py` y desde
+  su propio panel. Quien usa solo Nuke Shortcuts no se lleva el servidor. El keyframe funciona en
+  cualquier Nuke con interfaz, no solo en NukeX. El bridge 1.85 borra el keyframe que dejó la 1.84.
 
 ## Abiertas
 

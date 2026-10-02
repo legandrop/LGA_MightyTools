@@ -657,7 +657,7 @@ ModuleDescriptor folderSwitchDescriptor()
         "Quick access to the folder already open in Finder from file open or save dialogs. Simply switch to Finder and back, and the dialog moves to that folder. Inside the dialog, one shortcut jumps there right away and another picks a recent folder. Also works in Nuke.");
     d.offBullets = folderSwitchOffBullets([](const QString &, const QVariant &fallback) { return fallback; });
     d.offBulletsFor = &folderSwitchOffBullets;
-    d.platforms = PlatformMac;
+    d.platforms = PlatformWindows | PlatformMac; // el chip dice «Win · mac»: en Windows lo atiende FolderSwitchModule
     d.paintIcon = paintFolderSwitchIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
         return std::make_unique<FolderSwitchMacModule>(context);

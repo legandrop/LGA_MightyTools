@@ -58,6 +58,9 @@ private:
     bool frontNukeHasKeyframePlugin() const;
     void refreshAccessibility();
     void openAccessibilitySettings();
+    // Instala `<nukeDir>/LGA_NukeShortcuts` (boton de la tarjeta "Nuke plugin"). Nunca en una
+    // corrida automatizada.
+    void installPlugin(const QString &nukeDir);
     void startCalibration();
     void finishCalibration();
     bool needsPermission() const;

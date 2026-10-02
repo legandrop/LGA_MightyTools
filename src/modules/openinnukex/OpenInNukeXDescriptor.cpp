@@ -182,6 +182,34 @@ void testBridgeSourceRepoGuard(const std::function<void(bool, const QString &)> 
               QStringLiteral("bridge: instala en una .nuke versionada con git (detalle: %1)").arg(detail));
     }
     {
+        // Actualizar desde la 1.84: se borran el menu.py y el LGA_KeyframeToggle.py que dejo (son
+        // nuestros por contenido) y su .pyc; un menu.py ajeno se respeta.
+        QTemporaryDir tmp;
+        const QDir plugin(QDir(tmp.path()).filePath(QStringLiteral("LGA_OpenInNukeX")));
+        QDir().mkpath(plugin.filePath(QStringLiteral("__pycache__")));
+        const auto write = [](const QString &path, const QByteArray &data) {
+            QFile file(path);
+            return file.open(QIODevice::WriteOnly) && file.write(data) == data.size();
+        };
+        write(plugin.filePath(QStringLiteral("menu.py")), "import LGA_KeyframeToggle\nLGA_KeyframeToggle.setup()\n");
+        write(plugin.filePath(QStringLiteral("LGA_KeyframeToggle.py")), "# LGA_KeyframeToggle\n");
+        write(plugin.filePath(QStringLiteral("__pycache__/LGA_KeyframeToggle.cpython-311.pyc")), "x");
+        write(plugin.filePath(QStringLiteral("__pycache__/init.cpython-311.pyc")), "x");
+        QString detail;
+        check(NukeBridge::install(tmp.path(), &detail, true) == NukeBridge::Error::None,
+              QStringLiteral("bridge: actualiza una 1.84 (detalle: %1)").arg(detail));
+        check(!QFileInfo::exists(plugin.filePath(QStringLiteral("menu.py")))
+                  && !QFileInfo::exists(plugin.filePath(QStringLiteral("LGA_KeyframeToggle.py")))
+                  && !QFileInfo::exists(plugin.filePath(QStringLiteral("__pycache__/LGA_KeyframeToggle.cpython-311.pyc"))),
+              QStringLiteral("bridge: borra el keyframe que dejo la 1.84"));
+        check(QFileInfo::exists(plugin.filePath(QStringLiteral("__pycache__/init.cpython-311.pyc")))
+                  && QFileInfo::exists(plugin.filePath(QStringLiteral("init.py"))),
+              QStringLiteral("bridge: lo demas de la carpeta queda"));
+        write(plugin.filePath(QStringLiteral("menu.py")), "print('mio')\n");
+        NukeBridge::install(tmp.path(), &detail, true);
+        check(QFileInfo::exists(plugin.filePath(QStringLiteral("menu.py"))), QStringLiteral("bridge: un menu.py ajeno no se toca"));
+    }
+    {
         QTemporaryDir tmp; // carpeta limpia: ni CMakeLists.txt ni .git
         check(tmp.isValid(), QStringLiteral("bridge: carpeta temporal limpia creada"));
         QString detail;
@@ -310,9 +338,8 @@ void testEmbeddedPayload(const std::function<void(bool, const QString &)> &check
     check(QFileInfo::exists(QStringLiteral(":/bridge/init.py")), QStringLiteral("payload: init.py embebido presente"));
     check(QFileInfo::exists(QStringLiteral(":/bridge/LGA_QtAdapter_OpenInNukeX.py")),
           QStringLiteral("payload: LGA_QtAdapter_OpenInNukeX.py embebido presente"));
-    check(QFileInfo::exists(QStringLiteral(":/bridge/menu.py")), QStringLiteral("payload: menu.py embebido presente"));
-    check(QFileInfo::exists(QStringLiteral(":/bridge/LGA_KeyframeToggle.py")),
-          QStringLiteral("payload: LGA_KeyframeToggle.py embebido presente"));
+    check(!QFileInfo::exists(QStringLiteral(":/bridge/LGA_KeyframeToggle.py")),
+          QStringLiteral("payload: el keyframe ya no viaja en el bridge (D-41)"));
     check(!NukeBridge::bundledVersion().isEmpty(), QStringLiteral("payload: VERSION embebido legible y no vacio"));
 }
 

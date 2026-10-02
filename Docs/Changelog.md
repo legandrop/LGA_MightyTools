@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.17:
+
+El keyframe de Nuke Shortcuts se instalaba dentro de la carpeta de Open in NukeX (`LGA_OpenInNukeX`, bridge
+1.84): para tenerlo había que instalar Open in NukeX y llevarse su servidor de `.nk`. Ahora cada
+herramienta tiene su carpeta en la `.nuke` con su línea en el `init.py` (D-41): Nuke Shortcuts suma la
+tarjeta «Nuke plugin» que instala `LGA_NukeShortcuts` (versión propia 1.00), y el bridge 1.85 de Open in
+NukeX vuelve a traer solo el servidor y borra el keyframe que dejó la 1.84 (solo si lo reconoce como
+suyo). La lógica de instalar un plugin en la `.nuke` pasó a `core/NukePlugin`, compartida por los dos.
+Además, el chip de Folder Switch dice «Win · mac».
+[ Nuke Shortcuts - Plugin de Nuke en su propia carpeta ]
+
 v1.16:
 
 Folder Switch no existía en macOS (D-40). Ahora hace lo mismo que en Windows: al ir del diálogo al Finder

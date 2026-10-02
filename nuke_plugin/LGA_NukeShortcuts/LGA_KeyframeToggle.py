@@ -1,6 +1,10 @@
 """
 LGA_KeyframeToggle | Lega
 
+Plugin de Nuke de la herramienta Nuke Shortcuts de LGA Mighty Tools. Se instala en
+`<.nuke>/LGA_NukeShortcuts/` desde el panel de Nuke Shortcuts, con su propia linea en el init.py de la
+.nuke. Funciona en cualquier Nuke con interfaz (Nuke, NukeX, Nuke Studio, Indie).
+
 Atajo "Add keyframe" de LGA Mighty Tools resuelto DENTRO de Nuke: pone una key en el frame actual
 del knob que esta bajo el mouse (o, si el mouse no esta sobre un knob, del que tiene el foco), y si
 ya hay una key en ese frame, la borra. Reemplaza a la secuencia de clic derecho + flecha + Enter,

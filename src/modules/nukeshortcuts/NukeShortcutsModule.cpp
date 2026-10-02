@@ -6,6 +6,8 @@
 #include "app/ModuleContextImpl.h"
 #include "app/ModuleHost.h"
 #include "app/SettingsStore.h"
+#include "core/LgaRegistry.h"
+#include "core/NukePlugin.h"
 #include "modules/nukeshortcuts/ActionRunner.h"
 #include "modules/nukeshortcuts/CalibrationDialog.h"
 #include "modules/nukeshortcuts/CalibrationSession.h"
@@ -22,6 +24,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QEventLoop>
 #include <QMenu>
@@ -129,6 +132,40 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     for (const char *no : {"LGA_MightyTools.exe", "NukeShortcuts.exe", "NukeX.exe", "Nuke15.1.exe.bak", "explorer.exe",
                            "Nukeitall.exe", ""}) {
         check(!NukeWatcher::isNukeExecutable(QString::fromLatin1(no)), QStringLiteral("no es Nuke: '%1'").arg(QLatin1String(no)));
+    }
+
+    // Plugin de Nuke (D-41): embebido, se instala en su carpeta y agrega su linea al init.py.
+    {
+        const NukePlugin::Spec &spec = KeyframePlugin::plugin();
+        check(!NukePlugin::bundledVersion(spec).isEmpty(), QStringLiteral("plugin: VERSION embebido legible"));
+        for (const QString &name : spec.payloadFiles) {
+            check(QFileInfo::exists(spec.resourcePrefix + QLatin1Char('/') + name),
+                  QStringLiteral("plugin: %1 embebido").arg(name));
+        }
+        QTemporaryDir nukeDir;
+        QFile init(QDir(nukeDir.path()).filePath(QStringLiteral("init.py")));
+        check(init.open(QIODevice::WriteOnly) && init.write("import nuke\nnuke.pluginAddPath('./LGA_OpenInNukeX')\n") > 0,
+              QStringLiteral("plugin: init.py de prueba"));
+        init.close();
+        QString detail;
+        check(NukePlugin::install(spec, nukeDir.path(), &detail) == NukePlugin::Error::None,
+              QStringLiteral("plugin: se instala en una .nuke temporal (%1)").arg(detail));
+        const NukePlugin::Status status = NukePlugin::inspect(spec, nukeDir.path());
+        check(status.installed() && NukePlugin::chipState(spec, status) == NukePlugin::ChipState::Installed,
+              QStringLiteral("plugin: inspect lo ve instalado y al dia"));
+        check(QFileInfo::exists(QDir(nukeDir.path()).filePath(QStringLiteral("LGA_NukeShortcuts/LGA_KeyframeToggle.py"))),
+              QStringLiteral("plugin: LGA_KeyframeToggle.py en LGA_NukeShortcuts"));
+        QFile initAfter(init.fileName());
+        initAfter.open(QIODevice::ReadOnly);
+        const QString initText = QString::fromUtf8(initAfter.readAll());
+        check(initText.startsWith(QLatin1String("import nuke\nnuke.pluginAddPath('./LGA_OpenInNukeX')"))
+                  && initText.contains(QLatin1String("nuke.pluginAddPath('./LGA_NukeShortcuts')")),
+              QStringLiteral("plugin: el init.py conserva lo suyo y suma la linea de LGA_NukeShortcuts"));
+        initAfter.close();
+        NukePlugin::install(spec, nukeDir.path(), &detail);
+        initAfter.open(QIODevice::ReadOnly);
+        check(QString::fromUtf8(initAfter.readAll()).count(QLatin1String("LGA_NukeShortcuts')")) == 1,
+              QStringLiteral("plugin: reinstalar no duplica la linea"));
     }
 
     // Marca del plugin de Nuke (Add keyframe dentro de Nuke).
@@ -546,6 +583,44 @@ void NukeShortcutsModule::openAccessibilitySettings()
     QDesktopServices::openUrl(QUrl(QStringLiteral("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")));
 }
 
+void NukeShortcutsModule::installPlugin(const QString &nukeDir)
+{
+    if (context().automatedRun()) {
+        qInfo() << "[NukeShortcuts] (automatizada) no se instala el plugin de Nuke de verdad";
+        return;
+    }
+    QString detail;
+    const NukePlugin::Error err = NukePlugin::install(KeyframePlugin::plugin(), nukeDir, &detail);
+    if (!m_panel) {
+        return;
+    }
+    if (err == NukePlugin::Error::None) {
+        // Como el bridge de Open in NukeX: la .nuke donde quedo instalado se publica en el registro LGA,
+        // y las dos herramientas (y PipeSync) trabajan sobre la misma.
+        LgaRegistry::saveNukeDirectory(QDir::cleanPath(nukeDir));
+        m_panel->refreshPlugin();
+        m_panel->showPluginMessage(I18n::tr("Installed. Restart Nuke to load it."), false);
+        return;
+    }
+    qWarning() << "[NukeShortcuts] No se pudo instalar el plugin de Nuke:" << detail;
+    QString text;
+    switch (err) {
+    case NukePlugin::Error::DirMissing:
+        text = I18n::tr("That folder doesn't exist.");
+        break;
+    case NukePlugin::Error::SourceRepo:
+        text = I18n::tr("That folder is source code, not a .nuke folder. Installing there would overwrite it.");
+        break;
+    case NukePlugin::Error::PayloadMissing:
+        text = I18n::tr("This build doesn't include the plugin.");
+        break;
+    default:
+        text = I18n::tr("Couldn't write to that folder or to its init.py.");
+        break;
+    }
+    m_panel->showPluginMessage(text, true);
+}
+
 ModuleStatus NukeShortcutsModule::status() const
 {
     if (needsPermission() && !m_state->accessibilityGranted()) {
@@ -577,7 +652,23 @@ QWidget *NukeShortcutsModule::createPanel(QWidget *parent)
         panel->setValidator([this](ShortcutAction action, const Shortcut &shortcut) { return validateShortcut(action, shortcut); });
         connect(panel, &NukeShortcutsPanel::calibrateRequested, this, &NukeShortcutsModule::startCalibration);
         connect(panel, &NukeShortcutsPanel::accessibilityRequested, this, &NukeShortcutsModule::openAccessibilitySettings);
-    } else if (m_captureState == QLatin1String("recording")) {
+        connect(panel, &NukeShortcutsPanel::installPluginRequested, this, &NukeShortcutsModule::installPlugin);
+        panel->setNukeDirectory(NukePlugin::currentNukeDirectory());
+    }
+    if (!interactive) {
+        // Las capturas nunca leen la .nuke real.
+        const QString fixtureDir = QStringLiteral("C:/Users/you/.nuke");
+        if (m_captureState == QLatin1String("plugin-installed")) {
+            panel->showPluginFixture(NukePlugin::ChipState::Installed, QStringLiteral("1.00"), fixtureDir);
+        } else if (m_captureState == QLatin1String("plugin-update")) {
+            panel->showPluginFixture(NukePlugin::ChipState::UpdateAvailable, QStringLiteral("0.90"), fixtureDir);
+        } else if (m_captureState == QLatin1String("plugin-no-nuke")) {
+            panel->showPluginFixture(NukePlugin::ChipState::NotInstalled, QString(), QString());
+        } else {
+            panel->showPluginFixture(NukePlugin::ChipState::NotInstalled, QString(), fixtureDir);
+        }
+    }
+    if (m_captureState == QLatin1String("recording")) {
         panel->shortcutRow(ShortcutAction::AddKeyframe)->showRecordingFixture(QStringLiteral("Ctrl + Shift + ..."));
     } else if (m_captureState == QLatin1String("rejected")) {
         panel->shortcutRow(ShortcutAction::AddKeyframe)
@@ -614,7 +705,10 @@ QStringList NukeShortcutsModule::captureStates() const
             QStringLiteral("calibrate-dialog"),
             QStringLiteral("calibrate-bubble"),
             QStringLiteral("calibrate-bubble-move"),
-            QStringLiteral("calibrate-bubble-outside")};
+            QStringLiteral("calibrate-bubble-outside"),
+            QStringLiteral("plugin-installed"),
+            QStringLiteral("plugin-update"),
+            QStringLiteral("plugin-no-nuke")};
 }
 
 bool NukeShortcutsModule::applyCaptureState(const QString &state)

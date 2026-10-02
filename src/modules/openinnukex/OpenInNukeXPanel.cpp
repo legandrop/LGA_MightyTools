@@ -150,7 +150,7 @@ bool OpenInNukeXPanel::eventFilter(QObject *watched, QEvent *event)
             return true;
         }
         if (watched == m_nukeDirField) {
-            m_nukeDirField->setText(NukeBridge::currentNukeDirectory());
+            m_nukeDirField->setText(QDir::toNativeSeparators(NukeBridge::currentNukeDirectory()));
             m_nukeDirField->clearFocus();
             return true;
         }
@@ -543,7 +543,7 @@ void OpenInNukeXPanel::refreshBridge()
     // Version COMPLETA: repone el campo desde el registro LGA/autodeteccion. Solo al construir el
     // panel y despues de un Install/Reinstall exitoso (recien publicado). Un refresco disparado
     // por el USUARIO editando el campo usa refreshBridgeStatus(), que nunca le pisa lo que tipeo.
-    m_nukeDirField->setText(NukeBridge::currentNukeDirectory());
+    m_nukeDirField->setText(QDir::toNativeSeparators(NukeBridge::currentNukeDirectory()));
     refreshBridgeStatus();
 }
 
@@ -559,7 +559,7 @@ void OpenInNukeXPanel::refreshBridgeStatus()
     QString buttonVariant;
     switch (chip) {
     case NukeBridge::ChipState::NotInstalled:
-        chipTone = QStringLiteral("src");
+        chipTone = QStringLiteral("warn"); // falta un paso, como «Not associated»
         chipText = I18n::tr("Not installed");
         buttonVariant = QStringLiteral("primary");
         break;
@@ -591,7 +591,7 @@ void OpenInNukeXPanel::refreshBridgeStatus()
         Ui::setStyleProperty(m_bridgeHint, "tone", QStringLiteral("warn"));
         m_bridgeHint->setVisible(true);
     } else if (chip == NukeBridge::ChipState::NotInstalled) {
-        m_bridgeHint->setText(I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.").arg(nukeDir.toHtmlEscaped()));
+        m_bridgeHint->setText(I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.").arg(QDir::toNativeSeparators(nukeDir).toHtmlEscaped()));
         Ui::setStyleProperty(m_bridgeHint, "tone", QString());
         m_bridgeHint->setVisible(true);
     } else {
@@ -854,7 +854,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
         chipText = I18n::tr("Installed · unknown version");
         buttonVariant = QStringLiteral("primary");
     } else if (state == QStringLiteral("first-time") || state == QStringLiteral("scan-none")) {
-        chipTone = QStringLiteral("src");
+        chipTone = QStringLiteral("warn"); // falta un paso, como «Not associated»
         chipText = I18n::tr("Not installed");
         buttonText = I18n::tr("Install");
         buttonVariant = QStringLiteral("primary");
@@ -862,7 +862,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
         hintText = I18n::tr("Found your Nuke folder at <b>%1</b>. Change it if you use a different one.")
                        .arg(QStringLiteral("C:\\Users\\lega\\.nuke"));
     } else if (state == QStringLiteral("no-nuke-manual-open")) {
-        chipTone = QStringLiteral("src");
+        chipTone = QStringLiteral("warn"); // falta un paso, como «Not associated»
         chipText = I18n::tr("Not installed");
         buttonText = I18n::tr("Install");
         buttonVariant = QStringLiteral("primary");

@@ -6,6 +6,19 @@
 
 namespace KeyframePlugin {
 
+const NukePlugin::Spec &plugin()
+{
+    static const NukePlugin::Spec spec = {
+        QStringLiteral("LGA_NukeShortcuts"),
+        QStringLiteral(":/nukeshortcuts"),
+        {QStringLiteral("menu.py"), QStringLiteral("LGA_KeyframeToggle.py")},
+        {QStringLiteral("menu.py"), QStringLiteral("LGA_KeyframeToggle.py")},
+        {},
+        QStringLiteral("LGA Mighty Tools - Nuke Shortcuts"),
+    };
+    return spec;
+}
+
 QString markerDir()
 {
     return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("nuke_set_key"));

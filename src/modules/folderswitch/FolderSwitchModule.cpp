@@ -1172,7 +1172,7 @@ ModuleDescriptor folderSwitchDescriptor()
     d.offBullets = folderSwitchOffBullets([](const QString &, const QVariant &fallback) { return fallback; });
     // Los atajos de la vineta son los CONFIGURADOS (settings.ini), no los de fabrica.
     d.offBulletsFor = &folderSwitchOffBullets;
-    d.platforms = PlatformWindows;
+    d.platforms = PlatformWindows | PlatformMac; // el chip dice «Win · mac»: en mac lo atiende FolderSwitchMacModule
     d.paintIcon = paintFolderSwitchIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
         return std::make_unique<FolderSwitchModule>(context);
