@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.11:
+
+La ventana de Disk Space tenía el tamaño fijo del diseño y sus listas venían siempre ordenadas por peso.
+Ahora se estira desde bordes y esquinas (mínimo 860×440, el ancho con el que la barra de abajo entra
+entera en español) y recuerda su tamaño; en Windows lo hace el sistema, porque la ventana sin marco le
+dice qué borde hay bajo el mouse. En Folders, Largest files y What changed, un click en el título de una
+columna ordena por ella y otro invierte el sentido; cada lista recuerda su orden. Además, con el tamaño de
+interfaz 1 o 2 los nombres y las rutas se cortaban con «…» aunque entraran: se medían con el ancho
+redondeado hacia abajo y el recorte usaba el exacto. En macOS estirarla queda pendiente.
+[ Disk Space - Ventana redimensionable y listas ordenables ]
+
 v1.10:
 
 En macOS la app no declaraba los .nk como documento: Finder no tenía ícono para ellos y macOS podía no

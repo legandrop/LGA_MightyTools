@@ -4,7 +4,7 @@
 
 namespace WindowFrame {
 
-bool apply(QWidget *)
+bool apply(QWidget *, bool)
 {
     return false;
 }

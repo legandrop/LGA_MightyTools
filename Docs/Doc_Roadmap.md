@@ -9,7 +9,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      space» del aviso y el escaneo de un disco externo los prueba Lega; las pruebas automatizadas solo
      borran dentro de una carpeta propia. Empezar por una regla de carpeta chica y por «Move to Recycle
      Bin».
-   - **Limpieza, lo que sigue:** ventana redimensionable; lo que pide administrador (restos de Windows
+   - **Ventana estirable y listas ordenables (v1.11), para probar Lega:** estirar desde los cuatro
+     bordes y las cuatro esquinas (que la barra de desplazamiento de las listas siga andando contra el
+     borde derecho), acomodarla con Windows+flechas o arrastrándola a un costado, cerrarla y volver a
+     abrirla (tamaño y orden recordados), y ordenar las tres listas por cada columna. En macOS estirarla
+     está sin hacer (`platform/mac/WindowFrameMac.cpp`).
+   - **Limpieza, lo que sigue:** lo que pide administrador (restos de Windows
      Update, volcado de memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que
      quedaron afuera (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco
      frío; macOS (el borrado está deshabilitado hasta probarlo en una Mac); aceptar o corregir los

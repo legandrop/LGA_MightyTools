@@ -1,9 +1,11 @@
 #include "modules/diskspace/cleanup/SizeListView.h"
 
+#include "platform/WindowFrame.h"
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 
 #include <QCursor>
+#include <QtMath>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QScrollBar>
@@ -19,6 +21,14 @@ constexpr int kExpander = 16;
 constexpr int kPartGap = 6;
 constexpr int kIcon = 14;
 constexpr int kShareText = 34;
+
+// Ancho de un texto redondeado hacia arriba. Con el tamano de interfaz 1 o 2 (factor 1,1 o 1,2) los
+// anchos tienen decimales: con el entero redondeado, un nombre de 520,4 px recibia 520 y elidedText,
+// que mide exacto, lo cortaba en su ultima letra aunque sobrara lugar.
+int textWidth(const QFont &font, const QString &text)
+{
+    return qCeil(QFontMetricsF(font).horizontalAdvance(text));
+}
 
 QFont headerFont()
 {
@@ -50,14 +60,49 @@ void SizeListView::setColumns(const QString &nameTitle, const QList<SizeListColu
 {
     m_nameTitle = nameTitle;
     m_columns = columns;
-    // Una columna nunca es mas angosta que su titulo (en espanol son mas largos): se ensancha y las
-    // demas se corren, en vez de cortarlo.
+    // Una columna nunca es mas angosta que su titulo con la flecha del orden (en espanol son mas
+    // largos): se ensancha y las demas se corren, en vez de cortarlo. Cualquiera puede llevar la flecha.
     const QFontMetrics metrics(headerFont());
     for (SizeListColumn &column : m_columns) {
-        const QString title = column.sorted ? column.title + QStringLiteral(" ↓") : column.title;
-        column.width = qMax(column.width, metrics.horizontalAdvance(title) + 2);
+        column.width = qMax(column.width, metrics.horizontalAdvance(column.title + QStringLiteral(" ↓")) + 2);
+    }
+    if (m_sortColumn >= int(m_columns.size())) {
+        m_sortColumn = 0;
     }
     viewport()->update();
+}
+
+void SizeListView::setSort(int column, bool descending)
+{
+    m_sortColumn = column;
+    m_sortDescending = descending;
+    viewport()->update();
+}
+
+QString SizeListView::headerTitle(const QString &title, int column) const
+{
+    if (column != m_sortColumn) {
+        return title;
+    }
+    return title + (m_sortDescending ? QStringLiteral(" ↓") : QStringLiteral(" ↑"));
+}
+
+int SizeListView::headerColumnAt(int x) const
+{
+    const int columnsStart = columnsLeft();
+    if (x >= kPadX && x < columnsStart) {
+        return kNameColumn;
+    }
+    // Cada columna toma tambien el espacio a su izquierda: el titulo va contra el borde derecho.
+    int columnX = columnsStart;
+    for (int c = 0; c < m_columns.size(); ++c) {
+        const int right = columnX + kColumnGap + m_columns.at(c).width;
+        if (x >= columnX && x < right) {
+            return c;
+        }
+        columnX = right;
+    }
+    return kNoColumn;
 }
 
 void SizeListView::setRows(const QList<SizeListRow> &rows)
@@ -120,6 +165,7 @@ void SizeListView::setInteractive(bool interactive)
 {
     m_interactive = interactive;
     if (!interactive) {
+        setHoveredHeader(kNoColumn);
         setHovered(-1);
         updateRowTip(-1, 0);
     }
@@ -186,9 +232,20 @@ void SizeListView::setHovered(int row)
         return;
     }
     m_hovered = row;
-    const bool hand = row >= 0 && m_interactive && m_rows.at(row).selectable;
+    const bool hand = (row >= 0 && m_interactive && m_rows.at(row).selectable) || m_hoveredHeader != kNoColumn;
     viewport()->setCursor(hand ? Qt::PointingHandCursor : Qt::ArrowCursor);
     viewport()->update();
+}
+
+void SizeListView::setHoveredHeader(int column)
+{
+    if (column == m_hoveredHeader) {
+        return;
+    }
+    m_hoveredHeader = column;
+    const bool hand = column != kNoColumn || (m_hovered >= 0 && m_interactive && m_rows.at(m_hovered).selectable);
+    viewport()->setCursor(hand ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    viewport()->update(QRect(0, 0, viewport()->width(), kHeaderHeight));
 }
 
 void SizeListView::updateRowTip(int row, int x)
@@ -232,16 +289,18 @@ bool SizeListView::nameIsCut(const SizeListRow &row) const
     QFont noteFont = Theme::uiFont(12);
     noteFont.setItalic(true);
     const QFont chipFont = Theme::uiFont(11.5, QFont::Medium);
-    const int extras = (row.note.isEmpty() ? 0 : QFontMetrics(noteFont).horizontalAdvance(row.note) + kPartGap)
-                       + (row.chip.isEmpty() ? 0 : QFontMetrics(chipFont).horizontalAdvance(row.chip) + 14 + kPartGap);
+    const int extras = (row.note.isEmpty() ? 0 : textWidth(noteFont, row.note) + kPartGap)
+                       + (row.chip.isEmpty() ? 0 : textWidth(chipFont, row.chip) + 14 + kPartGap);
     const int limit = qMax(8, row.detail.isEmpty() ? available - extras : int(available * 0.6));
     QFont nameFont = Theme::uiFont(13);
     nameFont.setItalic(row.muted);
-    return QFontMetrics(nameFont).horizontalAdvance(row.name) > limit;
+    return textWidth(nameFont, row.name) > limit;
 }
 
 void SizeListView::mouseMoveEvent(QMouseEvent *event)
 {
+    const bool inHeader = event->pos().y() < kHeaderHeight;
+    setHoveredHeader(m_interactive && inHeader ? headerColumnAt(event->pos().x()) : kNoColumn);
     const int row = m_interactive ? rowAt(event->pos()) : -1;
     setHovered(row);
     updateRowTip(row, event->pos().x());
@@ -249,11 +308,18 @@ void SizeListView::mouseMoveEvent(QMouseEvent *event)
 
 void SizeListView::leaveEvent(QEvent *event)
 {
-    // Un Leave con el cursor todavia adentro (otra ventana que se le puso encima un instante) no cuenta.
-    if (viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos()))) {
+    // Un Leave con el cursor todavia adentro (otra ventana que se le puso encima un instante) no cuenta,
+    // salvo que el cursor este en la franja del borde que estira la ventana (platform/WindowFrame.h):
+    // ahi Windows se lo lleva, y la fila no puede quedar resaltada ni con su tooltip.
+    const QPoint inWindow = window()->mapFromGlobal(QCursor::pos());
+    const int edge = WindowFrame::kResizeBorder + 1;
+    const bool onEdge = inWindow.x() < edge || inWindow.y() < edge || inWindow.x() >= window()->width() - edge
+                        || inWindow.y() >= window()->height() - edge;
+    if (!onEdge && viewport()->rect().contains(viewport()->mapFromGlobal(QCursor::pos()))) {
         QAbstractScrollArea::leaveEvent(event);
         return;
     }
+    setHoveredHeader(kNoColumn);
     setHovered(-1);
     updateRowTip(-1, 0);
     QAbstractScrollArea::leaveEvent(event);
@@ -262,6 +328,13 @@ void SizeListView::leaveEvent(QEvent *event)
 void SizeListView::mousePressEvent(QMouseEvent *event)
 {
     if (!m_interactive || event->button() != Qt::LeftButton) {
+        return;
+    }
+    if (event->pos().y() < kHeaderHeight) {
+        const int column = headerColumnAt(event->pos().x());
+        if (column != kNoColumn) {
+            emit sortRequested(column);
+        }
         return;
     }
     const int index = rowAt(event->pos());
@@ -288,6 +361,11 @@ void SizeListView::mousePressEvent(QMouseEvent *event)
 void SizeListView::mouseDoubleClickEvent(QMouseEvent *event)
 {
     if (!m_interactive || event->button() != Qt::LeftButton) {
+        return;
+    }
+    // Dos clicks rapidos en un titulo son dos cambios de sentido, no uno.
+    if (event->pos().y() < kHeaderHeight) {
+        mousePressEvent(event);
         return;
     }
     const int index = rowAt(event->pos());
@@ -362,15 +440,16 @@ void SizeListView::paintEvent(QPaintEvent *)
         if (available > 8) {
             painter.setFont(row.muted ? mutedFont : nameFont);
             painter.setPen(row.muted ? faint : (selected ? bright : text));
-            const QFontMetrics nameMetrics(painter.font());
             // Con una ruta al lado, el nombre toma lo suyo (hasta el 60 %) y la ruta el resto.
-            const int extras = (row.note.isEmpty() ? 0 : QFontMetrics(noteFont).horizontalAdvance(row.note) + kPartGap)
-                               + (row.chip.isEmpty() ? 0 : QFontMetrics(chipFont).horizontalAdvance(row.chip) + 14 + kPartGap);
-            int nameWidth = nameMetrics.horizontalAdvance(row.name);
+            const int extras = (row.note.isEmpty() ? 0 : textWidth(noteFont, row.note) + kPartGap)
+                               + (row.chip.isEmpty() ? 0 : textWidth(chipFont, row.chip) + 14 + kPartGap);
+            const int fullWidth = textWidth(painter.font(), row.name);
             const int nameLimit = row.detail.isEmpty() ? available - extras : int(available * 0.6);
-            nameWidth = qMin(nameWidth, qMax(8, nameLimit));
+            const int nameWidth = qMin(fullWidth, qMax(8, nameLimit));
+            // Se recorta solo si de verdad no entra.
             painter.drawText(QRect(x, top, nameWidth, kRowHeight), Qt::AlignLeft | Qt::AlignVCenter,
-                             nameMetrics.elidedText(row.name, Qt::ElideRight, nameWidth));
+                             fullWidth <= nameWidth ? row.name
+                                                    : QFontMetricsF(painter.font()).elidedText(row.name, Qt::ElideRight, nameWidth));
             x += nameWidth + kPartGap;
             if (!row.note.isEmpty() && x < nameRight) {
                 painter.setFont(noteFont);
@@ -457,14 +536,21 @@ void SizeListView::paintEvent(QPaintEvent *)
     // ---- Encabezado, fijo arriba (se pinta al final para tapar la fila que pasa por debajo).
     painter.fillRect(QRect(0, 0, width, kHeaderHeight), Theme::color(Theme::kWindow));
     painter.fillRect(QRect(0, kHeaderHeight - 1, width, 1), Theme::color(Theme::kDivider));
+    // El titulo de la columna ordenada va en texto fuerte con su flecha; el que tiene el mouse, igual de
+    // fuerte (se puede ordenar por cualquiera).
     painter.setFont(headerFont());
-    painter.setPen(faint);
-    painter.drawText(QRect(kPadX, 0, columnsStart - kPadX, kHeaderHeight - 1), Qt::AlignLeft | Qt::AlignVCenter, m_nameTitle);
+    const auto headerPen = [&](int column) {
+        return column == m_sortColumn || column == m_hoveredHeader ? strong : faint;
+    };
+    painter.setPen(headerPen(kNameColumn));
+    painter.drawText(QRect(kPadX, 0, columnsStart - kPadX, kHeaderHeight - 1), Qt::AlignLeft | Qt::AlignVCenter,
+                     headerTitle(m_nameTitle, kNameColumn));
     int columnX = columnsStart + kColumnGap;
-    for (const SizeListColumn &column : m_columns) {
-        painter.setPen(column.sorted ? strong : faint);
+    for (int c = 0; c < m_columns.size(); ++c) {
+        const SizeListColumn &column = m_columns.at(c);
+        painter.setPen(headerPen(c));
         painter.drawText(QRect(columnX, 0, column.width, kHeaderHeight - 1), Qt::AlignRight | Qt::AlignVCenter,
-                         column.sorted ? column.title + QStringLiteral(" ↓") : column.title);
+                         headerTitle(column.title, c));
         columnX += column.width + kColumnGap;
     }
 }

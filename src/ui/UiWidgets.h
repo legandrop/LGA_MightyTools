@@ -54,6 +54,8 @@ public:
     void setText(const QString &text);
     QString text() const { return m_text; }
     void setElideMode(Qt::TextElideMode mode);
+    // Horizontal: a la izquierda (de fabrica) o a la derecha. Vertical, siempre centrado.
+    void setAlignment(Qt::Alignment alignment);
     // Texto que se ve con el ancho actual (para la evidencia de las capturas).
     QString shownText() const;
     QSize sizeHint() const override;
@@ -66,6 +68,7 @@ private:
     void updateTip();
     QString m_text;
     Qt::TextElideMode m_mode = Qt::ElideRight;
+    Qt::Alignment m_alignment = Qt::AlignLeft;
 };
 
 // Texto gris de una o mas lineas (`.cap` del canvas) con el interlineado del diseno: 17 px por

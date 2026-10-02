@@ -11,6 +11,7 @@
 #include "modules/diskspace/cleanup/CleanupDialogs.h"
 #include "modules/diskspace/cleanup/CleanupQa.h"
 #include "modules/diskspace/cleanup/CleanupWindow.h"
+#include "modules/diskspace/cleanup/SizeListView.h"
 #include "platform/LocalDrives.h"
 #include "platform/SystemPaths.h"
 #include "ui/Theme.h"
@@ -584,6 +585,8 @@ QStringList DiskSpaceModule::captureStates() const
     }
     states << QStringLiteral("cleanup-confirm") << QStringLiteral("cleanup-confirm-all") << QStringLiteral("cleanup-delete")
            << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
+    // La ventana al tamano minimo (con lo elegido: la barra de abajo mas cargada) y Folders ordenada por nombre.
+    states << QStringLiteral("cleanup-min") << QStringLiteral("cleanup-sorted");
     return states;
 }
 
@@ -608,6 +611,19 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
     if (CleanupWindow::fixtureStates().contains(state)) {
         auto *window = new CleanupWindow(m_state, nullptr, true, parent);
         window->applyFixture(state);
+        return window;
+    }
+    if (state == QLatin1String("cleanup-min")) {
+        auto *window = new CleanupWindow(m_state, nullptr, true, parent);
+        window->applyFixture(QStringLiteral("folders-selected"));
+        window->setMinimumSize(0, 0);
+        window->setFixedSize(CleanupWindow::kMinWidth, CleanupWindow::kMinHeight);
+        return window;
+    }
+    if (state == QLatin1String("cleanup-sorted")) {
+        auto *window = new CleanupWindow(m_state, nullptr, true, parent);
+        window->applyFixture(QStringLiteral("folders"));
+        window->sortList(CleanupWindow::Folders, SizeListView::kNameColumn);
         return window;
     }
     if (state == QLatin1String("cleanup-confirm") || state == QLatin1String("cleanup-confirm-all")) {

@@ -3,6 +3,7 @@
 #include "ui/Theme.h"
 
 #include <QBoxLayout>
+#include <QtMath>
 #include <QHBoxLayout>
 #include <QDesktopServices>
 #include <QEvent>
@@ -300,7 +301,7 @@ void ElidedLabel::resizeEvent(QResizeEvent *event)
 
 void ElidedLabel::updateTip()
 {
-    const bool cut = !m_text.isEmpty() && fontMetrics().horizontalAdvance(m_text) > width();
+    const bool cut = !m_text.isEmpty() && QFontMetricsF(font()).horizontalAdvance(m_text) > width();
     CustomTooltip::instance()->setToolTip(this, cut ? m_text.toHtmlEscaped() : QString());
 }
 
@@ -310,15 +311,24 @@ void ElidedLabel::setElideMode(Qt::TextElideMode mode)
     update();
 }
 
+void ElidedLabel::setAlignment(Qt::Alignment alignment)
+{
+    m_alignment = alignment & Qt::AlignHorizontal_Mask;
+    update();
+}
+
 QString ElidedLabel::shownText() const
 {
-    return fontMetrics().elidedText(m_text, m_mode, width());
+    // Medido con decimales: con el tamano de interfaz 1 o 2 el ancho entero redondeado de sizeHint() podia
+    // quedar por debajo del exacto y el texto se cortaba en su ultima letra aunque entrara.
+    const QFontMetricsF metrics(font());
+    return metrics.horizontalAdvance(m_text) <= width() ? m_text : metrics.elidedText(m_text, m_mode, width());
 }
 
 QSize ElidedLabel::sizeHint() const
 {
     const QFontMetrics fm(font());
-    return QSize(fm.horizontalAdvance(m_text), fm.height());
+    return QSize(qCeil(QFontMetricsF(font()).horizontalAdvance(m_text)), fm.height());
 }
 
 QSize ElidedLabel::minimumSizeHint() const
@@ -331,7 +341,7 @@ void ElidedLabel::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setFont(font());
     painter.setPen(palette().color(QPalette::WindowText));
-    painter.drawText(rect(), Qt::AlignLeft | Qt::AlignVCenter, shownText());
+    painter.drawText(rect(), m_alignment | Qt::AlignVCenter, shownText());
 }
 
 // ------------------------------------------------------------------ CaptionLabel

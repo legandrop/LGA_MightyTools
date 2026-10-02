@@ -20,7 +20,6 @@ struct SizeListColumn
     QString title;
     int width = 84;
     Kind kind = Kind::Text;
-    bool sorted = false; ///< la columna por la que esta ordenada la lista
 };
 
 struct SizeListRow
@@ -49,7 +48,9 @@ struct SizeListRow
 // lista y no un mapa a proposito: borrar algo cambia unas pocas filas y no hay nada que redibujar entero.
 //
 // No toma foco de teclado (regla de la app). Un click elige o suelta una fila; el click en la flecha
-// la despliega; el doble click la "activa" (la ventana la abre en el Explorador).
+// la despliega; el doble click la "activa" (la ventana la abre en el Explorador). Un click en un titulo
+// pide ordenar por esa columna: la lista no ordena, solo muestra la flecha; el orden lo arma quien la
+// llena (en Folders se ordena cada nivel del arbol por separado).
 class SizeListView : public QAbstractScrollArea
 {
     Q_OBJECT
@@ -57,6 +58,8 @@ class SizeListView : public QAbstractScrollArea
 public:
     static constexpr int kRowHeight = 28;
     static constexpr int kHeaderHeight = 28;
+    static constexpr int kNameColumn = -1; ///< la columna del nombre, en setSort() y sortRequested()
+    static constexpr int kNoColumn = -2;
 
     explicit SizeListView(QWidget *parent = nullptr);
 
@@ -74,11 +77,18 @@ public:
     void setEmptyText(const QString &text);
     // false: lista plana, sin el lugar de la flecha a la izquierda (Largest files, What changed).
     void setTree(bool tree);
+    // La columna por la que esta ordenada (kNameColumn, o el indice de una de `columns`) y el sentido.
+    void setSort(int column, bool descending);
+    int sortColumn() const { return m_sortColumn; }
+    bool sortDescending() const { return m_sortDescending; }
+    // La columna del encabezado en esa x del viewport (kNoColumn si cae entre columnas).
+    int headerColumnAt(int x) const;
 
 signals:
     void expanderClicked(const QString &id);
     void selectionChanged();
     void activated(const QString &id);
+    void sortRequested(int column);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -95,6 +105,8 @@ private:
     int columnsLeft() const;
     void updateScrollRange();
     void setHovered(int row);
+    void setHoveredHeader(int column);
+    QString headerTitle(const QString &title, int column) const;
     // El tooltip de una fila (su ruta completa). `x`: donde apunta la flecha, en el viewport.
     void updateRowTip(int row, int x);
     // El nombre de esa fila no entra en el ancho que tiene (se pinta recortado).
@@ -106,6 +118,9 @@ private:
     QSet<QString> m_selected;
     QString m_emptyText;
     int m_hovered = -1;
+    int m_hoveredHeader = kNoColumn;
+    int m_sortColumn = 0;
+    bool m_sortDescending = true;
     int m_tipRow = -1;
     // Widget invisible que ocupa la fila con tooltip: le da al tooltip un ancla del tamano de la fila
     // (para ubicarse arriba o abajo de ELLA y ocultarse solo cuando el mouse la deja).

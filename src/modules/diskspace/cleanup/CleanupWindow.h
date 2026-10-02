@@ -16,6 +16,7 @@
 
 class CleanupPane;
 class DiskState;
+class ElidedLabel;
 class ModuleContext;
 class QAbstractButton;
 class QLabel;
@@ -66,6 +67,10 @@ private:
 // nacen con la ventana y mueren con ella. Cerrarla no espera a ningun hilo (ver ScanEngine).
 //
 // En modo captura (QA) no hay motor ni disco: applyFixture() carga datos fijos y nada responde al click.
+//
+// Se estira desde los bordes (en Windows; ver platform/WindowFrame.h) y recuerda su tamano. Las tres
+// listas se ordenan con un click en el titulo de una columna; un segundo click invierte el sentido. El
+// orden de cada una tambien se recuerda.
 class CleanupWindow : public QWidget
 {
     Q_OBJECT
@@ -73,8 +78,10 @@ class CleanupWindow : public QWidget
 public:
     enum Tab { CleanUp = 0, Folders = 1, Files = 2, Changes = 3 };
 
-    static constexpr int kWidth = 960;
+    static constexpr int kWidth = 960;  ///< tamano de fabrica (el del canvas)
     static constexpr int kHeight = 620;
+    static constexpr int kMinWidth = 860;
+    static constexpr int kMinHeight = 440;
 
     // `state` y `context` son del modulo y viven mas que la ventana. `capture`: sin motor ni borrado.
     CleanupWindow(DiskState *state, ModuleContext *context, bool capture, QWidget *parent = nullptr);
@@ -88,6 +95,10 @@ public:
     static QStringList fixtureStates();
     // Carga un estado fijo (los del canvas). false si no lo conoce.
     bool applyFixture(const QString &state);
+    // Ordena la lista de esa pestana como si se hubiera hecho click en el titulo de `column`
+    // (SizeListView::kNameColumn o el indice de la columna). Lo usan la captura y la sonda.
+    void sortList(Tab tab, int column);
+    SizeListView *listForTab(Tab tab) const;
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -97,6 +108,13 @@ protected:
 private:
     enum class ScanState { Idle, Scanning, Complete, Stopped };
     enum class JobKind { None, CleanUp, Manual };
+
+    // Por que columna esta ordenada una lista (SizeListView::kNameColumn o el indice) y en que sentido.
+    struct SortOrder
+    {
+        int column = 0;
+        bool descending = true;
+    };
 
     // Una fila elegida de Folders o de Largest files.
     struct Picked
@@ -134,6 +152,11 @@ private:
     void reloadDrive();
 
     void setTab(int tab);
+    SortOrder &sortFor(Tab tab);
+    void loadSortOrders();
+    void saveSortOrder(Tab tab);
+    // El tamano guardado (o el de fabrica), sin pasarse del area util de la pantalla.
+    void restoreSize();
     void showDriveMenu();
     void showCompareMenu();
     // Compara el escaneo recien hecho contra ese resumen (vacio: nada con que comparar).
@@ -192,6 +215,9 @@ private:
     QHash<QString, Picked> m_folderRows; ///< id de fila -> que es
     QList<FileRow> m_fileRows;
     int m_fileFilter = 0;
+    SortOrder m_folderSort;
+    SortOrder m_fileSort;
+    SortOrder m_changeSort;
     ScanSnapshot m_baseline;            ///< el resumen con el que se compara
     ScanSnapshot m_snapshot;            ///< el del escaneo recien hecho
     QList<ScanSnapshot> m_baselines;    ///< los anteriores disponibles ("Compare with...")
@@ -203,7 +229,7 @@ private:
     TitleBar *m_titleBar = nullptr;
     QAbstractButton *m_driveButton = nullptr;
     QLabel *m_freeLabel = nullptr;
-    QLabel *m_scanLabel = nullptr;
+    ElidedLabel *m_scanLabel = nullptr;
     UsageBar *m_bar = nullptr;
     QPushButton *m_rescan = nullptr;
     QWidget *m_scanLine = nullptr;
@@ -222,6 +248,8 @@ private:
     QPushButton *m_actionCompare = nullptr;
     QPushButton *m_actionExport = nullptr;
     bool m_nativeFrameApplied = false;
+    bool m_shownOnce = false; ///< el tamano guardado y el centrado van solo la primera vez
+    bool m_sizeRestored = false; ///< ya se mostro con el tamano guardado: desde ahi el tamano se guarda
 };
 
 #endif // MIGHTYTOOLS_CLEANUPWINDOW_H

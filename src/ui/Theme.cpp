@@ -316,7 +316,7 @@ QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 
 /* Ventana de limpieza de Disk Space (canvas "Mighty Tools Disk Cleanup"). */
 QWidget#cleanupWindow { background-color: @window; }
 QScrollArea#cleanScroll, QWidget#cleanContent { background-color: @window; border: none; }
-QLabel#meterText { color: @textFaint; font-size: @fs12_5; }
+QLabel#meterText, ElidedLabel#meterText { color: @textFaint; font-size: @fs12_5; }
 QFrame#actionBar { background-color: @side; border: none; border-top: 1px solid @divider; }
 QLabel#actionText { color: @text; font-size: @fs13; }
 QPushButton[variant="danger"] {

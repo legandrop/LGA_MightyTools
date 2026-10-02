@@ -37,6 +37,7 @@
 #include <QPushButton>
 #include <QSaveFile>
 #include <QScreen>
+#include <QScrollBar>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QStandardPaths>
@@ -110,6 +111,97 @@ QString strong(const QString &text)
 QString joinPath(const QString &dir, const QString &name)
 {
     return dir.endsWith(QDir::separator()) ? dir + name : dir + QDir::separator() + name;
+}
+
+// Lo que decide el lugar de una fila al ordenar: el nombre, el numero de la columna elegida y el peso,
+// que desempata.
+struct SortKey
+{
+    QString name;
+    qint64 number = 0;
+    qint64 bytes = 0;
+};
+
+int compareNames(const QString &a, const QString &b)
+{
+    // Como el Explorador: sin distinguir mayusculas y con los numeros por su valor ("2" antes de "10").
+    // A mano y no con QCollator: sin ICU, QCollator llama al sistema en cada comparacion, y ordenar una
+    // carpeta de 28.000 hijos (WinSxS) llevaba 120 ms con el arbol trabado, cinco veces por segundo.
+    const int lengthA = int(a.size());
+    const int lengthB = int(b.size());
+    int i = 0;
+    int j = 0;
+    while (i < lengthA && j < lengthB) {
+        const QChar ca = a.at(i);
+        const QChar cb = b.at(j);
+        if (ca.isDigit() && cb.isDigit()) {
+            // Dos tramos de cifras: sin los ceros de adelante, el mas largo es el mayor; a igual largo,
+            // cifra por cifra.
+            int startA = i;
+            int startB = j;
+            while (startA < lengthA && a.at(startA) == QLatin1Char('0')) {
+                ++startA;
+            }
+            while (startB < lengthB && b.at(startB) == QLatin1Char('0')) {
+                ++startB;
+            }
+            int endA = startA;
+            int endB = startB;
+            while (endA < lengthA && a.at(endA).isDigit()) {
+                ++endA;
+            }
+            while (endB < lengthB && b.at(endB).isDigit()) {
+                ++endB;
+            }
+            if (endA - startA != endB - startB) {
+                return endA - startA < endB - startB ? -1 : 1;
+            }
+            for (int k = 0; k < endA - startA; ++k) {
+                if (a.at(startA + k) != b.at(startB + k)) {
+                    return a.at(startA + k) < b.at(startB + k) ? -1 : 1;
+                }
+            }
+            i = endA;
+            j = endB;
+            continue;
+        }
+        const char16_t fa = ca.toCaseFolded().unicode();
+        const char16_t fb = cb.toCaseFolded().unicode();
+        if (fa != fb) {
+            return fa < fb ? -1 : 1;
+        }
+        ++i;
+        ++j;
+    }
+    if (lengthA - i != lengthB - j) {
+        return lengthA - i < lengthB - j ? -1 : 1;
+    }
+    // Iguales salvo mayusculas o ceros: un orden fijo igual (std::sort necesita uno estricto).
+    return a < b ? -1 : (b < a ? 1 : 0);
+}
+
+// `a` va antes que `b`. Los empates van por peso (mayor primero) y despues por nombre.
+bool sortsBefore(const SortKey &a, const SortKey &b, bool byName, bool descending)
+{
+    const int order = byName ? compareNames(a.name, b.name) : (a.number < b.number ? -1 : (a.number > b.number ? 1 : 0));
+    if (order != 0) {
+        return descending ? order > 0 : order < 0;
+    }
+    if (a.bytes != b.bytes) {
+        return a.bytes > b.bytes;
+    }
+    return compareNames(a.name, b.name) < 0;
+}
+
+// Nombre de cada lista en settings.ini y cuantas columnas tiene ademas del nombre.
+const char *sortSettingName(CleanupWindow::Tab tab)
+{
+    return tab == CleanupWindow::Folders ? "folders" : (tab == CleanupWindow::Files ? "files" : "changes");
+}
+
+int sortColumnCount(CleanupWindow::Tab tab)
+{
+    return tab == CleanupWindow::Folders ? 4 : 2;
 }
 
 // La linea de 2 px debajo de la cabecera: un tramo violeta que recorre el ancho mientras hay trabajo.
@@ -373,7 +465,14 @@ CleanupWindow::CleanupWindow(DiskState *state, ModuleContext *context, bool capt
     // La barra de titulo la dibuja la app, como en la ventana principal.
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
     buildUi();
-    setFixedSize(kWidth, kHeight);
+    if (m_capture) {
+        setFixedSize(kWidth, kHeight);
+    } else {
+        // El tamano guardado se aplica al mostrarla (restoreSize), cuando ya se sabe en que pantalla esta.
+        setMinimumSize(kMinWidth, kMinHeight);
+        resize(kWidth, kHeight);
+    }
+    loadSortOrders();
     m_poll = new QTimer(this);
     m_poll->setInterval(kPollMs);
     connect(m_poll, &QTimer::timeout, this, &CleanupWindow::poll);
@@ -391,6 +490,12 @@ CleanupWindow::~CleanupWindow()
     // Nada espera a un hilo: el motor y el trabajo levantan su bandera y los hilos terminan solos.
     m_engine.cancel();
     m_job.cancel();
+    // El tamano se guarda al irse (cerrarla, o apagar la herramienta con la ventana abierta).
+    if (m_context && m_sizeRestored) {
+        const QSize size = isMaximized() ? normalGeometry().size() : this->size();
+        m_context->setValue(QStringLiteral("cleanup/windowWidth"), size.width());
+        m_context->setValue(QStringLiteral("cleanup/windowHeight"), size.height());
+    }
 }
 
 bool CleanupWindow::busy() const
@@ -420,11 +525,15 @@ void CleanupWindow::buildUi()
     meter->setSpacing(3);
     auto *meterLine = new QHBoxLayout();
     meterLine->setSpacing(10);
+    // Lo libre va entero; el estado del escaneo toma lo que queda y, con la ventana angosta, se recorta
+    // (el texto entero, en su tooltip).
     m_freeLabel = Ui::label(QString(), "meterText", header);
     m_freeLabel->setTextFormat(Qt::RichText);
-    meterLine->addWidget(m_freeLabel, 1);
-    m_scanLabel = Ui::label(QString(), "meterText", header);
-    meterLine->addWidget(m_scanLabel, 0);
+    meterLine->addWidget(m_freeLabel, 0);
+    m_scanLabel = new ElidedLabel(header);
+    m_scanLabel->setObjectName(QStringLiteral("meterText"));
+    m_scanLabel->setAlignment(Qt::AlignRight);
+    meterLine->addWidget(m_scanLabel, 1);
     meter->addLayout(meterLine);
     m_bar = new UsageBar(header);
     meter->addWidget(m_bar);
@@ -484,15 +593,15 @@ void CleanupWindow::buildUi()
     filesLayout->addWidget(filterRule);
     m_files = new SizeListView(filesPage);
     m_files->setTree(false);
-    m_files->setColumns(I18n::trc("column", "Name"), {{I18n::trc("column", "Size"), 84, SizeListColumn::Kind::Size, true},
-                                                      {I18n::trc("column", "Modified"), 72, SizeListColumn::Kind::Text, false}});
+    m_files->setColumns(I18n::trc("column", "Name"), {{I18n::trc("column", "Size"), 84, SizeListColumn::Kind::Size},
+                                                      {I18n::trc("column", "Modified"), 72, SizeListColumn::Kind::Text}});
     filesLayout->addWidget(m_files, 1);
     m_stack->addWidget(filesPage);
 
     m_changesList = new SizeListView(m_stack);
     m_changesList->setTree(false);
-    m_changesList->setColumns(I18n::trc("column", "Folder"), {{I18n::trc("column", "Change"), 96, SizeListColumn::Kind::Size, true},
-                                                              {I18n::trc("column", "Size now"), 84, SizeListColumn::Kind::Text, false}});
+    m_changesList->setColumns(I18n::trc("column", "Folder"), {{I18n::trc("column", "Change"), 96, SizeListColumn::Kind::Size},
+                                                              {I18n::trc("column", "Size now"), 84, SizeListColumn::Kind::Text}});
     m_stack->addWidget(m_changesList);
     root->addWidget(m_stack, 1);
 
@@ -524,6 +633,11 @@ void CleanupWindow::buildUi()
         actions->addWidget(button, 0, Qt::AlignVCenter);
     }
     root->addWidget(bar);
+
+    // Ordenar no toca el disco: anda tambien en la captura (la sonda lo usa; ahi nada hace click).
+    for (const Tab tab : {Folders, Files, Changes}) {
+        connect(listForTab(tab), &SizeListView::sortRequested, this, [this, tab](int column) { sortList(tab, column); });
+    }
 
     if (m_capture) {
         m_cleanPane->setInteractive(true); // dibujado con sus controles habilitados; nada esta conectado
@@ -872,12 +986,12 @@ void CleanupWindow::setFolderColumns(bool scanning)
     }
     m_folderColumns = int(scanning);
     // Escaneando, el porcentaje es de lo contado hasta ahora, y archivos y fecha todavia no dicen nada.
-    QList<SizeListColumn> columns = {{I18n::trc("column", "Size"), 84, SizeListColumn::Kind::Size, true},
+    QList<SizeListColumn> columns = {{I18n::trc("column", "Size"), 84, SizeListColumn::Kind::Size},
                                      {scanning ? I18n::trc("column", "% so far") : I18n::trc("column", "% of parent"), 132,
-                                      SizeListColumn::Kind::Share, false}};
+                                      SizeListColumn::Kind::Share}};
     if (!scanning) {
-        columns.append({I18n::trc("column", "Files"), 86, SizeListColumn::Kind::Text, false});
-        columns.append({I18n::trc("column", "Modified"), 72, SizeListColumn::Kind::Text, false});
+        columns.append({I18n::trc("column", "Files"), 86, SizeListColumn::Kind::Text});
+        columns.append({I18n::trc("column", "Modified"), 72, SizeListColumn::Kind::Text});
     }
     m_folders->setColumns(I18n::trc("column", "Name"), columns);
 }
@@ -889,30 +1003,49 @@ void CleanupWindow::refreshFolders()
     const QDateTime now = QDateTime::currentDateTime();
     const bool scanning = m_scanState == ScanState::Scanning;
     setFolderColumns(scanning && m_fullScan);
+    // Escaneando no estan Files ni Modified: mientras tanto se ordena por peso, sin perder lo elegido.
+    const bool sortHidden = scanning && m_fullScan && m_folderSort.column >= 2;
+    const int sortColumn = sortHidden ? 0 : m_folderSort.column;
+    const bool sortDescending = sortHidden || m_folderSort.descending;
+    m_folders->setSort(sortColumn, sortDescending);
+    // Size y "% of parent" ordenan igual: la parte de cada fila es su peso sobre el de la misma carpeta.
+    const auto folderNumber = [sortColumn](qint64 bytes, qint64 files, qint64 modified) {
+        return sortColumn == 2 ? files : (sortColumn == 3 ? modified : bytes);
+    };
     quint64 rootBytes = 0;
     {
         const auto lock = m_engine.lock();
         const ScanTree &tree = m_engine.tree();
         if (!tree.isEmpty()) {
             rootBytes = tree.node(tree.root()).bytes;
-            // Carpetas y archivos de un nivel, juntos y de mayor a menor.
+            // Carpetas y archivos de un nivel, juntos, en el orden elegido (de fabrica, de mayor a menor).
             struct Entry
             {
                 bool isDir = false;
                 ScanTree::Index dir = ScanTree::kNone;
                 int file = -1;
                 quint64 bytes = 0;
+                SortKey key;
             };
+            const bool byName = sortColumn == SizeListView::kNameColumn;
             std::function<void(ScanTree::Index, int)> addLevel = [&](ScanTree::Index node, int depth) {
                 QList<Entry> entries;
                 for (const ScanTree::Index child : tree.children(node)) {
-                    entries.append(Entry{true, child, -1, tree.node(child).bytes});
+                    const ScanTree::Node &n = tree.node(child);
+                    Entry entry{true, child, -1, n.bytes, {}};
+                    entry.key = {tree.name(child), folderNumber(qint64(n.bytes), qint64(n.files), qint64(n.newest)), qint64(n.bytes)};
+                    entries.append(entry);
                 }
                 const ScanEngine::FileListing listing = m_listings.value(node);
                 for (int i = 0; i < listing.largest.size(); ++i) {
-                    entries.append(Entry{false, node, i, listing.largest.at(i).bytes});
+                    const ScanEngine::FileEntry &file = listing.largest.at(i);
+                    Entry entry{false, node, i, file.bytes, {}};
+                    entry.key = {file.name, folderNumber(qint64(file.bytes), 1, qint64(file.modified)), qint64(file.bytes)};
+                    entries.append(entry);
                 }
-                std::stable_sort(entries.begin(), entries.end(), [](const Entry &a, const Entry &b) { return a.bytes > b.bytes; });
+                std::sort(entries.begin(), entries.end(), [byName, sortDescending](const Entry &a, const Entry &b) {
+                    return sortsBefore(a.key, b.key, byName, sortDescending);
+                });
                 const double parentBytes = double(qMax<quint64>(1, tree.node(node).bytes));
                 const QString nodePath = tree.path(node);
                 for (const Entry &entry : entries) {
@@ -1003,11 +1136,21 @@ void CleanupWindow::refreshFiles()
     QList<SizeListRow> rows;
     const QDateTime now = QDateTime::currentDateTime();
     const qint64 nowSecs = now.toSecsSinceEpoch();
+    // Columnas: 0 Size, 1 Modified.
+    QList<int> order;
+    QList<SortKey> keys;
     for (int i = 0; i < m_fileRows.size(); ++i) {
-        const FileRow &entry = m_fileRows.at(i);
-        if (!matchesFilter(m_fileFilter, entry.file.name, entry.file.modified, nowSecs)) {
-            continue;
+        const ScanEngine::TopFile &file = m_fileRows.at(i).file;
+        keys.append({file.name, m_fileSort.column == 1 ? qint64(file.modified) : qint64(file.bytes), qint64(file.bytes)});
+        if (matchesFilter(m_fileFilter, file.name, file.modified, nowSecs)) {
+            order.append(i);
         }
+    }
+    const bool byName = m_fileSort.column == SizeListView::kNameColumn;
+    std::sort(order.begin(), order.end(), [&](int a, int b) { return sortsBefore(keys.at(a), keys.at(b), byName, m_fileSort.descending); });
+    m_files->setSort(m_fileSort.column, m_fileSort.descending);
+    for (const int i : order) {
+        const FileRow &entry = m_fileRows.at(i);
         SizeListRow row;
         row.id = fileRowId(entry.file.dir, entry.file.name);
         row.name = entry.file.name;
@@ -1028,7 +1171,17 @@ void CleanupWindow::refreshFiles()
 void CleanupWindow::refreshChanges()
 {
     QList<SizeListRow> rows;
-    for (const ScanSnapshot::Change &change : m_changes) {
+    // Columnas: 0 Change (lo que crecio, con signo), 1 Size now.
+    QList<ScanSnapshot::Change> changes = m_changes;
+    const bool byName = m_changeSort.column == SizeListView::kNameColumn;
+    const int column = m_changeSort.column;
+    const bool descending = m_changeSort.descending;
+    std::sort(changes.begin(), changes.end(), [=](const ScanSnapshot::Change &a, const ScanSnapshot::Change &b) {
+        return sortsBefore({a.path, column == 1 ? a.bytes : a.delta, qAbs(a.delta)}, {b.path, column == 1 ? b.bytes : b.delta, qAbs(b.delta)},
+                           byName, descending);
+    });
+    m_changesList->setSort(m_changeSort.column, m_changeSort.descending);
+    for (const ScanSnapshot::Change &change : changes) {
         SizeListRow row;
         row.id = change.path;
         row.name = change.path;
@@ -1200,6 +1353,100 @@ void CleanupWindow::setTab(int tab)
         refreshFolders();
     }
     refreshActionBar();
+}
+
+SizeListView *CleanupWindow::listForTab(Tab tab) const
+{
+    switch (tab) {
+    case Folders:
+        return m_folders;
+    case Files:
+        return m_files;
+    case Changes:
+        return m_changesList;
+    case CleanUp:
+        break;
+    }
+    return nullptr;
+}
+
+CleanupWindow::SortOrder &CleanupWindow::sortFor(Tab tab)
+{
+    return tab == Folders ? m_folderSort : (tab == Files ? m_fileSort : m_changeSort);
+}
+
+void CleanupWindow::sortList(Tab tab, int column)
+{
+    SizeListView *list = listForTab(tab);
+    if (!list || column < SizeListView::kNameColumn || column >= sortColumnCount(tab)) {
+        return;
+    }
+    // Una columna nueva arranca por lo mas pesado, lo mas nuevo o lo que mas crecio; el nombre, de la A a la Z.
+    // Se compara con lo que la lista muestra: escaneando, Folders va por Size aunque lo elegido sea Files
+    // o Modified, y un click en Size tiene que invertir lo que se ve.
+    SortOrder &order = sortFor(tab);
+    if (list->sortColumn() == column) {
+        order.column = column;
+        order.descending = !list->sortDescending();
+    } else {
+        order.column = column;
+        order.descending = column != SizeListView::kNameColumn;
+    }
+    saveSortOrder(tab);
+    // Lo elegido se queda (las filas conservan su id); la vista vuelve arriba, al principio del orden nuevo.
+    list->verticalScrollBar()->setValue(0);
+    if (tab == Folders) {
+        refreshFolders();
+    } else if (tab == Files) {
+        refreshFiles();
+    } else {
+        refreshChanges();
+    }
+}
+
+void CleanupWindow::loadSortOrders()
+{
+    if (!m_context) {
+        return;
+    }
+    for (const Tab tab : {Folders, Files, Changes}) {
+        const QString prefix = QStringLiteral("cleanup/sort/%1/").arg(QLatin1String(sortSettingName(tab)));
+        bool ok = false;
+        const int column = m_context->value(prefix + QStringLiteral("column")).toInt(&ok);
+        if (ok && column >= SizeListView::kNameColumn && column < sortColumnCount(tab)) {
+            sortFor(tab).column = column;
+            sortFor(tab).descending = m_context->value(prefix + QStringLiteral("descending"), true).toBool();
+        }
+    }
+}
+
+void CleanupWindow::saveSortOrder(Tab tab)
+{
+    if (!m_context) {
+        return;
+    }
+    const QString prefix = QStringLiteral("cleanup/sort/%1/").arg(QLatin1String(sortSettingName(tab)));
+    m_context->setValue(prefix + QStringLiteral("column"), sortFor(tab).column);
+    m_context->setValue(prefix + QStringLiteral("descending"), sortFor(tab).descending);
+}
+
+void CleanupWindow::restoreSize()
+{
+    QSize size(kWidth, kHeight);
+    if (m_context) {
+        const int width = m_context->value(QStringLiteral("cleanup/windowWidth")).toInt();
+        const int height = m_context->value(QStringLiteral("cleanup/windowHeight")).toInt();
+        if (width > 0 && height > 0) {
+            size = QSize(width, height);
+        }
+    }
+    // Nunca mas grande que el area util (otra pantalla, u otro tamano de interfaz); nunca mas chica que
+    // el minimo, aunque la pantalla lo sea (como antes con el tamano fijo).
+    if (const QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen()) {
+        size = size.boundedTo(screen->availableGeometry().size());
+    }
+    resize(size.expandedTo(minimumSize()));
+    m_sizeRestored = true;
 }
 
 // ------------------------------------------------------------------ acciones
@@ -1818,15 +2065,18 @@ void CleanupWindow::removeFolderRule(const QString &categoryId)
 
 void CleanupWindow::showEvent(QShowEvent *event)
 {
-    if (!m_nativeFrameApplied && !m_capture) {
+    if (!m_shownOnce && !m_capture) {
+        // Solo la primera vez: al volver de minimizada se queda como el usuario la dejo.
+        m_shownOnce = true;
         // La bandera va ANTES de apply(), como en MainWindow (WM_NCCALCSIZE llega en el acto).
         m_nativeFrameApplied = true;
-        m_nativeFrameApplied = WindowFrame::apply(this);
+        m_nativeFrameApplied = WindowFrame::apply(this, true);
+        restoreSize();
         if (const QScreen *screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen()) {
             const QRect area = screen->availableGeometry();
             // Centrada, pero nunca con la barra de titulo arriba del borde: con un tamano de interfaz
             // grande (core/UiScale.h) en una pantalla chica la ventana puede no entrar entera.
-            const QPoint centered = area.center() - QPoint(kWidth / 2, kHeight / 2);
+            const QPoint centered = area.center() - QPoint(width() / 2, height() / 2);
             move(qMax(area.left(), centered.x()), qMax(area.top(), centered.y()));
         }
     }

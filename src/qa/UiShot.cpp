@@ -10,6 +10,7 @@
 #include "core/UiScale.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskState.h"
+#include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
 #include "ui/CustomTooltip.h"
 #include "ui/HelpDialog.h"
@@ -27,6 +28,7 @@
 #include <QEnterEvent>
 #include <QFileInfo>
 #include <QFontInfo>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QImage>
@@ -946,7 +948,7 @@ int runTooltipProbe()
     layout->addWidget(elided);
     auto *list = new SizeListView(&host);
     list->setTree(false);
-    list->setColumns(QStringLiteral("Name"), {{QStringLiteral("Size"), 84, SizeListColumn::Kind::Size, true}});
+    list->setColumns(QStringLiteral("Name"), {{QStringLiteral("Size"), 84, SizeListColumn::Kind::Size}});
     QList<SizeListRow> rows;
     for (int i = 0; i < 4; ++i) {
         SizeListRow row;
@@ -1107,6 +1109,281 @@ int runTooltipProbe()
     return failures == 0 ? 0 : 1;
 }
 
+// --ui-probe cleanup-sort: la ventana de Disk Space se estira y sus listas se ordenan por columna.
+//  - Una SizeListView interactiva en offscreen: el click en un titulo pide ordenar por esa columna (y el
+//    doble click, dos veces), el click en una fila no, y el titulo muestra la mano.
+//  - La ventana de limpieza con datos fijos (sin motor ni disco): Folders, Largest files y What changed
+//    ordenados por nombre, por peso y de vuelta, con lo "muted" siempre al final de su nivel.
+//  - Cada estado de la ventana al tamano minimo, en ingles y en espanol: los botones de la barra de abajo
+//    entran enteros, sin pisarse, y el texto de la barra no queda cortado.
+int runCleanupSortProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const auto settle = []() {
+        for (int i = 0; i < 5; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    };
+
+    // ---- La lista sola: clicks en el encabezado.
+    {
+        QWidget host;
+        auto *layout = new QVBoxLayout(&host);
+        layout->setContentsMargins(0, 0, 0, 0);
+        auto *list = new SizeListView(&host);
+        list->setTree(false);
+        list->setColumns(QStringLiteral("Name"), {{QStringLiteral("Size"), 84, SizeListColumn::Kind::Size},
+                                                  {QStringLiteral("Modified"), 72, SizeListColumn::Kind::Text}});
+        QList<SizeListRow> rows;
+        for (int i = 0; i < 3; ++i) {
+            SizeListRow row;
+            row.id = QStringLiteral("r%1").arg(i);
+            row.name = QStringLiteral("file%1.bin").arg(i);
+            row.cells = {QStringLiteral("1.00 GB"), QStringLiteral("3 d")};
+            rows.append(row);
+        }
+        list->setRows(rows);
+        layout->addWidget(list);
+        host.resize(600, 200);
+        host.show();
+        settle();
+        QList<int> requested;
+        QObject::connect(list, &SizeListView::sortRequested, [&requested](int column) { requested.append(column); });
+        QWidget *viewport = list->viewport();
+        const auto press = [viewport](QEvent::Type type, const QPoint &pos) {
+            QMouseEvent event(type, QPointF(pos), viewport->mapToGlobal(QPointF(pos)), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(viewport, &event);
+        };
+        const int headerY = SizeListView::kHeaderHeight / 2;
+        const int width = viewport->width();
+        // Columnas contra el borde derecho: Modified termina en width-16, Size 12 + 72 antes.
+        const int modifiedX = width - 16 - 10;
+        const int sizeX = width - 16 - 72 - 12 - 10;
+        check(list->headerColumnAt(30) == SizeListView::kNameColumn && list->headerColumnAt(sizeX) == 0
+                  && list->headerColumnAt(modifiedX) == 1 && list->headerColumnAt(width - 4) == SizeListView::kNoColumn,
+              QStringLiteral("cada zona del encabezado es su columna (nombre, Size, Modified; el margen, ninguna)"));
+        press(QEvent::MouseButtonPress, QPoint(30, headerY));
+        press(QEvent::MouseButtonPress, QPoint(sizeX, headerY));
+        press(QEvent::MouseButtonPress, QPoint(modifiedX, headerY));
+        check(requested == QList<int>({SizeListView::kNameColumn, 0, 1}),
+              QStringLiteral("un click en cada titulo pide ordenar por esa columna"));
+        requested.clear();
+        press(QEvent::MouseButtonPress, QPoint(30, SizeListView::kHeaderHeight + SizeListView::kRowHeight / 2));
+        check(requested.isEmpty() && list->selectedIds() == QStringList({QStringLiteral("r0")}),
+              QStringLiteral("un click en una fila la elige y no ordena"));
+        press(QEvent::MouseButtonPress, QPoint(sizeX, headerY));
+        press(QEvent::MouseButtonDblClick, QPoint(sizeX, headerY));
+        check(requested == QList<int>({0, 0}), QStringLiteral("dos clicks rapidos en un titulo son dos pedidos"));
+        QMouseEvent move(QEvent::MouseMove, QPointF(sizeX, headerY), viewport->mapToGlobal(QPointF(sizeX, headerY)), Qt::NoButton,
+                         Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(viewport, &move);
+        check(viewport->cursor().shape() == Qt::PointingHandCursor, QStringLiteral("el titulo muestra la mano"));
+        list->setSort(1, false);
+        check(list->sortColumn() == 1 && !list->sortDescending(), QStringLiteral("setSort guarda columna y sentido"));
+        list->setInteractive(false);
+        requested.clear();
+        press(QEvent::MouseButtonPress, QPoint(sizeX, headerY));
+        check(requested.isEmpty(), QStringLiteral("sin interaccion (captura, borrando) el encabezado no ordena"));
+    }
+
+    // ---- Un texto con el lugar justo no se recorta (con el tamano de interfaz 1 o 2 los anchos tienen
+    // decimales; correr la sonda tambien con --ui-scale 1).
+    {
+        QWidget host;
+        auto *label = new ElidedLabel(&host);
+        label->setObjectName(QStringLiteral("meterText"));
+        host.show();
+        int cut = 0;
+        QString firstCut;
+        const QStringList texts = {QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Temp\\work\\C--Portable-LGA-ShotDocs"),
+                                   QStringLiteral("C:\\Users\\lega\\AppData\\Local\\UA Midi Control"),
+                                   QStringLiteral("C:\\Users\\lega\\AppData\\Local\\npm-cache"),
+                                   QStringLiteral("C:\\$Recycle.Bin\\S-1-5-21-1907397018-2288654118-380003385-1001"),
+                                   QStringLiteral("Scanned today 12:41 · 4.69 M files · 7 s")};
+        for (int extra = 0; extra < 40; ++extra) {
+            for (const QString &base : texts) {
+                const QString text = base + QString(extra, QLatin1Char('x'));
+                label->setText(text);
+                label->resize(label->sizeHint());
+                if (label->shownText() != text) {
+                    ++cut;
+                    firstCut = firstCut.isEmpty() ? text : firstCut;
+                }
+            }
+        }
+        check(cut == 0, QStringLiteral("un texto en el ancho de su sizeHint no se recorta (%1 de 200 cortados%2)")
+                            .arg(cut)
+                            .arg(firstCut.isEmpty() ? QString() : QStringLiteral(": ") + firstCut));
+    }
+
+    // ---- La ventana con datos fijos.
+    const auto namesInOrder = [](const QList<SizeListRow> &rows, bool descending) {
+        // Hermanos de cada nivel (las filas "muted" no cuentan): cada uno respecto del anterior del mismo nivel.
+        QHash<int, QString> last;
+        for (const SizeListRow &row : rows) {
+            for (auto it = last.begin(); it != last.end();) {
+                it = it.key() > row.depth ? last.erase(it) : std::next(it);
+            }
+            if (row.muted) {
+                continue;
+            }
+            if (last.contains(row.depth)) {
+                const int order = QString::compare(last.value(row.depth), row.name, Qt::CaseInsensitive);
+                if (descending ? order < 0 : order > 0) {
+                    return false;
+                }
+            }
+            last.insert(row.depth, row.name);
+        }
+        return true;
+    };
+    const auto mutedLast = [](const QList<SizeListRow> &rows) {
+        // Una fila "muted" cierra su nivel: la que sigue es de un nivel de arriba (o no hay).
+        for (int i = 0; i + 1 < rows.size(); ++i) {
+            if (rows.at(i).muted && rows.at(i + 1).depth >= rows.at(i).depth && !rows.at(i + 1).muted) {
+                return false;
+            }
+        }
+        return true;
+    };
+    const auto ids = [](const QList<SizeListRow> &rows) {
+        QStringList out;
+        for (const SizeListRow &row : rows) {
+            out.append(row.id);
+        }
+        return out;
+    };
+    {
+        DiskState state(nullptr);
+        CleanupWindow window(&state, nullptr, true);
+        window.applyFixture(QStringLiteral("folders"));
+        SizeListView *folders = window.listForTab(CleanupWindow::Folders);
+        const QStringList bySize = ids(folders->rows());
+        check(folders->rows().size() > 5 && folders->sortColumn() == 0 && folders->sortDescending(),
+              QStringLiteral("Folders arranca ordenada por Size, de mayor a menor (%1 filas)").arg(folders->rows().size()));
+        window.sortList(CleanupWindow::Folders, SizeListView::kNameColumn);
+        check(folders->sortColumn() == SizeListView::kNameColumn && !folders->sortDescending() && namesInOrder(folders->rows(), false)
+                  && mutedLast(folders->rows()) && folders->rows().size() == bySize.size(),
+              QStringLiteral("Folders por nombre: A-Z en cada nivel, lo gris al final, las mismas filas"));
+        window.sortList(CleanupWindow::Folders, SizeListView::kNameColumn);
+        check(folders->sortDescending() && namesInOrder(folders->rows(), true) && mutedLast(folders->rows()),
+              QStringLiteral("Folders, segundo click en Name: Z-A"));
+        window.sortList(CleanupWindow::Folders, 0);
+        check(ids(folders->rows()) == bySize && folders->sortDescending(), QStringLiteral("Folders, de vuelta a Size: el orden de fabrica"));
+        window.sortList(CleanupWindow::Folders, 0);
+        QStringList reversedTop;
+        for (const SizeListRow &row : folders->rows()) {
+            if (row.depth == 0 && !row.muted) {
+                reversedTop.prepend(row.id);
+            }
+        }
+        QStringList top;
+        for (const QString &id : bySize) {
+            for (const SizeListRow &row : folders->rows()) {
+                if (row.id == id && row.depth == 0 && !row.muted) {
+                    top.append(id);
+                }
+            }
+        }
+        check(!folders->sortDescending() && reversedTop == top, QStringLiteral("Folders, segundo click en Size: de menor a mayor"));
+        window.sortList(CleanupWindow::Folders, 3);
+        check(folders->sortColumn() == 3 && folders->sortDescending() && mutedLast(folders->rows()),
+              QStringLiteral("Folders por Modified: lo mas nuevo primero"));
+        window.sortList(CleanupWindow::Folders, 9);
+        check(folders->sortColumn() == 3, QStringLiteral("una columna que no existe no cambia nada"));
+
+        // Escaneando no hay Modified: se ve Size, y un click en Size invierte lo que se ve.
+        window.applyFixture(QStringLiteral("scanning"));
+        check(folders->sortColumn() == 0 && folders->sortDescending(), QStringLiteral("escaneando, lo ordenado por Modified se ve por Size"));
+        window.sortList(CleanupWindow::Folders, 0);
+        check(folders->sortColumn() == 0 && !folders->sortDescending(),
+              QStringLiteral("escaneando, el primer click en Size invierte lo que se ve"));
+
+        window.applyFixture(QStringLiteral("files"));
+        SizeListView *files = window.listForTab(CleanupWindow::Files);
+        const int fileCount = int(files->rows().size());
+        window.sortList(CleanupWindow::Files, SizeListView::kNameColumn);
+        check(fileCount > 3 && namesInOrder(files->rows(), false) && files->rows().size() == fileCount,
+              QStringLiteral("Largest files por nombre: A-Z, los mismos %1 archivos").arg(fileCount));
+
+        window.applyFixture(QStringLiteral("changes"));
+        SizeListView *changes = window.listForTab(CleanupWindow::Changes);
+        const QStringList byChange = ids(changes->rows());
+        window.sortList(CleanupWindow::Changes, SizeListView::kNameColumn);
+        check(byChange.size() > 2 && namesInOrder(changes->rows(), false), QStringLiteral("What changed por carpeta: A-Z"));
+        window.sortList(CleanupWindow::Changes, 0);
+        check(ids(changes->rows()) == byChange, QStringLiteral("What changed por Change: lo que mas crecio primero, como de fabrica"));
+        window.sortList(CleanupWindow::Changes, 1);
+        check(changes->sortColumn() == 1 && changes->rows().size() == byChange.size(), QStringLiteral("What changed por Size now"));
+    }
+
+    // ---- Al tamano minimo, en los dos idiomas.
+    const I18n::Language before = I18n::language();
+    for (const I18n::Language language : {I18n::Language::English, I18n::Language::Spanish}) {
+        I18n::setLanguage(language);
+        const QString lang = language == I18n::Language::Spanish ? QStringLiteral("es") : QStringLiteral("en");
+        for (const QString &fixture : CleanupWindow::fixtureStates()) {
+            DiskState state(nullptr);
+            CleanupWindow window(&state, nullptr, true);
+            window.applyFixture(fixture);
+            window.setMinimumSize(0, 0);
+            window.setFixedSize(CleanupWindow::kMinWidth, CleanupWindow::kMinHeight);
+            window.show();
+            settle();
+            auto *bar = window.findChild<QFrame *>(QStringLiteral("actionBar"));
+            QList<QWidget *> parts;
+            for (QWidget *child : bar->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly)) {
+                if (child->isVisible()) {
+                    parts.append(child);
+                }
+            }
+            std::sort(parts.begin(), parts.end(), [](QWidget *a, QWidget *b) { return a->x() < b->x(); });
+            bool fits = !parts.isEmpty() && parts.last()->geometry().right() < bar->width() - 8;
+            QString squeezed;
+            for (int i = 0; i < parts.size(); ++i) {
+                QWidget *part = parts.at(i);
+                const int wanted = qobject_cast<QLabel *>(part) ? part->minimumSizeHint().width() : part->sizeHint().width();
+                if (part->width() < wanted) {
+                    fits = false;
+                    squeezed += QStringLiteral(" %1(%2<%3)").arg(part->objectName()).arg(part->width()).arg(wanted);
+                }
+                if (i > 0 && parts.at(i - 1)->geometry().right() >= part->x()) {
+                    fits = false;
+                }
+            }
+            check(fits, QStringLiteral("%1, %2 al minimo (%3x%4): la barra de abajo entra entera%5")
+                            .arg(fixture, lang)
+                            .arg(CleanupWindow::kMinWidth)
+                            .arg(CleanupWindow::kMinHeight)
+                            .arg(squeezed));
+        }
+    }
+    I18n::setLanguage(before);
+
+    // ---- La ventana de verdad (sin abrirla en un disco): estirable, con su minimo.
+    {
+        DiskState state(nullptr);
+        CleanupWindow window(&state, nullptr, false);
+        check(window.minimumSize() == QSize(CleanupWindow::kMinWidth, CleanupWindow::kMinHeight)
+                  && window.maximumSize().width() > CleanupWindow::kWidth && window.size() == QSize(CleanupWindow::kWidth, CleanupWindow::kHeight),
+              QStringLiteral("la ventana se estira: minimo %1x%2, arranca en %3x%4")
+                  .arg(CleanupWindow::kMinWidth)
+                  .arg(CleanupWindow::kMinHeight)
+                  .arg(CleanupWindow::kWidth)
+                  .arg(CleanupWindow::kHeight));
+    }
+
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "cleanup-sort ok" : "cleanup-sort FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -1129,6 +1406,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("tray-icon")) {
         return runTrayIconProbe();
+    }
+    if (probe == QLatin1String("cleanup-sort")) {
+        return runCleanupSortProbe();
     }
     if (probe != QLatin1String("threshold-focus")) {
         fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));
