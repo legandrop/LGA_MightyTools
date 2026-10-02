@@ -116,6 +116,10 @@
             </dict>
         </dict>
     </array>
+    <!-- Folder Switch (D-40) le pregunta al Finder la carpeta de su ventana del frente por Apple Events:
+         macOS muestra este texto la primera vez, al pedir el permiso de Automatizacion. -->
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Folder Switch reads the folder open in Finder to take file dialogs there.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Lega Pugliese</string>
 </dict>

@@ -3,7 +3,11 @@
 #include "ui/UiWidgets.h"
 #include "core/I18n.h"
 
+#include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QEventLoop>
+#include <QDebug>
+#include <QTimer>
 #include <QGuiApplication>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -11,7 +15,11 @@
 #include <QPainterPath>
 #include <QScreen>
 
+#ifdef Q_OS_WIN
 #include <windows.h>
+#else
+#include "platform/WindowActivation.h"
+#endif
 
 // Copia de LGA_FolderSwitch (src/ui/RecentFoldersPopup.cpp): misma geometria y el mismo dibujo a
 // mano, con los colores reemplazados por su token de Theme (tarjeta, badges y el hover de fila,
@@ -51,7 +59,11 @@ QString emptyTitle()
 
 QString emptyText()
 {
+#ifdef Q_OS_MACOS
+    return I18n::tr("Open a folder in Finder, then come back to this dialog.");
+#else
     return I18n::tr("Open a folder in Explorer or XYplorer, then come back to this dialog.");
+#endif
 }
 
 // Ancho del texto del estado vacio: la tarjeta menos su relleno, el icono y los aires.
@@ -79,6 +91,17 @@ QColor badgeHoverColor() { return Theme::color(Theme::kPrimaryBorder); }
 // "C:\A\B\carpeta\" -> {"carpeta", "C:\A\B"}; una raiz "N:\" queda entera como nombre.
 QPair<QString, QString> splitFolder(QString path)
 {
+#ifdef Q_OS_MACOS
+    // macOS: "/Users/x/carpeta/" -> {"carpeta", "/Users/x"}; "/" queda entera.
+    while (path.size() > 1 && path.endsWith(QLatin1Char('/'))) {
+        path.chop(1);
+    }
+    const int cut = path.lastIndexOf(QLatin1Char('/'));
+    if (cut < 0 || path.size() == 1) {
+        return {path, QString()};
+    }
+    return {path.mid(cut + 1), cut == 0 ? QStringLiteral("/") : path.left(cut)};
+#endif
     path.replace(QLatin1Char('/'), QLatin1Char('\\'));
     while (path.size() > 3 && path.endsWith(QLatin1Char('\\'))) {
         path.chop(1);
@@ -97,7 +120,15 @@ QPair<QString, QString> splitFolder(QString path)
 } // namespace
 
 RecentFoldersPopup::RecentFoldersPopup(const QStringList &folders, QWidget *parent)
+#ifdef Q_OS_MACOS
+    // macOS: Qt arma un Qt::Popup como un panel que nunca recibe el teclado (canBecomeKeyWindow NO), y
+    // desde un atajo global la app no puede pasar al frente. Como Qt::Tool si puede: toma el teclado sin
+    // activar la app (WindowActivation::takeKeyboardWithoutActivating) y se cierra al perder el foco
+    // (changeEvent), que es lo que el Qt::Popup hacia con el click afuera.
+    : QWidget(parent, Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint | Qt::WindowStaysOnTopHint)
+#else
     : QWidget(parent, Qt::Popup | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint)
+#endif
     , m_folders(folders)
 {
     setAttribute(Qt::WA_TranslucentBackground);
@@ -164,7 +195,20 @@ QString RecentFoldersPopup::exec(const QPoint &pos)
     show();
     // Una app en segundo plano no recibe el click de afuera (que cierra el popup) ni las teclas si
     // su ventana no pasa a primer plano. WM_HOTKEY le da a este proceso el permiso para hacerlo.
+#ifdef Q_OS_WIN
     SetForegroundWindow(reinterpret_cast<HWND>(winId()));
+#else
+    // macOS: la app vive en la barra de menu y macOS no la deja pasar al frente desde un atajo global:
+    // el popup toma el teclado como un panel de Spotlight, sin activar la app.
+    WindowActivation::takeKeyboardWithoutActivating(winId());
+    // Red de seguridad: si no llego a tomar el teclado, no hay Esc ni "perder el foco" que lo cierre.
+    QTimer::singleShot(1000, this, [this]() {
+        if (isVisible() && !m_hadFocus) {
+            qWarning() << "[folderSwitch] El popup de recientes no tomo el teclado: se cierra";
+            hide();
+        }
+    });
+#endif
     activateWindow();
 
     QEventLoop loop;
@@ -180,6 +224,20 @@ void RecentFoldersPopup::choose(int index)
         m_chosen = m_folders.at(index);
     }
     hide();
+}
+
+void RecentFoldersPopup::changeEvent(QEvent *event)
+{
+#ifdef Q_OS_MACOS
+    // Ver el constructor: en mac el popup es Qt::Tool y no se cierra solo con un click afuera.
+    if (event->type() == QEvent::ActivationChange && isVisible() && m_hadFocus && !isActiveWindow()) {
+        hide();
+    }
+    if (event->type() == QEvent::ActivationChange && isActiveWindow()) {
+        m_hadFocus = true;
+    }
+#endif
+    QWidget::changeEvent(event);
 }
 
 void RecentFoldersPopup::hideEvent(QHideEvent *event)

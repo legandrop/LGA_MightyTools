@@ -51,8 +51,13 @@ FolderSwitchPanel::FolderSwitchPanel(QWidget *parent)
 
     m_status = new StatusCard(this);
     column->addWidget(m_status);
-    connect(m_status->button(), &QPushButton::clicked, this,
-            [this]() { emit toggleRequested(!m_state.enabled); });
+    connect(m_status->button(), &QPushButton::clicked, this, [this]() {
+        if (m_state.needsAccessibility) {
+            emit accessibilityRequested();
+        } else {
+            emit toggleRequested(!m_state.enabled);
+        }
+    });
 
     column->addWidget(buildShortcutsCard());
     m_lastCard = buildLastFolderCard();
@@ -137,7 +142,12 @@ void FolderSwitchPanel::setState(const ViewState &state)
 
     // Tarjeta de estado: solo dos formas (on / paused), sin variante de error -- el atajo tomado se
     // ve en su propia fila, mas abajo (canvas, "Folder Switch · estados").
-    if (state.enabled) {
+    if (state.needsAccessibility) {
+        // macOS, como Nuke Shortcuts: sin el permiso no se leen los dialogos ni se les escribe.
+        m_status->set(QStringLiteral("warn"), I18n::tr("Accessibility access needed"),
+                      I18n::tr("Needed to read file dialogs and type the folder."), I18n::tr("Open Settings"),
+                      QStringLiteral("primary"), QStringLiteral("warn"));
+    } else if (state.enabled) {
         m_status->set(QStringLiteral("on"), I18n::tr("Switching is on"),
                       I18n::tr("Dialogs jump to the last folder you used."), I18n::tr("Pause"),
                       QString(), QString());
@@ -192,7 +202,11 @@ void FolderSwitchPanel::updateLastFolderCard()
     QString caption;
     QString tone;
     if (!valid) {
+#ifdef Q_OS_MACOS
+        caption = I18n::tr("Open a folder in Finder, then go to a file dialog.");
+#else
         caption = I18n::tr("Open a folder in Explorer, then go to a file dialog.");
+#endif
     } else if (!m_state.lastSwitch.applied) {
         caption = m_state.manualRegistered
                       ? I18n::tr("The dialog didn't take it. Retry with %1.").arg(m_state.manualShortcut.displayText())

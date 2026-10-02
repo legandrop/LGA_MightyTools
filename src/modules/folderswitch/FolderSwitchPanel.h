@@ -35,6 +35,9 @@ public:
         bool manualRegistered = true;
         bool recentRegistered = true;
         FolderSwitchState::LastSwitch lastSwitch;
+        // macOS: falta el permiso de Accesibilidad (leer los dialogos y escribirles la carpeta). En
+        // Windows siempre false.
+        bool needsAccessibility = false;
     };
 
     explicit FolderSwitchPanel(QWidget *parent = nullptr);
@@ -47,6 +50,8 @@ public:
 
 signals:
     void toggleRequested(bool on);
+    // macOS: "Open Settings" de la tarjeta de estado cuando falta el permiso de Accesibilidad.
+    void accessibilityRequested();
     void autoSwitchToggled(bool on);
     void manualShortcutRecorded(const Shortcut &shortcut);
     void recentShortcutRecorded(const Shortcut &shortcut);

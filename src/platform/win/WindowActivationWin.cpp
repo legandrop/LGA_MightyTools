@@ -15,4 +15,8 @@ void onReopenRequested(std::function<void()>)
 {
 }
 
+void takeKeyboardWithoutActivating(quintptr)
+{
+}
+
 } // namespace WindowActivation

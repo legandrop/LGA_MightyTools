@@ -9,6 +9,8 @@
 
 #if defined(Q_OS_WIN)
 #include "modules/folderswitch/FolderSwitchModule.h"
+#elif defined(Q_OS_MACOS)
+#include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
 #endif
 
 // Una linea por herramienta, en el orden de la lista de la ventana. Cada modulo declara su
@@ -23,7 +25,7 @@ QList<ModuleDescriptor> all()
     list << openInNukeXDescriptor();
     list << nukeShortcutsDescriptor();
     list << diskSpaceDescriptor();
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     list << folderSwitchDescriptor();
 #endif
     list << linkRedirectorDescriptor();
@@ -48,7 +50,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("nukeShortcuts"), &nukeShortcutsHelp);
     providers.insert(QStringLiteral("diskSpace"), &diskSpaceHelp);
     providers.insert(QStringLiteral("openInNukeX"), &openInNukeXHelp);
-#if defined(Q_OS_WIN)
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     providers.insert(QStringLiteral("folderSwitch"), &folderSwitchHelp);
 #endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);

@@ -39,6 +39,7 @@ protected:
     void leaveEvent(QEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void hideEvent(QHideEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 private:
     QRect cardRect() const;
@@ -50,6 +51,8 @@ private:
     int m_current = -1;
     QString m_chosen;
     QEventLoop *m_loop = nullptr;
+    // macOS: ya tomo el teclado una vez (perderlo despues lo cierra).
+    bool m_hadFocus = false;
 };
 
 #endif // MIGHTYTOOLS_FOLDERSWITCH_RECENTFOLDERSPOPUP_H

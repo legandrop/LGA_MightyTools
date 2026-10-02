@@ -70,9 +70,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 6. **Fase 8: macOS, en curso desde la Mac de Lega (2026-10-02).** Hecho y probado por Lega en la Mac (v1.15): la
    app compila, se instala con `deploy.sh` (D-38) y andan Nuke Shortcuts (con el Nuke Bridge), Disk Space
    (vigilancia y avisos), Open in NukeX y Link Redirector. Falta, en este orden:
-   - **Folder Switch** (no existe en mac; D-40): leer la carpeta del Finder, detectar el panel
-     Abrir/Guardar nativo y el navegador de Nuke por Accesibilidad, y llevarles la carpeta. Reemplaza a
-     Default Folder X.
+   - **Folder Switch en mac (v1.16, D-40): hecho y probado** con Nuke 17 y TextEdit (automático, manual
+     y recientes). Falta: que Lega apague Default Folder X y lo use en el día a día; sin probar todavía el
+     cartel del permiso de Automatización por la ruta nueva (en otro hilo), el Guardar como hoja y el
+     popup con click afuera. El ícono, las viñetas y los atajos configurados del descriptor están
+     copiados entre `FolderSwitchModule.cpp` (Windows) y `mac/FolderSwitchMacModule.cpp`: unificarlos en
+     un archivo común la próxima vez que se compile en Windows.
    - **Disk Space completo:** la ventana de limpieza está apagada en mac (`cleanupSupported()`): reglas
      propias de mac, Papelera (`RecycleBinMac`), «Show in Finder»; y estirar la ventana
      (`WindowFrameMac`).

@@ -41,4 +41,21 @@ void onReopenRequested(std::function<void()> handler)
                                                         andEventID:kAEReopenApplication];
 }
 
+void takeKeyboardWithoutActivating(quintptr winId)
+{
+    NSView *view = (__bridge NSView *)reinterpret_cast<void *>(winId);
+    NSWindow *window = view.window;
+    if (!window) {
+        return;
+    }
+    // Solo un NSPanel puede ser "nonactivating" (Qt usa NSPanel para Qt::Popup).
+    if ([window isKindOfClass:[NSPanel class]]) {
+        window.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+        static_cast<NSPanel *>(window).becomesKeyOnlyIfNeeded = NO;
+        // Qt::Tool se esconde cuando la app no esta activa; aca la app nunca se activa.
+        window.hidesOnDeactivate = NO;
+    }
+    [window makeKeyAndOrderFront:nil];
+}
+
 } // namespace WindowActivation

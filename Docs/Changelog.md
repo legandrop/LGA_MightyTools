@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.16:
+
+Folder Switch no existía en macOS (D-40). Ahora hace lo mismo que en Windows: al ir del diálogo al Finder
+y volver, el diálogo salta a la carpeta del Finder; ⌥⌘O lo hace de inmediato y ⌥⇧⌘O abre las carpetas
+recientes. Anda en los diálogos nativos de macOS (Cmd+Shift+G, la ruta y Return) y en el navegador de
+Nuke (la ruta en su campo, como en Windows). La carpeta se le pregunta al Finder por Apple Events: el
+permiso se pide en otro hilo, porque mandado desde la interfaz la congelaba mientras el cartel estaba
+abierto. El popup de recientes en mac es una ventana de herramienta: como popup, macOS nunca le daba el
+teclado. Probado por Lega con Nuke 17 y TextEdit.
+[ Folder Switch - Port a macOS ]
+
 v1.15:
 
 En macOS la app no compilaba (el updater de Windows quedaba afuera del `#ifdef`) y, compilada, fallaba

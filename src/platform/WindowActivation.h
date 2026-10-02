@@ -1,6 +1,8 @@
 #ifndef MIGHTYTOOLS_WINDOWACTIVATION_H
 #define MIGHTYTOOLS_WINDOWACTIVATION_H
 
+#include <QtGlobal>
+
 #include <functional>
 
 // Pasar el frente a otro proceso. Windows solo deja que un proceso traiga su ventana al frente si el
@@ -17,6 +19,12 @@ void allowAnyProcessToActivate();
 // handler se llama en el hilo de la interfaz. En Windows no hace nada: ahi la segunda copia arranca y
 // le pide la ventana a la residente por la instancia unica.
 void onReopenRequested(std::function<void()> handler);
+
+// macOS: la ventana `winId` (ya mostrada) recibe el teclado SIN activar la app, como los paneles de
+// Spotlight o Raycast. Lo usa el popup de recientes de Folder Switch: desde un atajo global macOS 14+ no
+// deja que esta app pase al frente, y sin esto las teclas (1-9, Enter, Esc) le llegaban a la app del
+// dialogo. En Windows no hace nada (ahi el popup usa SetForegroundWindow con el permiso de WM_HOTKEY).
+void takeKeyboardWithoutActivating(quintptr winId);
 
 } // namespace WindowActivation
 

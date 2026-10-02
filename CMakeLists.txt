@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.15 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.16 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -338,6 +338,14 @@ elseif(APPLE)
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/modules/linkredirector/mac/ProcessLatencyMac.cpp
         src/modules/openinnukex/mac/MacFileAssociation.mm
+        # Folder Switch en mac (D-40): la logica, el estado, el panel y el popup son los mismos de
+        # Windows; el modulo y lo de Accesibilidad/Finder son propios de mac.
+        src/modules/folderswitch/FolderSwitchLogic.cpp
+        src/modules/folderswitch/FolderSwitchPanel.cpp
+        src/modules/folderswitch/FolderSwitchState.cpp
+        src/modules/folderswitch/RecentFoldersPopup.cpp
+        src/modules/folderswitch/mac/FolderSwitchMacModule.cpp
+        src/modules/folderswitch/mac/MacFileDialogs.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/DirEnumeratorMac.cpp
@@ -360,6 +368,12 @@ elseif(APPLE)
     )
     list(APPEND HEADERS
         src/modules/openinnukex/mac/MacFileAssociation.h
+        src/modules/folderswitch/FolderSwitchLogic.h
+        src/modules/folderswitch/FolderSwitchPanel.h
+        src/modules/folderswitch/FolderSwitchState.h
+        src/modules/folderswitch/RecentFoldersPopup.h
+        src/modules/folderswitch/mac/FolderSwitchMacModule.h
+        src/modules/folderswitch/mac/MacFileDialogs.h
     )
 endif()
 
@@ -408,6 +422,7 @@ elseif(APPLE)
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/WindowActivationMac.mm
+        src/modules/folderswitch/mac/MacFileDialogs.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 
