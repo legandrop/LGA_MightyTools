@@ -68,8 +68,18 @@ void setDockIconVisible(bool visible)
     [NSApp setActivationPolicy:wanted];
     if (visible) {
         // Al pasar a app normal, macOS no la trae al frente sola: la ventana recien mostrada quedaria
-        // detras de la app que estaba activa.
-        [NSApp activateIgnoringOtherApps:YES];
+        // detras de la app que estaba activa. Y el selector de Cmd+Tab no se entera: la app ya era la
+        // activa (como app de barra de menu), activarla de nuevo no es un cambio y la deja ULTIMA en vez
+        // de segunda al pasar a otra app. El arreglo conocido: un instante de frente al Dock y de vuelta
+        // a la app, asi el selector ve una activacion de verdad (y aparece el menu de la app).
+        NSRunningApplication *dock =
+            [NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.apple.dock"].firstObject;
+        [dock activateWithOptions:0];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, int64_t(100 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+            if (NSApp.activationPolicy == NSApplicationActivationPolicyRegular) {
+                [NSApp activateIgnoringOtherApps:YES];
+            }
+        });
     }
 }
 

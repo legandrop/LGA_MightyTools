@@ -135,7 +135,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   aparece, eso no está bien»). La app es de barra de menú (sin Dock), y al pasar a otra app su ventana
   quedaba tapada sin forma de volver salvo el ícono de la barra. Con una ventana de la app abierta
   (la principal o la de limpieza) aparece en el Dock y en Cmd+Tab, con su menú; al cerrarlas vuelve a
-  ser solo de barra de menú.
+  ser solo de barra de menú. Al pasar a otra app queda segunda en Cmd+Tab, como cualquier app (v1.29).
 
 ## Abiertas
 

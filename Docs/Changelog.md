@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.29:
+
+Con la v1.28, al abrir la ventana desde el ícono de la barra y pasar a otra app, Mighty Tools quedaba
+última en Cmd+Tab en vez de segunda (Lega). La app ya era la activa (como app de barra de menú) cuando
+pasaba a app normal, así que activarla de nuevo no era un cambio para el selector, que la agregaba al
+final. Ahora, al pasar a app normal, se le da un instante de frente al Dock y se vuelve a activar la app:
+el selector registra una activación de verdad. Reproducido y verificado en la instalada con capturas del
+selector (abierta desde la barra de menú, TextEdit al frente: antes última, ahora segunda).
+[ macOS - Segunda en Cmd+Tab al pasar a otra app ]
+
 v1.28:
 
 En la Mac, al pasar a otra app la ventana de Mighty Tools «desaparecía»: no se escondía (sigue en
