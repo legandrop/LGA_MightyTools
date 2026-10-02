@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.28:
+
+En la Mac, al pasar a otra app la ventana de Mighty Tools «desaparecía»: no se escondía (sigue en
+pantalla), quedaba tapada, y como la app es de barra de menú (`LSUIElement`) no estaba en el Dock ni en
+Cmd+Tab: la única forma de volver era el ícono de la barra (Lega). Ahora, mientras haya una ventana de la
+app abierta, la política de activación pasa a la de una app normal (Dock, Cmd+Tab y menú propio) y al
+cerrarlas vuelve a accesorio (D-46, `WindowActivation::setDockIconVisible`). Con menú propio, «Quit»
+llega como `QEvent::Quit`, que primero cierra las ventanas y la principal se esconde en vez de cerrarse:
+se la esconde antes para que la salida siga. Probado en la instalada: abierta = Foreground, cerrada =
+UIElement, Quit sale.
+[ macOS - En el Dock mientras la ventana está abierta ]
+
 v1.27:
 
 El chequeo de updates corría una sola vez, 15 s después de arrancar, y la app vive en la bandeja días

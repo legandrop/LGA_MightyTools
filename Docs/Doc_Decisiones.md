@@ -131,6 +131,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   fraccionaria (el 1 de fábrica da 2,2 en una Retina: perdía la negrita y dejaba una línea de texto
   cortada debajo de lo libre en Disk Space); macOS ya tiene su escala en Ajustes > Pantallas. Windows
   sigue con 0, 1 y 2 (D-35).
+- **D-46 · macOS: en el Dock mientras la ventana está abierta** (2026-10-02, Lega: «con command tab tampoco
+  aparece, eso no está bien»). La app es de barra de menú (sin Dock), y al pasar a otra app su ventana
+  quedaba tapada sin forma de volver salvo el ícono de la barra. Con una ventana de la app abierta
+  (la principal o la de limpieza) aparece en el Dock y en Cmd+Tab, con su menú; al cerrarlas vuelve a
+  ser solo de barra de menú.
 
 ## Abiertas
 

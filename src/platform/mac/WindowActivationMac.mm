@@ -58,4 +58,19 @@ void takeKeyboardWithoutActivating(quintptr winId)
     [window makeKeyAndOrderFront:nil];
 }
 
+void setDockIconVisible(bool visible)
+{
+    const NSApplicationActivationPolicy wanted =
+        visible ? NSApplicationActivationPolicyRegular : NSApplicationActivationPolicyAccessory;
+    if (NSApp.activationPolicy == wanted) {
+        return;
+    }
+    [NSApp setActivationPolicy:wanted];
+    if (visible) {
+        // Al pasar a app normal, macOS no la trae al frente sola: la ventana recien mostrada quedaria
+        // detras de la app que estaba activa.
+        [NSApp activateIgnoringOtherApps:YES];
+    }
+}
+
 } // namespace WindowActivation

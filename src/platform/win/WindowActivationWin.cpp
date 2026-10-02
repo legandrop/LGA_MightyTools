@@ -19,4 +19,9 @@ void takeKeyboardWithoutActivating(quintptr)
 {
 }
 
+void setDockIconVisible(bool visible)
+{
+    Q_UNUSED(visible);
+}
+
 } // namespace WindowActivation

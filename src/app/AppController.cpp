@@ -496,6 +496,23 @@ void AppController::showSettings()
 
 bool AppController::eventFilter(QObject *watched, QEvent *event)
 {
+#ifdef Q_OS_MACOS
+    // D-46: con una ventana de la app a la vista, icono en el Dock y lugar en Cmd+Tab. Se recalcula
+    // despues del evento (la ventana ya cambio de estado) y solo para ventanas de verdad: los popups,
+    // los tooltips y el popup de Folder Switch (Qt::Tool) no cuentan.
+    if ((event->type() == QEvent::Show || event->type() == QEvent::Hide) && watched->isWidgetType()) {
+        auto *widget = static_cast<QWidget *>(watched);
+        if (widget->isWindow() && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog)) {
+            QTimer::singleShot(0, this, &AppController::refreshDockIcon);
+        }
+    }
+    // Con icono en el Dock la app tiene su menu, y "Quit" (o Cmd+Q, o cerrar la sesion) llega como
+    // QEvent::Quit, que primero cierra las ventanas: la principal se esconde en vez de cerrarse y la
+    // salida se cancelaria. Se esconde antes para que la salida siga.
+    if (watched == qApp && event->type() == QEvent::Quit && m_window) {
+        m_window->hide();
+    }
+#endif
     if (event->type() == QEvent::FileOpen) {
         // mac: un .nk o un link que llega a la app residente.
         auto *open = static_cast<QFileOpenEvent *>(event);
@@ -526,6 +543,19 @@ bool AppController::openExternal(const QString &argument)
         d->runExternal(request);
     }
     return true;
+}
+
+void AppController::refreshDockIcon()
+{
+    bool anyOpen = false;
+    for (QWidget *widget : QApplication::topLevelWidgets()) {
+        if (widget->isVisible() && !widget->testAttribute(Qt::WA_DontShowOnScreen)
+            && (widget->windowType() == Qt::Window || widget->windowType() == Qt::Dialog)) {
+            anyOpen = true;
+            break;
+        }
+    }
+    WindowActivation::setDockIconVisible(anyOpen);
 }
 
 void AppController::quit()

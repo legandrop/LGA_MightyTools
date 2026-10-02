@@ -62,6 +62,8 @@ public slots:
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
+    // macOS: icono en el Dock mientras haya una ventana de la app abierta (D-46).
+    void refreshDockIcon();
 
 private:
     void onToggleRequested(const QString &id, bool on);

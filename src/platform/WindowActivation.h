@@ -26,6 +26,11 @@ void onReopenRequested(std::function<void()> handler);
 // dialogo. En Windows no hace nada (ahi el popup usa SetForegroundWindow con el permiso de WM_HOTKEY).
 void takeKeyboardWithoutActivating(quintptr winId);
 
+// macOS: icono en el Dock y lugar en Cmd+Tab mientras una ventana de la app esta abierta (D-46). La app
+// es de barra de menu (LSUIElement): sin esto, otra app la tapaba y no habia como volver salvo el icono
+// de la barra. Con `visible` false vuelve a ser solo de barra de menu. En Windows no hace nada.
+void setDockIconVisible(bool visible);
+
 } // namespace WindowActivation
 
 #endif // MIGHTYTOOLS_WINDOWACTIVATION_H
