@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.18:
+
+Nuke Shortcuts y Open in NukeX figuraban «Activa» y «Asociado» aunque faltara su plugin dentro de Nuke, y
+sin él la herramienta no está completa (Lega). Ahora Nuke Shortcuts dice «Plugin missing» en la barra
+lateral y su tarjeta de estado ofrece «Install»; Open in NukeX, con los `.nk` asociados pero sin el bridge,
+dice «Bridge missing». Las dos tarjetas de plugin muestran «Not installed» en ámbar, como «Not associated»,
+y Open in NukeX muestra la `.nuke` con las barras de Windows. El estado del plugin se vuelve a mirar al
+traer Nuke al frente y después de instalar.
+[ Nuke Shortcuts - Sin plugin la herramienta no figura activa ]
+
 v1.17:
 
 El keyframe de Nuke Shortcuts se instalaba dentro de la carpeta de Open in NukeX (`LGA_OpenInNukeX`, bridge

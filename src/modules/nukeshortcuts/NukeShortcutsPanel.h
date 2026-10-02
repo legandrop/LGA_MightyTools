@@ -59,7 +59,7 @@ protected:
     void hideEvent(QHideEvent *event) override;
 
 private:
-    enum class Status { On, Paused, ShortcutTaken, NeedsPermission };
+    enum class Status { On, Paused, ShortcutTaken, NeedsPermission, NeedsPlugin };
     Status currentStatus() const;
     void onStatusButtonClicked();
     void onBrowseNukeDirClicked();

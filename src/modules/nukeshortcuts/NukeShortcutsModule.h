@@ -61,6 +61,8 @@ private:
     // Instala `<nukeDir>/LGA_NukeShortcuts` (boton de la tarjeta "Nuke plugin"). Nunca en una
     // corrida automatizada.
     void installPlugin(const QString &nukeDir);
+    // Mira la .nuke de trabajo (registro LGA o ~/.nuke) y lo deja en el estado. Barato: dos archivos.
+    void refreshPluginInstalled();
     void startCalibration();
     void finishCalibration();
     bool needsPermission() const;

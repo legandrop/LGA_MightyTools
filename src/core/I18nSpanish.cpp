@@ -219,6 +219,10 @@ const QHash<QString, QString> &spanishTable()
         E("Shortcuts", "Atajos"),
         E("Sets or removes a key on the knob under the pointer.", "Pone o quita un key en el knob que está bajo el puntero."),
         E("Nuke plugin", "Plugin de Nuke"),
+        E("Nuke plugin missing", "Falta el plugin de Nuke"),
+        E("The tool needs it inside Nuke too.", "La herramienta también lo necesita dentro de Nuke."),
+        E("Plugin missing", "Falta el plugin"),
+        E("Bridge missing", "Falta el bridge"),
         E("With the plugin, Nuke itself sets the key, even with the knob field in focus. Without it, "
           "Add keyframe right-clicks the knob.",
           "Con el plugin, el key lo pone el propio Nuke, aunque el campo del knob esté en edición. Sin él, "

@@ -132,6 +132,15 @@ void NukeShortcutsState::setNukeInFront(bool inFront)
     emit changed();
 }
 
+void NukeShortcutsState::setPluginInstalled(bool installed)
+{
+    if (m_pluginInstalled == installed) {
+        return;
+    }
+    m_pluginInstalled = installed;
+    emit changed();
+}
+
 void NukeShortcutsState::setRegistration(ShortcutAction action, Registration registration, const QString &conflictWith)
 {
     Registration &target = action == ShortcutAction::AddKeyframe ? m_addKeyframeRegistration : m_frameRegistration;

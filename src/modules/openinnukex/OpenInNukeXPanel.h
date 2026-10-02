@@ -43,6 +43,8 @@ public:
 signals:
     // El boton "Uninstall old app" termino: el modulo vuelve a leer su estado (la fila de la barra).
     void oldClientStateChanged();
+    // Se instalo el bridge: la fila de la barra lateral vuelve a calcular su estado.
+    void bridgeStateChanged();
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

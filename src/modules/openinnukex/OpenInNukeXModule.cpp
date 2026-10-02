@@ -1,4 +1,5 @@
 #include "modules/openinnukex/OpenInNukeXModule.h"
+#include "modules/openinnukex/NukeBridge.h"
 #include "core/I18n.h"
 
 #include "app/ModuleContext.h"
@@ -67,12 +68,16 @@ ModuleStatus OpenInNukeXModule::status() const
     const bool associated = false;
 #endif
 
-    if (associated) {
-        result.tone = ModuleTone::Active;
-        result.text = I18n::tr("Associated");
-    } else {
+    if (!associated) {
         result.tone = ModuleTone::Attention;
         result.text = I18n::tr("Not associated");
+    } else if (!NukeBridge::inspect(NukeBridge::currentNukeDirectory()).installed()) {
+        // La herramienta necesita las dos cosas: la asociacion y el bridge dentro de Nuke (Lega, 2026-10-02).
+        result.tone = ModuleTone::Attention;
+        result.text = I18n::tr("Bridge missing");
+    } else {
+        result.tone = ModuleTone::Active;
+        result.text = I18n::tr("Associated");
     }
     return result;
 }
@@ -88,6 +93,7 @@ QWidget *OpenInNukeXModule::createPanel(QWidget *parent)
     }
     m_panel = panel;
     connect(panel, &OpenInNukeXPanel::oldClientStateChanged, this, &Module::statusChanged);
+    connect(panel, &OpenInNukeXPanel::bridgeStateChanged, this, &Module::statusChanged);
     // Un panel nuevo pudo retomar una desinstalacion que termino sin panel: la fila de la barra se vuelve a leer.
     emit statusChanged();
     return panel;

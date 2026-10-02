@@ -320,6 +320,9 @@ NukeShortcutsPanel::Status NukeShortcutsPanel::currentStatus() const
         || m_state->registration(ShortcutAction::FrameDopeSheet) == NukeShortcutsState::Registration::Failed) {
         return Status::ShortcutTaken;
     }
+    if (!m_state->pluginInstalled()) {
+        return Status::NeedsPlugin;
+    }
     // Activos es activos, este Nuke al frente o no: mientras la ventana esta abierta la que esta al
     // frente es ella, asi que un "esperando a Nuke" se veria siempre (Lega, 2026-09-24).
     return Status::On;
@@ -363,6 +366,11 @@ void NukeShortcutsPanel::refresh()
                           I18n::tr("Needed to click and type in Nuke."), I18n::tr("Open Settings"),
                           QStringLiteral("primary"), QStringLiteral("warn"));
         break;
+    case Status::NeedsPlugin:
+        m_statusCard->set(QStringLiteral("warn"), I18n::tr("Nuke plugin missing"),
+                          I18n::tr("The tool needs it inside Nuke too."), I18n::tr("Install"),
+                          QStringLiteral("primary"), QStringLiteral("warn"));
+        break;
     }
 
     // Las filas que estan grabando no se tocan: pisarlas cortaria la grabacion a mitad.
@@ -403,6 +411,9 @@ void NukeShortcutsPanel::onStatusButtonClicked()
         break;
     case Status::NeedsPermission:
         emit accessibilityRequested();
+        break;
+    case Status::NeedsPlugin:
+        emit installPluginRequested(m_nukeDir);
         break;
     }
 }

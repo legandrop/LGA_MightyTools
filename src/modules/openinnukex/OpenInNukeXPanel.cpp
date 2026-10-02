@@ -629,6 +629,7 @@ void OpenInNukeXPanel::onInstallClicked()
         report(OpenInNukeXMessages::bridgeError(err));
     }
     refreshBridge();
+    emit bridgeStateChanged();
 }
 
 void OpenInNukeXPanel::onExportClicked()
