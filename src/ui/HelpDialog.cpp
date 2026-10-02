@@ -89,7 +89,7 @@ HelpDialog::HelpDialog(const QList<HelpSection> &sections, QWidget *parent)
     // 24; aca la fila mide 26 por el boton de cerrar: 4.
     header->addSpacing(4);
     header->addWidget(Ui::label(I18n::tr("Developed by Lega Pugliese"), "helpDeveloped", this));
-    auto *link = new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), this);
+    auto *link = new LinkLabel(QStringLiteral("lega.com.ar"), QStringLiteral("https://lega.com.ar"), this);
     link->setObjectName(QStringLiteral("helpLink"));
     header->addWidget(link);
     layout->addLayout(header);

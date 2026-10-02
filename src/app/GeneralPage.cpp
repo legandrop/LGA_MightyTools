@@ -338,7 +338,7 @@ QFrame *GeneralPage::buildAboutCard()
     row->addWidget(help, 0, Qt::AlignVCenter);
     layout->addLayout(row);
     layout->addWidget(Ui::caption(I18n::tr("Developed by Lega Pugliese"), card));
-    layout->addWidget(new LinkLabel(QStringLiteral("github.com/legandrop"), QStringLiteral("https://github.com/legandrop"), card));
+    layout->addWidget(new LinkLabel(QStringLiteral("lega.com.ar"), QStringLiteral("https://lega.com.ar"), card));
     connect(help, &QPushButton::clicked, this, &GeneralPage::helpRequested);
     return card;
 }

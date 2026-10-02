@@ -271,8 +271,9 @@ QProgressBar::chunk { background-color: #6a55c9; border-radius: 3px; }
 QLabel#helpTitle { color: rgb(127, 98, 170); font-size: @fs20; font-weight: 600; }
 QLabel#helpVersion { color: @textStrong; font-size: @fs16; font-weight: 600; }
 QLabel#helpDeveloped { color: #9D9D9D; font-size: @fs14; }
-QLabel#helpLink { color: @link; font-size: @fs14; text-decoration: underline; }
-QLabel#helpLink[hover="true"] { color: #C9C0F5; }
+/* El link a lega.com.ar es el mismo en todas las apps: #8C7ED9 y sin subrayar. */
+QLabel#helpLink { color: #8C7ED9; font-size: @fs14; text-decoration: none; }
+QLabel#helpLink[hover="true"] { color: #B3A8EC; }
 QLabel#helpSection { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 QLabel#helpBody { color: #a9a9ae; font-size: @fs13; }
 QLabel#helpNote { color: @textCaption; font-size: @fs12; }
@@ -309,8 +310,8 @@ QLabel#runningText { color: @text; font-size: @fs13; }
 QLabel#aboutName { color: @aboutName; font-size: @fs13_5; font-weight: 600; }
 QLabel#meta[tone="ok"] { color: @ok; }
 QLabel#meta[tone="warn"] { color: @warn; }
-QLabel#linkLabel { color: @link; font-size: @fs13; font-weight: 500; text-decoration: underline; }
-QLabel#linkLabel[hover="true"] { color: #C9C0F5; }
+QLabel#linkLabel { color: #8C7ED9; font-size: @fs13; font-weight: 500; text-decoration: none; }
+QLabel#linkLabel[hover="true"] { color: #B3A8EC; }
 QLabel#traySection { color: @textFaint; font-size: @fs11; padding: 0px 16px 0px 14px; min-height: 22px; max-height: 22px; background: transparent; }
 
 /* Ventana de limpieza de Disk Space (canvas "Mighty Tools Disk Cleanup"). */
