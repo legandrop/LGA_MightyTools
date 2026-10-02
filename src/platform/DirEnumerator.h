@@ -13,7 +13,9 @@
 //  - Windows (platform/win/DirEnumeratorWin.cpp): GetFileInformationByHandleEx con
 //    FileFullDirectoryInfo y un buffer grande. Trae el tamano asignado en disco. FileIdBothDirectoryInfo
 //    (con id de archivo) se midio 4 veces mas lento en un disco de 4,7 M de archivos: no se usa.
-//  - macOS (platform/mac/DirEnumeratorMac.cpp): readdir + fstatat sin seguir enlaces.
+//  - macOS (platform/mac/DirEnumeratorMac.cpp): getattrlistbulk, muchas entradas por llamada y sin
+//    seguir enlaces; los puntos de montaje (/System/Volumes/Data) cuentan como enlace. Respaldo con
+//    readdir + fstatat para un sistema de archivos que no lo acepte.
 //
 // Las rutas viajan en la codificacion del sistema (UTF-16 en Windows, UTF-8 en mac) para no convertir
 // millones de nombres; nativeDir() / toDisplay() pasan de y a QString en los bordes.

@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.23:
+
+En la Mac, el escaneo de Disk Space tardaba 3,5 minutos en el disco entero y contaba los datos del
+usuario dos o tres veces: entraba también por `/System/Volumes/Data` (el volumen de datos tiene el mismo
+`st_dev` que `/`, así que no se lo reconocía como otro volumen) y por `/.nofollow`. Además pedía cada
+archivo con su propio `fstatat`. Ahora `DirEnumeratorMac` usa `getattrlistbulk` (muchas entradas por
+llamada, como `FileFullDirectoryInfo` en Windows), saltea los puntos de montaje por `ATTR_DIR_MOUNTSTATUS`
+y los alias de la raíz, y marca como nube lo que no está bajado (`SF_DATALESS`). Medido en una Mac M1 Max
+con 4,2 M de archivos: 19 s y 776 GB, igual que el sistema. Es el piso de APFS: solo listar los nombres
+ya lleva el 40 %. También: Frame Dope Sheet probado y aprobado por Lega en la Mac (v1.22).
+[ Disk Space - Escaneo rápido en la Mac ]
+
 v1.22:
 
 En la Mac, Frame Dope Sheet seguía con el macro calibrado: el plugin `LGA_NukeShortcuts` 1.01 no

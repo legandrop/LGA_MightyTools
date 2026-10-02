@@ -26,7 +26,6 @@ QString markerDir();
 QString frameMarkerDir();
 
 // El plugin con esa version instalada hace "Frame Dope Sheet": la calibracion ya no hace falta.
-// En macOS siempre false hasta probarlo ahi (el plugin tampoco registra ese atajo en la Mac).
 bool framesDopeSheet(const QString &installedVersion);
 
 // Si existe la marca de `pid` y es posterior al arranque del proceso: un pid reciclado por otro Nuke

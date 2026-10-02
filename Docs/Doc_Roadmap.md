@@ -74,7 +74,8 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    `LGA OpenInNukeX.app`, su configuración vieja y los clones `~/.nuke/LGA_OpenInNukeX` y
    `~/Desktop/Codin/LGA_LinkRedirector`; links, `.html` y `.nk` los atiende Mighty Tools. Falta, en
    este orden:
-   1. **Disk Space completo en mac.** La ventana de limpieza está apagada en mac
+   1. **Disk Space completo en mac.** El escaneo ya está (v1.23: `getattrlistbulk`, 19 s para 4,2 M
+      de archivos, sin contar dos veces el volumen de datos). La ventana de limpieza está apagada en mac
       (`SystemPaths::cleanupSupported()` en `platform/mac/SystemPathsMac.cpp`): reglas propias de mac
       (`diskspace/cleanup/mac/CleanupRulesMac.cpp`, hoy vacía: cachés de `~/Library/Caches`, logs, etc.),
       borrado (`FileSystemOpsMac.cpp`: `removeFile/removeDir` deshabilitados), Papelera
@@ -96,8 +97,5 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    atajos del descriptor de Folder Switch están copiados entre `FolderSwitchModule.cpp` y
    `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez que se compile en Windows); el CI de mac
    (`.github/workflows/build-macos.yml`) no se corrió después del cambio de orden de sus pasos.
-7. **«Frame Dope Sheet» dentro de Nuke en la Mac (D-42).** El plugin 1.01 lo resuelve en Windows (Nuke
-   17) y desde la v1.22 lo registra también en macOS. Falta la prueba de Lega en la Mac: que el widget
-   `Dope_Sheet` y su ventana OpenGL incrustada existan igual, y que Cmd+A y F lleguen con el Enter falso.
-8. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+7. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
