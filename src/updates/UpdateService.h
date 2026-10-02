@@ -1,29 +1,35 @@
 #ifndef MIGHTYTOOLS_UPDATESERVICE_H
 #define MIGHTYTOOLS_UPDATESERVICE_H
 
+#include <QDateTime>
 #include <QObject>
 #include <QPointer>
 #include <QString>
 #include <QUrl>
+
+#include <functional>
 
 class QNetworkAccessManager;
 class QNetworkReply;
 class QProgressDialog;
 class QSaveFile;
 class QCryptographicHash;
+class QTimer;
 class QWidget;
+class SettingsStore;
 
 // Auto-update de LGA_MightyTools: chequea un manifiesto estatico publicado por
 // GitHub Pages (legandrop/LGA_Updates), ofrece bajar el instalador si hay una
 // version mas nueva, verifica su SHA-256 y lo lanza.
 //
 // Version SIMPLIFICADA de FM_UpdateService (LGA_FileManagerS3): esta app no tiene
-// snooze/skip persistente (el diseño de la app no lo pide: "Later" solo vale
-// hasta el proximo arranque o chequeo manual), ni helper de cierre de procesos, asi
-// que ese estado y esas ramas no existen aca. Lo que SI se porta tal cual son las
-// decisiones finas: comparacion de version via VersionCompare, verificacion de
-// digest, descarga por streaming a QSaveFile, y manejo de errores HTTP con detalle
-// crudo.
+// skip de version ni helper de cierre de procesos, asi que ese estado y esas ramas no
+// existen aca. "Later" pospone el chequeo automatico 1 dia (`updates/snoozeUntil` en
+// el SettingsStore), como "Remind me later" en las demas apps LGA. El chequeo
+// automatico corre al arrancar y se repite cada 3 horas mientras la app sigue abierta.
+// Lo que SI se porta tal cual son las decisiones finas: comparacion de version via
+// VersionCompare, verificacion de digest, descarga por streaming a QSaveFile, y
+// manejo de errores HTTP con detalle crudo.
 class UpdateService : public QObject
 {
     Q_OBJECT
@@ -32,8 +38,15 @@ public:
     explicit UpdateService(QWidget *parentWindow, QObject *parent = nullptr);
     ~UpdateService() override;
 
-    // Programa el chequeo automatico una sola vez (llamadas siguientes no hacen nada).
+    // Programa el chequeo automatico una sola vez (llamadas siguientes no hacen nada) y, despues,
+    // lo repite cada 3 horas mientras la app siga abierta.
     void scheduleAutomaticCheck();
+
+    // Donde se guarda el "Later" (sin store, el snooze vive solo en memoria).
+    void setSettingsStore(SettingsStore *store) { m_store = store; }
+    // Si el chequeo automatico sigue prendido: lo consulta cada chequeo periodico, asi apagarlo
+    // en General vale tambien para la sesion en curso.
+    void setAutomaticChecksEnabled(std::function<bool()> enabled) { m_automaticChecksEnabled = std::move(enabled); }
 
     // manual = true (menu "Check for Updates..."): siempre hay respuesta, incluso
     // "ya estas al dia" o un error con detalle. manual = false (chequeo de arranque):
@@ -59,6 +72,13 @@ private:
     void startCheckRequest(Mode mode);
     void onCheckFinished(Mode mode);
 
+    // Tick del chequeo periodico: si ya vencio el proximo chequeo, lo corre.
+    void onPeriodicTick();
+    // Fija el proximo chequeo periodico a `delayMs` (+/- el jitter si `withJitter`) de ahora.
+    void schedulePeriodicCheckIn(qint64 delayMs, bool withJitter);
+    QDateTime snoozeUntil() const;
+    void setSnoozeUntil(const QDateTime &until);
+
     void promptForUpdate(const QString &version, const QUrl &downloadUrl,
                          const QString &assetName, const QString &sha256Digest);
     void downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
@@ -81,6 +101,18 @@ private:
 
     bool m_busy = false;
     bool m_automaticCheckScheduled = false;
+
+    // ------------------------------------------------------ chequeo periodico
+    // Tick corto que compara el reloj contra m_nextPeriodicCheckUtc: al volver de una
+    // suspension, el chequeo vencido corre enseguida en vez de esperar otras 3 horas.
+    QTimer *m_periodicTimer = nullptr;
+    QDateTime m_nextPeriodicCheckUtc;
+    // El chequeo en curso lo lanzo el tick: si falla por red, se reintenta antes.
+    bool m_periodicCheckActive = false;
+    std::function<bool()> m_automaticChecksEnabled;
+    SettingsStore *m_store = nullptr;
+    // Snooze sin store (captura, self-test): vale solo para esta sesion.
+    QDateTime m_memorySnoozeUntil;
 
     // Lo que encontro el ultimo chequeo con version nueva, para "Update" de la fila.
     QString m_availableVersion;

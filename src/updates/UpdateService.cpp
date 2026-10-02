@@ -2,6 +2,7 @@
 #include "updates/VersionCompare.h"
 #include "updates/UpdateDialog.h"
 
+#include "app/SettingsStore.h"
 #include "core/I18n.h"
 
 #include <QApplication>
@@ -24,6 +25,7 @@
 #include <QProcess>
 #include <QProgressDialog>
 #include <QPushButton>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QScopedPointer>
@@ -46,6 +48,19 @@ const QString kDisplayName = QStringLiteral("LGA Mighty Tools");
 constexpr int kAutomaticCheckDelayMs = 15000;
 constexpr int kCheckTimeoutMs = 15000;
 constexpr int kDownloadTimeoutMs = 300000;
+
+// Chequeo periodico mientras la app sigue abierta (vive en la bandeja dias enteros): cada 3 horas
+// con un desfase al azar de +/-15 min, para que las maquinas de un estudio no consulten en el
+// mismo segundo. El tick de 5 min solo mira el reloj; si un periodico falla por red, se reintenta
+// a los 10 min (al despertar de una suspension la red suele tardar en levantar).
+constexpr qint64 kPeriodicCheckIntervalMs = 3LL * 60 * 60 * 1000;
+constexpr int kPeriodicCheckJitterMs = 15 * 60 * 1000;
+constexpr qint64 kPeriodicCheckRetryMs = 10LL * 60 * 1000;
+constexpr int kPeriodicTickMs = 5 * 60 * 1000;
+
+// "Later" calla el chequeo automatico este tiempo, igual que "Remind me later" en las demas apps.
+constexpr int kSnoozeDays = 1;
+const QString kSnoozeKey = QStringLiteral("updates/snoozeUntil");
 
 // Formato del manifiesto que esta app sabe leer.
 constexpr int kManifestSchemaVersion = 1;
@@ -196,6 +211,69 @@ void UpdateService::scheduleAutomaticCheck()
     m_automaticCheckScheduled = true;
 
     QTimer::singleShot(kAutomaticCheckDelayMs, this, [this]() { checkForUpdates(false); });
+
+    schedulePeriodicCheckIn(kPeriodicCheckIntervalMs, /*withJitter=*/true);
+    m_periodicTimer = new QTimer(this);
+    m_periodicTimer->setTimerType(Qt::VeryCoarseTimer);
+    m_periodicTimer->setInterval(kPeriodicTickMs);
+    connect(m_periodicTimer, &QTimer::timeout, this, &UpdateService::onPeriodicTick);
+    m_periodicTimer->start();
+}
+
+void UpdateService::schedulePeriodicCheckIn(qint64 delayMs, bool withJitter)
+{
+    qint64 jitterMs = 0;
+    if (withJitter) {
+        jitterMs = QRandomGenerator::global()->bounded(2 * kPeriodicCheckJitterMs + 1) - kPeriodicCheckJitterMs;
+    }
+    m_nextPeriodicCheckUtc = QDateTime::currentDateTimeUtc().addMSecs(qMax<qint64>(0, delayMs + jitterMs));
+}
+
+void UpdateService::onPeriodicTick()
+{
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    // Un reloj que se atraso (a mano o por zona) dejaria el proximo chequeo a dias de distancia.
+    if (now.msecsTo(m_nextPeriodicCheckUtc) > kPeriodicCheckIntervalMs + kPeriodicCheckJitterMs) {
+        schedulePeriodicCheckIn(kPeriodicCheckIntervalMs, /*withJitter=*/true);
+        return;
+    }
+    if (now < m_nextPeriodicCheckUtc) {
+        return;
+    }
+    // Con un chequeo, el cartel o una descarga en curso no se pisa nada: lo intenta el tick siguiente.
+    if (m_busy) {
+        return;
+    }
+    schedulePeriodicCheckIn(kPeriodicCheckIntervalMs, /*withJitter=*/true);
+    if (m_automaticChecksEnabled && !m_automaticChecksEnabled()) {
+        return;
+    }
+    m_periodicCheckActive = true;
+    checkForUpdates(false);
+    if (!m_checkReply) {
+        m_periodicCheckActive = false;
+    }
+}
+
+QDateTime UpdateService::snoozeUntil() const
+{
+    if (!m_store) {
+        return m_memorySnoozeUntil;
+    }
+    return QDateTime::fromString(m_store->value(kSnoozeKey).toString(), Qt::ISODate);
+}
+
+void UpdateService::setSnoozeUntil(const QDateTime &until)
+{
+    if (!m_store) {
+        m_memorySnoozeUntil = until;
+        return;
+    }
+    if (until.isValid()) {
+        m_store->setValue(kSnoozeKey, until.toString(Qt::ISODate));
+    } else {
+        m_store->remove(kSnoozeKey);
+    }
 }
 
 void UpdateService::checkForUpdates(bool manual)
@@ -274,6 +352,8 @@ void UpdateService::onCheckFinished(Mode mode)
     // Manual (menu) e Inline ("Check now" de General) muestran los errores en cartel; el automatico
     // se calla en todo lo que no sea "hay version nueva".
     const bool manual = mode != Mode::Automatic;
+    const bool periodic = m_periodicCheckActive;
+    m_periodicCheckActive = false;
     QNetworkReply *reply = m_checkReply;
     m_checkReply = nullptr;
 
@@ -294,6 +374,9 @@ void UpdateService::onCheckFinished(Mode mode)
     if (error != QNetworkReply::NoError) {
         qDebug() << "[UpdateService] Chequeo fallo, networkError=" << error
                  << "httpStatus=" << httpStatus;
+        if (periodic) {
+            schedulePeriodicCheckIn(kPeriodicCheckRetryMs, /*withJitter=*/false);
+        }
         m_busy = false;
         emit checkFailed();
         if (manual) {
@@ -313,6 +396,9 @@ void UpdateService::onCheckFinished(Mode mode)
     // reportada como "no hay update", ocultando el problema real.
     if (httpStatus != 200) {
         qDebug() << "[UpdateService] Chequeo con status HTTP invalido, httpStatus=" << httpStatus;
+        if (periodic) {
+            schedulePeriodicCheckIn(kPeriodicCheckRetryMs, /*withJitter=*/false);
+        }
         m_busy = false;
         emit checkFailed();
         if (manual) {
@@ -391,6 +477,15 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         return;
     }
+    // "Later" calla solo el automatico: la fila de General ya muestra la version disponible.
+    if (mode == Mode::Automatic) {
+        const QDateTime until = snoozeUntil();
+        if (until.isValid() && QDateTime::currentDateTime() < until) {
+            qDebug() << "[UpdateService] Pospuesto hasta" << until.toString(Qt::ISODate) << "; no se ofrece";
+            m_busy = false;
+            return;
+        }
+    }
     // m_busy queda en true a proposito: sigue representando la operacion en curso
     // durante el dialogo y, si el usuario acepta, durante el arranque de la
     // descarga. Se libera en promptForUpdate (si elige "Later") o en
@@ -405,11 +500,13 @@ void UpdateService::promptForUpdate(const QString &version, const QUrl &download
     QScopedPointer<QDialog> dialog(
         createUpdateAvailableDialog(parentWindow(), kDisplayName, version, QApplication::applicationVersion()));
 
-    // Later = no hacer nada: sin snooze ni skip persistente, por diseño. La proxima
-    // oportunidad de actualizar es el proximo arranque o un chequeo manual.
+    // Later (o cerrar el cartel) pospone el chequeo automatico 1 dia; sin eso el chequeo
+    // periodico lo volvia a mostrar cada 3 horas. El manual y "Check now" lo ignoran.
     if (dialog->exec() == QDialog::Accepted) {
+        setSnoozeUntil(QDateTime());
         downloadAndRunUpdate(downloadUrl, assetName, sha256Digest, version);
     } else {
+        setSnoozeUntil(QDateTime::currentDateTime().addDays(kSnoozeDays));
         // Salida real del flujo chequeo->prompt: recien aca se libera m_busy.
         m_busy = false;
     }

@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.27:
+
+El chequeo de updates corría una sola vez, 15 s después de arrancar, y la app vive en la bandeja días
+enteros: no se enteraba de una versión nueva hasta reiniciar. Ahora `UpdateService` lo repite cada 3 horas
+(±15 min al azar), medido contra el reloj con un tick de 5 min para que al volver de una suspensión corra
+enseguida, y reintenta a los 10 min si falló por red. Cada chequeo periódico consulta la casilla «Check for
+updates at startup», así que apagarla vale también para la sesión en curso. «Later» (o cerrar el cartel)
+pasa a posponer el automático 1 día, guardado en `updates/snoozeUntil` de `settings.ini`, igual que
+«Remind me later» en las demás apps: sin eso el periódico reabría el cartel cada 3 horas. El menú y
+«Check now» lo ignoran.
+[ Updates - Chequeo cada 3 horas y Later de 1 dia ]
+
 v1.26:
 
 En la Mac, el panel de Disk Space mostraba una línea de texto cortada debajo de «126 GB free of 926 GB»

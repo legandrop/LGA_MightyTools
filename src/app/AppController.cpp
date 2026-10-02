@@ -151,6 +151,8 @@ AppController::AppController(const Options &options, QObject *parent)
     if (!m_options.measurement) {
         // parentWindow es la ventana (normalmente oculta): sus dialogos igual se centran en pantalla.
         m_updates = new UpdateService(m_window, this);
+        m_updates->setSettingsStore(m_store.get());
+        m_updates->setAutomaticChecksEnabled([this]() { return m_store->value(kCheckUpdates, true).toBool(); });
         connect(m_updates, &UpdateService::checking, this, [this]() {
             m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
         });
