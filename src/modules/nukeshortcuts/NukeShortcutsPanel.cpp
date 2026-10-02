@@ -113,14 +113,8 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     pluginHead->addWidget(m_pluginChip, 0, Qt::AlignVCenter);
     plugin->addLayout(pluginHead);
     QLabel *pluginCaption = Ui::caption(
-#ifdef Q_OS_MACOS
-        // En la Mac el plugin solo hace el keyframe hasta probar ahi el Dope Sheet (D-42).
-        I18n::tr("With the plugin, Nuke itself sets the key, even with the knob field in focus. Without it, "
-                 "Add keyframe right-clicks the knob."),
-#else
         I18n::tr("With the plugin, both shortcuts work inside Nuke: no clicks and no calibration. Without it, "
                  "they click and type in Nuke for you."),
-#endif
         pluginCard);
     pluginCaption->setWordWrap(true);
     plugin->addWidget(pluginCaption);

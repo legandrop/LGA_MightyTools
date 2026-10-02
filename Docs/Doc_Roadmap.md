@@ -97,7 +97,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez que se compile en Windows); el CI de mac
    (`.github/workflows/build-macos.yml`) no se corrió después del cambio de orden de sus pasos.
 7. **«Frame Dope Sheet» dentro de Nuke en la Mac (D-42).** El plugin 1.01 lo resuelve en Windows (Nuke
-   17). En macOS falta probarlo: que el widget `Dope_Sheet` y su ventana OpenGL incrustada existan
-   igual, y que Cmd+A y F lleguen con el Enter falso.
+   17) y desde la v1.22 lo registra también en macOS. Falta la prueba de Lega en la Mac: que el widget
+   `Dope_Sheet` y su ventana OpenGL incrustada existan igual, y que Cmd+A y F lleguen con el Enter falso.
 8. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.

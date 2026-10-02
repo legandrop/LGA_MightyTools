@@ -225,10 +225,6 @@ const QHash<QString, QString> &spanishTable()
         E("The tool needs it inside Nuke too.", "La herramienta también lo necesita dentro de Nuke."),
         E("Plugin missing", "Falta el plugin"),
         E("Bridge missing", "Falta el bridge"),
-        E("With the plugin, Nuke itself sets the key, even with the knob field in focus. Without it, "
-          "Add keyframe right-clicks the knob.",
-          "Con el plugin, el key lo pone el propio Nuke, aunque el campo del knob esté en edición. Sin él, "
-          "Agregar keyframe hace clic derecho sobre el knob."),
         E("With the plugin, both shortcuts work inside Nuke: no clicks and no calibration. Without it, "
           "they click and type in Nuke for you.",
           "Con el plugin, los dos atajos funcionan dentro de Nuke: sin clics y sin calibración. Sin él, "

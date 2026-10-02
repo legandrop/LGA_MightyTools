@@ -34,11 +34,6 @@ QString frameMarkerDir()
 
 bool framesDopeSheet(const QString &installedVersion)
 {
-#ifdef Q_OS_MACOS
-    // Sin probar en la Mac (roadmap): ahi el plugin no registra el atajo y sigue el macro calibrado.
-    Q_UNUSED(installedVersion);
-    return false;
-#endif
     // La 1.00 solo traia el keyframe. Una version ilegible no cuenta: sin saber, queda la calibracion.
     // Mismo criterio que NukePlugin::chipState: "1.01" es 1.1 y "1.10" es 1.10.
     const QString trimmed = installedVersion.trimmed();

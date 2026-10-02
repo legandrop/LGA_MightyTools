@@ -1,5 +1,16 @@
 # Changelog — LGA Mighty Tools
 
+v1.22:
+
+En la Mac, Frame Dope Sheet seguía con el macro calibrado: el plugin `LGA_NukeShortcuts` 1.01 no
+registraba ese atajo en macOS y la app mostraba la calibración, porque el encuadre dentro de Nuke solo
+se había probado en Windows. Nada del método es de Windows (widget `Dope_Sheet`, ventana OpenGL
+incrustada, Enter y movimiento falsos, Ctrl+A y F por eventos de Qt, donde Ctrl es Cmd en mac), así que
+ahora el plugin lo registra también en la Mac y la app esconde la calibración igual que en Windows. Se
+habilita para la prueba de Lega en la Mac. El plugin sigue en 1.01: en ninguna Mac hay una 1.01
+instalada.
+[ Nuke Shortcuts - Frame Dope Sheet dentro de Nuke también en la Mac ]
+
 v1.21:
 
 Cada compilación mostraba un aviso de AutoMoc: `OpenInNukeXPanel.cpp` incluía `OpenInNukeXPanel.moc`

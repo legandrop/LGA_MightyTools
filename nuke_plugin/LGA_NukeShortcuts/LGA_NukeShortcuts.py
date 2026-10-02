@@ -55,8 +55,7 @@ _ACTIONS = (
         "run": LGA_FrameDopeSheet.frame_dope_sheet,
     },
 )
-# En la Mac el encuadre del Dope Sheet no esta probado: no se registra y la app sigue con su macro.
-ACTIONS = tuple(a for a in _ACTIONS if sys.platform != "darwin" or a["key"] != "frameDopeSheet")
+ACTIONS = _ACTIONS
 
 _state = {"watcher": None, "timer": None, "applied": {}}
 

@@ -208,22 +208,12 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         } cases[] = {{"1.00", false}, {"1.01", true}, {"1.02\n", true}, {"1.10", true}, {"2.00", true},
                      {"0.90", false}, {"", false}, {"1.01-beta", false}, {"abc", false}};
         for (const auto &c : cases) {
-#ifdef Q_OS_MACOS
-            if (c.frames) {
-                continue;
-            }
-#endif
             check(KeyframePlugin::framesDopeSheet(QString::fromLatin1(c.version)) == c.frames,
                   QStringLiteral("plugin: version '%1' %2 el Dope Sheet")
                       .arg(QString::fromLatin1(c.version).trimmed(), c.frames ? QStringLiteral("encuadra") : QStringLiteral("no encuadra")));
         }
-#ifdef Q_OS_MACOS
-        check(!KeyframePlugin::framesDopeSheet(NukePlugin::bundledVersion(KeyframePlugin::plugin())),
-              QStringLiteral("plugin: en la Mac el Dope Sheet sigue con la calibracion (sin probar ahi)"));
-#else
         check(KeyframePlugin::framesDopeSheet(NukePlugin::bundledVersion(KeyframePlugin::plugin())),
               QStringLiteral("plugin: la version embebida encuadra el Dope Sheet"));
-#endif
     }
 
     // Contrato con el plugin de Nuke: las claves del settings.ini, los atajos de fabrica y las carpetas
