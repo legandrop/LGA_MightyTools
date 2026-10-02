@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.20:
+
+Frame Dope Sheet era un macro: click en el punto calibrado del Dope Sheet, Ctrl+A y F. Fallaba si el
+panel cambiaba de lugar o estaba escondido, y obligaba a calibrar. Nuke manda las teclas al panel donde
+entró el mouse, no al que tiene el foco. Ahora el plugin `LGA_NukeShortcuts` 1.01 registra también este
+atajo dentro de Nuke: busca el widget del Dope Sheet, le manda un Enter y un movimiento de mouse falsos y
+después Ctrl+A y F, sin mover el puntero. Con el Dope Sheet escondido no hace nada. Cada atajo deja su
+propia marca para la app (D-42), y con el plugin 1.01 instalado se esconde la calibración.
+[ Nuke Shortcuts - Frame Dope Sheet dentro de Nuke ]
+
 v1.19:
 
 Las v1.17 y v1.18 probadas en la Mac: el bridge 1.85 borró el keyframe que había dejado la 1.84 en

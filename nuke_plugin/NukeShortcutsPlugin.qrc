@@ -2,12 +2,14 @@
   Plugin de Nuke de la herramienta Nuke Shortcuts, embebido en el exe. Se instala en
   `<.nuke>/LGA_NukeShortcuts/` desde el panel de Nuke Shortcuts, separado del de Open in NukeX:
   cada herramienta tiene su carpeta y su linea en el init.py de la .nuke. Version propia en VERSION.
-  En runtime: ":/nukeshortcuts/menu.py", ":/nukeshortcuts/LGA_KeyframeToggle.py", ":/nukeshortcuts/VERSION".
+  En runtime: ":/nukeshortcuts/<archivo>" (menu.py, los tres .py y VERSION).
 -->
 <RCC>
     <qresource prefix="/nukeshortcuts">
         <file alias="menu.py">LGA_NukeShortcuts/menu.py</file>
+        <file alias="LGA_NukeShortcuts.py">LGA_NukeShortcuts/LGA_NukeShortcuts.py</file>
         <file alias="LGA_KeyframeToggle.py">LGA_NukeShortcuts/LGA_KeyframeToggle.py</file>
+        <file alias="LGA_FrameDopeSheet.py">LGA_NukeShortcuts/LGA_FrameDopeSheet.py</file>
         <file alias="VERSION">LGA_NukeShortcuts/VERSION</file>
     </qresource>
 </RCC>

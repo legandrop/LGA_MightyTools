@@ -44,6 +44,9 @@ public:
     // El plugin de Nuke (`<.nuke>/LGA_NukeShortcuts`, D-41) esta instalado: la herramienta necesita las
     // dos cosas, la app y el plugin (Lega, 2026-10-02). Lo actualiza el modulo.
     bool pluginInstalled() const { return m_pluginInstalled; }
+    // Y es una version que hace "Frame Dope Sheet" dentro de Nuke (1.01+, D-42): la calibracion del
+    // Dope Sheet no hace falta y no se muestra.
+    bool pluginFramesDopeSheet() const { return m_pluginFramesDopeSheet; }
     Registration registration(ShortcutAction action) const;
     // La otra herramienta que declaro primero la combinacion de `action` (vacio = otra app o nadie).
     QString conflictWith(ShortcutAction action) const;
@@ -56,6 +59,7 @@ public:
     void setDopeSheetSpot(const QPointF &fraction);
     void setNukeInFront(bool inFront);
     void setPluginInstalled(bool installed);
+    void setPluginFramesDopeSheet(bool frames);
     void setRegistration(ShortcutAction action, Registration registration, const QString &conflictWith = QString());
     void setAccessibilityGranted(bool granted);
 
@@ -78,6 +82,7 @@ private:
 
     bool m_nukeInFront = false;
     bool m_pluginInstalled = true;
+    bool m_pluginFramesDopeSheet = false;
     Registration m_addKeyframeRegistration = Registration::Idle;
     Registration m_frameRegistration = Registration::Idle;
     QString m_addKeyframeConflict;

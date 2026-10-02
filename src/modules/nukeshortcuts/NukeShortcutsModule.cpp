@@ -166,6 +166,21 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         initAfter.open(QIODevice::ReadOnly);
         check(QString::fromUtf8(initAfter.readAll()).count(QLatin1String("LGA_NukeShortcuts')")) == 1,
               QStringLiteral("plugin: reinstalar no duplica la linea"));
+        initAfter.close();
+
+        // Una 1.00 (solo menu.py y LGA_KeyframeToggle.py): instalada y con actualizacion, sin encuadre.
+        const QDir folder(QDir(nukeDir.path()).filePath(spec.folderName));
+        QFile::remove(folder.filePath(QStringLiteral("LGA_NukeShortcuts.py")));
+        QFile::remove(folder.filePath(QStringLiteral("LGA_FrameDopeSheet.py")));
+        QFile version(folder.filePath(QStringLiteral("VERSION")));
+        check(version.open(QIODevice::WriteOnly | QIODevice::Truncate) && version.write("1.00\n") > 0,
+              QStringLiteral("plugin: VERSION 1.00 de prueba"));
+        version.close();
+        const NukePlugin::Status old = NukePlugin::inspect(spec, nukeDir.path());
+        check(old.installed() && NukePlugin::chipState(spec, old) == NukePlugin::ChipState::UpdateAvailable,
+              QStringLiteral("plugin: una 1.00 instalada se ve con actualizacion, no como faltante"));
+        check(!KeyframePlugin::framesDopeSheet(old.installedVersion),
+              QStringLiteral("plugin: con la 1.00 el Dope Sheet sigue con la calibracion"));
     }
 
     // Marca del plugin de Nuke (Add keyframe dentro de Nuke).
@@ -181,6 +196,53 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         check(!KeyframePlugin::handles(dir.path(), 4242, QDateTime::currentDateTimeUtc().addSecs(60)),
               QStringLiteral("plugin: marca anterior al arranque (pid reciclado) no cuenta"));
         check(!KeyframePlugin::handles(dir.path(), 0, before), QStringLiteral("plugin: sin Nuke al frente no cuenta"));
+        check(KeyframePlugin::frameMarkerDir() != KeyframePlugin::markerDir(),
+              QStringLiteral("plugin: el Dope Sheet tiene su propia carpeta de marcas"));
+    }
+
+    // Que version del plugin encuadra el Dope Sheet (D-42): la 1.00 solo traia el keyframe.
+    {
+        const struct {
+            const char *version;
+            bool frames;
+        } cases[] = {{"1.00", false}, {"1.01", true}, {"1.02\n", true}, {"1.10", true}, {"2.00", true},
+                     {"0.90", false}, {"", false}, {"1.01-beta", false}, {"abc", false}};
+        for (const auto &c : cases) {
+#ifdef Q_OS_MACOS
+            if (c.frames) {
+                continue;
+            }
+#endif
+            check(KeyframePlugin::framesDopeSheet(QString::fromLatin1(c.version)) == c.frames,
+                  QStringLiteral("plugin: version '%1' %2 el Dope Sheet")
+                      .arg(QString::fromLatin1(c.version).trimmed(), c.frames ? QStringLiteral("encuadra") : QStringLiteral("no encuadra")));
+        }
+#ifdef Q_OS_MACOS
+        check(!KeyframePlugin::framesDopeSheet(NukePlugin::bundledVersion(KeyframePlugin::plugin())),
+              QStringLiteral("plugin: en la Mac el Dope Sheet sigue con la calibracion (sin probar ahi)"));
+#else
+        check(KeyframePlugin::framesDopeSheet(NukePlugin::bundledVersion(KeyframePlugin::plugin())),
+              QStringLiteral("plugin: la version embebida encuadra el Dope Sheet"));
+#endif
+    }
+
+    // Contrato con el plugin de Nuke: las claves del settings.ini, los atajos de fabrica y las carpetas
+    // de marcas que lee LGA_NukeShortcuts.py son las de la app.
+    {
+        QFile py(KeyframePlugin::plugin().resourcePrefix + QStringLiteral("/LGA_NukeShortcuts.py"));
+        const QString text = py.open(QIODevice::ReadOnly) ? QString::fromUtf8(py.readAll()) : QString();
+        for (const ShortcutAction action : {ShortcutAction::AddKeyframe, ShortcutAction::FrameDopeSheet}) {
+            const QString key = NukeShortcutsState::shortcutKey(action).section(QLatin1Char('/'), 1);
+            check(text.contains(QStringLiteral("\"key\": \"%1\"").arg(key)),
+                  QStringLiteral("plugin: lee la clave %1").arg(key));
+            check(text.contains(QStringLiteral("\"default\": \"%1\"").arg((action == ShortcutAction::AddKeyframe ? Shortcut::defaultAddKeyframe() : Shortcut::defaultFrameDopeSheet()).toPortableString())),
+                  QStringLiteral("plugin: atajo de fabrica %1").arg((action == ShortcutAction::AddKeyframe ? Shortcut::defaultAddKeyframe() : Shortcut::defaultFrameDopeSheet()).toPortableString()));
+        }
+        for (const QString &dir : {KeyframePlugin::markerDir(), KeyframePlugin::frameMarkerDir()}) {
+            const QString name = QFileInfo(dir).fileName();
+            check(text.contains(QStringLiteral("\"markers\": \"%1\"").arg(name)),
+                  QStringLiteral("plugin: escribe sus marcas en %1").arg(name));
+        }
     }
 
     // Atajos: ida y vuelta por el texto del .ini, y textos invalidos.
@@ -403,14 +465,14 @@ void NukeShortcutsModule::updateRegistrations()
             registered = Shortcut();
             continue;
         }
-        if (wanted && action == ShortcutAction::AddKeyframe && frontNukeHasKeyframePlugin()) {
+        if (wanted && frontNukeHandles(action)) {
             // Este Nuke tiene el plugin: el atajo lo atiende Nuke y el global no se registra.
             if (hotkeys->isRegistered(id)) {
                 hotkeys->unregisterHotkey(id);
             }
             registered = Shortcut();
             if (m_state->registration(action) != NukeShortcutsState::Registration::Registered) {
-                qInfo() << "[NukeShortcuts] Add keyframe lo atiende el plugin de Nuke";
+                qInfo() << "[NukeShortcuts]" << NukeShortcutsState::actionTitle(action) << "lo atiende el plugin de Nuke";
             }
             m_state->setRegistration(action, NukeShortcutsState::Registration::Registered);
             continue;
@@ -437,7 +499,7 @@ void NukeShortcutsModule::updateRegistrations()
     m_updating = false;
 }
 
-bool NukeShortcutsModule::frontNukeHasKeyframePlugin() const
+bool NukeShortcutsModule::frontNukeHandles(ShortcutAction action) const
 {
     // Una corrida automatizada no mira el escritorio ni la carpeta real: el resultado no puede
     // depender de que Lega tenga un Nuke con el plugin al frente.
@@ -445,7 +507,9 @@ bool NukeShortcutsModule::frontNukeHasKeyframePlugin() const
         return false;
     }
     const NukeWatcher::FrontProcess front = m_watcher->frontNukeProcess();
-    return KeyframePlugin::handles(KeyframePlugin::markerDir(), front.pid, front.started);
+    const QString dir =
+        action == ShortcutAction::AddKeyframe ? KeyframePlugin::markerDir() : KeyframePlugin::frameMarkerDir();
+    return KeyframePlugin::handles(dir, front.pid, front.started);
 }
 
 QString NukeShortcutsModule::validateShortcut(ShortcutAction action, const Shortcut &shortcut) const
@@ -487,28 +551,38 @@ void NukeShortcutsModule::onHotkey(int localId)
         }
         return;
     }
-    if (localId == kAddKeyframeId) {
-        // El plugin pudo activarse con Nuke ya al frente (se carga al arrancar Nuke, o se recargo):
-        // el atajo global seguia tomado. Se suelta y se le devuelve la combinacion a Nuke.
-        if (frontNukeHasKeyframePlugin()) {
-            qInfo() << "[NukeShortcuts] Add keyframe: este Nuke tiene el plugin, se le devuelve el atajo";
-            const Shortcut shortcut = m_state->shortcut(ShortcutAction::AddKeyframe);
-            context().hotkeys()->unregisterHotkey(kAddKeyframeId);
-            m_registeredAddKeyframe = Shortcut();
-            m_state->setRegistration(ShortcutAction::AddKeyframe, NukeShortcutsState::Registration::Registered);
-            if (!context().dryRunInput()) {
-                context().hotkeys()->passThrough(shortcut);
-            }
-            return;
-        }
-        m_runner->runAddKeyframe();
+    if (localId != kAddKeyframeId && localId != kFrameDopeSheetId) {
         return;
     }
-    if (localId != kFrameDopeSheetId) {
+    const ShortcutAction action =
+        localId == kAddKeyframeId ? ShortcutAction::AddKeyframe : ShortcutAction::FrameDopeSheet;
+    // El plugin pudo activarse con Nuke ya al frente (se carga al arrancar Nuke, o se recargo): el
+    // atajo global seguia tomado. Se suelta y se le devuelve la combinacion a Nuke.
+    if (frontNukeHandles(action)) {
+        qInfo() << "[NukeShortcuts]" << NukeShortcutsState::actionTitle(action)
+                << ": este Nuke tiene el plugin, se le devuelve el atajo";
+        const Shortcut shortcut = m_state->shortcut(action);
+        context().hotkeys()->unregisterHotkey(localId);
+        (action == ShortcutAction::AddKeyframe ? m_registeredAddKeyframe : m_registeredFrame) = Shortcut();
+        m_state->setRegistration(action, NukeShortcutsState::Registration::Registered);
+        if (!context().dryRunInput()) {
+            context().hotkeys()->passThrough(shortcut);
+        }
+        return;
+    }
+    if (action == ShortcutAction::AddKeyframe) {
+        m_runner->runAddKeyframe();
         return;
     }
     if (!m_state->hasDopeSheetSpot()) {
         qInfo() << "[NukeShortcuts] Frame Dope Sheet sin calibrar";
+        if (m_state->pluginFramesDopeSheet()) {
+            // El plugin instalado ya encuadra solo (por eso no se ve el calibrador), pero este Nuke
+            // arranco antes de instalarlo y todavia no lo cargo.
+            context().notify(I18n::tr("Frame Dope Sheet"), I18n::tr("Restart Nuke to load its plugin."),
+                             ModuleContext::NoticeIcon::Info, 6000);
+            return;
+        }
         context().notify(I18n::tr("Frame Dope Sheet"),
 #ifdef Q_OS_MACOS
                          // En mac la barra de menu no tiene menu (D-39): se calibra desde el panel.
@@ -592,7 +666,9 @@ void NukeShortcutsModule::refreshPluginInstalled()
         return; // las capturas fijan el valor en applyCaptureState()
     }
     const QString nukeDir = NukePlugin::currentNukeDirectory();
-    m_state->setPluginInstalled(NukePlugin::inspect(KeyframePlugin::plugin(), nukeDir).installed());
+    const NukePlugin::Status status = NukePlugin::inspect(KeyframePlugin::plugin(), nukeDir);
+    m_state->setPluginInstalled(status.installed());
+    m_state->setPluginFramesDopeSheet(status.installed() && KeyframePlugin::framesDopeSheet(status.installedVersion));
 }
 
 void NukeShortcutsModule::installPlugin(const QString &nukeDir)
@@ -650,7 +726,7 @@ ModuleStatus NukeShortcutsModule::status() const
         // Corto: la fila de la barra lateral no tiene lugar para "Nuke plugin missing".
         return {ModuleTone::Attention, I18n::tr("Plugin missing")};
     }
-    if (!m_state->hasDopeSheetSpot()) {
+    if (!m_state->hasDopeSheetSpot() && !m_state->pluginFramesDopeSheet()) {
         return {ModuleTone::Attention, I18n::tr("Not calibrated")};
     }
     return {ModuleTone::Active, m_state->nukeInFront() ? I18n::tr("On · Nuke in front") : I18n::tr("On")};
@@ -686,7 +762,14 @@ QWidget *NukeShortcutsModule::createPanel(QWidget *parent)
         } else if (m_captureState == QLatin1String("plugin-no-nuke")) {
             panel->showPluginFixture(NukePlugin::ChipState::NotInstalled, QString(), QString());
         } else {
-            panel->showPluginFixture(NukePlugin::ChipState::Installed, QStringLiteral("1.00"), fixtureDir);
+            // Con "dope-by-plugin", la version que encuadra el Dope Sheet (la embebida); en el resto,
+            // la 1.00, que todavia necesita la calibracion que esas capturas muestran (D-42).
+            if (m_captureState == QLatin1String("dope-by-plugin")) {
+                panel->showPluginFixture(NukePlugin::ChipState::Installed,
+                                         NukePlugin::bundledVersion(KeyframePlugin::plugin()), fixtureDir);
+            } else {
+                panel->showPluginFixture(NukePlugin::ChipState::UpdateAvailable, QStringLiteral("1.00"), fixtureDir);
+            }
         }
     }
     if (m_captureState == QLatin1String("recording")) {
@@ -705,6 +788,9 @@ void NukeShortcutsModule::fillTrayMenu(QMenu *menu)
 {
     QAction *toggle = menu->addAction(m_state->paused() ? I18n::tr("Resume shortcuts") : I18n::tr("Pause shortcuts"));
     connect(toggle, &QAction::triggered, this, [this]() { m_state->setPaused(!m_state->paused()); });
+    if (m_state->pluginFramesDopeSheet()) {
+        return; // el plugin encuadra solo: no hay nada que calibrar
+    }
     QAction *calibrate = menu->addAction(I18n::tr("Calibrate Dope Sheet..."));
     connect(calibrate, &QAction::triggered, this, &NukeShortcutsModule::startCalibration);
 }
@@ -729,7 +815,8 @@ QStringList NukeShortcutsModule::captureStates() const
             QStringLiteral("calibrate-bubble-outside"),
             QStringLiteral("plugin-missing"),
             QStringLiteral("plugin-update"),
-            QStringLiteral("plugin-no-nuke")};
+            QStringLiteral("plugin-no-nuke"),
+            QStringLiteral("dope-by-plugin")};
 }
 
 bool NukeShortcutsModule::applyCaptureState(const QString &state)
@@ -751,6 +838,7 @@ bool NukeShortcutsModule::applyCaptureState(const QString &state)
         m_state->setRegistration(action, idle ? NukeShortcutsState::Registration::Idle : NukeShortcutsState::Registration::Registered);
     }
     m_state->setPluginInstalled(state != QLatin1String("plugin-missing") && state != QLatin1String("plugin-no-nuke"));
+    m_state->setPluginFramesDopeSheet(state == QLatin1String("dope-by-plugin"));
     if (state == QLatin1String("paused")) {
         m_state->setPaused(true);
     } else if (state == QLatin1String("taken")) {
@@ -797,8 +885,8 @@ ModuleDescriptor nukeShortcutsDescriptor()
     d.description = I18n::tr(
         "Two shortcuts for Nuke: set a key on the knob under the pointer, and frame every key in the Dope Sheet.");
     d.offBullets = {I18n::tr("Registers two shortcuts, only while Nuke is in front"),
-                    I18n::tr("Clicks and types in Nuke for you"),
-                    I18n::tr("Needs one calibration click on the Dope Sheet")};
+                    I18n::tr("Works inside Nuke through its plugin"),
+                    I18n::tr("Without the plugin, clicks and types in Nuke for you")};
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintNukeIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> { return std::make_unique<NukeShortcutsModule>(context); };
@@ -817,10 +905,12 @@ HelpSection nukeShortcutsHelp(const SettingsReader &value)
     section.steps = {
         I18n::tr("Put the pointer over a knob in Nuke and press %1 to set a key.")
             .arg(HelpSection::strong(configured(value, ShortcutAction::AddKeyframe).displayText())),
-        I18n::tr("Calibrate the %1 once: one click on an empty spot.").arg(HelpSection::strong(QStringLiteral("Dope Sheet"))),
+        I18n::tr("Without the Nuke plugin, calibrate the %1 once: one click on an empty spot.")
+            .arg(HelpSection::strong(QStringLiteral("Dope Sheet"))),
         I18n::tr("Press %1 to select every key in the Dope Sheet and frame them.")
             .arg(HelpSection::strong(configured(value, ShortcutAction::FrameDopeSheet).displayText())),
     };
     section.note = I18n::tr("The shortcuts only work while Nuke is in front; other apps keep these keys.");
     return section;
 }
+

@@ -54,8 +54,8 @@ private:
     void declareShortcuts();
     // Registra o suelta los atajos segun el estado: activos, Nuke al frente y (mac) con permiso.
     void updateRegistrations();
-    // El Nuke del frente atiende "Add keyframe" con su plugin (KeyframePlugin.h).
-    bool frontNukeHasKeyframePlugin() const;
+    // El Nuke del frente atiende `action` con su plugin (KeyframePlugin.h).
+    bool frontNukeHandles(ShortcutAction action) const;
     void refreshAccessibility();
     void openAccessibilitySettings();
     // Instala `<nukeDir>/LGA_NukeShortcuts` (boton de la tarjeta "Nuke plugin"). Nunca en una

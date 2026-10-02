@@ -9,6 +9,7 @@
 #include <functional>
 
 class Chip;
+class QFrame;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -71,6 +72,7 @@ private:
     StatusCard *m_statusCard = nullptr;
     ShortcutRow *m_addKeyframeRow = nullptr;
     ShortcutRow *m_frameRow = nullptr;
+    QFrame *m_spotCard = nullptr;
     Chip *m_spotChip = nullptr;
     SpotThumbnail *m_spotThumb = nullptr;
     QLabel *m_spotValue = nullptr;

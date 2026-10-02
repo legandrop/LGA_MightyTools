@@ -113,8 +113,14 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     pluginHead->addWidget(m_pluginChip, 0, Qt::AlignVCenter);
     plugin->addLayout(pluginHead);
     QLabel *pluginCaption = Ui::caption(
+#ifdef Q_OS_MACOS
+        // En la Mac el plugin solo hace el keyframe hasta probar ahi el Dope Sheet (D-42).
         I18n::tr("With the plugin, Nuke itself sets the key, even with the knob field in focus. Without it, "
                  "Add keyframe right-clicks the knob."),
+#else
+        I18n::tr("With the plugin, both shortcuts work inside Nuke: no clicks and no calibration. Without it, "
+                 "they click and type in Nuke for you."),
+#endif
         pluginCard);
     pluginCaption->setWordWrap(true);
     plugin->addWidget(pluginCaption);
@@ -142,6 +148,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
 
     // ---------- Tarjeta 4: punto del Dope Sheet ----------
     QFrame *spotCard = Ui::card(this);
+    m_spotCard = spotCard;
     auto *spot = new QVBoxLayout(spotCard);
     spot->setContentsMargins(14, 12, 14, 12);
     spot->setSpacing(8);
@@ -392,6 +399,8 @@ void NukeShortcutsPanel::refresh()
         m_spotCaption->setText(I18n::tr("Frame Dope Sheet needs it. Takes one click."));
     }
     m_spotThumb->setSpot(m_state->hasDopeSheetSpot(), m_state->dopeSheetSpot());
+    // Con el plugin que encuadra dentro de Nuke (D-42) el punto no se usa: la tarjeta no se muestra.
+    m_spotCard->setVisible(!m_state->pluginFramesDopeSheet());
 }
 
 void NukeShortcutsPanel::onStatusButtonClicked()

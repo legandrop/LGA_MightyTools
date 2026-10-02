@@ -141,6 +141,15 @@ void NukeShortcutsState::setPluginInstalled(bool installed)
     emit changed();
 }
 
+void NukeShortcutsState::setPluginFramesDopeSheet(bool frames)
+{
+    if (m_pluginFramesDopeSheet == frames) {
+        return;
+    }
+    m_pluginFramesDopeSheet = frames;
+    emit changed();
+}
+
 void NukeShortcutsState::setRegistration(ShortcutAction action, Registration registration, const QString &conflictWith)
 {
     Registration &target = action == ShortcutAction::AddKeyframe ? m_addKeyframeRegistration : m_frameRegistration;

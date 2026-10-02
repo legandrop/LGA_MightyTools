@@ -116,6 +116,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   Nuke Shortcuts instala `LGA_NukeShortcuts` (el keyframe), cada una con su línea en el `init.py` y desde
   su propio panel. Quien usa solo Nuke Shortcuts no se lleva el servidor. El keyframe funciona en
   cualquier Nuke con interfaz, no solo en NukeX. El bridge 1.85 borra el keyframe que dejó la 1.84.
+- **D-42 · «Frame Dope Sheet» dentro de Nuke** (2026-10-02, probado por Lega con una sonda: «funciona
+  perfecto»). El plugin `LGA_NukeShortcuts` 1.01 registra también este atajo. Busca el Dope Sheet por su
+  widget, le hace creer que el mouse entró y manda Ctrl+A y F: sin mover el puntero, sin click y sin
+  calibrar. Con el Dope Sheet escondido no hace nada (opción a de Lega). Cada atajo deja su propia marca,
+  así un plugin 1.00 no apaga el macro del Dope Sheet. Con el plugin 1.01 instalado no se muestra la
+  calibración. Sin plugin queda el macro calibrado de respaldo.
 
 ## Abiertas
 
