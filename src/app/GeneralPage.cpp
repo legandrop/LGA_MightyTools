@@ -161,8 +161,6 @@ QFrame *GeneralPage::buildAppCard()
     m_updateResult = Ui::label(QString(), "meta", card);
     m_updateButton = Ui::button(I18n::tr("Check now"), QString(), QStringLiteral("sm"), card);
     m_updateButton->setObjectName(QStringLiteral("checkNowButton"));
-#ifdef Q_OS_WIN
-    // Updates: solo en Windows por ahora (el updater baja y lanza el instalador de Inno).
     Ui::addDivider(layout, card);
     auto *row = new QHBoxLayout();
     row->setContentsMargins(0, 0, 0, 0);
@@ -174,11 +172,6 @@ QFrame *GeneralPage::buildAppCard()
     rowWidget->setLayout(row);
     rowWidget->setMinimumHeight(26);
     layout->addWidget(rowWidget);
-#else
-    m_checkUpdates->hide();
-    m_updateResult->hide();
-    m_updateButton->hide();
-#endif
     connect(m_checkUpdates, &QCheckBox::clicked, this, &GeneralPage::checkUpdatesAtStartupToggled);
     connect(m_updateButton, &QPushButton::clicked, this, [this]() {
         if (m_updateState.kind == UpdateRowState::Kind::Available) {
@@ -406,9 +399,7 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
     }
     m_updateResult->setText(text);
     Ui::setStyleProperty(m_updateResult, "tone", tone);
-#ifdef Q_OS_WIN
     m_updateResult->setVisible(!text.isEmpty());
-#endif
     const bool available = state.kind == UpdateRowState::Kind::Available;
     // Mientras dice "Checking…" no se puede pedir otro chequeo.
     m_updateButton->setEnabled(state.kind != UpdateRowState::Kind::Checking);

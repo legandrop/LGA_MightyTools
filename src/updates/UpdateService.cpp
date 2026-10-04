@@ -1,46 +1,43 @@
 #include "updates/UpdateService.h"
+#include "updates/UpdateManifest.h"
 #include "updates/VersionCompare.h"
 #include "updates/UpdateDialog.h"
 
 #include "app/SettingsStore.h"
+#include "core/AutomatedRun.h"
+#include "core/DebugFlags.h"
 #include "core/I18n.h"
+#include "platform/UpdateInstaller.h"
 
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDebug>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDir>
 #include <QFile>
-#include <QFileInfo>
-#include <QHBoxLayout>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonParseError>
-#include <QLabel>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
-#include <QProcess>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QRandomGenerator>
-#include <QRegularExpression>
 #include <QSaveFile>
 #include <QScopedPointer>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUrl>
-#include <QVBoxLayout>
 
 namespace {
 
 // Manifiesto estatico de LGA, servido por GitHub Pages desde legandrop/LGA_Updates.
 // No le pega a la API de GitHub (rate limit 60/h/IP): un workflow de ese repo la
 // consulta una vez y publica este archivo, sin limite de lecturas.
-const QString kManifestUrl = QStringLiteral("https://legandrop.github.io/LGA_Updates/versions.json");
+const QString kOfficialManifestUrl = QStringLiteral("https://legandrop.github.io/LGA_Updates/versions.json");
 const QString kRepoSlug = QStringLiteral("legandrop/LGA_MightyTools");
+// Donde se baja a mano cuando esta copia no se puede actualizar sola.
+const QString kReleasesPageUrl = QStringLiteral("https://github.com/legandrop/LGA_MightyTools/releases/latest");
 const QString kDisplayName = QStringLiteral("LGA Mighty Tools");
 
 // Demora del chequeo automatico al arrancar: le da tiempo a la app a terminar de
@@ -62,102 +59,38 @@ constexpr int kPeriodicTickMs = 5 * 60 * 1000;
 constexpr int kSnoozeDays = 1;
 const QString kSnoozeKey = QStringLiteral("updates/snoozeUntil");
 
-// Formato del manifiesto que esta app sabe leer.
-constexpr int kManifestSchemaVersion = 1;
-
-// El asset del release para esta app: "LGA_MightyTools_Setup_v<version>.exe".
-const QRegularExpression &assetPattern()
+// URL de un flag de debug, solo si apunta a ESTA maquina (UpdateManifest::loopbackUrl).
+QUrl loopbackDebugUrl(const QString &flag)
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^LGA_MightyTools_Setup_v(.+)\\.exe$"));
-    return pattern;
+    return UpdateManifest::loopbackUrl(DebugFlags::value(flag));
 }
 
-QString normalizedVersion(QString version)
+// El manifiesto oficial, salvo en una prueba del updater contra un servidor local
+// (updateManifestUrl de config/debug_flags.txt).
+QUrl manifestUrl()
 {
-    version = version.trimmed();
-    if (version.startsWith(QLatin1Char('v'), Qt::CaseInsensitive)) {
-        version.remove(0, 1);
-    }
-    return version;
+    const QUrl debugUrl = loopbackDebugUrl(QStringLiteral("updateManifestUrl"));
+    return debugUrl.isValid() ? debugUrl : QUrl(kOfficialManifestUrl);
 }
 
-QString normalizedSha256Digest(QString digest)
+bool usingDebugManifest()
 {
-    digest = digest.trimmed();
-    if (digest.startsWith(QStringLiteral("sha256:"), Qt::CaseInsensitive)) {
-        digest.remove(0, QStringLiteral("sha256:").size());
-    }
-    digest = digest.toLower();
-
-    static const QRegularExpression digestPattern(QStringLiteral("^[0-9a-f]{64}$"));
-    if (!digestPattern.match(digest).hasMatch()) {
-        return {};
-    }
-    return digest;
+    return loopbackDebugUrl(QStringLiteral("updateManifestUrl")).isValid();
 }
-
-// Datos del asset del release que le toca a esta plataforma.
-struct ReleaseInfo {
-    QString version;
-    QUrl downloadUrl;
-    QString assetName;
-    QString assetDigest;
-};
 
 // URL de descarga del asset, DERIVADA del slug/tag/nombre en vez de venir en el
 // manifiesto: es publica y estable, y guardarla seria un segundo lugar donde
 // quedar vieja.
 QUrl assetDownloadUrl(const QString &tag, const QString &name)
 {
+    if (usingDebugManifest()) {
+        const QUrl base = loopbackDebugUrl(QStringLiteral("updateDownloadBase"));
+        if (base.isValid()) {
+            return base.resolved(QUrl(name));
+        }
+    }
     return QUrl(QStringLiteral("https://github.com/%1/releases/download/%2/%3")
                     .arg(kRepoSlug, tag, name));
-}
-
-// Saca del manifiesto el release de LGA_MightyTools: tag + primer asset cuyo
-// nombre matchee assetPattern(). info.version queda vacio si el repo no tiene
-// release todavia (entrada ausente) o el manifiesto no se pudo leer.
-ReleaseInfo parseManifest(const QByteArray &payload)
-{
-    QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(payload, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-        return {};
-    }
-
-    const QJsonObject root = doc.object();
-    if (root.value(QStringLiteral("schemaVersion")).toInt(0) != kManifestSchemaVersion) {
-        return {};
-    }
-
-    const QJsonObject products = root.value(QStringLiteral("products")).toObject();
-    const QJsonObject product = products.value(kRepoSlug).toObject();
-    if (product.isEmpty()) {
-        // Repo sin release todavia: no es un error, es "no hay update".
-        return {};
-    }
-
-    const QString tag = product.value(QStringLiteral("tag")).toString().trimmed();
-    ReleaseInfo info;
-    info.version = normalizedVersion(tag);
-    if (info.version.isEmpty()) {
-        return {};
-    }
-
-    const QJsonArray assets = product.value(QStringLiteral("assets")).toArray();
-    for (const QJsonValue &assetValue : assets) {
-        const QJsonObject asset = assetValue.toObject();
-        const QString name = asset.value(QStringLiteral("name")).toString();
-        if (!assetPattern().match(name).hasMatch()) {
-            continue;
-        }
-        info.assetName = name;
-        info.downloadUrl = assetDownloadUrl(tag, name);
-        info.assetDigest = normalizedSha256Digest(asset.value(QStringLiteral("digest")).toString());
-        break;
-    }
-
-    return info;
 }
 
 } // namespace
@@ -318,6 +251,9 @@ void UpdateService::installAvailable()
             I18n::tr("An update operation is already in progress."));
         return;
     }
+    if (blockedHere()) {
+        return;
+    }
     m_busy = true;
     downloadAndRunUpdate(m_availableUrl, m_availableAsset, m_availableDigest, m_availableVersion);
 }
@@ -330,7 +266,7 @@ void UpdateService::startCheckRequest(Mode mode)
         return;
     }
 
-    QNetworkRequest request{QUrl(kManifestUrl)};
+    QNetworkRequest request{manifestUrl()};
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("LGA_MightyTools/%1").arg(QApplication::applicationVersion()));
     request.setRawHeader("Accept", "application/json");
@@ -383,7 +319,7 @@ void UpdateService::onCheckFinished(Mode mode)
             QMessageBox::warning(parentWindow(), I18n::tr("Update Check Failed"),
                 I18n::tr("Could not check for updates. Please try again later.\n\n"
                    "httpStatus=%1\nurl=%2\nnetworkError=%3\nbody=%4")
-                    .arg(QString::number(httpStatus), kManifestUrl,
+                    .arg(QString::number(httpStatus), manifestUrl().toString(),
                          QString::number(static_cast<int>(error)),
                          QString::fromUtf8(payload.left(2048))));
         }
@@ -405,13 +341,14 @@ void UpdateService::onCheckFinished(Mode mode)
             QMessageBox::warning(parentWindow(), I18n::tr("Update Check Failed"),
                 I18n::tr("Could not check for updates. Please try again later.\n\n"
                    "httpStatus=%1\nurl=%2\nbody=%3")
-                    .arg(QString::number(httpStatus), kManifestUrl,
+                    .arg(QString::number(httpStatus), manifestUrl().toString(),
                          QString::fromUtf8(payload.left(2048))));
         }
         return;
     }
 
-    const ReleaseInfo info = parseManifest(payload);
+    const UpdateManifest::ReleaseInfo info = UpdateManifest::parse(payload, UpdateManifest::currentPlatform());
+    const QUrl downloadUrl = info.assetName.isEmpty() ? QUrl() : assetDownloadUrl(info.tag, info.assetName);
     if (info.version.isEmpty()) {
         qDebug() << "[UpdateService] Sin release instalable en el manifiesto.";
         m_busy = false;
@@ -423,7 +360,7 @@ void UpdateService::onCheckFinished(Mode mode)
         return;
     }
 
-    if (!info.downloadUrl.isValid()) {
+    if (!downloadUrl.isValid()) {
         qDebug() << "[UpdateService] Release" << info.version << "sin asset que matchee el patron.";
         m_busy = false;
         emit checkFailed();
@@ -468,7 +405,7 @@ void UpdateService::onCheckFinished(Mode mode)
 
     qDebug() << "[UpdateService] Hay update disponible:" << info.version;
     m_availableVersion = info.version;
-    m_availableUrl = info.downloadUrl;
+    m_availableUrl = downloadUrl;
     m_availableAsset = info.assetName;
     m_availableDigest = info.assetDigest;
     emit updateAvailable(info.version);
@@ -490,19 +427,26 @@ void UpdateService::onCheckFinished(Mode mode)
     // durante el dialogo y, si el usuario acepta, durante el arranque de la
     // descarga. Se libera en promptForUpdate (si elige "Later") o en
     // onDownloadFinished / los retornos tempranos de downloadAndRunUpdate.
-    promptForUpdate(info.version, info.downloadUrl, info.assetName, info.assetDigest);
+    promptForUpdate(info.version, downloadUrl, info.assetName, info.assetDigest);
 }
 
 void UpdateService::promptForUpdate(const QString &version, const QUrl &downloadUrl,
                                     const QString &assetName, const QString &sha256Digest)
 {
+    // Prueba del updater contra un servidor local: instala sin preguntar (ver DebugFlags.h).
+    const bool withoutAsking = usingDebugManifest() && DebugFlags::isOn(QStringLiteral("updateInstallWithoutAsking"));
+
     // El armado vive en UpdateDialog.cpp para que --ui-shot lo pueda dibujar sin este servicio.
     QScopedPointer<QDialog> dialog(
         createUpdateAvailableDialog(parentWindow(), kDisplayName, version, QApplication::applicationVersion()));
 
     // Later (o cerrar el cartel) pospone el chequeo automatico 1 dia; sin eso el chequeo
     // periodico lo volvia a mostrar cada 3 horas. El manual y "Check now" lo ignoran.
-    if (dialog->exec() == QDialog::Accepted) {
+    if (withoutAsking || dialog->exec() == QDialog::Accepted) {
+        if (blockedHere()) {
+            m_busy = false;
+            return;
+        }
         setSnoozeUntil(QDateTime());
         downloadAndRunUpdate(downloadUrl, assetName, sha256Digest, version);
     } else {
@@ -512,14 +456,55 @@ void UpdateService::promptForUpdate(const QString &version, const QUrl &download
     }
 }
 
+bool UpdateService::blockedHere()
+{
+    const UpdateInstaller::Blocker blocker = UpdateInstaller::blocker();
+    if (blocker == UpdateInstaller::Blocker::None) {
+        return false;
+    }
+    qDebug() << "[UpdateService] Esta copia no se puede actualizar sola, motivo=" << int(blocker);
+    // Vale como "Later": sin esto el chequeo periodico volveria a ofrecer cada 3 horas una
+    // actualizacion que aca no se puede instalar.
+    setSnoozeUntil(QDateTime::currentDateTime().addDays(kSnoozeDays));
+
+    QString text;
+    bool offerDownload = true;
+    switch (blocker) {
+    case UpdateInstaller::Blocker::DevelopmentCopy:
+        text = I18n::tr("This is a development copy, so it does not update itself.");
+        offerDownload = false;
+        break;
+    case UpdateInstaller::Blocker::MoveToApplications:
+        text = I18n::tr("%1 is running from the disk image or from a temporary copy, so it cannot update "
+                        "itself.\n\nMove it to the Applications folder, open it from there and try again.")
+                   .arg(kDisplayName);
+        break;
+    case UpdateInstaller::Blocker::FolderNotWritable:
+        text = I18n::tr("You do not have permission to change the folder where %1 is installed, so it "
+                        "cannot update itself.\n\nDownload the new version and install it by hand.")
+                   .arg(kDisplayName);
+        break;
+    case UpdateInstaller::Blocker::None:
+        break;
+    }
+
+    QMessageBox box(QMessageBox::Information, I18n::tr("Updates"), text, QMessageBox::NoButton, parentWindow());
+    QPushButton *download = offerDownload ? box.addButton(I18n::tr("Open download page"), QMessageBox::AcceptRole)
+                                          : nullptr;
+    box.addButton(I18n::tr("Close"), QMessageBox::RejectRole);
+    box.exec();
+    if (download && box.clickedButton() == download && !AutomatedRun::active()) {
+        QDesktopServices::openUrl(QUrl(kReleasesPageUrl));
+    }
+    return true;
+}
+
 void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
                                          const QString &sha256Digest, const QString &version)
 {
     if (!m_network || m_downloadReply) {
         return;
     }
-
-    m_pendingSha256Digest = normalizedSha256Digest(sha256Digest);
 
     // Carpeta temporal, no el cache: el instalador descargado es de un solo uso y no
     // hay motivo para que sobreviva a un reinicio del sistema.
@@ -535,6 +520,10 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
     }
 
     discardPartialDownload();
+    // DESPUES de discardPartialDownload(), que limpia el digest pendiente: asignado antes, la descarga
+    // llegaba al final sin digest contra el cual verificar y nunca se instalaba.
+    m_pendingSha256Digest = UpdateManifest::normalizedSha256Digest(sha256Digest);
+    m_downloadVersion = version;
     m_downloadTargetPath = QDir(updateDir).filePath(assetName);
     m_downloadUserCancelled = false;
     m_downloadWriteFailed = false;
@@ -699,6 +688,7 @@ void UpdateService::onDownloadFinished()
         const QString detail = QStringLiteral("httpStatus=%1\nnetworkError=%2 (%3)")
                                    .arg(QString::number(httpStatus),
                                         QString::number(static_cast<int>(error)), errorString);
+        qDebug() << "[UpdateService] La descarga fallo:" << detail;
         discardPartialDownload();
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
             I18n::tr("The update installer could not be downloaded.\n\n%1").arg(detail));
@@ -711,6 +701,7 @@ void UpdateService::onDownloadFinished()
     // guard, no un caso legitimo.
     Q_ASSERT(!m_pendingSha256Digest.isEmpty());
     if (m_pendingSha256Digest.isEmpty()) {
+        qDebug() << "[UpdateService] Descarga sin digest pendiente: no se instala.";
         discardPartialDownload();
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
             I18n::tr("Internal error: missing integrity digest for the downloaded update."));
@@ -721,6 +712,7 @@ void UpdateService::onDownloadFinished()
     if (downloadedDigest.compare(m_pendingSha256Digest, Qt::CaseInsensitive) != 0) {
         const QString detail = QStringLiteral("expected=%1\ngot=%2")
                                    .arg(m_pendingSha256Digest, downloadedDigest);
+        qDebug() << "[UpdateService] El SHA-256 de lo descargado no coincide:" << detail;
         discardPartialDownload();
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
             I18n::tr("The downloaded update failed integrity verification.\n\n%1")
@@ -731,6 +723,7 @@ void UpdateService::onDownloadFinished()
     const QString installerPath = m_downloadTargetPath;
     if (!m_downloadFile->commit()) {
         const QString detail = m_downloadFile->errorString();
+        qDebug() << "[UpdateService] No se pudo guardar lo descargado:" << detail;
         discardPartialDownload();
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
             I18n::tr("The update installer could not be saved.\n\n%1").arg(detail));
@@ -742,10 +735,21 @@ void UpdateService::onDownloadFinished()
     delete m_downloadHash;
     m_downloadHash = nullptr;
 
-    qDebug() << "[UpdateService] Descarga OK, verificada. Lanzando instalador:" << installerPath;
+    qDebug() << "[UpdateService] Descarga OK, verificada. Instalando:" << installerPath;
 
-    // El .iss ya mata la instancia en curso igual, pero salir primero es mas limpio.
-    QProcess::startDetached(installerPath, {});
+    const UpdateInstaller::Result launched = UpdateInstaller::launch(
+        installerPath, m_downloadVersion, kDisplayName,
+        I18n::tr("The update could not be installed. %1 was left as it was.").arg(kDisplayName));
+    if (!launched.started) {
+        qDebug() << "[UpdateService] No se pudo lanzar la instalacion:" << launched.detail;
+        QFile::remove(installerPath);
+        m_busy = false;
+        QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
+            I18n::tr("The update could not be started.\n\n%1").arg(launched.detail));
+        return;
+    }
+    // Windows: el .iss ya cierra la instancia en curso igual, pero salir primero es mas limpio.
+    // macOS: el script espera a que esta copia termine para reemplazarla.
     qApp->quit();
 }
 

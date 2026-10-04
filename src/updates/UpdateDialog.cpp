@@ -26,10 +26,15 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
     title->setWordWrap(true);
     layout->addWidget(title);
 
-    auto *message = new QLabel(I18n::tr("You are running version %1. Updating closes Mighty Tools "
-                                              "and opens the installer.")
-                                   .arg(currentVersion),
-                               dialog);
+#ifdef Q_OS_MACOS
+    // En macOS no hay instalador: la app se reemplaza sola y vuelve a abrir.
+    const QString body = I18n::tr("You are running version %1. Updating closes Mighty Tools and opens it "
+                                  "again when it is done.");
+#else
+    const QString body = I18n::tr("You are running version %1. Updating closes Mighty Tools "
+                                  "and opens the installer.");
+#endif
+    auto *message = new QLabel(body.arg(currentVersion), dialog);
     message->setObjectName(QStringLiteral("caption"));
     message->setWordWrap(true);
     layout->addWidget(message);

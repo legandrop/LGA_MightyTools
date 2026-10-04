@@ -19,8 +19,9 @@ class QWidget;
 class SettingsStore;
 
 // Auto-update de LGA_MightyTools: chequea un manifiesto estatico publicado por
-// GitHub Pages (legandrop/LGA_Updates), ofrece bajar el instalador si hay una
-// version mas nueva, verifica su SHA-256 y lo lanza.
+// GitHub Pages (legandrop/LGA_Updates), ofrece bajar el paquete de esta plataforma si hay una
+// version mas nueva, verifica su SHA-256 y lo instala (platform/UpdateInstaller.h: en Windows
+// lanza el instalador, en macOS reemplaza el bundle).
 //
 // Version SIMPLIFICADA de FM_UpdateService (LGA_FileManagerS3): esta app no tiene
 // skip de version ni helper de cierre de procesos, asi que ese estado y esas ramas no
@@ -81,6 +82,9 @@ private:
 
     void promptForUpdate(const QString &version, const QUrl &downloadUrl,
                          const QString &assetName, const QString &sha256Digest);
+    // True si ESTA copia no se puede actualizar sola (ya le mostro al usuario por que y lo dejo
+    // pospuesto como "Later").
+    bool blockedHere();
     void downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
                               const QString &sha256Digest, const QString &version);
     void onDownloadReadyRead();
@@ -127,6 +131,7 @@ private:
     QSaveFile *m_downloadFile = nullptr;
     QCryptographicHash *m_downloadHash = nullptr;
     QString m_downloadTargetPath;
+    QString m_downloadVersion;
     QString m_pendingSha256Digest;
     bool m_downloadUserCancelled = false;
     // Escritura a disco corta o fallida (disco lleno, permisos, etc.): se corta la

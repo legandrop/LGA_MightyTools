@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.29 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.30 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -168,6 +168,10 @@ set(SOURCES
     src/ui/UiWidgets.cpp
     src/ui/CustomTooltip.cpp
     src/updates/UpdateDialog.cpp
+    src/updates/UpdateManifest.cpp
+    src/updates/UpdateSelfTest.cpp
+    src/updates/UpdateService.cpp
+    src/updates/VersionCompare.cpp
 )
 
 set(HEADERS
@@ -270,6 +274,11 @@ set(HEADERS
     src/ui/UiWidgets.h
     src/ui/CustomTooltip.h
     src/updates/UpdateDialog.h
+    src/updates/UpdateManifest.h
+    src/updates/UpdateSelfTest.h
+    src/updates/UpdateService.h
+    src/updates/VersionCompare.h
+    src/platform/UpdateInstaller.h
 )
 
 # Capa de plataforma: una implementacion por sistema detras de los headers de src/platform/.
@@ -303,9 +312,8 @@ if(WIN32)
         src/platform/win/WindowFrameWin.cpp
         # Self-test del registro sobre un hive privado (RegLoadAppKey): solo Windows.
         src/qa/RegistryHiveTest.cpp
-        # El updater baja y lanza el instalador de Inno: solo Windows por ahora.
-        src/updates/UpdateService.cpp
-        src/updates/VersionCompare.cpp
+        # Ultimo paso del updater en Windows: lanza el instalador de Inno.
+        src/platform/win/UpdateInstallerWin.cpp
         # Modulo Folder Switch: solo Windows (plan, 2 "Folder Switch").
         src/modules/folderswitch/DialogSwitcher.cpp
         src/modules/folderswitch/FolderResolver.cpp
@@ -323,8 +331,6 @@ if(WIN32)
         src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
         src/qa/RegistryHiveTest.h
-        src/updates/UpdateService.h
-        src/updates/VersionCompare.h
         src/modules/folderswitch/DialogSwitcher.h
         src/modules/folderswitch/FolderResolver.h
         src/modules/folderswitch/FolderSwitchLogic.h
@@ -357,6 +363,8 @@ elseif(APPLE)
         src/platform/mac/RecycleBinMac.cpp
         src/platform/mac/ScreenInfoMac.mm
         src/platform/mac/SystemPathsMac.cpp
+        # Ultimo paso del updater en macOS: el script que reemplaza el bundle instalado.
+        src/platform/mac/UpdateInstallerMac.cpp
         src/modules/diskspace/cleanup/mac/CleanupRulesMac.cpp
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/HotkeyServiceMac.cpp

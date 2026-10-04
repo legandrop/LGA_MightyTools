@@ -7,9 +7,9 @@
 
 namespace {
 
-QHash<QString, bool> load()
+QHash<QString, QString> load()
 {
-    QHash<QString, bool> flags;
+    QHash<QString, QString> flags;
     QFile file(AppPaths::configFile(QStringLiteral("debug_flags.txt")));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         return flags;
@@ -24,11 +24,15 @@ QHash<QString, bool> load()
         if (eq <= 0) {
             continue;
         }
-        const QString value = line.mid(eq + 1).trimmed().toLower();
-        flags.insert(line.left(eq).trimmed(),
-                     value == QLatin1String("true") || value == QLatin1String("1") || value == QLatin1String("yes"));
+        flags.insert(line.left(eq).trimmed(), line.mid(eq + 1).trimmed());
     }
     return flags;
+}
+
+const QHash<QString, QString> &flags()
+{
+    static const QHash<QString, QString> loaded = load();
+    return loaded;
 }
 
 } // namespace
@@ -37,8 +41,13 @@ namespace DebugFlags {
 
 bool isOn(const QString &name)
 {
-    static const QHash<QString, bool> flags = load();
-    return flags.value(name, false);
+    const QString value = flags().value(name).toLower();
+    return value == QLatin1String("true") || value == QLatin1String("1") || value == QLatin1String("yes");
+}
+
+QString value(const QString &name)
+{
+    return flags().value(name);
 }
 
 } // namespace DebugFlags

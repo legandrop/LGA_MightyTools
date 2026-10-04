@@ -17,9 +17,7 @@
 #include "platform/WindowActivation.h"
 #include "ui/HelpDialog.h"
 
-#ifdef Q_OS_WIN
 #include "updates/UpdateService.h"
-#endif
 
 #include <QAction>
 #include <QApplication>
@@ -147,7 +145,6 @@ AppController::AppController(const Options &options, QObject *parent)
         WindowActivation::onReopenRequested([this]() { showSettings(); });
     }
 
-#ifdef Q_OS_WIN
     if (!m_options.measurement) {
         // parentWindow es la ventana (normalmente oculta): sus dialogos igual se centran en pantalla.
         m_updates = new UpdateService(m_window, this);
@@ -165,7 +162,6 @@ AppController::AppController(const Options &options, QObject *parent)
         connect(m_updates, &UpdateService::checkFailed, this,
                 [this]() { m_window->setUpdateState(UpdateRowState()); });
     }
-#endif
 
     wireGeneralPage();
     const bool checkUpdates = m_store->value(kCheckUpdates, true).toBool();
@@ -187,7 +183,6 @@ AppController::AppController(const Options &options, QObject *parent)
         });
     }
 
-#ifdef Q_OS_WIN
     if (m_updates) {
         if (checkUpdates) {
             m_updates->scheduleAutomaticCheck();
@@ -195,9 +190,6 @@ AppController::AppController(const Options &options, QObject *parent)
             qInfo() << "[AppController] Chequeo de updates al arrancar: desactivado por el usuario";
         }
     }
-#else
-    Q_UNUSED(checkUpdates);
-#endif
 
     if (!m_options.measurement) {
         // La ventana se abre sola SOLO en el primer arranque de la copia instalada (D-06, canvas
@@ -303,12 +295,10 @@ void AppController::wireGeneralPage()
     connect(general, &GeneralPage::languageChangeRequested, this, &AppController::onLanguageChangeRequested);
     connect(general, &GeneralPage::uiSizeChangeRequested, this, &AppController::onUiSizeChangeRequested);
     connect(general, &GeneralPage::quitRequested, this, &AppController::quit);
-#ifdef Q_OS_WIN
     if (m_updates) {
         connect(general, &GeneralPage::checkNowRequested, m_updates, &UpdateService::checkInline);
         connect(general, &GeneralPage::updateRequested, m_updates, &UpdateService::installAvailable);
     }
-#endif
     general->setCheckUpdatesAtStartup(m_store->value(kCheckUpdates, true).toBool());
     refreshAutoStart();
 }

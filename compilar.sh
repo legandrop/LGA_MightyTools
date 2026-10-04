@@ -69,17 +69,38 @@ if [ -z "${QT_PREFIX:-}" ]; then
 fi
 SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
 
+# Arquitecturas: Release (lo que se publica) es UNIVERSAL, arm64 + x86_64: el Qt oficial es universal y
+# las Mac Intel de los usuarios tambien actualizan. Debug (desarrollo) solo arm64, que compila la mitad
+# de rapido. Cambiar el conjunto sobre un arbol ya compilado mezcla objetos de otra arquitectura: se
+# reconfigura de cero (ver mas abajo).
+if [ "$BUILD_TYPE" = "Release" ]; then
+    OSX_ARCHS="arm64;x86_64"
+else
+    OSX_ARCHS="arm64"
+fi
+
 # Se reconfigura si falta el cache o si el build type cacheado no es el pedido: si no, pedir Release
 # sobre un arbol en Debug compilaria Debug en silencio.
 CACHED_TYPE=""
 CACHED_PREFIX=""
+CACHED_ARCHS=""
 if [ -f CMakeCache.txt ]; then
     CACHED_TYPE="$(grep -E '^CMAKE_BUILD_TYPE:' CMakeCache.txt | cut -d= -f2)"
     CACHED_PREFIX="$(grep -E '^CMAKE_PREFIX_PATH:' CMakeCache.txt | cut -d= -f2)"
+    CACHED_ARCHS="$(grep -E '^CMAKE_OSX_ARCHITECTURES:' CMakeCache.txt | cut -d= -f2)"
 fi
 # Cambiar de Qt sobre un arbol ya configurado mezcla los dos: se empieza de cero.
 if [ -f CMakeCache.txt ] && [ "$CACHED_PREFIX" != "$QT_PREFIX" ]; then
     echo "El arbol estaba configurado con otro Qt ($CACHED_PREFIX): se limpia."
+    cd "$APP_ROOT"
+    rm -rf "$BUILD_DIR"
+    mkdir -p "$BUILD_DIR"
+    cd "$BUILD_DIR"
+fi
+# Lo mismo con las arquitecturas: un arbol de otra arquitectura (el Release de antes era solo arm64) se
+# borra entero, no se reaprovecha.
+if [ -f CMakeCache.txt ] && [ "$CACHED_ARCHS" != "$OSX_ARCHS" ]; then
+    echo "El arbol estaba configurado para otras arquitecturas ($CACHED_ARCHS): se limpia."
     cd "$APP_ROOT"
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
@@ -90,7 +111,7 @@ if [ ! -f CMakeCache.txt ] || [ "$CACHED_TYPE" != "$BUILD_TYPE" ]; then
     cmake .. -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
         -DCMAKE_PREFIX_PATH="$QT_PREFIX" \
-        -DCMAKE_OSX_ARCHITECTURES="arm64" \
+        -DCMAKE_OSX_ARCHITECTURES="$OSX_ARCHS" \
         -DCMAKE_OSX_SYSROOT="$SDK_PATH"
 fi
 

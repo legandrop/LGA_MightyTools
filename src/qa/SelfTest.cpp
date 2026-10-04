@@ -19,6 +19,7 @@
 #include "platform/ProcessStats.h"
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
+#include "updates/UpdateSelfTest.h"
 
 #ifdef Q_OS_WIN
 #include "qa/RegistryHiveTest.h"
@@ -946,6 +947,8 @@ int run()
 #ifdef Q_OS_WIN
     testOperations(check);
 #endif
+
+    UpdateSelfTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[updates] ") + what); });
 
     // La logica de cada herramienta, con sus propios casos negativos.
     for (const ModuleDescriptor &d : ModuleRegistry::all()) {

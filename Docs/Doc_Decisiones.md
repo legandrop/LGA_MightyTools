@@ -136,6 +136,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   quedaba tapada sin forma de volver salvo el ícono de la barra. Con una ventana de la app abierta
   (la principal o la de limpieza) aparece en el Dock y en Cmd+Tab, con su menú; al cerrarlas vuelve a
   ser solo de barra de menú. Al pasar a otra app queda segunda en Cmd+Tab, como cualquier app (v1.29).
+- **D-47 · El release de macOS sale completo** (2026-10-04, Lega). La versión de Mac no se publica hasta
+  tener las tres cosas: el ZIP, el DMG y el actualizador de macOS. No sale un DMG solo: quien lo instalara
+  quedaría con una app que no busca versiones nuevas y tendría que volver a bajarlo a mano cada vez.
+- **D-48 · En el sitio va con las apps** (2026-10-04, Lega). La tarjeta pasa de «Nuke & Hiero Tools» a
+  «VFX & Media Apps»: es una app de escritorio y tres de sus cinco herramientas no dependen de Nuke. La
+  etiqueta «Nuke + app» de la tarjeta se queda. El sitio suma macOS recién cuando exista el release de Mac.
 
 ## Abiertas
 

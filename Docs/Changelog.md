@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.30:
+
+La app ya funcionaba en la Mac, pero no había forma de publicarla ni de actualizarla: `deploy.sh` solo
+instalaba la copia local y el actualizador se compilaba solo en Windows. Ahora `deploy.sh --zip --dmg` arma
+el ZIP y el DMG universales (Apple Silicon e Intel) y `--publish` los sube, firmados con el certificado
+propio, a un release que ya tenga el instalador de Windows. El actualizador corre en las dos plataformas:
+elige su paquete por familia en el manifiesto y, en macOS, un script reemplaza la app instalada con dos
+renombres y la vuelve a abrir; si algo falla, queda la versión anterior. La prueba de punta a punta contra
+un servidor local destapó un error publicado desde la 1.00: el hash esperado se borraba antes de empezar a
+bajar, y toda actualización terminaba en «missing integrity digest», también en Windows. Corregido. D-47.
+[ macOS - Paquete universal, publicación y actualizador ]
+
 v1.29:
 
 Con la v1.28, al abrir la ventana desde el ícono de la barra y pasar a otra app, Mighty Tools quedaba
