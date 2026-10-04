@@ -37,7 +37,7 @@ namespace {
 const QString kOfficialManifestUrl = QStringLiteral("https://legandrop.github.io/LGA_Updates/versions.json");
 const QString kRepoSlug = QStringLiteral("legandrop/LGA_MightyTools");
 // Donde se baja a mano cuando esta copia no se puede actualizar sola.
-const QString kReleasesPageUrl = QStringLiteral("https://github.com/legandrop/LGA_MightyTools/releases/latest");
+const QString kReleasesPageUrl = QStringLiteral("https://github.com/legandrop/LGA_MightyTools/releases");
 const QString kDisplayName = QStringLiteral("LGA Mighty Tools");
 
 // Demora del chequeo automatico al arrancar: le da tiempo a la app a terminar de
@@ -134,6 +134,27 @@ UpdateService::~UpdateService()
 QWidget *UpdateService::parentWindow() const
 {
     return m_parentWindow.data();
+}
+
+QWidget *UpdateService::dialogParent() const
+{
+#ifdef Q_OS_MACOS
+    QWidget *window = parentWindow();
+    return window && window->isVisible() ? window : nullptr;
+#else
+    return parentWindow();
+#endif
+}
+
+bool UpdateService::refuseWhileBusyElsewhere()
+{
+    if (!m_busyElsewhere || !m_busyElsewhere()) {
+        return false;
+    }
+    qDebug() << "[UpdateService] La app esta borrando archivos: no se actualiza ahora";
+    QMessageBox::information(parentWindow(), I18n::tr("Updates"),
+        I18n::tr("Disk Space is still deleting files. Update when it finishes."));
+    return true;
 }
 
 void UpdateService::scheduleAutomaticCheck()
@@ -251,7 +272,7 @@ void UpdateService::installAvailable()
             I18n::tr("An update operation is already in progress."));
         return;
     }
-    if (blockedHere()) {
+    if (blockedHere() || refuseWhileBusyElsewhere()) {
         return;
     }
     m_busy = true;
@@ -414,6 +435,16 @@ void UpdateService::onCheckFinished(Mode mode)
         m_busy = false;
         return;
     }
+    // Con un borrado de Disk Space en curso no se interrumpe con el cartel: se vuelve a mirar en
+    // un rato (la fila de General ya muestra la version disponible).
+    if (mode == Mode::Automatic && m_busyElsewhere && m_busyElsewhere()) {
+        qDebug() << "[UpdateService] La app esta borrando archivos: el cartel se deja para despues";
+        if (m_periodicTimer) {
+            schedulePeriodicCheckIn(kPeriodicCheckRetryMs, /*withJitter=*/false);
+        }
+        m_busy = false;
+        return;
+    }
     // "Later" calla solo el automatico: la fila de General ya muestra la version disponible.
     if (mode == Mode::Automatic) {
         const QDateTime until = snoozeUntil();
@@ -443,7 +474,7 @@ void UpdateService::promptForUpdate(const QString &version, const QUrl &download
     // Later (o cerrar el cartel) pospone el chequeo automatico 1 dia; sin eso el chequeo
     // periodico lo volvia a mostrar cada 3 horas. El manual y "Check now" lo ignoran.
     if (withoutAsking || dialog->exec() == QDialog::Accepted) {
-        if (blockedHere()) {
+        if (blockedHere() || refuseWhileBusyElsewhere()) {
             m_busy = false;
             return;
         }
@@ -542,9 +573,9 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
     m_downloadHash = new QCryptographicHash(QCryptographicHash::Sha256);
 
     m_progressDialog = new QProgressDialog(
-        I18n::tr("Downloading %1 %2...").arg(kDisplayName, version), I18n::tr("Cancel"), 0, 0, parentWindow());
+        I18n::tr("Downloading %1 %2...").arg(kDisplayName, version), I18n::tr("Cancel"), 0, 0, dialogParent());
     m_progressDialog->setWindowTitle(I18n::tr("Downloading Update"));
-    m_progressDialog->setWindowModality(Qt::WindowModal);
+    m_progressDialog->setWindowModality(dialogParent() ? Qt::WindowModal : Qt::NonModal);
     m_progressDialog->setMinimumDuration(0);
     m_progressDialog->setAutoClose(false);
     m_progressDialog->setAutoReset(false);
@@ -735,17 +766,41 @@ void UpdateService::onDownloadFinished()
     delete m_downloadHash;
     m_downloadHash = nullptr;
 
+    // Un borrado de Disk Space pudo empezar mientras bajaba: instalar cierra la app.
+    if (refuseWhileBusyElsewhere()) {
+        QFile::remove(installerPath);
+        return;
+    }
+
     qDebug() << "[UpdateService] Descarga OK, verificada. Instalando:" << installerPath;
 
     const UpdateInstaller::Result launched = UpdateInstaller::launch(
         installerPath, m_downloadVersion, kDisplayName,
         I18n::tr("The update could not be installed. %1 was left as it was.").arg(kDisplayName));
     if (!launched.started) {
-        qDebug() << "[UpdateService] No se pudo lanzar la instalacion:" << launched.detail;
+        qDebug() << "[UpdateService] No se pudo lanzar la instalacion, motivo=" << int(launched.failure);
         QFile::remove(installerPath);
         m_busy = false;
+        QString reason;
+        switch (launched.failure) {
+        case UpdateInstaller::Failure::WriteScript:
+            reason = I18n::tr("The update script could not be written.");
+            break;
+        case UpdateInstaller::Failure::StartScript:
+            reason = I18n::tr("The update script could not be started.");
+            break;
+        case UpdateInstaller::Failure::StartInstaller:
+            reason = I18n::tr("The installer could not be started.");
+            break;
+        case UpdateInstaller::Failure::Blocked:
+            reason = I18n::tr("This copy cannot update itself.");
+            break;
+        case UpdateInstaller::Failure::AutomatedRun:
+        case UpdateInstaller::Failure::None:
+            break;
+        }
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
-            I18n::tr("The update could not be started.\n\n%1").arg(launched.detail));
+            I18n::tr("The update could not be started.\n\n%1").arg(reason));
         return;
     }
     // Windows: el .iss ya cierra la instancia en curso igual, pero salir primero es mas limpio.

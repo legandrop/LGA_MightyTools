@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.31:
+
+La v1.30 solo podía publicar la versión de Mac sobre un release que Windows ya hubiera creado, e
+`instalador.bat` fallaba si el tag existía: los dos paquetes tenían que salir en un orden fijo. Ahora los
+dos scripts publican en cualquier orden: el primero crea el tag y el release, el segundo sube lo suyo,
+fusiona `SHA256SUMS` sin pisar las líneas de la otra plataforma y publica las notas de `Docs/WhatsNew.md`.
+`deploy.sh` corre el `--self-test` de las dos mitades (Apple Silicon e Intel) antes de empaquetar. En el
+actualizador: no se ofrece ni se instala una versión mientras Disk Space está borrando, el cartel de
+progreso de la descarga se ve en la Mac aunque la ventana principal esté cerrada, y los motivos por los que
+una instalación no arranca salen traducidos. `instalador.bat` no se pudo ejecutar desde la Mac: queda
+revisado por lectura y pendiente de su primera corrida en Windows. D-49.
+[ Release - Publicación en los dos órdenes y ajustes del actualizador ]
+
 v1.30:
 
 La app ya funcionaba en la Mac, pero no había forma de publicarla ni de actualizarla: `deploy.sh` solo

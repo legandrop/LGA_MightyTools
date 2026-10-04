@@ -771,6 +771,12 @@ const QHash<QString, QString> &spanishTable()
         E("The update could not be installed. %1 was left as it was.",
           "No se pudo instalar la actualización. %1 quedó como estaba."),
         E("The update could not be started.\n\n%1", "No se pudo iniciar la actualización.\n\n%1"),
+        E("The update script could not be written.", "No se pudo escribir el script de actualización."),
+        E("The update script could not be started.", "No se pudo iniciar el script de actualización."),
+        E("The installer could not be started.", "No se pudo iniciar el instalador."),
+        E("This copy cannot update itself.", "Esta copia no se puede actualizar sola."),
+        E("Disk Space is still deleting files. Update when it finishes.",
+          "Disk Space todavía está borrando archivos. Actualizar cuando termine."),
         E("Later", "Más tarde"),
         E("Update now", "Actualizar ahora"),
 

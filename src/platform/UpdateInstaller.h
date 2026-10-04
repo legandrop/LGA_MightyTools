@@ -20,10 +20,19 @@ enum class Blocker {
 };
 Blocker blocker();
 
+// Por que no arranco la instalacion (el texto para el usuario lo arma UpdateService).
+enum class Failure {
+    None,
+    AutomatedRun,   // corrida automatizada: nunca se instala nada
+    Blocked,        // blocker() != None
+    WriteScript,    // macOS: no se pudo escribir el script auxiliar
+    StartScript,    // macOS: no se pudo lanzar el script auxiliar
+    StartInstaller, // Windows: no se pudo lanzar el instalador
+};
+
 struct Result {
     bool started = false;
-    // Detalle tecnico para el cartel de error (sin traducir).
-    QString detail;
+    Failure failure = Failure::None;
 };
 
 // noticeTitle / noticeBody: el aviso que muestra el script de macOS si el reemplazo falla (ya

@@ -17,6 +17,7 @@
 #include "platform/WindowActivation.h"
 #include "ui/HelpDialog.h"
 
+#include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "updates/UpdateService.h"
 
 #include <QAction>
@@ -150,6 +151,16 @@ AppController::AppController(const Options &options, QObject *parent)
         m_updates = new UpdateService(m_window, this);
         m_updates->setSettingsStore(m_store.get());
         m_updates->setAutomaticChecksEnabled([this]() { return m_store->value(kCheckUpdates, true).toBool(); });
+        // Actualizar cierra la app: con Disk Space borrando, el borrado quedaria por la mitad.
+        m_updates->setBusyElsewhere([]() {
+            for (QWidget *widget : QApplication::topLevelWidgets()) {
+                const auto *cleanup = qobject_cast<const CleanupWindow *>(widget);
+                if (cleanup && cleanup->isDeleting()) {
+                    return true;
+                }
+            }
+            return false;
+        });
         connect(m_updates, &UpdateService::checking, this, [this]() {
             m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
         });

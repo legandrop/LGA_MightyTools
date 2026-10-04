@@ -1,10 +1,17 @@
 @echo off
 setlocal enabledelayedexpansion
-REM Uso: instalador.bat [--no-run]
-REM   --no-run  arma el instalador y su SHA256SUMS y no ofrece ejecutarlo ni revelarlo en el
-REM             Explorer. La parte de commit y release sigue igual.
+REM Uso: instalador.bat [--no-run] [--replace]
+REM   --no-run   arma el instalador y su SHA256SUMS y no ofrece ejecutarlo ni revelarlo en el
+REM              Explorer. La parte de commit y release sigue igual.
+REM   --replace  si el release v<version> ya tiene el instalador de Windows, lo reemplaza.
+REM El release v<version> lo crea la primera plataforma que publica, Windows o la Mac: si ya
+REM existe, este script le suma el instalador y fusiona SHA256SUMS en vez de crearlo.
 set "NO_RUN="
-if /I "%~1"=="--no-run" set "NO_RUN=1"
+set "REPLACE="
+for %%A in (%*) do (
+    if /I "%%~A"=="--no-run" set "NO_RUN=1"
+    if /I "%%~A"=="--replace" set "REPLACE=1"
+)
 REM Sin consola (corrida encadenada, automatizada o con la entrada redirigida) un choice puede
 REM leer la respuesta de esa entrada y terminar ejecutando el instalador, abriendo el Explorer o
 REM publicando. Se detecta ANTES de cualquier pregunta: sin consola no se ejecuta, no se revela ni
@@ -14,6 +21,8 @@ REM criterio que instalador.bat de LGA_VideoDownloader y LGA_SceneBuilder.
 set "INTERACTIVE=1"
 powershell -NoProfile -NonInteractive -Command "if ([Console]::IsInputRedirected) { exit 3 } else { exit 0 }"
 if errorlevel 1 set "INTERACTIVE="
+REM Solo se deshace un tag que creo ESTA corrida.
+set "TAG_CREATED_HERE="
 REM Codigo de salida deliberado (Doc_Migracion_Scripts_Build_Windows.md de LGA_Base_QT_C_Py,
 REM 5.12): HAD_ERROR marca que un paso de PUBLICACION que se intento fallo (git add/commit/push,
 REM tag, gh release). Se inicializa aca arriba para que no herede el valor del entorno. NO la
@@ -177,6 +186,13 @@ if "%VERSION%"=="" (
 )
 echo OK: Version detectada: %VERSION%
 
+REM Notas para el usuario [What's new]: el control va ANTES de compilar porque puede preguntar. Si
+REM corta, no se publica: se arma el instalador local, igual que con cualquier otro chequeo de GitHub.
+if /i "!GITHUB_READY!"=="true" (
+    call :notes_check
+    if errorlevel 1 set "GITHUB_READY=false"
+)
+
 REM Cerrar SOLO las copias que corren desde deploy\ y build-release\ de ESTE repo, para evitar
 REM bloqueos durante deploy/installer. Antes era "taskkill /F /IM", que cerraba tambien la
 REM instalada. Ver tools\close_by_path.ps1. Sale con 2 solo si rechazo los parametros.
@@ -212,26 +228,12 @@ if errorlevel 1 (
 )
 echo OK: El binario reporta la version %VERSION%.
 
+REM Estado del tag y del release v<version>: pueden no existir (se crean), o existir porque la Mac
+REM publico primero (se les suma el instalador). Frena si el tag es otro codigo, si el release es un
+REM borrador o si ya tiene este instalador sin --replace. Ver :publish_analysis.
 if /i "!GITHUB_READY!"=="true" (
-    git rev-parse -q --verify "refs/tags/v%VERSION%" >nul 2>nul
-    if !errorlevel! EQU 0 (
-        echo AVISO: El tag local v%VERSION% ya existe.
-        set "GITHUB_READY=false"
-    ) else (
-        git ls-remote --exit-code --tags origin "refs/tags/v%VERSION%" >nul 2>nul
-        if !errorlevel! EQU 0 (
-            echo AVISO: El tag remoto v%VERSION% ya existe.
-            set "GITHUB_READY=false"
-        ) else (
-            "!GH_CMD!" release view "v%VERSION%" --repo "%PUBLIC_RELEASE_REPO%" >nul 2>nul
-            if !errorlevel! EQU 0 (
-                echo AVISO: La release v%VERSION% ya existe en %PUBLIC_RELEASE_REPO%.
-                set "GITHUB_READY=false"
-            ) else (
-                echo OK: El tag v%VERSION% esta disponible.
-            )
-        )
-    )
+    call :publish_analysis
+    if errorlevel 1 set "GITHUB_READY=false"
 )
 
 if /i "!GITHUB_READY!" NEQ "true" if /i "!GITHUB_LOCAL_ONLY_CONFIRMED!" NEQ "true" (
@@ -357,6 +359,17 @@ for /f "tokens=*" %%S in ('git status --porcelain 2^>nul') do (
     set "HAS_INSTALLER_CHANGES=true"
 )
 
+REM Si el tag ya existe [lo creo la Mac], el release sale del codigo de ESE tag: un commit nuevo lo
+REM dejaria atras. Con cambios sin commitear despues de compilar no se publica.
+if "!HAS_INSTALLER_CHANGES!"=="true" if defined TAG_REMOTE (
+    echo ERROR: Hay cambios sin commitear despues de crear el instalador y el tag v%VERSION% ya existe:
+    git status --short
+    echo No se sube el instalador: un commit nuevo ya no coincidiria con ese tag.
+    set "HAD_ERROR=true"
+    set "RELEASE_ALLOWED=false"
+    set "HAS_INSTALLER_CHANGES=false"
+)
+
 if "!HAS_INSTALLER_CHANGES!"=="true" (
     echo Cambios detectados despues de crear el instalador:
     git status --short
@@ -427,6 +440,30 @@ choice /C YN /M "Desea subir el instalador como release v%VERSION% a GitHub?"
 if !errorlevel! NEQ 1 goto :END
 
 echo.
+REM Se vuelve a mirar el tag y el release: pasaron la compilacion y las preguntas, y la Mac pudo
+REM publicar en el medio.
+call :publish_analysis
+if errorlevel 1 (
+    set "HAD_ERROR=true"
+    goto :END
+)
+if defined TAG_REMOTE goto :PUB_TAG_DONE
+
+REM El tag se crea solo sobre un commit que ya esta en origin/main: un tag sobre un commit sin
+REM pushear dejaria el release fuera de main, y la otra plataforma no podria sumarse.
+git fetch -q origin
+if !errorlevel! NEQ 0 (
+    echo ERROR: No se pudo leer origin.
+    set "HAD_ERROR=true"
+    goto :END
+)
+git merge-base --is-ancestor HEAD origin/main
+if !errorlevel! NEQ 0 (
+    echo ERROR: HEAD no esta en origin/main. Pushear antes de publicar.
+    set "HAD_ERROR=true"
+    goto :END
+)
+
 echo Creando tag v%VERSION%...
 git tag -a "v%VERSION%" -m "Release v%VERSION%"
 if !errorlevel! NEQ 0 (
@@ -435,6 +472,7 @@ if !errorlevel! NEQ 0 (
     set "HAD_ERROR=true"
     goto :END
 )
+set "TAG_CREATED_HERE=1"
 
 echo Haciendo push del tag v%VERSION%...
 git push origin "v%VERSION%"
@@ -445,12 +483,24 @@ if !errorlevel! NEQ 0 (
     goto :END
 )
 
+REM Tag listo en origin: o ya estaba [lo creo la Mac] o se acaba de crear.
+:PUB_TAG_DONE
+if defined REL_EXISTS goto :PUB_UPLOAD
+
 echo.
 echo Creando release en GitHub...
 "!GH_CMD!" release create "v%VERSION%" "%OUTPUT_EXE%" "%SUMS_FILE%" --repo "%PUBLIC_RELEASE_REPO%" --target "main" --title "v%VERSION%" --notes "Release v%VERSION%"
 if !errorlevel! NEQ 0 (
     echo ERROR: No se pudo crear la release en GitHub.
     set "HAD_ERROR=true"
+    REM Solo se ofrece borrar un tag que creo ESTA corrida: uno que ya estaba [lo creo la Mac] no es
+    REM nuestro y el release de esa plataforma puede depender de el.
+    if not defined TAG_CREATED_HERE (
+        echo.
+        echo El tag v%VERSION% ya existia antes de esta corrida: se conserva.
+        echo Si GitHub dejo un release en borrador de v%VERSION%, borrarlo a mano antes de reintentar.
+        goto :END
+    )
     echo.
     echo El commit y el push del branch ya fueron hechos si correspondia.
     echo El tag v%VERSION% ya fue creado y subido a origin.
@@ -469,6 +519,24 @@ if !errorlevel! NEQ 0 (
         echo Puede crear la release manualmente desde:
         echo https://github.com/%PUBLIC_RELEASE_REPO%/releases
     )
+    goto :END
+)
+goto :PUB_NOTES
+
+REM El release ya existe [lo creo la Mac]: se le suma el instalador y se fusiona SHA256SUMS.
+:PUB_UPLOAD
+call :publish_upload
+if errorlevel 1 (
+    set "HAD_ERROR=true"
+    goto :END
+)
+
+REM Las notas van DESPUES de crear o completar el release y ANTES de avisarle al manifiesto. Si
+REM fallan, el release ya esta publicado: se informa el comando para reintentar y no se deshace nada.
+:PUB_NOTES
+call :publish_notes
+if errorlevel 1 (
+    set "HAD_ERROR=true"
     goto :END
 )
 
@@ -501,3 +569,205 @@ if !errorlevel! EQU 0 (
 set "FINAL_EXIT=0"
 if /i "!HAD_ERROR!"=="true" set "FINAL_EXIT=1"
 endlocal & exit /b %FINAL_EXIT%
+
+REM ==== PUBLICAR: subrutinas. Todas se llaman con call y devuelven con exit /b.
+
+:notes_check
+REM Notas para el usuario [What's new]: la logica vive en LGA_RepoTools; LGA_REPOTOOLS apunta a otra
+REM copia. Deja WN_BAT y WN_FILE para :publish_notes. exit /b 1 si faltan, fallan o se contesto que no.
+set "WN_REPOTOOLS=%LGA_REPOTOOLS%"
+if not defined WN_REPOTOOLS set "WN_REPOTOOLS=%SCRIPT_DIR%..\LGA_RepoTools"
+set "WN_BAT=%WN_REPOTOOLS%\WhatsNew_Win\whats_new_release.bat"
+set "WN_FILE=%SCRIPT_DIR%Docs\WhatsNew.md"
+if not exist "%WN_BAT%" (
+    echo AVISO: no encontre "%WN_BAT%".
+    echo Clonar LGA_RepoTools al lado de este repo o definir LGA_REPOTOOLS. Sin notas no se publica.
+    exit /b 1
+)
+echo Verificando las notas para el usuario [What's new] de v%VERSION%...
+call "%WN_BAT%" check "%WN_FILE%" "%VERSION%"
+if errorlevel 1 (
+    echo AVISO: faltan o fallan las notas de v%VERSION%, o se contesto que no. No se publica.
+    exit /b 1
+)
+exit /b 0
+
+:publish_analysis
+REM Estado del tag y del release v<version> en origin. Deja TAG, TAG_REMOTE, TAG_COMMIT y REL_EXISTS.
+REM exit /b 1 si no se puede publicar. Corre despues de compilar y otra vez justo antes de publicar.
+REM  - El tag no existe: se crea mas adelante sobre HEAD [como siempre].
+REM  - El tag existe en origin [lo creo la Mac, o una corrida anterior]: el instalador tiene que salir
+REM    de ese mismo codigo, ver :tag_matches.
+REM  - Un tag local que NO esta en origin es de una corrida que no llego a pushear: se frena.
+set "TAG=v%VERSION%"
+set "TAG_REMOTE="
+set "TAG_COMMIT="
+set "TAG_LOCAL="
+git rev-parse -q --verify "refs/tags/%TAG%" >nul 2>nul
+if not errorlevel 1 set "TAG_LOCAL=1"
+git ls-remote --exit-code --tags origin "refs/tags/%TAG%" >nul 2>nul
+set "LS_RC=%ERRORLEVEL%"
+if "%LS_RC%"=="0" set "TAG_REMOTE=1"
+if not "%LS_RC%"=="0" if not "%LS_RC%"=="2" (
+    echo AVISO: No se pudo leer los tags de origin.
+    exit /b 1
+)
+if defined TAG_REMOTE goto :analysis_tag_remote
+if defined TAG_LOCAL (
+    echo AVISO: El tag local %TAG% ya existe y no esta en origin: es de una corrida que no llego a pushear.
+    echo        Borrarlo con git tag -d %TAG% y volver a correr.
+    exit /b 1
+)
+echo OK: El tag %TAG% no existe todavia: se crea sobre HEAD.
+goto :analysis_release
+:analysis_tag_remote
+REM Se trae el tag [y su historia] para poder compararlo con HEAD. Si ya hay un tag local con ese
+REM nombre y distinto, el fetch no lo pisa y falla.
+git fetch -q origin "refs/tags/%TAG%:refs/tags/%TAG%" >nul 2>nul
+if errorlevel 1 (
+    echo AVISO: No se pudo traer el tag %TAG% de origin, o hay un tag local con ese nombre y distinto.
+    exit /b 1
+)
+for /f %%C in ('git rev-list -n 1 "refs/tags/%TAG%"') do set "TAG_COMMIT=%%C"
+call :tag_matches
+if errorlevel 1 exit /b 1
+:analysis_release
+call :release_check
+if errorlevel 1 exit /b 1
+if defined REL_EXISTS if not defined TAG_REMOTE (
+    echo AVISO: El release %TAG% existe en %PUBLIC_RELEASE_REPO% pero su tag no esta en origin. No se toca: revisarlo a mano.
+    exit /b 1
+)
+exit /b 0
+
+:tag_matches
+REM HEAD tiene que ser el commit del tag, o uno posterior que difiera SOLO en WHATS_NEW.md: las notas
+REM de la plataforma que publico primero dejan un commit en main hecho por la API, y quien llega
+REM segundo y hace git pull tiene HEAD un commit mas adelante, con el mismo codigo.
+set "HEAD_SHA="
+for /f %%C in ('git rev-parse HEAD') do set "HEAD_SHA=%%C"
+if not defined TAG_COMMIT (
+    echo AVISO: No se pudo leer a que commit apunta el tag %TAG%.
+    exit /b 1
+)
+if /i "%HEAD_SHA%"=="%TAG_COMMIT%" (
+    echo OK: El tag %TAG% de origin coincide con HEAD.
+    exit /b 0
+)
+git merge-base --is-ancestor %TAG_COMMIT% HEAD
+if errorlevel 1 goto :tag_mismatch
+set "TAG_EXTRA="
+for /f "delims=" %%F in ('git diff --name-only %TAG_COMMIT% HEAD') do if /i not "%%F"=="WHATS_NEW.md" set "TAG_EXTRA=1"
+if defined TAG_EXTRA goto :tag_mismatch
+echo OK: El tag %TAG% de origin esta en HEAD o antes, y HEAD solo agrega las notas [WHATS_NEW.md]: mismo codigo.
+exit /b 0
+:tag_mismatch
+echo AVISO: HEAD no es el commit del tag %TAG% ni uno posterior que solo agregue las notas [WHATS_NEW.md].
+echo        HEAD: %HEAD_SHA%
+echo        tag:  %TAG_COMMIT%
+echo        Hacer git pull, o revisar si el tag se creo sobre otro codigo.
+exit /b 1
+
+:release_check
+REM Lo que hay en el release v<version> antes de tocarlo. Deja REL_EXISTS [vacio si no existe],
+REM REL_SUMS, REL_OWN y REL_OTHER. Que no exista es un estado valido: se crea. Corta si es un borrador,
+REM si ya tiene este instalador [salvo --replace] o si tiene archivos de macOS sin SHA256SUMS: fusionar
+REM contra nada borraria sus lineas, y el auto-update de la Mac dejaria de verlo.
+set "REL_EXISTS="
+set "REL_DRAFT=0"
+set "REL_SUMS=0"
+set "REL_OWN=0"
+set "REL_OTHER=0"
+set "MT_RC=%TEMP%\mt_release_check_%RANDOM%%RANDOM%"
+mkdir "%MT_RC%" >nul 2>nul
+REM Las respuestas de gh van a archivos: un gh entre comillas adentro de un for /f no itera. Se leen
+REM con PowerShell porque gh escribe solo LF y findstr /X no las reconoce.
+call "%GH_CMD%" release view "%TAG%" --repo "%PUBLIC_RELEASE_REPO%" --json isDraft -q ".isDraft" >"%MT_RC%\draft.txt" 2>"%MT_RC%\err.txt"
+if errorlevel 1 goto :release_check_view_failed
+call "%GH_CMD%" release view "%TAG%" --repo "%PUBLIC_RELEASE_REPO%" --json assets -q ".assets[].name" >"%MT_RC%\assets.txt" 2>nul
+if errorlevel 1 goto :release_check_gh_failed
+set "REL_EXISTS=1"
+set "MT_OWN_ASSET=LGA_MightyTools_Setup_v%VERSION%.exe"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $d=$env:MT_RC; $a=@(Get-Content -LiteralPath (Join-Path $d 'assets.txt') | ForEach-Object { $_.Trim() }); $draft=@(Get-Content -LiteralPath (Join-Path $d 'draft.txt') | ForEach-Object { $_.Trim() }) -contains 'true'; $other=@($a | Where-Object { $_ -like 'LGA_MightyTools_Mac_v*' }).Count -gt 0; Set-Content -LiteralPath (Join-Path $d 'state.txt') -Encoding Ascii -Value ('REL_DRAFT=' + [int]$draft), ('REL_SUMS=' + [int]($a -contains 'SHA256SUMS')), ('REL_OWN=' + [int]($a -contains $env:MT_OWN_ASSET)), ('REL_OTHER=' + [int]$other)"
+if errorlevel 1 goto :release_check_gh_failed
+for /f "usebackq tokens=1,2 delims==" %%A in ("%MT_RC%\state.txt") do set "%%A=%%B"
+rmdir /S /Q "%MT_RC%" >nul 2>nul
+if "%REL_DRAFT%"=="1" (
+    echo AVISO: El release %TAG% existe como borrador. Publicarlo o borrarlo a mano antes de seguir.
+    exit /b 1
+)
+if "%REL_OWN%"=="1" if not defined REPLACE (
+    echo AVISO: El release %TAG% ya tiene %MT_OWN_ASSET%. Para reemplazarlo, correr con --replace.
+    exit /b 1
+)
+if "%REL_OTHER%"=="1" if "%REL_SUMS%"=="0" (
+    echo AVISO: El release %TAG% tiene los archivos de macOS pero no SHA256SUMS: no se fusiona contra
+    echo        nada, porque se perderian sus lineas. Subir primero el SHA256SUMS de la Mac.
+    exit /b 1
+)
+echo OK: El release %TAG% ya existe en %PUBLIC_RELEASE_REPO%: se le suma el instalador de Windows.
+exit /b 0
+:release_check_view_failed
+REM gh dice "release not found" cuando el release no existe; cualquier otro error es otra cosa.
+findstr /I /C:"not found" "%MT_RC%\err.txt" >nul 2>nul
+if not errorlevel 1 (
+    rmdir /S /Q "%MT_RC%" >nul 2>nul
+    echo OK: El release %TAG% no existe todavia en %PUBLIC_RELEASE_REPO%: se crea.
+    exit /b 0
+)
+type "%MT_RC%\err.txt"
+:release_check_gh_failed
+echo AVISO: No se pudo leer el release %TAG% de %PUBLIC_RELEASE_REPO%.
+rmdir /S /Q "%MT_RC%" >nul 2>nul
+exit /b 1
+
+:publish_upload
+REM El release v<version> ya existe [lo creo la Mac]. SHA256SUMS es UNO para las dos plataformas: se
+REM baja el del release, se reemplaza solo la linea del instalador de Windows [se agrega si no
+REM estaba] y se resube. Todo lo que puede cortar [leer, fusionar] pasa antes de escribir nada. El
+REM .exe sube ANTES que el SHA256SUMS: en el medio la app no ofrece nada que no pueda verificar.
+echo.
+echo El release %TAG% ya existe: se suma el instalador de Windows.
+set "WORK=%TEMP%\mt_release_%RANDOM%%RANDOM%"
+mkdir "%WORK%" >nul 2>nul
+if "%REL_SUMS%"=="0" goto :publish_merge
+call "%GH_CMD%" release download "%TAG%" --repo "%PUBLIC_RELEASE_REPO%" --pattern SHA256SUMS --dir "%WORK%"
+if errorlevel 1 goto :publish_upload_failed
+:publish_merge
+REM Una sola linea por nombre: las del release que no son el instalador de Windows, y la propia al
+REM final. Una linea ilegible corta: no se adivina que era. El resultado queda en una ruta fija para
+REM poder resubirlo a mano si la subida falla [--clobber borra el viejo antes de subir].
+mkdir "%INSTALLER_DIR%\release" >nul 2>nul
+set "MT_OLD=%WORK%\SHA256SUMS"
+set "MT_OWN=%SUMS_FILE%"
+set "MT_OUT=%INSTALLER_DIR%\release\SHA256SUMS"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; $re='^([0-9a-fA-F]{64}) [ *](.+)$'; $own=@(([IO.File]::ReadAllText($env:MT_OWN)) -split '\r?\n' | Where-Object { $_ -match $re }); if ($own.Count -ne 1) { Write-Host 'ERROR: installer\SHA256SUMS no tiene una sola linea valida'; exit 1 }; $null=$own[0] -match $re; $seen=@{}; $seen[$Matches[2]]=1; $keep=New-Object System.Collections.Generic.List[string]; if (Test-Path -LiteralPath $env:MT_OLD) { foreach ($l in (([IO.File]::ReadAllText($env:MT_OLD)) -split '\r?\n')) { if ($l -match $re) { if (-not $seen.ContainsKey($Matches[2])) { $seen[$Matches[2]]=1; $keep.Add($l) } } elseif ($l.Trim()) { Write-Host ('ERROR: el SHA256SUMS del release tiene una linea ilegible: ' + $l); exit 1 } } }; $keep.Add($own[0]); [IO.File]::WriteAllText($env:MT_OUT, (($keep -join [char]10) + [char]10)); Write-Host ('SHA256SUMS fusionado: ' + $keep.Count + ' lineas')"
+if errorlevel 1 goto :publish_upload_failed
+call "%GH_CMD%" release upload "%TAG%" "%OUTPUT_EXE%" --repo "%PUBLIC_RELEASE_REPO%" --clobber
+if errorlevel 1 goto :publish_upload_failed
+call "%GH_CMD%" release upload "%TAG%" "%MT_OUT%" --repo "%PUBLIC_RELEASE_REPO%" --clobber
+if errorlevel 1 goto :publish_sums_failed
+rmdir /S /Q "%WORK%" >nul 2>nul
+exit /b 0
+:publish_sums_failed
+echo ERROR: El instalador subio, pero SHA256SUMS no: el release puede haber quedado SIN SHA256SUMS
+echo        y la app no ofrece el update. El fusionado esta en %MT_OUT%. Subirlo con:
+echo        gh release upload %TAG% "%MT_OUT%" --repo %PUBLIC_RELEASE_REPO% --clobber
+rmdir /S /Q "%WORK%" >nul 2>nul
+exit /b 1
+:publish_upload_failed
+echo ERROR: Fallo la subida al release %TAG%. Ver el mensaje de arriba.
+rmdir /S /Q "%WORK%" >nul 2>nul
+exit /b 1
+
+:publish_notes
+REM Notas para el usuario [What's new]: body del release, whats_new.json y WHATS_NEW.md en la raiz del
+REM repo [un commit en main hecho por la API]. Idempotente: si falla, se reintenta con el mismo comando.
+echo Publicando las notas para el usuario [What's new]...
+call "%WN_BAT%" publish "%WN_FILE%" "%VERSION%" "%PUBLIC_RELEASE_REPO%" "%TAG%"
+if errorlevel 1 (
+    echo ERROR: El release %TAG% quedo publicado, pero sus notas no. Reintentar con el comando de arriba.
+    exit /b 1
+)
+echo Las notas dejaron un commit en origin/main [WHATS_NEW.md]: correr git pull.
+exit /b 0

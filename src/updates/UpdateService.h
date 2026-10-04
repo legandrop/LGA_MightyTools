@@ -48,6 +48,9 @@ public:
     // Si el chequeo automatico sigue prendido: lo consulta cada chequeo periodico, asi apagarlo
     // en General vale tambien para la sesion en curso.
     void setAutomaticChecksEnabled(std::function<bool()> enabled) { m_automaticChecksEnabled = std::move(enabled); }
+    // Si la app esta haciendo algo que una actualizacion cortaria al cerrarla (Disk Space borrando):
+    // mientras devuelva true no se ofrece ni se instala nada.
+    void setBusyElsewhere(std::function<bool()> busy) { m_busyElsewhere = std::move(busy); }
 
     // manual = true (menu "Check for Updates..."): siempre hay respuesta, incluso
     // "ya estas al dia" o un error con detalle. manual = false (chequeo de arranque):
@@ -85,6 +88,11 @@ private:
     // True si ESTA copia no se puede actualizar sola (ya le mostro al usuario por que y lo dejo
     // pospuesto como "Later").
     bool blockedHere();
+    // True si ahora no conviene cerrar la app (ya se lo dijo al usuario).
+    bool refuseWhileBusyElsewhere();
+    // Padre de los carteles de la descarga. En macOS, con la ventana principal cerrada, un cartel
+    // hijo de ella no se ve: ahi van sin padre.
+    QWidget *dialogParent() const;
     void downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
                               const QString &sha256Digest, const QString &version);
     void onDownloadReadyRead();
@@ -114,6 +122,7 @@ private:
     // El chequeo en curso lo lanzo el tick: si falla por red, se reintenta antes.
     bool m_periodicCheckActive = false;
     std::function<bool()> m_automaticChecksEnabled;
+    std::function<bool()> m_busyElsewhere;
     SettingsStore *m_store = nullptr;
     // Snooze sin store (captura, self-test): vale solo para esta sesion.
     QDateTime m_memorySnoozeUntil;

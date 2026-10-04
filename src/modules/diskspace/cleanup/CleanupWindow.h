@@ -91,6 +91,9 @@ public:
     // Abre (o cambia a) ese disco y esa pestana, y escanea si hace falta. `root`: "C:/".
     void openOn(const QString &root, Tab tab);
     QString root() const { return m_root; }
+    // Hay un borrado en curso (Clean up, una fila o la Papelera): lo mira el updater para no cerrar
+    // la app en el medio.
+    bool isDeleting() const;
 
     // ---- QA
     static QStringList fixtureStates();

@@ -139,6 +139,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-47 · El release de macOS sale completo** (2026-10-04, Lega). La versión de Mac no se publica hasta
   tener las tres cosas: el ZIP, el DMG y el actualizador de macOS. No sale un DMG solo: quien lo instalara
   quedaría con una app que no busca versiones nuevas y tendría que volver a bajarlo a mano cada vez.
+- **D-49 · Se publica desde cualquiera de las dos máquinas** (2026-10-04, Lega: «arreglá todo lo que
+  falta»). `instalador.bat` (Windows) y `./deploy.sh --publish` (macOS) publican en el mismo release
+  `v<versión>` en cualquier orden: el primero crea el tag y el release, el segundo suma su paquete. Cada
+  plataforma puede quedar una versión atrás de la otra: el actualizador, el sitio y PipeSync leen el
+  último paquete de cada una (`assetLatest`).
 - **D-48 · En el sitio va con las apps** (2026-10-04, Lega). La tarjeta pasa de «Nuke & Hiero Tools» a
   «VFX & Media Apps»: es una app de escritorio y tres de sus cinco herramientas no dependen de Nuke. La
   etiqueta «Nuke + app» de la tarjeta se queda. El sitio suma macOS recién cuando exista el release de Mac.

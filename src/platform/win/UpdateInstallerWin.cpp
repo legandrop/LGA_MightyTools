@@ -22,12 +22,12 @@ Result launch(const QString &packagePath, const QString &version, const QString 
     Q_UNUSED(noticeBody);
     Result result;
     if (AutomatedRun::active()) {
-        result.detail = QStringLiteral("automated run");
+        result.failure = Failure::AutomatedRun;
         return result;
     }
     result.started = QProcess::startDetached(packagePath, QStringList());
     if (!result.started) {
-        result.detail = QStringLiteral("could not start %1").arg(packagePath);
+        result.failure = Failure::StartInstaller;
     }
     return result;
 }

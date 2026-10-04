@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.31
+- [improved] The app waits to offer or install an update while Disk Space is deleting files.
+
 ## v1.30
 - [new][mac] LGA Mighty Tools is now available for macOS, on Apple Silicon and Intel, with its five tools: Open in NukeX, Nuke Shortcuts, Disk Space, Folder Switch and Link Redirector.
 - [new][mac] The app checks for new versions and installs them for you in one click.

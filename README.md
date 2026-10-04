@@ -17,7 +17,7 @@ a tool on the left and turn it on.
 
 ## Download
 
-Installers are on the [releases page](https://github.com/legandrop/LGA_MightyTools/releases/latest).
+Installers are on the [releases page](https://github.com/legandrop/LGA_MightyTools/releases).
 The app checks for new versions and updates itself.
 
 The tools come from separate LGA apps (LGA Nuke Shortcuts, LGA OpenInNukeX, LGA FolderSwitch and

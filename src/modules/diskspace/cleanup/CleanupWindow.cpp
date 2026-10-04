@@ -498,6 +498,11 @@ CleanupWindow::~CleanupWindow()
     }
 }
 
+bool CleanupWindow::isDeleting() const
+{
+    return m_jobKind != JobKind::None;
+}
+
 bool CleanupWindow::busy() const
 {
     return m_jobKind != JobKind::None || m_scanState == ScanState::Scanning;

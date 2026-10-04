@@ -342,11 +342,11 @@ Result launch(const QString &packagePath, const QString &version, const QString 
 {
     Result result;
     if (AutomatedRun::active()) {
-        result.detail = QStringLiteral("automated run");
+        result.failure = Failure::AutomatedRun;
         return result;
     }
     if (blocker() != Blocker::None) {
-        result.detail = QStringLiteral("this copy cannot update itself");
+        result.failure = Failure::Blocked;
         return result;
     }
 
@@ -362,13 +362,13 @@ Result launch(const QString &packagePath, const QString &version, const QString 
 
     const QString script = MacUpdateHelper::writeScript(QFileInfo(packagePath).absolutePath());
     if (script.isEmpty()) {
-        result.detail = QStringLiteral("could not write the update script");
+        result.failure = Failure::WriteScript;
         return result;
     }
     result.started = QProcess::startDetached(QStringLiteral("/bin/bash"), MacUpdateHelper::arguments(script, job));
     if (!result.started) {
         QFile::remove(script);
-        result.detail = QStringLiteral("could not start the update script");
+        result.failure = Failure::StartScript;
     }
     return result;
 }

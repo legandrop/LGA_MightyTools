@@ -88,41 +88,35 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       sin click que vuelva a la app (`ToastActivationMac.cpp` es un stub) y sin el desplegable «Remind me
       again in» de Disk Space. Pasar a `UNUserNotificationCenter` con acciones (macOS las agrupa en
       «Options») y pedir el permiso de notificaciones.
-   3. **Release de mac: publicar y lo que cuelga de eso.** El paquete y el actualizador están hechos
-      (v1.30, D-47): `./deploy.sh --zip --dmg` arma el ZIP y el DMG universales y `./deploy.sh --publish`
-      los sube al release `v<versión>` **que ya creó `instalador.bat` en Windows** (la Mac no crea
-      releases ni tags; `--publish --dry-run` ensaya sin escribir nada). Falta:
-      - **Publicar el primero** (Lega): `instalador.bat` en Windows con la versión del momento y, sobre el
-        mismo commit, `./deploy.sh --publish` en la Mac. Antes, en Windows: `compilar.bat --no-run` y
-        `--self-test` (la v1.30 tocó el actualizador de Windows y solo se compiló en la Mac). Después de
-        `--publish`: `git pull` (las notas dejan un commit en `main` con `WHATS_NEW.md`, hecho por la API;
-        un `--publish --replace` posterior ya no pasa el control «HEAD es el commit del tag»). No subir a
-        mano los paquetes de `deploy/`: `--publish` los rearma. Las Windows instaladas hasta la 1.21 no
-        pueden actualizarse solas (v1.30): hay que instalar una vez a mano. La cadena completa contra GitHub recién se prueba
-        con el segundo release (el primero no tiene desde dónde actualizarse); contra un servidor local ya
-        está probada (`updateManifestUrl` y `updateDownloadBase` de `config/debug_flags.txt`).
+   3. **Release de mac: lo que queda.** El paquete, el actualizador y la publicación están hechos (v1.30
+      y v1.31, D-47 y D-49): `./deploy.sh --zip --dmg` arma el ZIP y el DMG universales; `./deploy.sh
+      --publish` (Mac) e `instalador.bat` (Windows) publican en el mismo release en cualquier orden
+      (`--publish --dry-run` ensaya sin escribir nada). Después de publicar: `git pull` (las notas dejan
+      un commit en `main` con `WHATS_NEW.md`, hecho por la API). Falta:
+      - **Primera corrida de `instalador.bat` en Windows** (Lega): la v1.31 lo cambió (tag o release ya
+        creados por la Mac, fusión de `SHA256SUMS`, notas, `--replace`) y solo se revisó por lectura; y
+        la v1.30 tocó el actualizador de Windows sin compilarlo. Antes: `compilar.bat --no-run` y
+        `--self-test`. En esa primera corrida, leer las líneas `OK:` del análisis de publicación (salen
+        antes de las preguntas) y recién entonces aceptar la subida. Las Windows instaladas hasta la
+        1.21 no pueden actualizarse solas: hay que instalar una vez a mano. Observación abierta: si
+        `gh release create` falla con el tag recién creado, el deshacer borra también el release; en una
+        carrera con la Mac borraría el de la Mac (re-mirar el release antes de borrar).
+      - **La primera actualización real contra GitHub** se prueba con el segundo release de mac (el
+        primero no tiene desde dónde actualizarse); contra un servidor local ya está probada
+        (`updateManifestUrl` y `updateDownloadBase` de `config/debug_flags.txt`).
       - **Respaldar el certificado «LGA Code Signing»** (el `.p12` del llavero de la Mac de Lega): si se
         pierde, la versión siguiente sale con otra identidad, el actualizador la rechaza y hay que
         reinstalar a mano y volver a dar los permisos.
-      - **`instalador.bat`** (probar en Windows): hoy crea el release y sube un `SHA256SUMS` con solo la
-        línea del `.exe`; si se vuelve a correr sobre un release que ya tiene los paquetes de mac, tiene
-        que conservar sus líneas. Tampoco publica las notas de `Docs/WhatsNew.md` (el de la Mac sí).
-      - **El sitio** (`LGA_SiteLega`, después de publicar): sumar `mac` a la tarjeta, un botón de descarga
-        por plataforma leyendo `assetLatest` (hoy arma la descarga con `tag` + un solo nombre), y el pie
-        de la ficha. **PipeSync** (con pedido de Lega): `UpdateCatalog.cpp` solo conoce el paquete de
-        Windows de Mighty Tools.
-      - La mudanza de los usuarios de mac del OpenInNukeX viejo. Recién ahí `LGA_OpenInNukeX` puede pasar
-        a privado (la fila `lga_openinnukex` de PipeSync en mac depende de ese release).
-      - **Probar a mano en la Mac antes de anunciar** (GUI, Lega): el cartel «Update available» que sale
-        solo con la ventana cerrada (la prueba de cadena lo salteó con `updateInstallWithoutAsking`: ver
-        que aparezca al frente), y una actualización en una cuenta de macOS limpia, sin acceso total al
-        disco (permiso «App Management» de macOS 13+).
-      - Observaciones de las auditorías: `deploy.sh` no corre el `--self-test` de la mitad Intel antes de
-        empaquetar (se hizo a mano con `arch -x86_64`: 0 fallas); el detalle técnico de un cartel de
-        error (`UpdateInstaller::Result::detail`) va en inglés; no ofrecer «Update» mientras Disk Space está borrando
-        (hoy se corta igual que con «Quit»); el cartel de progreso de la descarga cuelga de la ventana
-        principal, que puede estar cerrada; la app no está notarizada (la primera apertura pide el
-        `xattr -dr com.apple.quarantine` del `README.txt` del DMG).
+      - **Probar a mano en la Mac** (GUI, Lega): que el cartel «Update available» que sale solo con la
+        ventana cerrada se vea al frente (se comprobó que abre y que la app pasa a primer plano, con la
+        pantalla bloqueada), y una actualización en una cuenta de macOS limpia, sin acceso total al disco
+        (permiso «App Management» de macOS 13+).
+      - **La mudanza de los usuarios de mac del OpenInNukeX viejo** (decisión de Lega: quién prende Open in
+        NukeX y quién quita la app vieja; en Windows lo hace el instalador). Hasta entonces PipeSync en
+        mac muestra Mighty Tools solo donde ya está instalada, y `LGA_OpenInNukeX` no puede pasar a
+        privado (la fila `lga_openinnukex` de PipeSync en mac depende de ese release).
+      - La app no está notarizada: la primera apertura pide el `xattr -dr com.apple.quarantine` del
+        `README.txt` del DMG.
    Pendientes chicos de mac: Folder Switch sin probar con el Guardar como hoja ni el popup con click
    afuera; Lega apaga Default Folder X y usa Folder Switch en el día a día; el ícono, las viñetas y los
    atajos del descriptor de Folder Switch están copiados entre `FolderSwitchModule.cpp` y
