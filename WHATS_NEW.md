@@ -1,5 +1,9 @@
 # What's new in LGA Mighty Tools
 
+## v1.33 (2026-10-04)
+
+- **Fixed:** Checking for updates works: version 1.31 could not connect, so download this version once from the download page. (macOS only)
+
 ## v1.31 (2026-10-04)
 
 - **Improved:** The app waits to offer or install an update while Disk Space is deleting files.
