@@ -22,6 +22,10 @@ PLUGINS_KEEP = {
     'platforms': {'libqcocoa.dylib'},
     'styles': {'libqmacstyle.dylib'},
     'imageformats': {'libqico.dylib', 'libqicns.dylib', 'libqjpeg.dylib', 'libqgif.dylib'},
+    # Sin un backend de TLS, QNetworkAccessManager no puede hacer HTTPS: el updater no llega ni al
+    # manifiesto ("No functional TLS backend was found"). El de macOS es Secure Transport, que usa
+    # el framework Security del sistema y no arrastra OpenSSL.
+    'tls': {'libqsecuretransportbackend.dylib'},
 }
 
 

@@ -2,6 +2,7 @@
 #include "updates/UpdateManifest.h"
 
 #include <QByteArray>
+#include <QSslSocket>
 #include <QString>
 
 #ifdef Q_OS_MACOS
@@ -39,6 +40,17 @@ QByteArray asset(const char *name, const char *digest, const char *tag = nullptr
     }
     json += "\"name\":\"" + QByteArray(name) + "\",\"digest\":\"" + QByteArray(digest) + "\",\"size\":1}";
     return json;
+}
+
+// El updater habla HTTPS con el manifiesto y con GitHub. El backend de TLS de Qt es un plugin aparte
+// (tls/): si el paquete no lo trae, todo compila y la app abre, pero ningun chequeo llega a la red.
+// Este caso corre tambien sobre la copia empaquetada (deploy.sh y el build de Windows), que es donde
+// puede faltar.
+void testTls(const Check &check)
+{
+    check(QSslSocket::supportsSsl(),
+          QStringLiteral("red: hay un backend de TLS para HTTPS (activo: '%1', disponibles: %2)")
+              .arg(QSslSocket::activeBackend(), QSslSocket::availableBackends().join(QLatin1Char(','))));
 }
 
 void testManifest(const Check &check)
@@ -414,6 +426,7 @@ namespace UpdateSelfTest {
 
 void run(const std::function<void(bool ok, const QString &what)> &check)
 {
+    testTls(check);
     testManifest(check);
 #ifdef Q_OS_MACOS
     // Unica excepcion del updater a "en una corrida automatizada nunca se ejecuta una accion real"

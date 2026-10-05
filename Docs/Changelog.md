@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.33:
+
+En la Mac, «Check now» y el chequeo automático fallaban siempre con «Could not check for updates»
+(`networkError=99`), también en la 1.31 publicada. El paquete no traía el backend de TLS de Qt:
+`tools/macos/podar_bundle.py` deja solo los plugins que la app usa y, hasta la v1.30, la versión de Mac
+no hablaba con la red, así que `tls/` se descartaba; sin él ninguna conexión HTTPS arranca («No functional
+TLS backend was found»). Las pruebas del actualizador no lo vieron porque iban contra un servidor local
+sin HTTPS. Ahora la poda conserva `libqsecuretransportbackend.dylib` y el `--self-test` comprueba que haya
+TLS; como `deploy.sh` lo corre sobre el bundle armado antes de empaquetar, un paquete sin TLS ya no se
+publica. Quien instaló la 1.31 en Mac tiene que bajar esta versión a mano una vez.
+[ macOS - El paquete trae TLS: vuelve el chequeo de versiones ]
+
 v1.32:
 
 La versión de Windows quedaba sin comprobar cada vez que se trabajaba desde la Mac: el código nuevo del

@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.33
+- [fixed][mac] Checking for updates works: version 1.31 could not connect, so download this version once from the download page.
+
 ## v1.31
 - [improved] The app waits to offer or install an update while Disk Space is deleting files.
 
