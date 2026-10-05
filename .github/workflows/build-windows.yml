@@ -1,0 +1,153 @@
+name: Build Windows
+
+# Compila la version de Windows en un runner de GitHub (mismo Qt y mismo MinGW que compilar.bat) y
+# corre el self-test. Sirve para saber que el codigo de Windows compila sin tener una PC a mano; no
+# reemplaza la prueba real de los atajos, los dialogos ni el instalador.
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_mingw"
+          tools: "tools_mingw1310 tools_ninja"
+          cache: true
+
+      # El MinGW y el Ninja que baja la accion van adelante en el PATH: el runner trae otro MinGW.
+      - name: Toolchain
+        shell: pwsh
+        run: |
+          "$env:IQTA_TOOLS\mingw1310_64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$env:IQTA_TOOLS\Ninja" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Configure
+        shell: pwsh
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR" -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build -j 4
+
+      # El exe es de interfaz grafica: su salida se redirige a un archivo para poder leerla.
+      - name: Self-test
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $p = Start-Process -FilePath "build\LGA_MightyTools.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow -RedirectStandardOutput selftest.txt -RedirectStandardError selftest_err.txt
+          Get-Content selftest.txt | Select-String -Pattern "FAIL|self-test" | Select-Object -Last 60
+          Get-Content selftest.txt | Select-String -Pattern "\[updates\]"
+          Write-Host "exit code: $($p.ExitCode)"
+          exit $p.ExitCode
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-windows
+          path: |
+            selftest.txt
+            selftest_err.txt
+          retention-days: 7
+
+  # instalador.bat de punta a punta en modo local (sin consola no pregunta ni publica nada): compila,
+  # arma la carpeta, analiza el tag y el release (solo lectura) y genera el instalador con Inno Setup.
+  installer:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # compilar.bat busca Qt y MinGW en C:\Qt, igual que en la PC de desarrollo.
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.5.3"
+          host: "windows"
+          target: "desktop"
+          arch: "win64_mingw"
+          tools: "tools_mingw1310 tools_ninja"
+          dir: "C:\\"
+          cache: false
+
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          Get-ChildItem "C:\Qt" -Depth 1 | Select-Object FullName
+          Get-ChildItem "C:\Qt\Tools" | Select-Object FullName
+
+      # El control de notas vive en un repo aparte: aca se reemplaza por uno que siempre aprueba.
+      - name: Notes stub
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\stub\WhatsNew_Win | Out-Null
+          Set-Content -Path C:\stub\WhatsNew_Win\whats_new_release.bat -Value "@echo off`r`necho [stub] notas: %*`r`nexit /b 0" -Encoding ascii
+
+      - name: instalador.bat --no-run
+        shell: cmd
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LGA_REPOTOOLS: C:\stub
+        run: |
+          git log --oneline -3
+          call instalador.bat --no-run < NUL > instalador.log 2>&1
+          echo exit code: %ERRORLEVEL% >> instalador.log
+          type instalador.log
+          dir installer
+          type installer\SHA256SUMS
+
+      # El instalador recien generado, instalado en silencio en esta maquina descartable: la copia
+      # instalada corre su self-test SIN el Qt del runner a mano (solo con lo que trae el instalador) y
+      # despues se desinstala.
+      - name: Install, self-test, uninstall
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem installer\LGA_MightyTools_Setup_v*.exe | Select-Object -First 1
+          $p = Start-Process -FilePath $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/LOG=setup.log" -Wait -PassThru
+          Write-Host "instalador: codigo $($p.ExitCode)"
+          if ($p.ExitCode -ne 0) { exit 1 }
+          $dir = "C:\Portable\LGA\MightyTools"
+          Write-Host "archivos instalados: $((Get-ChildItem $dir -Recurse -File).Count)"
+          $env:QT_PLUGIN_PATH = $null
+          $env:QML2_IMPORT_PATH = $null
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Qt\\' }) -join ';'
+          $t = Start-Process -FilePath "$dir\LGA_MightyTools.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow -RedirectStandardOutput installed_selftest.txt -RedirectStandardError installed_selftest_err.txt
+          Get-Content installed_selftest.txt | Select-String -Pattern "FAIL"
+          Get-Content installed_selftest.txt | Select-Object -Last 2
+          Write-Host "self-test de la copia instalada: codigo $($t.ExitCode)"
+          if ($t.ExitCode -ne 0) { Get-Content installed_selftest_err.txt | Select-Object -Last 20; exit 1 }
+          $u = Get-ChildItem "$dir\unins*.exe" | Select-Object -First 1
+          $q = Start-Process -FilePath $u.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 8
+          Write-Host "desinstalador: codigo $($q.ExitCode); queda la carpeta: $(Test-Path $dir)"
+          if (Test-Path $dir) { Get-ChildItem $dir -Recurse | Select-Object FullName }
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-windows
+          path: |
+            installer/LGA_MightyTools_Setup_v*.exe
+            installer/SHA256SUMS
+          retention-days: 7
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instalador-log
+          path: instalador.log
+          retention-days: 7

@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.32:
+
+La versión de Windows quedaba sin comprobar cada vez que se trabajaba desde la Mac: el código nuevo del
+actualizador no se había compilado ahí e `instalador.bat`, cambiado en la v1.31, nunca había corrido. Se
+suma un build de Windows en un runner de GitHub (`.github/workflows/build-windows.yml`, a mano): compila
+con el mismo Qt y MinGW, corre el `--self-test`, ejecuta `instalador.bat` en modo local (sin consola no
+pregunta ni publica), instala en silencio el instalador generado, corre el self-test de la copia instalada
+y la desinstala. Sobre la v1.31 dio 0 fallas, y el análisis reconoció el release creado desde la Mac. En
+`instalador.bat`, si falla la creación del release y la otra plataforma ya subió sus paquetes, no se
+ofrece borrar el tag (se llevaría ese release). La mudanza de mac del OpenInNukeX viejo se descarta
+(D-50). Sin cambios en la app.
+[ Windows - Build y prueba del instalador en un runner ]
+
 v1.31:
 
 La v1.30 solo podía publicar la versión de Mac sobre un release que Windows ya hubiera creado, e

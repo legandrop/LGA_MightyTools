@@ -93,14 +93,15 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       --publish` (Mac) e `instalador.bat` (Windows) publican en el mismo release en cualquier orden
       (`--publish --dry-run` ensaya sin escribir nada). Después de publicar: `git pull` (las notas dejan
       un commit en `main` con `WHATS_NEW.md`, hecho por la API). Falta:
-      - **Primera corrida de `instalador.bat` en Windows** (Lega): la v1.31 lo cambió (tag o release ya
-        creados por la Mac, fusión de `SHA256SUMS`, notas, `--replace`) y solo se revisó por lectura; y
-        la v1.30 tocó el actualizador de Windows sin compilarlo. Antes: `compilar.bat --no-run` y
-        `--self-test`. En esa primera corrida, leer las líneas `OK:` del análisis de publicación (salen
-        antes de las preguntas) y recién entonces aceptar la subida. Las Windows instaladas hasta la
-        1.21 no pueden actualizarse solas: hay que instalar una vez a mano. Observación abierta: si
-        `gh release create` falla con el tag recién creado, el deshacer borra también el release; en una
-        carrera con la Mac borraría el de la Mac (re-mirar el release antes de borrar).
+      - **`instalador.bat` publicando de verdad** (Lega, en Windows): en un runner de GitHub ya corrió
+        entero en modo local (compila, analiza el tag y el release, genera el instalador; build «Build
+        Windows», que además instala en silencio, corre el self-test de la copia instalada y
+        desinstala). Lo que nunca se ejecutó es la subida: en la primera corrida real, leer las líneas
+        `OK:` del análisis antes de aceptar. Las Windows instaladas hasta la 1.21 no pueden actualizarse
+        solas: hay que instalar una vez a mano.
+      - Observación del runner: el `--self-test` falló una vez de ocho en la copia recién instalada
+        (`[diskSpace] motor`: el escaneo de la carpeta de pruebas no terminó en los 5 s de `waitScan`,
+        con el antivirus del runner encima); las siete restantes, 0 fallas.
       - **La primera actualización real contra GitHub** se prueba con el segundo release de mac (el
         primero no tiene desde dónde actualizarse); contra un servidor local ya está probada
         (`updateManifestUrl` y `updateDownloadBase` de `config/debug_flags.txt`).
@@ -111,10 +112,8 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
         ventana cerrada se vea al frente (se comprobó que abre y que la app pasa a primer plano, con la
         pantalla bloqueada), y una actualización en una cuenta de macOS limpia, sin acceso total al disco
         (permiso «App Management» de macOS 13+).
-      - **La mudanza de los usuarios de mac del OpenInNukeX viejo** (decisión de Lega: quién prende Open in
-        NukeX y quién quita la app vieja; en Windows lo hace el instalador). Hasta entonces PipeSync en
-        mac muestra Mighty Tools solo donde ya está instalada, y `LGA_OpenInNukeX` no puede pasar a
-        privado (la fila `lga_openinnukex` de PipeSync en mac depende de ese release).
+      - `LGA_OpenInNukeX` puede archivarse y pasar a privado cuando Lega quiera (D-10): en mac no hay
+        mudanza que esperar (D-50) y PipeSync ya ofrece Mighty Tools en las dos plataformas.
       - La app no está notarizada: la primera apertura pide el `xattr -dr com.apple.quarantine` del
         `README.txt` del DMG.
    Pendientes chicos de mac: Folder Switch sin probar con el Guardar como hoja ni el popup con click

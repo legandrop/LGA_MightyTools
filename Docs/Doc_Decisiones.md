@@ -139,6 +139,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-47 · El release de macOS sale completo** (2026-10-04, Lega). La versión de Mac no se publica hasta
   tener las tres cosas: el ZIP, el DMG y el actualizador de macOS. No sale un DMG solo: quien lo instalara
   quedaría con una app que no busca versiones nuevas y tendría que volver a bajarlo a mano cada vez.
+- **D-50 · En macOS no hay mudanza del OpenInNukeX viejo** (2026-10-04, Lega: «nadie tiene OpenInNukeX
+  en mac, así que no es problema»). No se hace `--migrate-openinnukex` ni «Uninstall old app» para
+  macOS, y PipeSync ofrece Mighty Tools en mac a todos, con la misma regla que en Windows.
 - **D-49 · Se publica desde cualquiera de las dos máquinas** (2026-10-04, Lega: «arreglá todo lo que
   falta»). `instalador.bat` (Windows) y `./deploy.sh --publish` (macOS) publican en el mismo release
   `v<versión>` en cualquier orden: el primero crea el tag y el release, el segundo suma su paquete. Cada

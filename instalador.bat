@@ -501,6 +501,18 @@ if !errorlevel! NEQ 0 (
         echo Si GitHub dejo un release en borrador de v%VERSION%, borrarlo a mano antes de reintentar.
         goto :END
     )
+    REM Si en el medio la otra plataforma creo el release y ya subio lo suyo, no se ofrece borrar
+    REM nada: borrar el tag se llevaria tambien ese release.
+    set "MT_REL_HAS_MAC="
+    "!GH_CMD!" release view "v%VERSION%" --repo "%PUBLIC_RELEASE_REPO%" --json assets -q ".assets[].name" > "%TEMP%\mt_rel_assets.txt" 2>nul
+    findstr /C:"_Mac_v" "%TEMP%\mt_rel_assets.txt" >nul 2>nul && set "MT_REL_HAS_MAC=1"
+    del "%TEMP%\mt_rel_assets.txt" >nul 2>nul
+    if defined MT_REL_HAS_MAC (
+        echo.
+        echo El release v%VERSION% ya existe en GitHub con los paquetes de macOS: no se borra nada.
+        echo Volver a correr instalador.bat para sumar el instalador de Windows a ese release.
+        goto :END
+    )
     echo.
     echo El commit y el push del branch ya fueron hechos si correspondia.
     echo El tag v%VERSION% ya fue creado y subido a origin.
