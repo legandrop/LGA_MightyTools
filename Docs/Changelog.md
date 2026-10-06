@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.35:
+
+En Windows, `deploy.bat` todavía abría la copia de `deploy\` con `start` y una ruta relativa: lanzada
+desde la consola que corría el script, la app quedaba dentro del árbol de procesos de esa
+consola y se cerraba con ella, como pasaba con `compilar.bat` antes de la v1.34. Ahora la abre
+`explorer.exe` con la ruta completa, porque `explorer.exe` no usa el directorio actual. La app nace con
+cwd System32 y sin el entorno del script, tampoco el `PATH` con Qt que `deploy.bat` arma para
+`windeployqt`: no lo necesita, las DLL ya están en `deploy\`. `instalador.bat` no cambia: corre el
+instalador en primer plano a propósito, para que las preguntas de publicación aparezcan recién cuando
+el instalador termina.
+
+[ Build - deploy.bat abre la app con explorer.exe ]
+
 v1.34:
 
 En Windows, `compilar.bat` lanzaba la app con `start` desde la consola que lo corría: la app quedaba

@@ -110,7 +110,12 @@ echo.
 echo Implementacion completada. App portable en carpeta 'deploy'.
 echo.
 if /I "%NO_RUN%"=="true" goto skip_run
-start deploy\LGA_MightyTools.exe
+REM La abre el Explorador de Windows, no esta consola: lanzada con start, la app queda dentro
+REM del arbol de procesos de la terminal que corrio el script y se cierra con ella. La ruta va
+REM completa porque explorer.exe no usa el directorio actual. La app nace con cwd System32 y sin
+REM el entorno de este script (tampoco el PATH con Qt de mas arriba: las DLL ya estan en deploy\).
+REM explorer.exe siempre devuelve 1: no se mira su codigo.
+explorer.exe "%APP_ROOT%deploy\LGA_MightyTools.exe"
 goto end_run
 
 :skip_run
