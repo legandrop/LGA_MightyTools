@@ -332,8 +332,10 @@ atajos o competirían como navegador.
 - `--simulate-action <acción>`: la secuencia real con el inyector en modo solo loguear.
 - `--ui-shot <estado> <png>`: una captura por pantalla y estado, offscreen.
 - `--ui-probe <caso>`: comportamiento de widgets con eventos internos (foco, teclas).
-- Todo exe de prueba corre con `tools\qa\run_headless.ps1`. Las pruebas con mouse, teclado, Nuke real,
-  diálogos reales y navegadores reales las hace Lega.
+- Todo exe de prueba corre con `..\LGA_Base_QT_C_Py\tools\qa\run_headless.ps1`, el runner de la
+  plantilla, que lanza el exe en un escritorio aparte, sin carteles. Este repo no lleva copia: el repo
+  de la plantilla va clonado al lado. Las pruebas con mouse, teclado, Nuke real, diálogos reales y
+  navegadores reales las hace Lega.
 
 ## 8. Decisiones
 

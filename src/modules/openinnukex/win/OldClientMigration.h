@@ -92,8 +92,8 @@ Report removeOldClient(SettingsStore *store, const Options &options);
 /// se puede leer. Pura: la usa el self-test.
 bool splitUninstallString(const QString &uninstallString, QString *exe, QString *arguments);
 
-/// True si el proceso corre en el escritorio aparte del arnes de QA (tools\qa\run_headless.ps1):
-/// entonces nunca se lanza ni se escribe nada.
+/// True si el proceso corre en el escritorio aparte del arnes de QA (run_headless.ps1, el de
+/// ..\LGA_Base_QT_C_Py\tools\qa): entonces nunca se lanza ni se escribe nada.
 bool runningOnQaDesktop();
 
 /// Entradas de main. Imprimen cada linea en stdout (y en el debug.log con log=true) y devuelven el

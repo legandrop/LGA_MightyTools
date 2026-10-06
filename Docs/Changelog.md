@@ -1,5 +1,17 @@
 # Changelog — LGA Mighty Tools
 
+v1.36:
+
+El repo llevaba una copia propia del runner que corre los exes de prueba en un escritorio aparte
+(`tools\qa\run_headless.ps1`, con su lista `net_allowed_paths.txt`). Era igual a la de la plantilla
+`LGA_Base_QT_C_Py` salvo una línea de ayuda, y una copia así se desactualiza sin que nadie lo note: un
+arreglo del runner no llegaba acá. Se borran los dos archivos y las pruebas pasan a usar el de la
+plantilla por ruta relativa, `..\LGA_Base_QT_C_Py\tools\qa\run_headless.ps1` (el repo de la plantilla va
+clonado al lado de este). Ningún script del repo lo llamaba: cambian la sección de pruebas de
+`Docs/Plan_MightyTools.md` y un comentario del código. Sin cambios en la app.
+
+[ QA - El runner sin escritorio se usa desde la plantilla ]
+
 v1.35:
 
 En Windows, `deploy.bat` todavía abría la copia de `deploy\` con `start` y una ruta relativa: lanzada
