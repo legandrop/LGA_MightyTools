@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.34:
+
+En Windows, `compilar.bat` lanzaba la app con `start` desde la consola que lo corría: la app quedaba
+dentro del árbol de procesos de esa terminal y se cerraba con ella, sin error ni log. Ahora la abre
+`explorer.exe`, fuera de ese árbol. `--sim-slow` sigue con `start`, porque `explorer.exe` no acepta
+`/LOW` ni `/AFFINITY`. La app nace con cwd System32 y sin el entorno del script, igual que cuando
+arranca con la sesión.
+
+[ Build - compilar.bat abre la app con explorer.exe ]
+
 v1.33:
 
 En la Mac, «Check now» y el chequeo automático fallaban siempre con «Could not check for updates»

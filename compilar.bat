@@ -165,7 +165,12 @@ if "%SIM_SLOW%"=="true" (
     start "" /LOW /AFFINITY 3 "%APP_ROOT%%BUILD_DIR%\LGA_MightyTools.exe"
     exit /b 0
 )
-start "" "%APP_ROOT%%BUILD_DIR%\LGA_MightyTools.exe"
+REM La abre el Explorador de Windows, no esta consola: lanzada con start, la app queda dentro
+REM del arbol de procesos de la terminal que corrio el script y se cierra con ella. --sim-slow
+REM sigue con start porque explorer.exe no acepta /LOW ni /AFFINITY. La app nace con cwd
+REM System32 y sin el entorno de este script. explorer.exe siempre devuelve 1: no se mira su
+REM codigo.
+explorer.exe "%APP_ROOT%%BUILD_DIR%\LGA_MightyTools.exe"
 exit /b 0
 
 REM ============================================================
