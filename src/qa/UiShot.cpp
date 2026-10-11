@@ -15,6 +15,8 @@
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
+#include "modules/windowlayouts/WindowLayoutsModule.h"
+#include "modules/windowlayouts/WindowLayoutsPanel.h"
 #include "ui/CustomTooltip.h"
 #include "ui/HelpDialog.h"
 #include "ui/TitleBar.h"
@@ -50,6 +52,8 @@
 #include <QPixmap>
 #include <QSaveFile>
 #include <QScopedPointer>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QTextEdit>
 #include <QThread>
 #include <QTimer>
@@ -1523,6 +1527,66 @@ int runDiskReminderProbe()
     return failures ? 1 : 0;
 }
 
+int runWindowLayoutsEditorScrollProbe()
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!canvasFixture(host, QStringLiteral("windowLayouts"))) {
+        fprintf(stderr, "window-layouts-editor-scroll: no se pudo preparar el resto de la ventana\n");
+        return 1;
+    }
+    if (!enable(host, QStringLiteral("windowLayouts"), QStringLiteral("list"))) {
+        fprintf(stderr, "window-layouts-editor-scroll: no se pudo preparar la lista\n");
+        return 1;
+    }
+    auto *module = static_cast<WindowLayoutsModule *>(host.module(QStringLiteral("windowLayouts")));
+    for (int i = 0; i < 10; ++i) {
+        WindowLayout layout;
+        layout.name = QStringLiteral("Extra %1").arg(i + 1);
+        layout.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+%1").arg(QChar(char('A' + i))));
+        layout.enabled = false;
+        QString error;
+        if (!module->saveLayout(layout, &error)) {
+            fprintf(stderr, "window-layouts-editor-scroll: fixture %d: %s\n", i + 1, qPrintable(error));
+            return 1;
+        }
+    }
+    MainWindow window(&host, MainWindow::Mode::Capture, nullptr);
+    window.setAttribute(Qt::WA_DontShowOnScreen, true);
+    window.selectPage(QStringLiteral("windowLayouts"));
+    settle(window);
+    QWidget *panelWidget = window.findChild<QWidget *>(QStringLiteral("windowLayoutsPanel"));
+    if (!panelWidget) {
+        fprintf(stderr, "window-layouts-editor-scroll: panel no encontrado\n");
+        return 1;
+    }
+    QScrollArea *scroll = nullptr;
+    for (QWidget *parent = panelWidget->parentWidget(); parent; parent = parent->parentWidget()) {
+        if (auto *candidate = qobject_cast<QScrollArea *>(parent)) {
+            scroll = candidate;
+            break;
+        }
+    }
+    if (!scroll) {
+        fprintf(stderr, "window-layouts-editor-scroll: scroll no encontrado\n");
+        return 1;
+    }
+    QScrollBar *bar = scroll->verticalScrollBar();
+    const int listMaximum = bar->maximum();
+    bar->setValue(listMaximum);
+    static_cast<WindowLayoutsPanel *>(panelWidget)->showEditorForCapture();
+    settle(window);
+    QLineEdit *name = panelWidget->findChild<QLineEdit *>(QStringLiteral("ruleField"));
+    const bool editorVisible = name && name->isVisibleTo(panelWidget) && name->width() > 100 && name->height() > 10;
+    const bool ok = listMaximum > 0 && bar->value() == 0 && bar->maximum() < listMaximum && editorVisible;
+    fprintf(stdout, "%s lista=%d editor=%d scroll=%d formulario=%s\n",
+            ok ? "window-layouts-editor-scroll ok" : "window-layouts-editor-scroll FALLO",
+            listMaximum, bar->maximum(), bar->value(), editorVisible ? "visible" : "oculto");
+    return ok ? 0 : 1;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -1531,6 +1595,9 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
+    if (probe == QLatin1String("window-layouts-editor-scroll")) {
+        return runWindowLayoutsEditorScrollProbe();
+    }
     if (probe == QLatin1String("disk-reminder")) {
         return runDiskReminderProbe();
     }

@@ -280,11 +280,11 @@ ModuleStatus WindowLayoutsModule::status() const
     int count = 0;
     for (const WindowLayout &layout : m_state.layouts()) count += layout.enabled;
     if (count == 0) {
-        return {ModuleTone::Active, m_state.layouts().isEmpty() ? I18n::tr("No layouts yet")
-                                                            : I18n::tr("All layouts are off")};
+        return {ModuleTone::Active, m_state.layouts().isEmpty() ? I18n::tr("No shortcuts yet")
+                                                            : I18n::tr("All shortcuts are off")};
     }
     return {ModuleTone::Active,
-            count == 1 ? I18n::tr("1 layout ready") : I18n::tr("%1 layouts ready").arg(count)};
+            count == 1 ? I18n::tr("1 shortcut ready") : I18n::tr("%1 shortcuts ready").arg(count)};
 }
 
 QWidget *WindowLayoutsModule::createPanel(QWidget *parent)
@@ -360,7 +360,7 @@ QString WindowLayoutsModule::validateShortcut(int editingId, const Shortcut &sho
     }
     for (const WindowLayout &layout : m_state.layouts()) {
         if (layout.id != editingId && layout.shortcut == shortcut) {
-            return I18n::tr("Already used by another layout.");
+            return I18n::tr("Already used by another shortcut.");
         }
     }
     ModuleHotkeys *hotkeys = enabled ? (m_hotkeys ? m_hotkeys : context().hotkeys()) : nullptr;
@@ -385,7 +385,7 @@ bool WindowLayoutsModule::saveLayout(WindowLayout layout, QString *error)
         if (stored.id == layout.id) previous = stored;
     }
     if (!m_state.upsert(layout)) {
-        if (error) *error = I18n::tr("Check the name and area, or remove a layout to make room.");
+        if (error) *error = I18n::tr("Check the name and area, or remove a shortcut to make room.");
         return false;
     }
     registerLayouts();
@@ -484,7 +484,7 @@ HelpSection windowLayoutsHelp(const SettingsReader &)
 {
     HelpSection help;
     help.title = QStringLiteral("Window Layouts");
-    help.steps = {I18n::tr("Add a layout and choose a quick preset, or combine horizontal and vertical fractions."),
+    help.steps = {I18n::tr("Add a shortcut and choose a quick preset, or combine horizontal and vertical fractions."),
                   I18n::tr("Draw a destination area or click an open window to copy its bounds."),
                   I18n::tr("Record a shortcut. It acts on the window in front when you press it.")};
     help.note = I18n::tr("Visible system bars are excluded. Some protected windows may require accessibility permission or cannot be moved.");

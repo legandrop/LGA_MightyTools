@@ -9,7 +9,7 @@ class QHideEvent;
 class QLabel;
 class QLineEdit;
 class QPushButton;
-class QStackedWidget;
+class CurrentPageStack;
 class ShortcutRow;
 class StatusCard;
 class WindowLayoutsModule;
@@ -38,7 +38,7 @@ private:
 
     WindowLayoutsModule *m_module = nullptr;
     bool m_interactive = false;
-    QStackedWidget *m_pages = nullptr;
+    CurrentPageStack *m_pages = nullptr;
     QWidget *m_listPage = nullptr;
     QWidget *m_editorPage = nullptr;
     QWidget *m_rows = nullptr;

@@ -5,6 +5,12 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-56 · Editor y nombre de los atajos de Window Layouts** (2026-10-11, Lega). El alta se presenta
+  como «Nuevo atajo de ventana» en español y «Add windows shortcut» en inglés. Todo el panel y sus
+  estados llaman atajos a los elementos guardados. Al abrir el editor desde el final de una lista
+  larga, el contenido ajusta su altura a la página visible y vuelve el scroll al inicio. Se elimina
+  el botón superior de regreso: «Cancelar» y «Guardar atajo» resuelven la salida.
+
 - **D-55 · Choques informativos de Window Layouts** (2026-10-11, Lega). Cuando una disposición
   activa comparte un atajo detectable con otra app o el sistema, la barra lateral conserva el
   estado normal de la herramienta: ese uso es una elección del usuario. El aviso queda solo dentro

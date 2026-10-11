@@ -18,7 +18,8 @@
 #include <QPointer>
 #include <QPushButton>
 #include <QScreen>
-#include <QStackedWidget>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -223,6 +224,36 @@ private:
     QRectF m_area;
 };
 
+class CurrentPageStack : public QWidget
+{
+public:
+    explicit CurrentPageStack(QWidget *parent = nullptr) : QWidget(parent)
+    {
+        auto *column = new QVBoxLayout(this);
+        column->setContentsMargins(0, 0, 0, 0);
+    }
+
+    void addWidget(QWidget *page)
+    {
+        layout()->addWidget(page);
+        if (m_current) page->hide();
+        else m_current = page;
+    }
+
+    QWidget *currentWidget() const { return m_current; }
+    void setCurrentWidget(QWidget *page)
+    {
+        if (m_current == page) return;
+        m_current->hide();
+        m_current = page;
+        m_current->show();
+        layout()->invalidate();
+    }
+
+private:
+    QWidget *m_current = nullptr;
+};
+
 WindowLayoutsPanel::WindowLayoutsPanel(WindowLayoutsModule *module, bool interactive, QWidget *parent)
     : QWidget(parent), m_module(module), m_interactive(interactive)
 {
@@ -230,7 +261,7 @@ WindowLayoutsPanel::WindowLayoutsPanel(WindowLayoutsModule *module, bool interac
     auto *column = new QVBoxLayout(this);
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
-    m_pages = new QStackedWidget(this);
+    m_pages = new CurrentPageStack(this);
     m_listPage = createListPage();
     m_editorPage = createEditorPage();
     m_pages->addWidget(m_listPage);
@@ -251,7 +282,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     auto *savedColumn = new QVBoxLayout(saved);
     savedColumn->setContentsMargins(14, 12, 14, 12);
     savedColumn->setSpacing(8);
-    savedColumn->addWidget(Ui::label(I18n::tr("Saved layouts"), "cardTitle", saved));
+    savedColumn->addWidget(Ui::label(I18n::tr("Saved shortcuts"), "cardTitle", saved));
     m_rows = new QWidget(saved);
     m_rows->setLayout(new QVBoxLayout());
     m_rows->layout()->setContentsMargins(0, 0, 0, 0);
@@ -265,12 +296,12 @@ QWidget *WindowLayoutsPanel::createListPage()
     auto *addRow = new QHBoxLayout(addCard);
     addRow->setContentsMargins(14, 12, 14, 12);
     auto *texts = new QVBoxLayout();
-    texts->addWidget(Ui::label(I18n::tr("Create another layout"), "cardTitle", addCard));
+    texts->addWidget(Ui::label(I18n::tr("Create a window shortcut"), "cardTitle", addCard));
     auto *caption = Ui::caption(I18n::tr("Combine fractions, draw an area, or copy a window's bounds."), addCard);
     caption->setWordWrap(true);
     texts->addWidget(caption);
     addRow->addLayout(texts, 1);
-    auto *add = Ui::button(I18n::tr("Add layout"), QStringLiteral("primary"), QString(), addCard);
+    auto *add = Ui::button(I18n::tr("Add windows shortcut"), QStringLiteral("primary"), QString(), addCard);
     addRow->addWidget(add, 0, Qt::AlignVCenter);
     if (m_interactive) connect(add, &QPushButton::clicked, this, [this]() { editLayout(); });
     column->addWidget(addCard);
@@ -284,17 +315,11 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     auto *column = new QVBoxLayout(page);
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(6);
-    auto *back = Ui::button(I18n::tr("‹ Saved layouts"), QStringLiteral("ghost"), QString(), page);
-    column->addWidget(back, 0, Qt::AlignLeft);
-    if (m_interactive) connect(back, &QPushButton::clicked, this, [this]() {
-        resetDeleteConfirmation();
-        m_pages->setCurrentWidget(m_listPage);
-    });
     auto *card = Ui::card(page);
     auto *form = new QVBoxLayout(card);
     form->setContentsMargins(14, 12, 14, 12);
     form->setSpacing(6);
-    form->addWidget(Ui::label(I18n::tr("New layout"), "cardTitle", card));
+    form->addWidget(Ui::label(I18n::tr("Window shortcut"), "cardTitle", card));
     form->addWidget(Ui::caption(I18n::tr("Name"), card));
     m_name = new QLineEdit(card);
     m_name->setFocusPolicy(Qt::ClickFocus);
@@ -343,7 +368,7 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     actions->addWidget(m_remove);
     actions->addStretch();
     auto *cancel = Ui::button(I18n::tr("Cancel"), QString(), QStringLiteral("sm"), card);
-    auto *save = Ui::button(I18n::tr("Save layout"), QStringLiteral("primary"), QStringLiteral("sm"), card);
+    auto *save = Ui::button(I18n::tr("Save shortcut"), QStringLiteral("primary"), QStringLiteral("sm"), card);
     actions->addWidget(cancel);
     actions->addWidget(save);
     form->addLayout(actions);
@@ -465,9 +490,9 @@ void WindowLayoutsPanel::refresh()
                           QString(), QString(), QString());
     } else {
         m_statusCard->set(QStringLiteral("on"), I18n::tr("Window shortcuts are on"),
-                          count == 0 ? I18n::tr("No layouts yet. Add one to get started.")
-                          : enabled == 0 ? I18n::tr("All layouts are off. Use their switches to turn them on.")
-                          : I18n::tr("%1 of %2 layouts are on.").arg(enabled).arg(count),
+                          count == 0 ? I18n::tr("No shortcuts yet. Add one to get started.")
+                          : enabled == 0 ? I18n::tr("All shortcuts are off. Use their switches to turn them on.")
+                          : I18n::tr("%1 of %2 shortcuts are on.").arg(enabled).arg(count),
                           QString(), QString(), QString());
     }
     if (m_pages->currentWidget() == m_editorPage && !error.isEmpty()) {
@@ -486,7 +511,7 @@ void WindowLayoutsPanel::rebuildList()
     }
     const QList<WindowLayout> layouts = m_module->layoutsState().layouts();
     if (layouts.isEmpty()) {
-        auto *empty = Ui::caption(I18n::tr("No layouts yet. Add one to choose an area and a shortcut."), m_rows);
+        auto *empty = Ui::caption(I18n::tr("No shortcuts yet. Add one to choose an area and key combination."), m_rows);
         empty->setWordWrap(true);
         column->addWidget(empty);
         return;
@@ -501,7 +526,7 @@ void WindowLayoutsPanel::rebuildList()
         line->addWidget(mini, 0, Qt::AlignTop);
         auto *shortcut = new ShortcutRow(layout.name, description(layout), row);
         shortcut->setShortcut(layout.shortcut);
-        shortcut->editButton()->setAccessibleName(I18n::tr("Edit layout"));
+        shortcut->editButton()->setAccessibleName(I18n::tr("Edit window shortcut"));
         const QString registrationError = m_module->registrationError(layout.id);
         if (!registrationError.isEmpty()) shortcut->setError(registrationError);
         auto *controls = new QWidget(shortcut);
@@ -525,7 +550,7 @@ void WindowLayoutsPanel::rebuildList()
         toggle->setObjectName(QStringLiteral("layoutEnabledSwitch"));
         toggle->setAccessibleName(I18n::tr("Enable %1").arg(layout.name));
         toggle->setChecked(layout.enabled);
-        CustomTooltip::instance()->setToolTip(toggle, I18n::tr("Enable or disable only this layout."));
+        CustomTooltip::instance()->setToolTip(toggle, I18n::tr("Enable or disable only this shortcut."));
         controlRow->addWidget(toggle, 0, Qt::AlignVCenter);
         shortcut->setTrailingWidget(controls);
         if (m_interactive) {
@@ -558,6 +583,12 @@ void WindowLayoutsPanel::editLayout(int id)
     updateEditor();
     m_pages->setCurrentWidget(m_editorPage);
     m_remove->setVisible(id != 0);
+    for (QWidget *ancestor = parentWidget(); ancestor; ancestor = ancestor->parentWidget()) {
+        if (auto *scroll = qobject_cast<QScrollArea *>(ancestor)) {
+            QTimer::singleShot(0, this, [scroll]() { scroll->verticalScrollBar()->setValue(0); });
+            break;
+        }
+    }
 }
 
 void WindowLayoutsPanel::resetDeleteConfirmation()

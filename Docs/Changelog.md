@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.50:
+
+Al elegir crear un atajo desde el final de una lista larga de Window Layouts,
+el editor conservaba el desplazamiento de la lista y la altura de esa página.
+Por eso podía abrirse sobre un tramo vacío y obligar a desplazarse manualmente
+hacia arriba. El contenedor ahora calcula su altura según la página visible y
+lleva el scroll al comienzo al entrar al editor. Se quita el botón superior
+«Disposiciones guardadas», que duplicaba la salida ya ofrecida por «Cancelar»
+y «Guardar». Lega eligió llamar a esta acción «Nuevo atajo de ventana» en
+español y «Add windows shortcut» en inglés; el resto del panel y sus estados
+usan «atajo» de forma consistente. No cambian las combinaciones, áreas ni el
+registro de teclas guardadas.
+
+[ Window Layouts - Abrir el editor arriba y nombrar atajos de ventana ]
+
 v1.49:
 
 La v1.48 señalaba cinco combinaciones compartidas con un estado amarillo en la
