@@ -5,6 +5,15 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-54 · Control individual de Window Layouts** (2026-10-11, Lega). Cada disposición nueva queda
+  activada y ofrece un interruptor propio debajo del lápiz de edición. Ya no existe la pausa global.
+  Al apagar una disposición se libera solo su atajo; las demás siguen activas. En Windows todas las
+  disposiciones activas intentan capturar su combinación con prioridad, sin una casilla adicional.
+  Cada fallo de activación aparece en su fila. Un punto rojo marca las combinaciones cuyo uso por
+  otra app o por el sistema se puede detectar; el cartel superior resume cuántas hay. No se puede
+  identificar de forma fiable al dueño ni detectar todos los hooks, y la prioridad no está
+  garantizada. Esta decisión reemplaza el carácter optativo y la pausa global de D-53.
+
 - **D-53 · Prioridad de atajos de Window Layouts en Windows** (2026-10-11, Lega). Cada disposición
   puede optar por intentar responder antes que otra app que use el mismo atajo. Por defecto queda
   apagado y siguen bloqueados los choques entre herramientas y disposiciones de Mighty Tools. La

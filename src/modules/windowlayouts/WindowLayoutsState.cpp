@@ -9,7 +9,6 @@
 
 namespace {
 const QString kLayouts = QStringLiteral("layouts");
-const QString kPaused = QStringLiteral("paused");
 
 bool validLayout(const WindowLayout &layout)
 {
@@ -32,18 +31,8 @@ WindowLayoutsState::WindowLayoutsState(ModuleContext *context)
 {
     if (context) {
         m_layouts = fromJson(context->value(kLayouts).toString());
-        m_paused = context->value(kPaused, false).toBool();
-    }
-}
-
-void WindowLayoutsState::setPaused(bool paused)
-{
-    if (m_paused == paused) {
-        return;
-    }
-    m_paused = paused;
-    if (m_context) {
-        m_context->setValue(kPaused, paused);
+        // La pausa global anterior se reemplazo por interruptores por disposicion.
+        if (context->value(QStringLiteral("paused")).isValid()) context->removeValue(QStringLiteral("paused"));
     }
 }
 
@@ -135,7 +124,7 @@ QList<WindowLayout> WindowLayoutsState::fromJson(const QString &text)
         layout.id = object.value(QStringLiteral("id")).toInt();
         layout.name = object.value(QStringLiteral("name")).toString();
         layout.shortcut = Shortcut::fromPortableString(object.value(QStringLiteral("shortcut")).toString());
-        layout.takePriority = object.value(QStringLiteral("takePriority")).toBool();
+        layout.enabled = object.value(QStringLiteral("enabled")).toBool(true);
         const QString destination = object.value(QStringLiteral("destination")).toString();
         layout.destination = destination == QLatin1String("minimize") ? LayoutDestination::Minimize
                            : destination == QLatin1String("custom") ? LayoutDestination::Custom
@@ -173,7 +162,7 @@ QString WindowLayoutsState::toJson(const QList<WindowLayout> &layouts)
         object.insert(QStringLiteral("id"), layout.id);
         object.insert(QStringLiteral("name"), layout.name);
         object.insert(QStringLiteral("shortcut"), layout.shortcut.toPortableString());
-        if (layout.takePriority) object.insert(QStringLiteral("takePriority"), true);
+        if (!layout.enabled) object.insert(QStringLiteral("enabled"), false);
         object.insert(QStringLiteral("destination"),
                       layout.destination == LayoutDestination::Minimize ? QStringLiteral("minimize")
                       : layout.destination == LayoutDestination::Custom ? QStringLiteral("custom")

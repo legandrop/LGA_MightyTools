@@ -1,5 +1,21 @@
 # Changelog — LGA Mighty Tools
 
+v1.48:
+
+Window Layouts solo mostraba el último error de registro porque cada fallo pisaba
+el anterior. El botón «Pausar» suspendía todas las disposiciones sin indicar su
+alcance. Cada fila tiene ahora un interruptor individual, activado al crearla;
+al apagarlo se libera únicamente ese atajo. Los fallos se guardan por disposición
+y se explican en su propia fila, mientras el cartel superior muestra el total.
+Las combinaciones que el sistema permite detectar como ocupadas llevan un punto
+rojo junto al interruptor y un aviso informativo. En Windows, toda disposición
+activa intenta responder con prioridad, sin una casilla adicional; otro hook o el
+sistema todavía pueden imponerse. Se migran los ajustes anteriores conservando
+las disposiciones, se elimina la pausa global y se comprueba que dos fallos
+simultáneos no se oculten entre sí.
+
+[ Window Layouts - Activar disposiciones por separado y mostrar cada choque ]
+
 v1.47:
 
 El editor de Window Layouts mostraba los ajustes rápidos y los ejes horizontal y

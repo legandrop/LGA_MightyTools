@@ -10,8 +10,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      los bordes disponibles y autooculta; en la Mac instalada, Dock a izquierda, derecha y abajo,
      visible y autooculto, más permiso de Accesibilidad y Grabación de pantalla. Verificar monitor
      secundario, DPI mixto, los presets migrados, minimizar y una ventana con tamaño mínimo o permisos
-     de administrador. Probar la prioridad voluntaria de Alt+Win+Abajo y Ctrl+Alt+Shift+Win+O con
-     el AHK elevado todavía activo, y comprobar que pausa, apagado y edición devuelvan la combinación.
+     de administrador. Probar la prioridad de Alt+Win+Abajo y Ctrl+Alt+Shift+Win+O con
+     el AHK elevado todavía activo; verificar los puntos de conflicto y que el interruptor individual,
+     el apagado del módulo y la edición liberen la combinación correspondiente.
      Si se abre un diálogo modal nativo de la propia app en el instante del atajo, comprobar si
      Windows entrega la activación al hilo principal o si se pierde con la cola de mensajes.
      La QA

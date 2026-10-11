@@ -114,7 +114,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_caption = new CaptionLabel(description, this);
     m_caption->setObjectName(QStringLiteral("caption"));
     m_caption->setWordWrap(true);
-    column->addWidget(m_caption);
+    m_captionRow = new QHBoxLayout();
+    m_captionRow->setContentsMargins(0, 0, 0, 0);
+    m_captionRow->setSpacing(5);
+    m_captionRow->addWidget(m_caption, 1);
+    column->addLayout(m_captionRow);
 
     connect(m_editButton, &QPushButton::clicked, this, [this]() {
         if (m_editHandler) {
@@ -127,6 +131,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
             startRecording();
         }
     });
+}
+
+void ShortcutRow::setTrailingWidget(QWidget *widget)
+{
+    m_captionRow->addWidget(widget, 0, Qt::AlignVCenter);
 }
 
 void ShortcutRow::setExtraChip(const QString &tone, const QString &text)

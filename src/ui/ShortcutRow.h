@@ -34,6 +34,7 @@ public:
     Shortcut shortcut() const { return m_shortcut; }
     void setValidator(Validator validator) { m_validator = std::move(validator); }
     void setEditHandler(std::function<void()> handler) { m_editHandler = std::move(handler); }
+    void setTrailingWidget(QWidget *widget);
 
     // Chip junto al nombre (Folder Switch: "In use" cuando otra app o herramienta ya tiene el
     // atajo). Tono vacio lo oculta. Aditivo: sin llamarlo, la fila se ve igual que antes.
@@ -79,6 +80,7 @@ private:
     QLabel *m_recorderText = nullptr;
     QPushButton *m_editButton = nullptr;
     QLabel *m_caption = nullptr;
+    QHBoxLayout *m_captionRow = nullptr;
 };
 
 #endif // MIGHTYTOOLS_SHORTCUTROW_H

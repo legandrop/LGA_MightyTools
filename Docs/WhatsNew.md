@@ -15,7 +15,7 @@ platforms: [win, mac]
 
 ## v1.43
 - [new] Window Layouts moves or minimizes the active window with your shortcuts: combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds while keeping clear of visible system bars.
-- [new][win] Window Layouts can try to take priority when another app uses a shortcut you choose for a layout.
+- [new][win] Window Layouts tries to take priority for active shortcuts, marks detected clashes with a red dot, and lets you turn each layout on or off separately.
 
 ## v1.37
 - [improved] Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting.

@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-class QCheckBox;
 class QHideEvent;
 class QLabel;
 class QLineEdit;
@@ -21,7 +20,7 @@ class WindowLayoutsPanel : public QWidget
 public:
     WindowLayoutsPanel(WindowLayoutsModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
-    void showEditorForCapture(bool priority = false);
+    void showEditorForCapture();
 
 protected:
     void hideEvent(QHideEvent *event) override;
@@ -36,7 +35,6 @@ private:
     void selectArea(bool pickWindow);
     void applyQuickPreset(int index);
     void resetDeleteConfirmation();
-    void updatePriorityHint();
 
     WindowLayoutsModule *m_module = nullptr;
     bool m_interactive = false;
@@ -53,8 +51,6 @@ private:
     QPushButton *m_vertical = nullptr;
     WorkAreaPreview *m_preview = nullptr;
     ShortcutRow *m_shortcut = nullptr;
-    QCheckBox *m_priorityCheck = nullptr;
-    QLabel *m_priorityHint = nullptr;
     QPushButton *m_remove = nullptr;
     WindowLayout m_draft;
     bool m_autoName = false;
