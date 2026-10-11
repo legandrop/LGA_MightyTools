@@ -5,6 +5,13 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-57 · Presentación del recordatorio de Disk Space** (2026-10-11, Lega). Las dos acciones inferiores
+  tienen el mismo ancho, separación y padding horizontal que los campos del plazo y el mínimo, y un
+  hover visible. El aviso completo es un poco más compacto y todos sus textos bajan una unidad de
+  tamaño. La acción que guarda el mínimo y aplaza el próximo aviso se llama «Remind me again» en inglés
+  y «Volver a recordarme» en español. Esta decisión actualiza el tamaño y el nombre de D-51 sin cambiar
+  lo que se guarda.
+
 - **D-56 · Editor y nombre de los atajos de Window Layouts** (2026-10-11, Lega). El alta se presenta
   como «Nuevo atajo de ventana» en español y «Add windows shortcut» en inglés. Todo el panel y sus
   estados llaman atajos a los elementos guardados. Al abrir el editor desde el final de una lista

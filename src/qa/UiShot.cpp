@@ -1426,8 +1426,12 @@ int runDiskReminderProbe()
     if (!edit || !time || !save || !cleanup || !error) {
         return 1;
     }
-    check(toast.width() == 364 && save->height() == 36 && cleanup->height() == 36, "ancho 364 y botones de 36");
+    check(toast.width() == 352 && save->height() == 34 && cleanup->height() == 34, "aviso compacto y botones de 34");
     check(edit->mapTo(&toast, QPoint()).y() == time->mapTo(&toast, QPoint()).y(), "tiempo y minimo en la misma fila");
+    check(save->mapTo(&toast, QPoint()).x() == time->mapTo(&toast, QPoint()).x()
+              && cleanup->mapTo(&toast, QPoint()).x() == edit->mapTo(&toast, QPoint()).x()
+              && save->width() == time->width() && cleanup->width() == edit->width(),
+          "botones y campos alineados y del mismo ancho");
     check(edit->focusPolicy() == Qt::ClickFocus && time->focusPolicy() == Qt::NoFocus
               && save->focusPolicy() == Qt::NoFocus, "solo el campo editable toma teclado por click");
 #ifdef Q_OS_WIN

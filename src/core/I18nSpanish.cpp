@@ -308,7 +308,7 @@ const QHash<QString, QString> &spanishTable()
         E("%1 free", "%1 libres"),
         E("Remind me in", "Recordarme en"),
         E("Only below", "Solo por debajo de"),
-        E("Save and remind me", "Guardar y recordarme"),
+        E("Remind me again", "Volver a recordarme"),
         E("Disk Space settings", "Ajustes de Disk Space"),
         E("Low space on %1 (%2 total). The alert is set to appear below %3 GB.",
           "Queda poco espacio en %1 (%2 en total). El aviso está configurado para cuando baje de %3 GB."),

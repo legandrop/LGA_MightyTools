@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.51:
+
+El recordatorio de Disk Space tenía los botones inferiores con menos padding que
+los campos superiores y con una separación distinta: los bordes no coincidían.
+Además, una regla de fondo más específica impedía que el hover de esos botones
+se viera. Se igualan el ancho, la separación horizontal y el padding de ambas
+filas, y el hover gana ahora sobre el fondo normal de cada botón. El aviso se
+compacta levemente: menor ancho, icono, espaciados y un nivel menos de tamaño
+en todos sus textos, incluida la lista del plazo y el mensaje de error. El botón
+de confirmación se llama «Remind me again» / «Volver a recordarme» para expresar
+la acción de posponer el aviso. Su funcionamiento sigue guardando el mínimo
+editado y el plazo elegido para ese disco.
+
+[ Disk Space - Alinear y compactar el recordatorio ]
+
 v1.50:
 
 Al elegir crear un atajo desde el final de una lista larga de Window Layouts,

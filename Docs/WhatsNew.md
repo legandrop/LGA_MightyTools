@@ -18,7 +18,7 @@ platforms: [win, mac]
 - [new][win] Window Layouts tries to take priority for active shortcuts, marks detected clashes with a yellow dot inside its panel, and lets you turn each layout on or off separately.
 
 ## v1.37
-- [improved] Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting.
+- [improved] Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting, in a smaller alert with aligned buttons and a clearer "Remind me again" action.
 
 ## v1.33
 - [fixed][mac] Checking for updates works: version 1.31 could not connect, so download this version once from the download page.

@@ -42,6 +42,7 @@ inline constexpr const char *kReminderBody = "#d0d0d0";
 inline constexpr const char *kReminderUnit = "#bebebe";
 inline constexpr const char *kReminderHeaderIcon = "#aaaaaa";
 inline constexpr const char *kReminderButton = "rgba(255,255,255,8)";
+inline constexpr const char *kReminderButtonHover = "#383838";
 
 // Texto
 inline constexpr const char *kText = "#B2B2B2";

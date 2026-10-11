@@ -39,7 +39,7 @@ protected:
     {
         QComboBox::paintEvent(event);
         QPainter painter(this);
-        Icons::paint(painter, Icon::ChevronDown, QRectF(width() - 24, 10, 12, 12),
+        Icons::paint(painter, Icon::ChevronDown, QRectF(width() - 24, 9, 12, 12),
                      Theme::color(Theme::kReminderUnit));
     }
 };
@@ -77,9 +77,9 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     }
     setAttribute(Qt::WA_TranslucentBackground);
     setObjectName(QStringLiteral("diskReminderToast"));
-    setFixedWidth(364);
+    setFixedWidth(352);
     setFocusPolicy(Qt::NoFocus);
-    setFont(Theme::uiFont(14));
+    setFont(Theme::uiFont(13));
 #ifdef Q_OS_WIN
     // Offscreen no enumera las fuentes de Windows: usa el mismo archivo que el escritorio real.
     if (QGuiApplication::platformName() == QLatin1String("offscreen")) {
@@ -92,9 +92,9 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     const QString family = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
 #endif
     setStyleSheet(QStringLiteral(
-        "#diskReminderToast QLabel, #diskReminderToast QLineEdit, #diskReminderToast QComboBox, #diskReminderToast QPushButton { background:transparent; border:0; color:%1; font-family:'%2'; font-size:14px; font-weight:400; }"
+        "#diskReminderToast QLabel, #diskReminderToast QLineEdit, #diskReminderToast QComboBox, #diskReminderToast QPushButton { background:transparent; border:0; color:%1; font-family:'%2'; font-size:13px; font-weight:400; }"
         "#diskReminderToast QPushButton { min-height:24px; max-height:24px; padding:0; }"
-        "#diskReminderToast QLabel#headerTitle { font-size:13px; }"
+        "#diskReminderToast QLabel#headerTitle { font-size:12px; }"
         "#diskReminderToast QLabel#reminderBody { color:%3; }"
         "#diskReminderToast QLabel#reminderUnit { color:%4; }"
         "#diskReminderToast QLineEdit, #diskReminderToast QComboBox { background:%5; border:1px solid %6; border-radius:5px; padding:0 10px; color:white; }"
@@ -103,19 +103,19 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
         "#diskReminderToast QComboBox { padding-right:32px; }"
         "#diskReminderToast QComboBox::drop-down { width:32px; border:0; }"
         "#diskReminderToast QComboBox::down-arrow { image:none; width:0; height:0; }"
-        "#diskReminderToast QComboBox QAbstractItemView { background:%5; border:1px solid %6; color:%1; font-family:'%2'; font-size:14px; }"
-        "#diskReminderToast QPushButton#reminderSave, #diskReminderToast QPushButton#reminderCleanup { min-height:34px; max-height:34px; background:%7; border:1px solid %8; border-radius:4px; padding:0 7px; color:white; }"
-        "#diskReminderToast QPushButton:hover { background:%9; }"
+        "#diskReminderToast QComboBox QAbstractItemView { background:%5; border:1px solid %6; color:%1; font-family:'%2'; font-size:13px; }"
+        "#diskReminderToast QPushButton#reminderSave, #diskReminderToast QPushButton#reminderCleanup { min-height:32px; max-height:32px; background:%7; border:1px solid %8; border-radius:4px; padding:0 10px; color:white; }"
+        "#diskReminderToast QPushButton#reminderSave:hover, #diskReminderToast QPushButton#reminderCleanup:hover { background:%9; }"
         "#diskReminderToast QPushButton:disabled { color:%10; }"
-        "#diskReminderToast QLabel#reminderError { color:%11; font-size:12px; }")
+        "#diskReminderToast QLabel#reminderError { color:%11; font-size:11px; }")
         .arg(QLatin1String(Theme::kReminderText), family, QLatin1String(Theme::kReminderBody),
              QLatin1String(Theme::kReminderUnit), QLatin1String(Theme::kBorder),
              QLatin1String(Theme::kReminderFieldBorder), QLatin1String(Theme::kReminderButton),
-             QLatin1String(Theme::kReminderButtonBorder), QLatin1String(Theme::kRowHover))
+             QLatin1String(Theme::kReminderButtonBorder), QLatin1String(Theme::kReminderButtonHover))
         .arg(QLatin1String(Theme::kTextFaint), QLatin1String(Theme::kError)));
 
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(16, 15, 16, 16);
+    layout->setContentsMargins(16, 14, 16, 14);
     layout->setSpacing(0);
     auto *header = new QHBoxLayout;
     header->setSpacing(8);
@@ -148,7 +148,7 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     closeButton->setAccessibleName(I18n::tr("Close"));
     header->addWidget(closeButton);
     layout->addLayout(header);
-    layout->addSpacing(14);
+    layout->addSpacing(12);
     connect(closeButton, &QPushButton::clicked, this, &QWidget::close);
     auto *menu = new QMenu(this);
     menu->addAction(I18n::tr("Disk Space settings"), this, [this] { emit settingsRequested(); });
@@ -157,10 +157,10 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     });
 
     auto *summary = new QHBoxLayout;
-    summary->setSpacing(15);
+    summary->setSpacing(12);
     auto *largeIcon = new QLabel(this);
-    largeIcon->setFixedSize(60, 60);
-    largeIcon->setPixmap(iconPixmap(60));
+    largeIcon->setFixedSize(56, 56);
+    largeIcon->setPixmap(iconPixmap(56));
     auto *iconLayout = new QVBoxLayout;
     iconLayout->setSpacing(0);
     iconLayout->addSpacing(4);
@@ -170,7 +170,7 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     auto *text = new QVBoxLayout;
     text->setSpacing(0);
     auto *title = new CaptionLabel(I18n::tr("%1 free on %2")
-        .arg(DiskSpace::formatBytes(drive.freeBytes), drive.label), this, 20);
+        .arg(DiskSpace::formatBytes(drive.freeBytes), drive.label), this, 19);
     title->setObjectName(QStringLiteral("reminderTitle"));
     text->addWidget(title);
     QString body;
@@ -181,24 +181,24 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
         body = I18n::tr("Low space on %1 (%2 total). The alert is set to appear below %3 GB.")
             .arg(drive.label, DiskSpace::formatBytes(drive.totalBytes), QString::number(m_watch.value));
     }
-    auto *description = new CaptionLabel(body, this, 20);
+    auto *description = new CaptionLabel(body, this, 19);
     description->setObjectName(QStringLiteral("reminderBody"));
     text->addWidget(description);
     text->addStretch();
     summary->addLayout(text, 1);
     layout->addLayout(summary);
-    layout->addSpacing(21);
+    layout->addSpacing(17);
 
     auto *fields = new QHBoxLayout;
     fields->setSpacing(12);
     auto *timeField = new QVBoxLayout;
-    timeField->setSpacing(8);
+    timeField->setSpacing(7);
     auto *timeLabel = new QLabel(I18n::tr("Remind me in"), this);
-    timeLabel->setFixedHeight(19);
+    timeLabel->setFixedHeight(18);
     timeField->addWidget(timeLabel);
     m_minutes = new ReminderComboBox(this);
     m_minutes->setObjectName(QStringLiteral("reminderTime"));
-    m_minutes->setFixedSize(160, 33);
+    m_minutes->setFixedSize(154, 32);
     m_minutes->setAccessibleName(timeLabel->text());
     for (int choice : DiskSpace::remindChoices()) {
         m_minutes->addItem(DiskSpace::intervalText(choice), choice);
@@ -208,21 +208,21 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     timeField->addWidget(m_minutes);
     fields->addLayout(timeField);
     auto *thresholdField = new QVBoxLayout;
-    thresholdField->setSpacing(8);
+    thresholdField->setSpacing(7);
     auto *thresholdLabel = new QLabel(I18n::tr("Only below"), this);
-    thresholdLabel->setFixedHeight(19);
+    thresholdLabel->setFixedHeight(18);
     thresholdField->addWidget(thresholdLabel);
     auto *number = new QWidget(this);
-    number->setFixedSize(160, 33);
+    number->setFixedSize(154, 32);
     m_value = new QLineEdit(QString::number(m_watch.value), number);
     m_value->setObjectName(QStringLiteral("reminderThreshold"));
-    m_value->setGeometry(0, 0, 160, 33);
+    m_value->setGeometry(0, 0, 154, 32);
     m_value->setInputMethodHints(Qt::ImhDigitsOnly);
     m_value->setMaxLength(10);
     m_value->setAccessibleName(thresholdLabel->text());
     auto *unitLabel = new QLabel(m_watch.unit == DiskWatch::Unit::GB ? I18n::tr("GB") : I18n::tr("%"), number);
     unitLabel->setObjectName(QStringLiteral("reminderUnit"));
-    unitLabel->setGeometry(118, 7, 31, 20);
+    unitLabel->setGeometry(112, 6, 31, 20);
     unitLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     unitLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     thresholdField->addWidget(number);
@@ -233,17 +233,17 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     m_error->setWordWrap(true);
     m_error->hide();
     layout->addWidget(m_error);
-    layout->addSpacing(17);
+    layout->addSpacing(14);
 
     auto *buttons = new QHBoxLayout;
-    buttons->setSpacing(8);
-    auto *save = new QPushButton(I18n::tr("Save and remind me"), this);
+    buttons->setSpacing(12);
+    auto *save = new QPushButton(I18n::tr("Remind me again"), this);
     save->setObjectName(QStringLiteral("reminderSave"));
-    save->setFixedSize(162, 36);
+    save->setFixedSize(154, 34);
     buttons->addWidget(save);
     auto *cleanup = new QPushButton(I18n::tr("Free up space"), this);
     cleanup->setObjectName(QStringLiteral("reminderCleanup"));
-    cleanup->setFixedSize(162, 36);
+    cleanup->setFixedSize(154, 34);
     cleanup->setEnabled(SystemPaths::cleanupSupported());
     buttons->addWidget(cleanup);
     layout->addLayout(buttons);
