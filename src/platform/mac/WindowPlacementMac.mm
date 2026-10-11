@@ -91,6 +91,8 @@ QRect screenRect(NSScreen *screen, CGFloat mainTop, bool available)
 
 bool axGeometry(AXUIElementRef window, QRect *out)
 {
+    constexpr AXValueType pointType = static_cast<AXValueType>(kAXValueCGPointType);
+    constexpr AXValueType sizeType = static_cast<AXValueType>(kAXValueCGSizeType);
     CFHolder position, size;
     if (AXUIElementCopyAttributeValue(window, kAXPositionAttribute, &position.value) != kAXErrorSuccess
         || AXUIElementCopyAttributeValue(window, kAXSizeAttribute, &size.value) != kAXErrorSuccess
@@ -100,13 +102,13 @@ bool axGeometry(AXUIElementRef window, QRect *out)
     }
     const auto pointValue = static_cast<AXValueRef>(position.value);
     const auto sizeValue = static_cast<AXValueRef>(size.value);
-    if (AXValueGetType(pointValue) != kAXValueCGPointType || AXValueGetType(sizeValue) != kAXValueCGSizeType) {
+    if (AXValueGetType(pointValue) != pointType || AXValueGetType(sizeValue) != sizeType) {
         return false;
     }
     CGPoint point{};
     CGSize dimensions{};
-    if (!AXValueGetValue(pointValue, kAXValueCGPointType, &point)
-        || !AXValueGetValue(sizeValue, kAXValueCGSizeType, &dimensions)) {
+    if (!AXValueGetValue(pointValue, pointType, &point)
+        || !AXValueGetValue(sizeValue, sizeType, &dimensions)) {
         return false;
     }
     *out = QRect(qRound(point.x), qRound(point.y), qRound(dimensions.width), qRound(dimensions.height));
@@ -115,11 +117,13 @@ bool axGeometry(AXUIElementRef window, QRect *out)
 
 bool setAxGeometry(AXUIElementRef window, const QRect &rect)
 {
+    constexpr AXValueType pointType = static_cast<AXValueType>(kAXValueCGPointType);
+    constexpr AXValueType sizeType = static_cast<AXValueType>(kAXValueCGSizeType);
     CGPoint point = CGPointMake(rect.x(), rect.y());
     CGSize size = CGSizeMake(rect.width(), rect.height());
     CFHolder pointValue, sizeValue;
-    pointValue.value = AXValueCreate(kAXValueCGPointType, &point);
-    sizeValue.value = AXValueCreate(kAXValueCGSizeType, &size);
+    pointValue.value = AXValueCreate(pointType, &point);
+    sizeValue.value = AXValueCreate(sizeType, &size);
     // Algunas apps limitan el tamaño segun la posicion actual; reubicar antes
     // de redimensionar y repetir la posicion por si la app la ajusto.
     return pointValue.value && sizeValue.value

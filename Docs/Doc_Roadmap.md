@@ -5,7 +5,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 1. **Prueba de Lega de las fases 2 a 6** en su máquina (atajos, calibrador, discos, cambio de carpeta en
    diálogos reales, links, doble click en `.nk`, Apply de la asociación, instalación del Nuke Bridge),
    con las apps viejas cerradas y fuera del inicio con Windows.
-   - **Window Layouts (v1.40):** Lega prueba el alta, edición y borrado de una disposición, dos ejes
+   - **Window Layouts (v1.41):** Lega prueba el alta, edición y borrado de una disposición, dos ejes
      combinados (tercio por cuarto), arrastre, selección de ventana y atajos reales. Probar taskbar en
      los bordes disponibles y autooculta; en la Mac instalada, Dock a izquierda, derecha y abajo,
      visible y autooculto, más permiso de Accesibilidad y Grabación de pantalla. Verificar monitor

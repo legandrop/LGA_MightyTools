@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.41:
+
+La primera compilación de Window Layouts en macOS no terminaba: el SDK entrega los tipos
+de valor de Accesibilidad como constantes enteras, mientras las funciones de lectura y escritura
+de geometría exigen el tipo enumerado `AXValueType`. Se convierte cada constante al tipo que
+espera la API antes de leer posición y tamaño o crear los valores nuevos. No cambia el cálculo
+del área útil ni el funcionamiento de Windows. La tanda anterior ya compilaba y pasaba el
+self-test en Windows; esta corrección habilita comprobar la construcción completa en macOS
+sin mover ventanas ajenas. La interacción real con permisos de Accesibilidad y las posiciones
+del Dock siguen reservadas para la prueba de Lega con la app instalada.
+
+[ Window Layouts - Corregir compilacion de macOS ]
+
 v1.40:
 
 Los atajos de reposicionamiento seguían en scripts externos y no se podían configurar desde Mighty
