@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.39 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.40 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -152,12 +152,18 @@ set(SOURCES
     src/modules/openinnukex/OpenInNukeXModule.cpp
     src/modules/openinnukex/OpenInNukeXOperations.cpp
     src/modules/openinnukex/OpenInNukeXPanel.cpp
+    src/modules/windowlayouts/AreaPicker.cpp
+    src/modules/windowlayouts/LayoutGeometry.cpp
+    src/modules/windowlayouts/WindowLayoutsModule.cpp
+    src/modules/windowlayouts/WindowLayoutsPanel.cpp
+    src/modules/windowlayouts/WindowLayoutsState.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
     src/platform/NukeWatcherCommon.cpp
     src/platform/SystemNotifierCommon.cpp
     src/platform/ToastActivationCommon.cpp
+    src/platform/WindowPlacementCommon.cpp
     src/qa/Measure.cpp
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
@@ -246,6 +252,11 @@ set(HEADERS
     src/modules/openinnukex/OpenInNukeXModule.h
     src/modules/openinnukex/OpenInNukeXOperations.h
     src/modules/openinnukex/OpenInNukeXPanel.h
+    src/modules/windowlayouts/AreaPicker.h
+    src/modules/windowlayouts/LayoutGeometry.h
+    src/modules/windowlayouts/WindowLayoutsModule.h
+    src/modules/windowlayouts/WindowLayoutsPanel.h
+    src/modules/windowlayouts/WindowLayoutsState.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
     src/platform/DirEnumerator.h
@@ -264,6 +275,7 @@ set(HEADERS
     src/platform/ToastActivation.h
     src/platform/WindowActivation.h
     src/platform/WindowFrame.h
+    src/platform/WindowPlacement.h
     src/qa/Measure.h
     src/qa/SelfTest.h
     src/qa/UiShot.h
@@ -311,6 +323,7 @@ if(WIN32)
         src/platform/win/ToastActivationWin.cpp
         src/platform/win/WindowActivationWin.cpp
         src/platform/win/WindowFrameWin.cpp
+        src/platform/win/WindowPlacementWin.cpp
         # Self-test del registro sobre un hive privado (RegLoadAppKey): solo Windows.
         src/qa/RegistryHiveTest.cpp
         # Ultimo paso del updater en Windows: lanza el instalador de Inno.
@@ -378,6 +391,7 @@ elseif(APPLE)
         src/platform/mac/ToastActivationMac.cpp
         src/platform/mac/WindowActivationMac.mm
         src/platform/mac/WindowFrameMac.mm
+        src/platform/mac/WindowPlacementMac.mm
     )
     list(APPEND HEADERS
         src/modules/openinnukex/mac/MacFileAssociation.h
@@ -435,6 +449,7 @@ elseif(APPLE)
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm
         src/platform/mac/WindowActivationMac.mm
+        src/platform/mac/WindowPlacementMac.mm
         src/modules/folderswitch/mac/MacFileDialogs.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()

@@ -2,6 +2,7 @@
 #include "modules/diskspace/DiskSpaceModule.h"
 #include "modules/linkredirector/LinkRedirectorDescriptor.h"
 #include "modules/nukeshortcuts/NukeShortcutsModule.h"
+#include "modules/windowlayouts/WindowLayoutsModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -29,6 +30,7 @@ QList<ModuleDescriptor> all()
     list << folderSwitchDescriptor();
 #endif
     list << linkRedirectorDescriptor();
+    list << windowLayoutsDescriptor();
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
@@ -54,6 +56,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("folderSwitch"), &folderSwitchHelp);
 #endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
+    providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     return providers;
 }
 

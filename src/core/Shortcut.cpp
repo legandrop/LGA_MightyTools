@@ -40,7 +40,8 @@ QString Shortcut::keyName(int key)
 bool Shortcut::isSupportedKey(int key)
 {
     return (key >= Qt::Key_A && key <= Qt::Key_Z) || (key >= Qt::Key_0 && key <= Qt::Key_9)
-        || (key >= Qt::Key_F1 && key <= Qt::Key_F12);
+        || (key >= Qt::Key_F1 && key <= Qt::Key_F12)
+        || key == Qt::Key_Left || key == Qt::Key_Right || key == Qt::Key_Up || key == Qt::Key_Down;
 }
 
 bool Shortcut::isModifierKey(int key)

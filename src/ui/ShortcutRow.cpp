@@ -20,7 +20,7 @@ Qt::KeyboardModifiers relevantModifiers(Qt::KeyboardModifiers modifiers)
     return modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier | Qt::MetaModifier);
 }
 
-// La tecla del evento como Qt::Key de letra, digito o F1-F12. En Windows se lee la virtual-key: con
+// La tecla del evento como Qt::Key de letra, digito, F1-F12 o flecha. En Windows se lee la virtual-key: con
 // Shift apretado, event->key() de "1" es "!" y la combinacion no se podria guardar.
 int keyFromEvent(const QKeyEvent *event)
 {
@@ -239,12 +239,12 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
 
     QString error;
     if (!Shortcut::isSupportedKey(candidate.key)) {
-        error = I18n::tr("Use a letter, a number or F1-F12.");
+        error = I18n::tr("Use a letter, a number, F1-F12 or an arrow key.");
     } else if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
 #ifdef Q_OS_MACOS
         error = I18n::tr("Add ⌘, ⌥ or ⌃ so it doesn't take a plain key.");
 #else
-        error = I18n::tr("Add Ctrl or Alt so it doesn't take a plain key.");
+        error = I18n::tr("Add Ctrl, Alt or Win so it doesn't take a plain key.");
 #endif
     } else if (candidate == previous) {
         setError(QString());

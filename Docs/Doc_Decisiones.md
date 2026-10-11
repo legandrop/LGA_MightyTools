@@ -5,6 +5,19 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-52 · Window Layouts** (2026-10-11, Lega). Herramienta nueva, apagada y sin atajos ni
+  disposiciones al instalar. Cada disposición tiene nombre, atajo y destino: ajuste rápido, selección
+  independiente de fracción y posición horizontal y vertical (entero, mitad, tercio o cuarto), área
+  dibujada con arrastre o límites de una ventana abierta. Los destinos se guardan como fracciones del
+  área útil y se resuelven sobre el monitor de la ventana activa al pulsar el atajo. En Windows se usa
+  el área de trabajo del monitor; en macOS, el área visible de la pantalla. Taskbar, Dock y barra de
+  menús visibles quedan afuera aunque estén en otro borde; las franjas de activación de taskbar y Dock
+  autoocultos se recuperan. Si la app ajena no acepta el tamaño o la posición, se intenta restaurar
+  la geometría anterior y se muestra el error. Los atajos AHK anteriores no se migran automáticamente:
+  se eligen en el panel y se informan los choques con otra herramienta o con el sistema. En macOS mover ventanas ajenas requiere
+  Accesibilidad; elegirlas puede requerir Grabación de pantalla. El selector no hace una captura del
+  escritorio: superpone un contorno y actualiza las posiciones mientras está abierto.
+
 - **D-51 · Editar el mínimo desde el recordatorio** (2026-10-11, Lega). Aviso propio con «Remind me
   in» y «Only below» en paralelo. El mínimo se escribe y conserva GB o porcentaje según ese disco.
   Dos botones de 36 píxeles: «Save and remind me» guarda el mínimo para los avisos siguientes y

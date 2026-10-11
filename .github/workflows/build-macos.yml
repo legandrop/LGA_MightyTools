@@ -5,6 +5,12 @@ name: Build macOS
 # necesita el permiso de Accesibilidad y a Nuke abierto.
 on:
   workflow_dispatch:
+    inputs:
+      compile_only:
+        description: "Compilar sin empaquetar ni ejecutar la app"
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   build-macos:
@@ -31,20 +37,24 @@ jobs:
       # El Release no lleva ruta al Qt (solo @executable_path/../Frameworks): el self-test corre sobre el
       # bundle ya armado por macdeployqt, que es ademas lo que se publica.
       - name: Bundle
+        if: ${{ !inputs.compile_only }}
         run: |
           cd build
           macdeployqt "LGA Mighty Tools.app"
           python3 ../tools/macos/podar_bundle.py "LGA Mighty Tools.app"
 
       - name: Self-test
+        if: ${{ !inputs.compile_only }}
         run: QT_QPA_PLATFORM=offscreen "build/LGA Mighty Tools.app/Contents/MacOS/LGA Mighty Tools" --self-test
 
       - name: Zip
+        if: ${{ !inputs.compile_only }}
         run: |
           cd build
           ditto -c -k --keepParent "LGA Mighty Tools.app" LGA_MightyTools_Mac.zip
 
       - name: Upload
+        if: ${{ !inputs.compile_only }}
         uses: actions/upload-artifact@v4
         with:
           name: LGA_MightyTools_Mac

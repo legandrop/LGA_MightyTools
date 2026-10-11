@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.40:
+
+Los atajos de reposicionamiento seguían en scripts externos y no se podían configurar desde Mighty
+Tools. Se agrega Window Layouts, apagada y sin disposiciones iniciales: cada destino permite combinar
+mitades, tercios y cuartos de manera independiente en horizontal y vertical, usar un ajuste rápido,
+dibujar un área o tomar los límites de una ventana abierta. Los atajos se registran con el servicio
+compartido y muestran los choques; al apagar la herramienta se liberan. El destino se calcula sobre
+el área útil del monitor de la ventana activa al pulsar, respetando taskbar, Dock y barra de menús
+visibles, incluso en otros bordes, y recuperando la franja de activación de barras autoocultas.
+Si una aplicación rechaza la geometría se informa y se intenta restaurar la anterior. El selector
+actualiza los límites de ventanas abiertas y borrar una disposición exige confirmación. Se agregan
+traducciones, capturas y pruebas de geometría y de rechazo de registro.
+
+[ Window Layouts - Configurar atajos y areas por monitor ]
+
 v1.39:
 
 El llamador del instalador local se había creado como `instalador_loca.bat`, sin la última letra.

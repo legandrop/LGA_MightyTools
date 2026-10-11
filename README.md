@@ -11,6 +11,7 @@ shortcuts, no system hooks.
 | **Open in NukeX** | Double-click a `.nk` file to open it in the NukeX you already have open, or in your preferred version. | Windows, macOS |
 | **Folder Switch** | Open and Save dialogs jump to the folder you have open in Explorer or XYplorer (Finder on macOS). | Windows, macOS |
 | **Link Redirector** | Opens each link in the right browser: links with your keywords go to an alternative browser. | Windows, macOS |
+| **Window Layouts** | Move the active window to a saved area with a shortcut. Combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds. | Windows, macOS |
 
 Nothing is on after you install it. Open the window from the tray icon (the menu bar on macOS), pick
 a tool on the left and turn it on.

@@ -112,7 +112,7 @@ QString canvasState(const QString &id)
 
 bool canvasOff(const QString &id)
 {
-    return id == QLatin1String("linkRedirector");
+    return id == QLatin1String("linkRedirector") || id == QLatin1String("windowLayouts");
 }
 
 // Prende para captura una herramienta con su estado (vacio = el primero que declara).

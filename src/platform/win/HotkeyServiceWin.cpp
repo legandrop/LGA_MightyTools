@@ -33,6 +33,10 @@ UINT nativeKey(int key)
     if (key >= Qt::Key_F1 && key <= Qt::Key_F12) {
         return static_cast<UINT>(VK_F1 + (key - Qt::Key_F1));
     }
+    if (key == Qt::Key_Left) return VK_LEFT;
+    if (key == Qt::Key_Right) return VK_RIGHT;
+    if (key == Qt::Key_Up) return VK_UP;
+    if (key == Qt::Key_Down) return VK_DOWN;
     return 0;
 }
 

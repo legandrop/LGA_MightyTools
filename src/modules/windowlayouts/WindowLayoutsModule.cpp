@@ -1,0 +1,426 @@
+#include "modules/windowlayouts/WindowLayoutsModule.h"
+
+#include "app/ModuleContext.h"
+#include "core/I18n.h"
+#include "modules/windowlayouts/LayoutGeometry.h"
+#include "modules/windowlayouts/WindowLayoutsPanel.h"
+#include "platform/WindowPlacement.h"
+#include "ui/Theme.h"
+
+#include <QPainter>
+#include <QPainterPath>
+#include <QHash>
+
+namespace {
+
+void paintLayoutIcon(QPainter &painter, const QRectF &rect, const QColor &color)
+{
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QRectF box = rect.adjusted(rect.width() * .14, rect.height() * .14,
+                                     -rect.width() * .14, -rect.height() * .14);
+    painter.setPen(QPen(color, 1.4));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRoundedRect(box, 1.5, 1.5);
+    painter.drawLine(QPointF(box.center().x(), box.top()), QPointF(box.center().x(), box.bottom()));
+    painter.drawLine(QPointF(box.left(), box.center().y()), QPointF(box.right(), box.center().y()));
+    painter.restore();
+}
+
+class RejectingHotkeys : public ModuleHotkeys
+{
+public:
+    bool registerHotkey(int, const Shortcut &) override { return false; }
+    void unregisterHotkey(int) override {}
+    void unregisterAll() override {}
+    bool isRegistered(int) const override { return false; }
+    bool probe(const Shortcut &) override { return true; }
+    void passThrough(const Shortcut &) override {}
+    QString declare(int, const Shortcut &) override { return {}; }
+    QString declaredByOtherModule(const Shortcut &) const override { return {}; }
+};
+
+class RejectionContext : public ModuleContext
+{
+public:
+    QString moduleId() const override { return QStringLiteral("windowLayouts"); }
+    QString moduleTitle() const override { return QStringLiteral("Window Layouts"); }
+    QVariant value(const QString &key, const QVariant &fallback = {}) const override { return m_values.value(key, fallback); }
+    void setValue(const QString &key, const QVariant &value) override { m_values.insert(key, value); }
+    void removeValue(const QString &key) override { m_values.remove(key); }
+    bool captureMode() const override { return false; }
+    bool dryRunInput() const override { return true; }
+    bool automatedRun() const override { return true; }
+    bool persistentRegistrationAllowed() const override { return false; }
+    ModuleHotkeys *hotkeys() override { return &m_hotkeys; }
+    InputInjector *injector() override { return nullptr; }
+    ForegroundWatcher *foreground() override { return nullptr; }
+    void notify(const QString &, const QString &, NoticeIcon, int) override {}
+    void showPanel() override {}
+    void hideWindowTemporarily() override {}
+    void restoreWindow() override {}
+    QWidget *window() const override { return nullptr; }
+
+private:
+    QHash<QString, QVariant> m_values;
+    RejectingHotkeys m_hotkeys;
+};
+
+void selfTest(const std::function<void(bool, const QString &)> &check)
+{
+    using namespace LayoutGeometry;
+    const QRectF mixed = grid({3, 0}, {4, 1});
+    check(validArea(mixed) && qAbs(mixed.x()) < 1e-9 && qAbs(mixed.y() - .25) < 1e-9
+              && qAbs(mixed.width() - 1.0 / 3.0) < 1e-9 && qAbs(mixed.height() - .25) < 1e-9,
+          QStringLiteral("grid: tercio horizontal combinado con segundo cuarto vertical"));
+    check(!validArea(grid({0, 0}, {1, 0})) && !validArea(grid({3, 3}, {1, 0})),
+          QStringLiteral("grid: ejes invalidos rechazados"));
+    const QRect work(100, 50, 900, 600);
+    check(resolve(work, mixed) == QRect(100, 200, 300, 150),
+          QStringLiteral("grid: fracciones resueltas dentro del area util desplazada"));
+    const QRectF clipped = capture(QRect(50, 100, 200, 200), work);
+    check(validArea(clipped) && resolve(work, clipped) == QRect(100, 100, 150, 200),
+          QStringLiteral("captura: rectangulo recortado al area util"));
+    check(!validArea(capture(QRect(0, 0, 20, 20), work)),
+          QStringLiteral("captura: fuera del monitor no guarda destino"));
+
+    WindowLayoutsState state;
+    WindowLayout layout;
+    layout.name = QStringLiteral("Mixto");
+    layout.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
+    layout.horizontal = {3, 0};
+    layout.vertical = {4, 1};
+    check(state.upsert(layout) && state.layouts().size() == 1 && state.layouts().first().id == 1,
+          QStringLiteral("estado: primer id local estable"));
+    const QList<WindowLayout> loaded = WindowLayoutsState::fromJson(WindowLayoutsState::toJson(state.layouts()));
+    check(loaded.size() == 1 && loaded.first().shortcut == layout.shortcut
+              && loaded.first().horizontal.parts == 3 && loaded.first().vertical.parts == 4,
+          QStringLiteral("estado: persistencia de atajo y ambos ejes"));
+    check(WindowLayoutsState::fromJson(QStringLiteral("[{\"id\":1,\"name\":\"x\",\"horizontalParts\":9}]")).isEmpty(),
+          QStringLiteral("estado: ajustes corruptos no crean un layout"));
+    check(state.remove(1) && state.layouts().isEmpty(), QStringLiteral("estado: borrar libera el id local"));
+    // El descriptor y el constructor no registran nada: solo start() toma el servicio de atajos.
+    RejectionContext context;
+    WindowLayoutsModule module(context);
+    module.start();
+    WindowLayout rejected = layout;
+    rejected.id = 0;
+    QString error;
+    check(!module.saveLayout(rejected, &error) && !error.isEmpty()
+              && module.layoutsState().layouts().isEmpty()
+              && context.value(QStringLiteral("layouts")).toString() == QStringLiteral("[]"),
+          QStringLiteral("registro: rechazo entre probe y register revierte el primer layout persistido"));
+    module.stop();
+}
+
+} // namespace
+
+WindowLayoutsModule::WindowLayoutsModule(ModuleContext &context)
+    : Module(context), m_state(&context)
+{
+}
+
+WindowLayoutsModule::~WindowLayoutsModule()
+{
+    stop();
+}
+
+void WindowLayoutsModule::start()
+{
+    if (m_started) {
+        return;
+    }
+    m_started = true;
+    registerLayouts();
+}
+
+void WindowLayoutsModule::stop()
+{
+    if (!m_started) {
+        return;
+    }
+    m_started = false;
+    if (m_picker) {
+        m_picker->close();
+        m_picker->deleteLater();
+        m_picker = nullptr;
+        context().restoreWindow();
+    }
+    if (m_hotkeys) {
+        disconnect(m_hotkeys, nullptr, this, nullptr);
+        m_hotkeys->unregisterAll();
+        for (int id : m_declaredIds) {
+            m_hotkeys->declare(id, Shortcut());
+        }
+        m_declaredIds.clear();
+        m_hotkeys = nullptr;
+    }
+}
+
+void WindowLayoutsModule::registerLayouts()
+{
+    if (!m_started) {
+        return;
+    }
+    if (m_hotkeys) {
+        m_hotkeys->unregisterAll();
+        for (int id : m_declaredIds) {
+            m_hotkeys->declare(id, Shortcut());
+        }
+        m_declaredIds.clear();
+    }
+    m_failedIds.clear();
+    m_lastError.clear();
+    if (m_state.paused()) {
+        emit statusChanged();
+        emit layoutsChanged();
+        return;
+    }
+    for (const WindowLayout &layout : m_state.layouts()) {
+        if (!layout.shortcut.isValid()) {
+            continue;
+        }
+        if (!m_hotkeys) {
+            m_hotkeys = context().hotkeys();
+            connect(m_hotkeys, &ModuleHotkeys::activated, this, &WindowLayoutsModule::onHotkey);
+        }
+        const QString takenBy = m_hotkeys->declare(layout.id, layout.shortcut);
+        if (!takenBy.isEmpty()) {
+            m_lastError = I18n::tr("%1 is already used by %2.").arg(layout.shortcut.displayText(), takenBy);
+            m_failedIds.insert(layout.id);
+            continue;
+        }
+        m_declaredIds.insert(layout.id);
+        if (!m_hotkeys->registerHotkey(layout.id, layout.shortcut)) {
+            m_lastError = I18n::tr("%1 is taken by another app.").arg(layout.shortcut.displayText());
+            m_failedIds.insert(layout.id);
+        }
+    }
+    emit statusChanged();
+    emit layoutsChanged();
+}
+
+void WindowLayoutsModule::onHotkey(int id)
+{
+    if (!m_started || m_state.paused()) {
+        return;
+    }
+    for (const WindowLayout &layout : m_state.layouts()) {
+        if (layout.id != id) {
+            continue;
+        }
+        QString error;
+        if (!WindowPlacement::moveForeground(layout.normalizedArea(), &error, context().automatedRun())) {
+            m_lastError = error.isEmpty() ? I18n::tr("This window could not be moved.") : error;
+            emit statusChanged();
+            emit layoutsChanged();
+        } else if (!m_lastError.isEmpty()) {
+            m_lastError.clear();
+            emit statusChanged();
+            emit layoutsChanged();
+        }
+        break;
+    }
+}
+
+ModuleStatus WindowLayoutsModule::status() const
+{
+    if (m_state.paused()) {
+        return {ModuleTone::Paused, I18n::tr("Paused")};
+    }
+    if (!m_lastError.isEmpty()) {
+        return {ModuleTone::Error, I18n::tr("Needs attention")};
+    }
+    const int count = m_state.layouts().size();
+    if (count == 0) {
+        return {ModuleTone::Active, I18n::tr("No layouts yet")};
+    }
+    return {ModuleTone::Active,
+            count == 1 ? I18n::tr("1 layout ready") : I18n::tr("%1 layouts ready").arg(count)};
+}
+
+QWidget *WindowLayoutsModule::createPanel(QWidget *parent)
+{
+    auto *panel = new WindowLayoutsPanel(this, !context().captureMode(), parent);
+    connect(this, &WindowLayoutsModule::layoutsChanged, panel, &WindowLayoutsPanel::refresh);
+    if (m_captureState == QLatin1String("editor")) {
+        panel->showEditorForCapture();
+    }
+    return panel;
+}
+
+QStringList WindowLayoutsModule::captureStates() const
+{
+    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("picker"), QStringLiteral("draw")};
+}
+
+bool WindowLayoutsModule::applyCaptureState(const QString &state)
+{
+    if (!context().captureMode() || !captureStates().contains(state)) {
+        return false;
+    }
+    m_captureState = state;
+    if (state == QLatin1String("list")) {
+        WindowLayout a;
+        a.id = 1;
+        a.name = QStringLiteral("Left third");
+        a.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
+        a.horizontal = {3, 0};
+        WindowLayout b;
+        b.id = 2;
+        b.name = QStringLiteral("Center third");
+        b.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+K"));
+        b.horizontal = {3, 1};
+        m_state.setCaptureLayouts({a, b});
+    } else {
+        m_state.setCaptureLayouts({});
+    }
+    return true;
+}
+
+QWidget *WindowLayoutsModule::createCaptureWidget(const QString &state, QWidget *parent)
+{
+    if (state == QLatin1String("picker") || state == QLatin1String("draw")) {
+        return new AreaPicker(state == QLatin1String("draw") ? AreaPicker::Mode::Draw : AreaPicker::Mode::Window,
+                              true, parent);
+    }
+    return nullptr;
+}
+
+void WindowLayoutsModule::setPaused(bool paused)
+{
+    m_state.setPaused(paused);
+    registerLayouts();
+}
+
+QString WindowLayoutsModule::validateShortcut(int editingId, const Shortcut &shortcut) const
+{
+    if (!shortcut.isValid()) {
+        return I18n::tr("Choose a shortcut.");
+    }
+    for (const WindowLayout &layout : m_state.layouts()) {
+        if (layout.id != editingId && layout.shortcut == shortcut) {
+            return I18n::tr("Already used by another layout.");
+        }
+    }
+    ModuleHotkeys *hotkeys = m_hotkeys ? m_hotkeys : context().hotkeys();
+    if (hotkeys) {
+        const QString takenBy = hotkeys->declaredByOtherModule(shortcut);
+        if (!takenBy.isEmpty()) {
+            return I18n::tr("Already used by %1.").arg(takenBy);
+        }
+        bool unchanged = false;
+        for (const WindowLayout &layout : m_state.layouts()) {
+            unchanged = unchanged || (layout.id == editingId && layout.shortcut == shortcut);
+        }
+        if (!unchanged && !hotkeys->probe(shortcut)) {
+            return I18n::tr("%1 is taken by another app.").arg(shortcut.displayText());
+        }
+    }
+    return {};
+}
+
+bool WindowLayoutsModule::saveLayout(WindowLayout layout, QString *error)
+{
+    const QString shortcutError = validateShortcut(layout.id, layout.shortcut);
+    if (!shortcutError.isEmpty()) {
+        if (error) *error = shortcutError;
+        return false;
+    }
+    WindowLayout previous;
+    for (const WindowLayout &stored : m_state.layouts()) {
+        if (stored.id == layout.id) previous = stored;
+    }
+    if (!m_state.upsert(layout)) {
+        if (error) *error = I18n::tr("Check the name and area, or remove a layout to make room.");
+        return false;
+    }
+    registerLayouts();
+    if (m_failedIds.contains(layout.id)) {
+        const QString failure = m_lastError;
+        if (previous.id) {
+            m_state.upsert(previous);
+        } else {
+            m_state.remove(layout.id);
+        }
+        registerLayouts();
+        if (error) *error = failure;
+        return false;
+    }
+    return true;
+}
+
+bool WindowLayoutsModule::removeLayout(int id)
+{
+    if (!m_state.remove(id)) {
+        return false;
+    }
+    registerLayouts();
+    return true;
+}
+
+void WindowLayoutsModule::openAreaPicker(AreaPicker::Mode mode, std::function<void(const QRectF &)> chosen)
+{
+    if (!m_started || m_picker || context().automatedRun()) {
+        return;
+    }
+    auto *picker = new AreaPicker(mode, false);
+    if (!picker->error().isEmpty()) {
+        m_lastError = picker->error();
+        picker->deleteLater();
+        emit statusChanged();
+        emit layoutsChanged();
+        return;
+    }
+    if (mode == AreaPicker::Mode::Window && !picker->hasCandidates()) {
+        m_lastError = I18n::tr("No selectable windows found. Draw an area instead.");
+        picker->deleteLater();
+        emit statusChanged();
+        emit layoutsChanged();
+        return;
+    }
+    m_picker = picker;
+    picker->setChosen(std::move(chosen));
+    connect(picker, &QObject::destroyed, this, [this]() {
+        m_picker = nullptr;
+        if (m_started) context().restoreWindow();
+    });
+    context().hideWindowTemporarily();
+    picker->open();
+}
+
+ModuleDescriptor windowLayoutsDescriptor()
+{
+    ModuleDescriptor d;
+    d.id = QStringLiteral("windowLayouts");
+    d.title = QStringLiteral("Window Layouts");
+    d.description = I18n::tr("Move the active window to a saved area with a shortcut.");
+    d.offBullets = {I18n::tr("Combine horizontal and vertical halves, thirds and quarters"),
+                    I18n::tr("Draw an area or copy an open window's bounds"),
+                    I18n::tr("Keeps clear of a visible taskbar, Dock and menu bar")};
+    d.platforms = PlatformWindows | PlatformMac;
+    d.paintIcon = &paintLayoutIcon;
+    d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
+        return std::make_unique<WindowLayoutsModule>(context);
+    };
+    d.configuredShortcuts = [](const SettingsReader &read) {
+        QList<Shortcut> shortcuts;
+        for (const WindowLayout &layout : WindowLayoutsState::fromJson(read(QStringLiteral("layouts"), {}).toString())) {
+            if (layout.shortcut.isValid()) shortcuts.append(layout.shortcut);
+        }
+        return shortcuts;
+    };
+    d.selfTest = &selfTest;
+    return d;
+}
+
+HelpSection windowLayoutsHelp(const SettingsReader &)
+{
+    HelpSection help;
+    help.title = QStringLiteral("Window Layouts");
+    help.steps = {I18n::tr("Add a layout and choose a quick preset, or combine horizontal and vertical fractions."),
+                  I18n::tr("Draw a destination area or click an open window to copy its bounds."),
+                  I18n::tr("Record a shortcut. It moves the window that is in front when you press it.")};
+    help.note = I18n::tr("Visible system bars are excluded. Some protected windows may require accessibility permission or cannot be moved.");
+    return help;
+}

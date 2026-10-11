@@ -45,6 +45,8 @@ UInt32 nativeKey(int key)
         {Qt::Key_F1, kVK_F1}, {Qt::Key_F2, kVK_F2}, {Qt::Key_F3, kVK_F3}, {Qt::Key_F4, kVK_F4},
         {Qt::Key_F5, kVK_F5}, {Qt::Key_F6, kVK_F6}, {Qt::Key_F7, kVK_F7}, {Qt::Key_F8, kVK_F8},
         {Qt::Key_F9, kVK_F9}, {Qt::Key_F10, kVK_F10}, {Qt::Key_F11, kVK_F11}, {Qt::Key_F12, kVK_F12},
+        {Qt::Key_Left, kVK_LeftArrow}, {Qt::Key_Right, kVK_RightArrow},
+        {Qt::Key_Up, kVK_UpArrow}, {Qt::Key_Down, kVK_DownArrow},
     };
     return table.value(key, UINT32_MAX);
 }

@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.40
+- [new] Window Layouts moves the active window with your shortcuts: combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds while keeping clear of visible system bars.
+
 ## v1.37
 - [improved] Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting.
 
