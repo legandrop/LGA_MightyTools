@@ -10,7 +10,11 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      los bordes disponibles y autooculta; en la Mac instalada, Dock a izquierda, derecha y abajo,
      visible y autooculto, más permiso de Accesibilidad y Grabación de pantalla. Verificar monitor
      secundario, DPI mixto, los presets migrados, minimizar y una ventana con tamaño mínimo o permisos
-     de administrador. La instancia AHK elevada anterior debe terminar para liberar los atajos. La QA
+     de administrador. Probar la prioridad voluntaria de Alt+Win+Abajo y Ctrl+Alt+Shift+Win+O con
+     el AHK elevado todavía activo, y comprobar que pausa, apagado y edición devuelvan la combinación.
+     Si se abre un diálogo modal nativo de la propia app en el instante del atajo, comprobar si
+     Windows entrega la activación al hilo principal o si se pierde con la cola de mensajes.
+     La QA
      automatizada solo valida geometría, registro simulado y capturas: no mueve ventanas reales.
    - **Ventana de limpieza de Disk Space (v1.04):** el borrado real, la Papelera, el botón «Free up
      space» del aviso y el escaneo de un disco externo los prueba Lega; las pruebas automatizadas solo

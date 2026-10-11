@@ -17,6 +17,7 @@ struct WindowLayout
     int id = 0;
     QString name;
     Shortcut shortcut{Qt::NoModifier, 0};
+    bool takePriority = false;
     LayoutDestination destination = LayoutDestination::Grid;
     LayoutGeometry::AxisSlice horizontal;
     LayoutGeometry::AxisSlice vertical;

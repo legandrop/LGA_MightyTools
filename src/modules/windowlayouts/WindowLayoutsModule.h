@@ -32,7 +32,8 @@ public:
     const WindowLayoutsState &layoutsState() const { return m_state; }
     QString lastError() const { return m_lastError; }
     void setPaused(bool paused);
-    QString validateShortcut(int editingId, const Shortcut &shortcut) const;
+    QString validateShortcut(int editingId, const Shortcut &shortcut, bool allowExternalConflict = false) const;
+    bool externalShortcutConflict(int editingId, const Shortcut &shortcut) const;
     bool saveLayout(WindowLayout layout, QString *error = nullptr);
     bool removeLayout(int id);
     void openAreaPicker(AreaPicker::Mode mode, std::function<void(const QRectF &)> chosen);

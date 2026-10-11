@@ -24,6 +24,7 @@ public:
     // Registra `shortcut` con el identificador `id` (si ya habia uno con ese id, lo reemplaza).
     // False si el sistema lo rechazo: otra app ya tiene esa combinacion.
     bool registerHotkey(int id, const Shortcut &shortcut);
+    bool registerPriorityHotkey(int id, const Shortcut &shortcut);
     void unregisterHotkey(int id);
     void unregisterAll();
     bool isRegistered(int id) const;

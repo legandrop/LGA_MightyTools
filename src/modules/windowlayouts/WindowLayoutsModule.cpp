@@ -31,6 +31,7 @@ class RejectingHotkeys : public ModuleHotkeys
 {
 public:
     bool registerHotkey(int, const Shortcut &) override { return false; }
+    bool registerPriorityHotkey(int, const Shortcut &) override { return false; }
     void unregisterHotkey(int) override {}
     void unregisterAll() override {}
     bool isRegistered(int) const override { return false; }
@@ -114,6 +115,9 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     check(restored.size() == 1 && restored.first().destination == LayoutDestination::Minimize
               && WindowPlacement::minimizeForeground(&minimizeError, true) && minimizeError.isEmpty(),
           QStringLiteral("estado: minimizar persiste y dry-run no toca ventanas"));
+    minimize.takePriority = true;
+    check(WindowLayoutsState::fromJson(WindowLayoutsState::toJson({minimize})).first().takePriority,
+          QStringLiteral("estado: la prioridad voluntaria persiste"));
     // El descriptor y el constructor no registran nada: solo start() toma el servicio de atajos.
     RejectionContext context;
     WindowLayoutsModule module(context);
@@ -125,6 +129,11 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               && module.layoutsState().layouts().isEmpty()
               && context.value(QStringLiteral("layouts")).toString() == QStringLiteral("[]"),
           QStringLiteral("registro: rechazo entre probe y register revierte el primer layout persistido"));
+    rejected.takePriority = true;
+    error.clear();
+    check(!module.saveLayout(rejected, &error) && !error.isEmpty()
+              && module.layoutsState().layouts().isEmpty(),
+          QStringLiteral("prioridad: fallo del hook revierte el layout persistido"));
     module.stop();
 }
 
@@ -206,8 +215,18 @@ void WindowLayoutsModule::registerLayouts()
             continue;
         }
         m_declaredIds.insert(layout.id);
-        if (!m_hotkeys->registerHotkey(layout.id, layout.shortcut)) {
-            m_lastError = I18n::tr("%1 is taken by another app.").arg(layout.shortcut.displayText());
+#ifdef Q_OS_WIN
+        const bool priority = layout.takePriority;
+#else
+        const bool priority = false;
+#endif
+        const bool registered = priority
+            ? m_hotkeys->registerPriorityHotkey(layout.id, layout.shortcut)
+            : m_hotkeys->registerHotkey(layout.id, layout.shortcut);
+        if (!registered) {
+            m_lastError = priority
+                ? I18n::tr("Could not take priority for %1.").arg(layout.shortcut.displayText())
+                : I18n::tr("Another app or Windows uses %1.").arg(layout.shortcut.displayText());
             m_failedIds.insert(layout.id);
         }
     }
@@ -261,15 +280,15 @@ QWidget *WindowLayoutsModule::createPanel(QWidget *parent)
 {
     auto *panel = new WindowLayoutsPanel(this, !context().captureMode(), parent);
     connect(this, &WindowLayoutsModule::layoutsChanged, panel, &WindowLayoutsPanel::refresh);
-    if (m_captureState == QLatin1String("editor")) {
-        panel->showEditorForCapture();
+    if (m_captureState == QLatin1String("editor") || m_captureState == QLatin1String("priority")) {
+        panel->showEditorForCapture(m_captureState == QLatin1String("priority"));
     }
     return panel;
 }
 
 QStringList WindowLayoutsModule::captureStates() const
 {
-    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("minimize"),
+    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("priority"), QStringLiteral("minimize"),
             QStringLiteral("picker"), QStringLiteral("draw")};
 }
 
@@ -319,7 +338,7 @@ void WindowLayoutsModule::setPaused(bool paused)
     registerLayouts();
 }
 
-QString WindowLayoutsModule::validateShortcut(int editingId, const Shortcut &shortcut) const
+QString WindowLayoutsModule::validateShortcut(int editingId, const Shortcut &shortcut, bool allowExternalConflict) const
 {
     if (!shortcut.isValid()) {
         return I18n::tr("Choose a shortcut.");
@@ -335,20 +354,44 @@ QString WindowLayoutsModule::validateShortcut(int editingId, const Shortcut &sho
         if (!takenBy.isEmpty()) {
             return I18n::tr("Already used by %1.").arg(takenBy);
         }
-        bool unchanged = false;
-        for (const WindowLayout &layout : m_state.layouts()) {
-            unchanged = unchanged || (layout.id == editingId && layout.shortcut == shortcut);
-        }
-        if (!unchanged && !hotkeys->probe(shortcut)) {
+        if (!allowExternalConflict && externalShortcutConflict(editingId, shortcut)) {
+#ifdef Q_OS_WIN
+            return I18n::tr("Another app or Windows uses %1. Turn on 'Try to take priority' to use it here.")
+                .arg(shortcut.displayText());
+#else
             return I18n::tr("%1 is taken by another app.").arg(shortcut.displayText());
+#endif
         }
     }
     return {};
 }
 
+bool WindowLayoutsModule::externalShortcutConflict(int editingId, const Shortcut &shortcut) const
+{
+    for (const WindowLayout &layout : m_state.layouts()) {
+        // En macOS la preferencia importada no activa el hook de Windows.
+#ifdef Q_OS_WIN
+        const bool registeredNormally = !layout.takePriority;
+#else
+        const bool registeredNormally = true;
+#endif
+        if (layout.id == editingId && layout.shortcut == shortcut && registeredNormally && m_hotkeys
+            && m_hotkeys->isRegistered(editingId)) {
+            return false;
+        }
+    }
+    ModuleHotkeys *hotkeys = m_hotkeys ? m_hotkeys : context().hotkeys();
+    return hotkeys && !hotkeys->probe(shortcut);
+}
+
 bool WindowLayoutsModule::saveLayout(WindowLayout layout, QString *error)
 {
-    const QString shortcutError = validateShortcut(layout.id, layout.shortcut);
+#ifdef Q_OS_WIN
+    const bool priority = layout.takePriority;
+#else
+    const bool priority = false;
+#endif
+    const QString shortcutError = validateShortcut(layout.id, layout.shortcut, priority);
     if (!shortcutError.isEmpty()) {
         if (error) *error = shortcutError;
         return false;

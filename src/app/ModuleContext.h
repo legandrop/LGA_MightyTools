@@ -41,6 +41,13 @@ public:
     ~ModuleHotkeys() override = default;
 
     virtual bool registerHotkey(int localId, const Shortcut &shortcut) = 0;
+    // Captura voluntaria para una combinacion ocupada por otra app; solo Windows la implementa.
+    virtual bool registerPriorityHotkey(int localId, const Shortcut &shortcut)
+    {
+        Q_UNUSED(localId);
+        Q_UNUSED(shortcut);
+        return false;
+    }
     virtual void unregisterHotkey(int localId) = 0;
     virtual void unregisterAll() = 0;
     virtual bool isRegistered(int localId) const = 0;

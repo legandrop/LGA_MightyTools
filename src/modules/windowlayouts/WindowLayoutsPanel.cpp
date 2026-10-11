@@ -8,6 +8,7 @@
 #include "ui/UiWidgets.h"
 
 #include <QComboBox>
+#include <QCheckBox>
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QHBoxLayout>
@@ -338,6 +339,16 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     form->addWidget(methodHint);
     m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Acts on the window in front."), card);
     form->addWidget(m_shortcut);
+#ifdef Q_OS_WIN
+    m_priorityCheck = new QCheckBox(I18n::tr("Try to take priority over other apps"), card);
+    m_priorityCheck->setFocusPolicy(Qt::NoFocus);
+    form->addWidget(m_priorityCheck);
+    m_priorityHint = Ui::caption(QString(), card);
+    m_priorityHint->setWordWrap(true);
+    m_priorityHint->setContentsMargins(20, 0, 0, 0);
+    m_priorityHint->hide();
+    form->addWidget(m_priorityHint);
+#endif
     m_editorError = Ui::caption(QString(), card);
     Ui::setStyleProperty(m_editorError, "tone", QStringLiteral("err"));
     m_editorError->hide();
@@ -370,10 +381,17 @@ QWidget *WindowLayoutsPanel::createEditorPage()
         connect(m_shortcut, &ShortcutRow::shortcutRecorded, this, [this](const Shortcut &shortcut) {
             m_draft.shortcut = shortcut;
             m_shortcut->setShortcut(shortcut);
+            updatePriorityHint();
         });
         m_shortcut->setValidator([this](const Shortcut &shortcut) {
-            return m_module->validateShortcut(m_draft.id, shortcut);
+            return m_module->validateShortcut(m_draft.id, shortcut, m_priorityCheck != nullptr);
         });
+#ifdef Q_OS_WIN
+        connect(m_priorityCheck, &QCheckBox::toggled, this, [this](bool checked) {
+            m_draft.takePriority = checked;
+            updatePriorityHint();
+        });
+#endif
         connect(draw, &QPushButton::clicked, this, [this]() { selectArea(false); });
         connect(pick, &QPushButton::clicked, this, [this]() { selectArea(true); });
         connect(cancel, &QPushButton::clicked, this, [this]() {
@@ -528,6 +546,33 @@ void WindowLayoutsPanel::updateEditor()
                                 ? I18n::tr("This shortcut minimizes the active window.")
                                 : I18n::tr("Available area excludes visible taskbar, Dock and menu bar."));
     m_shortcut->setShortcut(m_draft.shortcut);
+    if (m_priorityCheck) {
+        const QSignalBlocker blockPriority(m_priorityCheck);
+        m_priorityCheck->setChecked(m_draft.takePriority);
+    }
+    updatePriorityHint();
+}
+
+void WindowLayoutsPanel::updatePriorityHint()
+{
+    if (!m_priorityHint) return;
+    if (!m_draft.shortcut.isValid()) {
+        m_priorityHint->hide();
+        return;
+    }
+    const bool conflict = m_module->externalShortcutConflict(m_draft.id, m_draft.shortcut);
+    if (conflict && m_draft.shortcut.key == Qt::Key_Down
+        && m_draft.shortcut.modifiers == (Qt::AltModifier | Qt::MetaModifier)) {
+        m_priorityHint->setText(I18n::tr("Windows normally uses Win+Alt+Down to snap a window to the lower half. The current shortcut owner cannot be identified."));
+    } else if (conflict) {
+        m_priorityHint->setText(I18n::tr("Another app or Windows uses this shortcut. Its current action cannot be identified."));
+    } else if (m_draft.takePriority) {
+        m_priorityHint->setText(I18n::tr("Window Layouts will try to respond first. Windows or another app may still take precedence."));
+    } else {
+        m_priorityHint->hide();
+        return;
+    }
+    m_priorityHint->show();
 }
 
 void WindowLayoutsPanel::applyQuickPreset(int index)
@@ -578,12 +623,13 @@ void WindowLayoutsPanel::saveEditor()
     m_pages->setCurrentWidget(m_listPage);
 }
 
-void WindowLayoutsPanel::showEditorForCapture()
+void WindowLayoutsPanel::showEditorForCapture(bool priority)
 {
     editLayout();
     m_draft.name = I18n::tr("Custom mix");
     m_draft.horizontal = {3, 0};
     m_draft.vertical = {4, 1};
     m_draft.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
+    m_draft.takePriority = priority;
     updateEditor();
 }

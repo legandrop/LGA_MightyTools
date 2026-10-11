@@ -118,6 +118,11 @@ bool HotkeyService::registerHotkey(int id, const Shortcut &shortcut)
     return true;
 }
 
+bool HotkeyService::registerPriorityHotkey(int, const Shortcut &)
+{
+    return false;
+}
+
 void HotkeyService::unregisterHotkey(int id)
 {
     const auto it = d->refs.find(id);

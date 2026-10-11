@@ -135,6 +135,7 @@ QList<WindowLayout> WindowLayoutsState::fromJson(const QString &text)
         layout.id = object.value(QStringLiteral("id")).toInt();
         layout.name = object.value(QStringLiteral("name")).toString();
         layout.shortcut = Shortcut::fromPortableString(object.value(QStringLiteral("shortcut")).toString());
+        layout.takePriority = object.value(QStringLiteral("takePriority")).toBool();
         const QString destination = object.value(QStringLiteral("destination")).toString();
         layout.destination = destination == QLatin1String("minimize") ? LayoutDestination::Minimize
                            : destination == QLatin1String("custom") ? LayoutDestination::Custom
@@ -172,6 +173,7 @@ QString WindowLayoutsState::toJson(const QList<WindowLayout> &layouts)
         object.insert(QStringLiteral("id"), layout.id);
         object.insert(QStringLiteral("name"), layout.name);
         object.insert(QStringLiteral("shortcut"), layout.shortcut.toPortableString());
+        if (layout.takePriority) object.insert(QStringLiteral("takePriority"), true);
         object.insert(QStringLiteral("destination"),
                       layout.destination == LayoutDestination::Minimize ? QStringLiteral("minimize")
                       : layout.destination == LayoutDestination::Custom ? QStringLiteral("custom")

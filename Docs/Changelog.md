@@ -1,5 +1,22 @@
 # Changelog — LGA Mighty Tools
 
+v1.45:
+
+Window Layouts rechazaba las combinaciones que otra aplicación ya había registrado,
+aunque la intención era reemplazar los atajos de ventanas del script anterior. El
+registro normal de Windows no permite apropiarse de una combinación ocupada ni
+identificar con certeza al programa o la acción que la usa. Cada disposición ofrece
+ahora «Try to take priority over other apps», desactivado de fábrica. Al elegirlo,
+Window Layouts captura esa combinación con un hook de teclado en un hilo dedicado,
+sin alterar los atajos de otros módulos; los suelta al pausar, borrar o apagar la
+herramienta. El editor conserva una combinación ocupada para poder elegir la opción,
+y avisa de la acción habitual de Win+Alt+Abajo sin atribuirle falsamente el dueño
+actual. Si falla la instalación del hook, el guardado se revierte. La prioridad no
+puede ser absoluta frente a Windows ni a un hook instalado después. Las acciones
+reales quedan para la prueba de Lega.
+
+[ Window Layouts - Permitir prioridad voluntaria de atajos en Windows ]
+
 v1.44:
 
 El modo local del instalador terminaba inmediatamente después de generar el archivo

@@ -5,6 +5,14 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-53 · Prioridad de atajos de Window Layouts en Windows** (2026-10-11, Lega). Cada disposición
+  puede optar por intentar responder antes que otra app que use el mismo atajo. Por defecto queda
+  apagado y siguen bloqueados los choques entre herramientas y disposiciones de Mighty Tools. La
+  captura de teclado se crea solo mientras haya una disposición prioritaria activa y se suelta al
+  pausar o apagar. No se mata ni se modifica el otro programa; se consume la pulsación elegida.
+  Windows no informa de forma fiable quién tiene el atajo ni qué hace. La prioridad puede perder
+  frente a atajos del sistema o a otros capturadores posteriores; Lega prueba las teclas reales.
+
 - **D-52 · Window Layouts** (2026-10-11, Lega). Herramienta nueva, apagada y sin atajos ni
   disposiciones al instalar. Cada disposición tiene nombre, atajo y destino: ajuste rápido, selección
   independiente de fracción y posición horizontal y vertical (entero, mitad, tercio o cuarto), área

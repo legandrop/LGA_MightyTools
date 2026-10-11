@@ -230,11 +230,17 @@ void testHost(const Check &check)
     check(b && b->hotkeys()->declare(2, k) == QLatin1String("Probe A"),
           QStringLiteral("choque: B no puede declarar Ctrl+Alt+K, gana A que declaro primero"));
     check(b && !b->hotkeys()->registerHotkey(2, k), QStringLiteral("choque: B no registra Ctrl+Alt+K (sin llamar al sistema)"));
+    check(b && !b->hotkeys()->registerPriorityHotkey(2, k),
+          QStringLiteral("choque: prioridad no salta el bloqueo entre modulos"));
     check(b && b->hotkeys()->declaredByOtherModule(k) == QLatin1String("Probe A"),
           QStringLiteral("choque: el grabador de B ve \"Already used by Probe A\""));
     const Shortcut n = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+N"));
     check(b && b->hotkeys()->declare(4, n).isEmpty() && b->hotkeys()->declaredByOtherModule(n).isEmpty(),
           QStringLiteral("choque: su propio atajo no cuenta como de otra"));
+    check(b && b->hotkeys()->registerPriorityHotkey(4, n) && host.hotkeyHub()->registeredCount() == 3
+              && !host.hotkeyHub()->systemServiceAlive(),
+          QStringLiteral("prioridad: se cuenta sin instalar hooks en corrida automatizada"));
+    if (b) b->hotkeys()->unregisterHotkey(4);
     const Shortcut l = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
     store.setValue(QStringLiteral("probeC/shortcut"), QStringLiteral("Ctrl+Alt+L"));
     check(b && b->hotkeys()->declaredByOtherModule(l) == QLatin1String("Probe C"),

@@ -47,7 +47,7 @@ public:
     QString declaredByOffModule(const Shortcut &shortcut, const QString &exceptModuleId) const;
 
     // Lo que usa ModuleHotkeysImpl.
-    bool systemRegister(int globalId, const Shortcut &shortcut);
+    bool systemRegister(int globalId, const Shortcut &shortcut, bool priority = false);
     void systemUnregister(int globalId);
     bool systemProbe(const Shortcut &shortcut);
     void systemPassThrough(const Shortcut &shortcut);
@@ -73,6 +73,7 @@ public:
     ~ModuleHotkeysImpl() override;
 
     bool registerHotkey(int localId, const Shortcut &shortcut) override;
+    bool registerPriorityHotkey(int localId, const Shortcut &shortcut) override;
     void unregisterHotkey(int localId) override;
     void unregisterAll() override;
     bool isRegistered(int localId) const override;

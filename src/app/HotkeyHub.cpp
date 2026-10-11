@@ -78,14 +78,15 @@ QString HotkeyHub::declaredByOffModule(const Shortcut &shortcut, const QString &
     return m_offLookup ? m_offLookup(shortcut, exceptModuleId) : QString();
 }
 
-bool HotkeyHub::systemRegister(int globalId, const Shortcut &shortcut)
+bool HotkeyHub::systemRegister(int globalId, const Shortcut &shortcut, bool priority)
 {
     if (m_automated) {
         qDebug() << "[HotkeyHub] (automatizada) registro contado sin llamar al sistema:" << shortcut.toPortableString()
                  << "id" << globalId;
         return true;
     }
-    return m_service && m_service->registerHotkey(globalId, shortcut);
+    return m_service && (priority ? m_service->registerPriorityHotkey(globalId, shortcut)
+                                  : m_service->registerHotkey(globalId, shortcut));
 }
 
 void HotkeyHub::systemUnregister(int globalId)
@@ -157,6 +158,20 @@ bool ModuleHotkeysImpl::registerHotkey(int localId, const Shortcut &shortcut)
         return false;
     }
     if (!m_hub->systemRegister(globalId(localId), shortcut)) {
+        return false;
+    }
+    m_registered.insert(localId, shortcut);
+    return true;
+}
+
+bool ModuleHotkeysImpl::registerPriorityHotkey(int localId, const Shortcut &shortcut)
+{
+    if (localId <= 0 || localId >= kRangeSize || !m_hub) {
+        return false;
+    }
+    unregisterHotkey(localId);
+    if (!m_hub->declaredByRunningModule(shortcut, m_moduleId).isEmpty()
+        || !m_hub->systemRegister(globalId(localId), shortcut, true)) {
         return false;
     }
     m_registered.insert(localId, shortcut);
