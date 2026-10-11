@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.38:
+
+Generar un instalador para probar cambios locales requería pasar por el flujo de publicación:
+`--no-run` evitaba ejecutarlo, pero seguía controlando Git, la autenticación de GitHub, las notas y
+el estado del release. Además exigía main y un árbol limpio, aunque no se quisiera publicar nada.
+Ahora `instalador.bat --local` saltea todo ese preflight y conserva únicamente la preparación Release,
+el control de versión del binario, la compilación con Inno Setup y la generación de SHA256SUMS.
+Termina al generar los archivos, sin ofrecer instalar, revelar, commitear ni publicar. El nuevo
+`instalador_loca.bat` llama a ese modo y devuelve su código de salida. Se conservan los controles
+y las preguntas del flujo habitual de publicación. El README incluye ambas formas de uso.
+
+[ Build - Generar el instalador local sin publicacion ]
+
 v1.37:
 
 El aviso de Disk Space permitía posponer un recordatorio, pero para cambiar el mínimo de espacio

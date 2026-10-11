@@ -1,6 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
-REM Uso: instalador.bat [--no-run] [--replace]
+REM Uso: instalador.bat [--local] [--no-run] [--replace]
+REM   --local    solo genera el instalador y su SHA256SUMS, sin Git/GitHub ni preguntas.
+REM              No ejecuta el instalador ni lo revela en Explorer; admite cambios locales.
 REM   --no-run   arma el instalador y su SHA256SUMS y no ofrece ejecutarlo ni revelarlo en el
 REM              Explorer. La parte de commit y release sigue igual.
 REM   --replace  si el release v<version> ya tiene el instalador de Windows, lo reemplaza.
@@ -8,7 +10,9 @@ REM El release v<version> lo crea la primera plataforma que publica, Windows o l
 REM existe, este script le suma el instalador y fusiona SHA256SUMS en vez de crearlo.
 set "NO_RUN="
 set "REPLACE="
+set "LOCAL_ONLY="
 for %%A in (%*) do (
+    if /I "%%~A"=="--local" set "LOCAL_ONLY=1"
     if /I "%%~A"=="--no-run" set "NO_RUN=1"
     if /I "%%~A"=="--replace" set "REPLACE=1"
 )
@@ -39,6 +43,13 @@ set "PUBLIC_RELEASE_REPO=legandrop/LGA_MightyTools"
 set "GITHUB_READY=true"
 set "GH_CMD="
 set "GITHUB_LOCAL_ONLY_CONFIRMED=false"
+
+if defined LOCAL_ONLY (
+    set "GITHUB_READY=false"
+    set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
+    echo Modo local: solo se genera el instalador, sin Git/GitHub ni preguntas.
+    goto :BUILD_INSTALLER
+)
 
 echo.
 echo ============================================================
@@ -156,6 +167,7 @@ if /i "!GITHUB_READY!" NEQ "true" (
     set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
 )
 
+:BUILD_INSTALLER
 echo Creando instalador de LGA Mighty Tools...
 
 REM Buscar Inno Setup. Va ANTES del build: si falta, enterarse en dos segundos y
@@ -295,6 +307,7 @@ echo SHA256SUMS: %SUMS_FILE%
 
 echo.
 echo Instalador creado: %OUTPUT_EXE%
+if defined LOCAL_ONLY goto :END
 
 REM ---------------------------------------------------------------- instalar local
 REM Primero se ofrece instalar / revelar el .exe; recien despues commit + GitHub.
