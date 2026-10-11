@@ -54,6 +54,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 #include <qpa/qwindowsysteminterface.h>
 
 #include <cstdio>
@@ -1430,6 +1431,10 @@ int runDiskReminderProbe()
 #endif
     check(toast.unit() == DiskWatch::Unit::GB && time->currentData().toInt() == 15 && edit->text() == QLatin1String("250"),
           "se heredan unidad, minimo y recordatorio");
+    QWheelEvent wheel(QPointF(80, 16), QPointF(80, 16), QPoint(), QPoint(0, -120),
+                      Qt::NoButton, Qt::NoModifier, Qt::ScrollUpdate, false);
+    QApplication::sendEvent(time, &wheel);
+    check(time->currentData().toInt() == 15, "la rueda sobre el desplegable no cambia el plazo");
     int saved = 0;
     QObject::connect(&toast, &DiskReminderToast::reminderRequested, &canvas, [&](int minutes, int value) {
         check(module.saveReminder(drive.root, minutes, value, toast.unit(), now), "el modulo acepta el guardado valido");

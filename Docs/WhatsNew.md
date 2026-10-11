@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.47
+- [fixed] Scrolling over the reminder time in Disk Space no longer changes your choice; choose a time from the menu to change it.
+
 ## v1.43
 - [new] Window Layouts moves or minimizes the active window with your shortcuts: combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds while keeping clear of visible system bars.
 - [new][win] Window Layouts can try to take priority when another app uses a shortcut you choose for a layout.

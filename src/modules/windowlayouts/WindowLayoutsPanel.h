@@ -5,7 +5,6 @@
 
 #include <QWidget>
 
-class QComboBox;
 class QCheckBox;
 class QHideEvent;
 class QLabel;
@@ -49,9 +48,9 @@ private:
     QLabel *m_editorError = nullptr;
     QLabel *m_workAreaText = nullptr;
     QLineEdit *m_name = nullptr;
-    QComboBox *m_preset = nullptr;
-    QComboBox *m_horizontal = nullptr;
-    QComboBox *m_vertical = nullptr;
+    QPushButton *m_preset = nullptr;
+    QPushButton *m_horizontal = nullptr;
+    QPushButton *m_vertical = nullptr;
     WorkAreaPreview *m_preview = nullptr;
     ShortcutRow *m_shortcut = nullptr;
     QCheckBox *m_priorityCheck = nullptr;

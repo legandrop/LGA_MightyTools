@@ -21,6 +21,7 @@
 #include <QResizeEvent>
 #include <QStandardPaths>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 #include <utility>
 
 namespace {
@@ -29,6 +30,11 @@ class ReminderComboBox : public QComboBox
 public:
     using QComboBox::QComboBox;
 protected:
+    void wheelEvent(QWheelEvent *event) override
+    {
+        event->ignore();
+    }
+
     void paintEvent(QPaintEvent *event) override
     {
         QComboBox::paintEvent(event);

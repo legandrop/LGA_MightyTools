@@ -7,13 +7,13 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
-#include <QComboBox>
 #include <QCheckBox>
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QPainter>
 #include <QPointer>
 #include <QPushButton>
@@ -104,22 +104,23 @@ QString presetText(int index)
     }
 }
 
-void addAxisOptions(QComboBox *box, bool horizontal)
+QPushButton *dropdown(QWidget *parent)
 {
-    for (int parts = 2; parts <= 4; ++parts) {
-        for (int index = 0; index < parts; ++index) {
-            const LayoutGeometry::AxisSlice axis{parts, index};
-            box->addItem(axisText(axis, horizontal), axisKey(axis));
-        }
-    }
-    box->insertItem(0, axisText({1, 0}, horizontal), axisKey({1, 0}));
-    box->setFocusPolicy(Qt::NoFocus);
+    auto *button = Ui::button(QString(), QString(), QString(), parent);
+    button->setObjectName(QStringLiteral("fieldButton"));
+    button->setFocusPolicy(Qt::NoFocus);
+    button->setStyleSheet(QStringLiteral("text-align: left;"));
+    Ui::setDropdownArrow(button);
+    return button;
 }
 
-LayoutGeometry::AxisSlice selectedAxis(QComboBox *box)
+QList<LayoutGeometry::AxisSlice> axisOptions()
 {
-    const int key = box->currentData().toInt();
-    return {key / 10, key % 10};
+    QList<LayoutGeometry::AxisSlice> options = {{1, 0}};
+    for (int parts = 2; parts <= 4; ++parts) {
+        for (int index = 0; index < parts; ++index) options.append({parts, index});
+    }
+    return options;
 }
 
 QString description(const WindowLayout &layout)
@@ -304,12 +305,8 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     m_name->setObjectName(QStringLiteral("ruleField"));
     form->addWidget(m_name);
     form->addWidget(Ui::caption(I18n::tr("Quick preset"), card));
-    m_preset = new QComboBox(card);
-    m_preset->setFocusPolicy(Qt::NoFocus);
-    for (int i = 0; i < presets().size(); ++i) m_preset->addItem(presetText(i));
-    m_preset->addItem(I18n::tr("Custom mix"));
-    m_preset->addItem(I18n::tr("Custom area"));
-    m_preset->addItem(I18n::tr("Minimize"));
+    m_preset = dropdown(card);
+    m_preset->setAccessibleName(I18n::tr("Quick preset"));
     form->addWidget(m_preset);
     auto *axes = new QHBoxLayout();
     axes->setSpacing(9);
@@ -317,8 +314,8 @@ QWidget *WindowLayoutsPanel::createEditorPage()
         auto *axisColumn = new QVBoxLayout();
         axisColumn->setSpacing(5);
         axisColumn->addWidget(Ui::caption(which == 0 ? I18n::tr("Horizontal") : I18n::tr("Vertical"), card));
-        auto *box = new QComboBox(card);
-        addAxisOptions(box, which == 0);
+        auto *box = dropdown(card);
+        box->setAccessibleName(which == 0 ? I18n::tr("Horizontal") : I18n::tr("Vertical"));
         axisColumn->addWidget(box);
         axes->addLayout(axisColumn, 1);
         (which == 0 ? m_horizontal : m_vertical) = box;
@@ -367,17 +364,57 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     column->addWidget(card);
     column->addStretch();
     if (m_interactive) {
-        connect(m_preset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &WindowLayoutsPanel::applyQuickPreset);
-        auto axisChanged = [this]() {
+        connect(m_preset, &QPushButton::clicked, this, [this]() {
+            QMenu menu(this);
+            int selected = presets().size() + (m_draft.destination == LayoutDestination::Minimize ? 2 : 1);
+            if (m_draft.destination == LayoutDestination::Grid) {
+                selected = presets().size();
+                for (int i = 0; i < presets().size(); ++i) {
+                    if (sameAxis(presets().at(i).horizontal, m_draft.horizontal)
+                        && sameAxis(presets().at(i).vertical, m_draft.vertical)) {
+                        selected = i;
+                        break;
+                    }
+                }
+            }
+            for (int i = 0; i < presets().size() + 3; ++i) {
+                const QString title = i < presets().size() ? presetText(i)
+                    : i == presets().size() ? I18n::tr("Custom mix")
+                    : i == presets().size() + 1 ? I18n::tr("Custom area") : I18n::tr("Minimize");
+                QAction *action = menu.addAction(title);
+                action->setData(i);
+                action->setCheckable(true);
+                action->setChecked(i == selected);
+            }
+            if (QAction *chosen = menu.exec(m_preset->mapToGlobal(QPoint(0, m_preset->height() + 2)))) {
+                if (chosen->data().toInt() != selected) applyQuickPreset(chosen->data().toInt());
+            }
+        });
+        auto axisChanged = [this](LayoutGeometry::AxisSlice axis, bool horizontal) {
             m_draft.name = m_name->text();
             if (m_autoName) m_draft.name = I18n::tr("Custom mix");
             m_draft.destination = LayoutDestination::Grid;
-            m_draft.horizontal = selectedAxis(m_horizontal);
-            m_draft.vertical = selectedAxis(m_vertical);
+            if (horizontal) m_draft.horizontal = axis;
+            else m_draft.vertical = axis;
             updateEditor();
         };
-        connect(m_horizontal, QOverload<int>::of(&QComboBox::currentIndexChanged), this, axisChanged);
-        connect(m_vertical, QOverload<int>::of(&QComboBox::currentIndexChanged), this, axisChanged);
+        for (const bool horizontal : {true, false}) {
+            QPushButton *button = horizontal ? m_horizontal : m_vertical;
+            connect(button, &QPushButton::clicked, this, [this, button, horizontal, axisChanged]() {
+                QMenu menu(this);
+                const LayoutGeometry::AxisSlice current = horizontal ? m_draft.horizontal : m_draft.vertical;
+                for (const LayoutGeometry::AxisSlice axis : axisOptions()) {
+                    QAction *action = menu.addAction(axisText(axis, horizontal));
+                    action->setData(axisKey(axis));
+                    action->setCheckable(true);
+                    action->setChecked(sameAxis(axis, current));
+                }
+                if (QAction *chosen = menu.exec(button->mapToGlobal(QPoint(0, button->height() + 2)))) {
+                    const int key = chosen->data().toInt();
+                    if (key != axisKey(current)) axisChanged({key / 10, key % 10}, horizontal);
+                }
+            });
+        }
         connect(m_shortcut, &ShortcutRow::shortcutRecorded, this, [this](const Shortcut &shortcut) {
             m_draft.shortcut = shortcut;
             m_shortcut->setShortcut(shortcut);
@@ -513,14 +550,9 @@ void WindowLayoutsPanel::hideEvent(QHideEvent *event)
 
 void WindowLayoutsPanel::updateEditor()
 {
-    const QSignalBlocker blockPreset(m_preset);
-    const QSignalBlocker blockHorizontal(m_horizontal);
-    const QSignalBlocker blockVertical(m_vertical);
     m_name->setText(m_draft.name);
-    const int h = m_horizontal->findData(axisKey(m_draft.horizontal));
-    const int v = m_vertical->findData(axisKey(m_draft.vertical));
-    m_horizontal->setCurrentIndex(qMax(0, h));
-    m_vertical->setCurrentIndex(qMax(0, v));
+    m_horizontal->setText(axisText(m_draft.horizontal, true));
+    m_vertical->setText(axisText(m_draft.vertical, false));
     m_horizontal->setEnabled(m_draft.destination == LayoutDestination::Grid);
     m_vertical->setEnabled(m_draft.destination == LayoutDestination::Grid);
     int preset = presets().size() + (m_draft.destination == LayoutDestination::Minimize ? 2 : 1);
@@ -534,7 +566,9 @@ void WindowLayoutsPanel::updateEditor()
             }
         }
     }
-    m_preset->setCurrentIndex(preset);
+    m_preset->setText(preset < presets().size() ? presetText(preset)
+                      : preset == presets().size() ? I18n::tr("Custom mix")
+                      : preset == presets().size() + 1 ? I18n::tr("Custom area") : I18n::tr("Minimize"));
     m_preview->setArea(m_draft.normalizedArea());
     m_workAreaText->setText(m_draft.destination == LayoutDestination::Minimize
                                 ? I18n::tr("This shortcut minimizes the active window.")

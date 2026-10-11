@@ -1,5 +1,21 @@
 # Changelog — LGA Mighty Tools
 
+v1.47:
+
+El editor de Window Layouts mostraba los ajustes rápidos y los ejes horizontal y
+vertical con el aspecto gris nativo de `QComboBox`, distinto de los desplegables
+oscuros del resto de Mighty Tools. Además, la rueda podía cambiar una opción al
+pasar sobre esos campos sin una elección consciente. Los tres controles usan
+ahora el mismo campo y menú de opciones marcables que ya se emplea en General y
+Disk Space; la disposición solo cambia cuando se elige un elemento del menú.
+Se conservan los quince ajustes rápidos y las combinaciones de mitades, tercios
+y cuartos de ambos ejes. El recordatorio editable de Disk Space era el único
+`QComboBox` restante: ahora ignora la rueda y conserva su plazo hasta que el
+usuario elige otro. La sonda del recordatorio comprueba ese comportamiento con
+un evento de rueda real.
+
+[ Window Layouts - Unificar desplegables y bloquear cambios por rueda ]
+
 v1.46:
 
 La lista de Window Layouts mostraba cada atajo como una cadena de texto apagada,
