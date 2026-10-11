@@ -15,13 +15,15 @@ bool validLayout(const WindowLayout &layout)
 {
     return layout.id >= 1 && layout.id <= WindowLayoutsState::kMaxLayouts
         && !layout.name.trimmed().isEmpty() && layout.name.size() <= 80
-        && layout.horizontal.valid() && layout.vertical.valid()
-        && layout.shortcut.isValid() && LayoutGeometry::validArea(layout.normalizedArea());
+        && layout.horizontal.valid() && layout.vertical.valid() && layout.shortcut.isValid()
+        && (layout.destination == LayoutDestination::Minimize
+            || LayoutGeometry::validArea(layout.normalizedArea()));
 }
 } // namespace
 
 QRectF WindowLayout::normalizedArea() const
 {
+    if (destination == LayoutDestination::Minimize) return {};
     return destination == LayoutDestination::Custom ? customArea : LayoutGeometry::grid(horizontal, vertical);
 }
 
@@ -133,8 +135,10 @@ QList<WindowLayout> WindowLayoutsState::fromJson(const QString &text)
         layout.id = object.value(QStringLiteral("id")).toInt();
         layout.name = object.value(QStringLiteral("name")).toString();
         layout.shortcut = Shortcut::fromPortableString(object.value(QStringLiteral("shortcut")).toString());
-        layout.destination = object.value(QStringLiteral("destination")).toString() == QLatin1String("custom")
-            ? LayoutDestination::Custom : LayoutDestination::Grid;
+        const QString destination = object.value(QStringLiteral("destination")).toString();
+        layout.destination = destination == QLatin1String("minimize") ? LayoutDestination::Minimize
+                           : destination == QLatin1String("custom") ? LayoutDestination::Custom
+                           : LayoutDestination::Grid;
         layout.horizontal = {object.value(QStringLiteral("horizontalParts")).toInt(1),
                              object.value(QStringLiteral("horizontalIndex")).toInt()};
         layout.vertical = {object.value(QStringLiteral("verticalParts")).toInt(1),
@@ -169,7 +173,9 @@ QString WindowLayoutsState::toJson(const QList<WindowLayout> &layouts)
         object.insert(QStringLiteral("name"), layout.name);
         object.insert(QStringLiteral("shortcut"), layout.shortcut.toPortableString());
         object.insert(QStringLiteral("destination"),
-                      layout.destination == LayoutDestination::Custom ? QStringLiteral("custom") : QStringLiteral("grid"));
+                      layout.destination == LayoutDestination::Minimize ? QStringLiteral("minimize")
+                      : layout.destination == LayoutDestination::Custom ? QStringLiteral("custom")
+                      : QStringLiteral("grid"));
         object.insert(QStringLiteral("horizontalParts"), layout.horizontal.parts);
         object.insert(QStringLiteral("horizontalIndex"), layout.horizontal.index);
         object.insert(QStringLiteral("verticalParts"), layout.vertical.parts);

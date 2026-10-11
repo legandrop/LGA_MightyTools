@@ -30,6 +30,9 @@ QRect resolve(const QRect &workArea, const QRectF &normalizedArea);
 // En dryRun solo valida el rectangulo; no consulta ni modifica ventanas del sistema.
 bool moveForeground(const QRectF &normalizedArea, QString *error = nullptr, bool dryRun = false);
 
+// En dryRun no consulta ni modifica ventanas del sistema.
+bool minimizeForeground(QString *error = nullptr, bool dryRun = false);
+
 } // namespace WindowPlacement
 
 #endif // MIGHTYTOOLS_WINDOWPLACEMENT_H

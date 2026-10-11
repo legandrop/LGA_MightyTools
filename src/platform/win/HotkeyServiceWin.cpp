@@ -37,7 +37,6 @@ UINT nativeKey(int key)
     if (key == Qt::Key_Right) return VK_RIGHT;
     if (key == Qt::Key_Up) return VK_UP;
     if (key == Qt::Key_Down) return VK_DOWN;
-    if (key == Qt::Key_Home) return VK_HOME;
     return 0;
 }
 

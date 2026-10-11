@@ -10,7 +10,7 @@
 
 class ModuleContext;
 
-enum class LayoutDestination { Grid, Custom };
+enum class LayoutDestination { Grid, Custom, Minimize };
 
 struct WindowLayout
 {

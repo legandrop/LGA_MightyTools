@@ -71,8 +71,8 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     using namespace LayoutGeometry;
     check(Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L")).isValid()
               && Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+L")).isValid()
-              && Shortcut::fromPortableString(QStringLiteral("Ctrl+Home")).key == Qt::Key_Home,
-          QStringLiteral("atajos: las tres combinaciones antiguas se pueden configurar"));
+              && !Shortcut::fromPortableString(QStringLiteral("Ctrl+Home")).isValid(),
+          QStringLiteral("atajos: las combinaciones de ventanas se admiten, Ctrl+Home no"));
     const QRectF mixed = grid({3, 0}, {4, 1});
     check(validArea(mixed) && qAbs(mixed.x()) < 1e-9 && qAbs(mixed.y() - .25) < 1e-9
               && qAbs(mixed.width() - 1.0 / 3.0) < 1e-9 && qAbs(mixed.height() - .25) < 1e-9,
@@ -103,6 +103,17 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     check(WindowLayoutsState::fromJson(QStringLiteral("[{\"id\":1,\"name\":\"x\",\"horizontalParts\":9}]")).isEmpty(),
           QStringLiteral("estado: ajustes corruptos no crean un layout"));
     check(state.remove(1) && state.layouts().isEmpty(), QStringLiteral("estado: borrar libera el id local"));
+    WindowLayout minimize;
+    minimize.name = QStringLiteral("Minimizar");
+    minimize.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Down"));
+    minimize.destination = LayoutDestination::Minimize;
+    check(state.upsert(minimize) && !LayoutGeometry::validArea(minimize.normalizedArea()),
+          QStringLiteral("estado: minimizar no requiere area"));
+    const QList<WindowLayout> restored = WindowLayoutsState::fromJson(WindowLayoutsState::toJson(state.layouts()));
+    QString minimizeError;
+    check(restored.size() == 1 && restored.first().destination == LayoutDestination::Minimize
+              && WindowPlacement::minimizeForeground(&minimizeError, true) && minimizeError.isEmpty(),
+          QStringLiteral("estado: minimizar persiste y dry-run no toca ventanas"));
     // El descriptor y el constructor no registran nada: solo start() toma el servicio de atajos.
     RejectionContext context;
     WindowLayoutsModule module(context);
@@ -214,8 +225,11 @@ void WindowLayoutsModule::onHotkey(int id)
             continue;
         }
         QString error;
-        if (!WindowPlacement::moveForeground(layout.normalizedArea(), &error, context().automatedRun())) {
-            m_lastError = error.isEmpty() ? I18n::tr("This window could not be moved.") : error;
+        const bool succeeded = layout.destination == LayoutDestination::Minimize
+            ? WindowPlacement::minimizeForeground(&error, context().automatedRun())
+            : WindowPlacement::moveForeground(layout.normalizedArea(), &error, context().automatedRun());
+        if (!succeeded) {
+            m_lastError = error.isEmpty() ? I18n::tr("This window could not be moved or minimized.") : error;
             emit statusChanged();
             emit layoutsChanged();
         } else if (!m_lastError.isEmpty()) {
@@ -255,7 +269,8 @@ QWidget *WindowLayoutsModule::createPanel(QWidget *parent)
 
 QStringList WindowLayoutsModule::captureStates() const
 {
-    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("picker"), QStringLiteral("draw")};
+    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("minimize"),
+            QStringLiteral("picker"), QStringLiteral("draw")};
 }
 
 bool WindowLayoutsModule::applyCaptureState(const QString &state)
@@ -264,7 +279,14 @@ bool WindowLayoutsModule::applyCaptureState(const QString &state)
         return false;
     }
     m_captureState = state;
-    if (state == QLatin1String("list")) {
+    if (state == QLatin1String("minimize")) {
+        WindowLayout layout;
+        layout.id = 1;
+        layout.name = I18n::tr("Minimize");
+        layout.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Down"));
+        layout.destination = LayoutDestination::Minimize;
+        m_state.setCaptureLayouts({layout});
+    } else if (state == QLatin1String("list")) {
         WindowLayout a;
         a.id = 1;
         a.name = QStringLiteral("Left third");
@@ -398,7 +420,7 @@ ModuleDescriptor windowLayoutsDescriptor()
     ModuleDescriptor d;
     d.id = QStringLiteral("windowLayouts");
     d.title = QStringLiteral("Window Layouts");
-    d.description = I18n::tr("Move the active window to a saved area with a shortcut.");
+    d.description = I18n::tr("Move or minimize the active window with a shortcut.");
     d.offBullets = {I18n::tr("Combine horizontal and vertical halves, thirds and quarters"),
                     I18n::tr("Draw an area or copy an open window's bounds"),
                     I18n::tr("Keeps clear of a visible taskbar, Dock and menu bar")};
@@ -424,7 +446,7 @@ HelpSection windowLayoutsHelp(const SettingsReader &)
     help.title = QStringLiteral("Window Layouts");
     help.steps = {I18n::tr("Add a layout and choose a quick preset, or combine horizontal and vertical fractions."),
                   I18n::tr("Draw a destination area or click an open window to copy its bounds."),
-                  I18n::tr("Record a shortcut. It moves the window that is in front when you press it.")};
+                  I18n::tr("Record a shortcut. It acts on the window in front when you press it.")};
     help.note = I18n::tr("Visible system bars are excluded. Some protected windows may require accessibility permission or cannot be moved.");
     return help;
 }

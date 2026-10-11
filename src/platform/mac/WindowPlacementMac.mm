@@ -300,4 +300,46 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
     }
 }
 
+bool minimizeForeground(QString *error, bool dryRun)
+{
+    if (error) error->clear();
+    if (dryRun) return true;
+    @autoreleasepool {
+        if (!AXIsProcessTrustedWithOptions(nullptr)) {
+            fail(error, I18n::tr("Allow LGA Mighty Tools in Privacy & Security > Accessibility to control windows."));
+            return false;
+        }
+        NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
+        if (!front || front.processIdentifier == getpid()) {
+            fail(error, I18n::tr("Switch to a movable app window and try again."));
+            return false;
+        }
+        CFHolder app, window, minimized;
+        app.value = AXUIElementCreateApplication(front.processIdentifier);
+        if (!app.value) {
+            fail(error, I18n::tr("Could not access the active app."));
+            return false;
+        }
+        AXUIElementSetMessagingTimeout(static_cast<AXUIElementRef>(app.value), 1.0f);
+        if (AXUIElementCopyAttributeValue(static_cast<AXUIElementRef>(app.value), kAXFocusedWindowAttribute,
+                                          &window.value) != kAXErrorSuccess || !window.value) {
+            fail(error, I18n::tr("The active app has no accessible window."));
+            return false;
+        }
+        auto *axWindow = static_cast<AXUIElementRef>(window.value);
+        AXUIElementSetMessagingTimeout(axWindow, 1.0f);
+        Boolean settable = false;
+        if (AXUIElementIsAttributeSettable(axWindow, kAXMinimizedAttribute, &settable) != kAXErrorSuccess
+            || !settable
+            || AXUIElementSetAttributeValue(axWindow, kAXMinimizedAttribute, kCFBooleanTrue) != kAXErrorSuccess
+            || AXUIElementCopyAttributeValue(axWindow, kAXMinimizedAttribute, &minimized.value) != kAXErrorSuccess
+            || !minimized.value || CFGetTypeID(minimized.value) != CFBooleanGetTypeID()
+            || !CFBooleanGetValue(static_cast<CFBooleanRef>(minimized.value))) {
+            fail(error, I18n::tr("This window could not be minimized."));
+            return false;
+        }
+        return true;
+    }
+}
+
 } // namespace WindowPlacement

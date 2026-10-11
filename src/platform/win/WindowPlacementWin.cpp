@@ -348,4 +348,28 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
     return true;
 }
 
+bool minimizeForeground(QString *error, bool dryRun)
+{
+    if (error) error->clear();
+    if (dryRun) return true;
+
+    HWND hwnd = GetForegroundWindow();
+    DWORD pid = 0;
+    if (hwnd) GetWindowThreadProcessId(hwnd, &pid);
+    if (!hwnd || pid == GetCurrentProcessId() || !isOrdinaryWindow(hwnd)) {
+        fail(error, I18n::tr("Switch to a movable app window and try again."));
+        return false;
+    }
+    if (targetNeedsElevation(hwnd)) {
+        fail(error, I18n::tr("Windows does not allow controlling an administrator window from this app."));
+        return false;
+    }
+    ShowWindow(hwnd, SW_MINIMIZE);
+    if (!IsIconic(hwnd)) {
+        fail(error, I18n::tr("This window could not be minimized."));
+        return false;
+    }
+    return true;
+}
+
 } // namespace WindowPlacement

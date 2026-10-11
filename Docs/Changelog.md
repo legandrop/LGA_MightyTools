@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.43:
+
+La revisión de los atajos originales mostró que Ctrl+Home no reposiciona ventanas: se
+había agregado por error al editor y a los registros de teclado de Window Layouts.
+Se retira ese soporte y se deja el atajo en su script original. Los doce atajos de
+ventanas incluyen diez destinos de tamaño y posición, minimizar y el tamaño para OBS;
+el módulo ahora permite guardar y ejecutar también la acción de minimizar. La
+configuración personal de Lega recibe los doce destinos como fracciones del área útil:
+los llamados «2/3» del script eran en realidad tres cuartos. El script de ventanas
+queda comentado para que no vuelva a registrar atajos al iniciar sesión. La instancia
+elevada anterior no puede descargarse desde un proceso normal y conservará los atajos
+hasta que termine la sesión. El movimiento y la minimización reales los prueba Lega.
+
+[ Window Layouts - Migrar los atajos de ventanas y conservar Ctrl+Home en AHK ]
+
 v1.42:
 
 Al revisar los atajos de los scripts que Window Layouts reemplaza, se encontró que Ctrl+Home

@@ -123,6 +123,9 @@ LayoutGeometry::AxisSlice selectedAxis(QComboBox *box)
 
 QString description(const WindowLayout &layout)
 {
+    if (layout.destination == LayoutDestination::Minimize) {
+        return I18n::tr("Minimize · active window");
+    }
     if (layout.destination == LayoutDestination::Custom) {
         return I18n::tr("Custom area · active window");
     }
@@ -133,7 +136,7 @@ class MiniLayout : public QWidget
 {
 public:
     explicit MiniLayout(QWidget *parent = nullptr) : QWidget(parent) { setFixedSize(47, 31); }
-    void setArea(const QRectF &area) { m_area = area; update(); }
+    void setArea(const QRectF &area, bool minimize = false) { m_area = area; m_minimize = minimize; update(); }
 protected:
     void paintEvent(QPaintEvent *) override
     {
@@ -141,7 +144,10 @@ protected:
         painter.setPen(Theme::color(Theme::kBorderStrong));
         painter.setBrush(Theme::color(Theme::kWindow));
         painter.drawRoundedRect(rect().adjusted(0, 0, -1, -1), 3, 3);
-        if (LayoutGeometry::validArea(m_area)) {
+        if (m_minimize) {
+            painter.setPen(QPen(Theme::color(Theme::kPrimary), 2));
+            painter.drawLine(QPointF(width() * .32, height() * .69), QPointF(width() * .68, height() * .69));
+        } else if (LayoutGeometry::validArea(m_area)) {
             const QRectF inner = QRectF(rect()).adjusted(4, 4, -4, -4);
             painter.setPen(Theme::color(Theme::kLink));
             painter.setBrush(Theme::color(Theme::kPrimary));
@@ -152,6 +158,7 @@ protected:
     }
 private:
     QRectF m_area;
+    bool m_minimize = false;
 };
 
 } // namespace
@@ -252,7 +259,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     m_rows->layout()->setContentsMargins(0, 0, 0, 0);
     m_rows->layout()->setSpacing(0);
     savedColumn->addWidget(m_rows);
-    auto *hint = Ui::caption(I18n::tr("Shortcuts move the window in front. Fractions use the available area of its monitor."), saved);
+    auto *hint = Ui::caption(I18n::tr("Shortcuts act on the window in front. Fractions use the available area of its monitor."), saved);
     hint->setWordWrap(true);
     savedColumn->addWidget(hint);
     column->addWidget(saved);
@@ -301,6 +308,7 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     for (int i = 0; i < presets().size(); ++i) m_preset->addItem(presetText(i));
     m_preset->addItem(I18n::tr("Custom mix"));
     m_preset->addItem(I18n::tr("Custom area"));
+    m_preset->addItem(I18n::tr("Minimize"));
     form->addWidget(m_preset);
     auto *axes = new QHBoxLayout();
     axes->setSpacing(9);
@@ -328,7 +336,7 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     auto *methodHint = Ui::caption(I18n::tr("Draw a rectangle or copy an open window's bounds instead of using fractions."), card);
     methodHint->setWordWrap(true);
     form->addWidget(methodHint);
-    m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Moves the window in front to this area."), card);
+    m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Acts on the window in front."), card);
     form->addWidget(m_shortcut);
     m_editorError = Ui::caption(QString(), card);
     Ui::setStyleProperty(m_editorError, "tone", QStringLiteral("err"));
@@ -436,7 +444,7 @@ void WindowLayoutsPanel::rebuildList()
         line->setContentsMargins(0, 7, 0, 7);
         line->setSpacing(9);
         auto *mini = new MiniLayout(row);
-        mini->setArea(layout.normalizedArea());
+        mini->setArea(layout.normalizedArea(), layout.destination == LayoutDestination::Minimize);
         line->addWidget(mini);
         auto *texts = new QVBoxLayout();
         texts->setSpacing(2);
@@ -503,7 +511,7 @@ void WindowLayoutsPanel::updateEditor()
     m_vertical->setCurrentIndex(qMax(0, v));
     m_horizontal->setEnabled(m_draft.destination == LayoutDestination::Grid);
     m_vertical->setEnabled(m_draft.destination == LayoutDestination::Grid);
-    int preset = presets().size() + 1;
+    int preset = presets().size() + (m_draft.destination == LayoutDestination::Minimize ? 2 : 1);
     if (m_draft.destination == LayoutDestination::Grid) {
         preset = presets().size();
         for (int i = 0; i < presets().size(); ++i) {
@@ -516,6 +524,9 @@ void WindowLayoutsPanel::updateEditor()
     }
     m_preset->setCurrentIndex(preset);
     m_preview->setArea(m_draft.normalizedArea());
+    m_workAreaText->setText(m_draft.destination == LayoutDestination::Minimize
+                                ? I18n::tr("This shortcut minimizes the active window.")
+                                : I18n::tr("Available area excludes visible taskbar, Dock and menu bar."));
     m_shortcut->setShortcut(m_draft.shortcut);
 }
 
@@ -533,6 +544,9 @@ void WindowLayoutsPanel::applyQuickPreset(int index)
     } else if (index == presets().size() + 1) {
         m_draft.destination = LayoutDestination::Custom;
         if (m_autoName) m_draft.name = I18n::tr("Custom area");
+    } else if (index == presets().size() + 2) {
+        m_draft.destination = LayoutDestination::Minimize;
+        if (m_autoName) m_draft.name = I18n::tr("Minimize");
     }
     updateEditor();
 }

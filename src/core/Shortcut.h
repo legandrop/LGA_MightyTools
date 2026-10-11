@@ -32,7 +32,7 @@ struct Shortcut
     // Nombre de una tecla sola (sin modificadores), para las cajas.
     static QString keyName(int key);
     // True si la tecla se puede usar como atajo global en las dos plataformas: letras, digitos,
-    // F1-F12, flechas y Home. Lo demas depende de la distribucion del teclado y no se ofrece.
+    // F1-F12 y flechas. Lo demas depende de la distribucion del teclado y no se ofrece.
     static bool isSupportedKey(int key);
     // True si `key` es una tecla modificadora sola (Ctrl, Shift, Alt, Meta...).
     static bool isModifierKey(int key);
