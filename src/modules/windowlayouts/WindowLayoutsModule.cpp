@@ -69,6 +69,10 @@ private:
 void selfTest(const std::function<void(bool, const QString &)> &check)
 {
     using namespace LayoutGeometry;
+    check(Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L")).isValid()
+              && Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+L")).isValid()
+              && Shortcut::fromPortableString(QStringLiteral("Ctrl+Home")).key == Qt::Key_Home,
+          QStringLiteral("atajos: las tres combinaciones antiguas se pueden configurar"));
     const QRectF mixed = grid({3, 0}, {4, 1});
     check(validArea(mixed) && qAbs(mixed.x()) < 1e-9 && qAbs(mixed.y() - .25) < 1e-9
               && qAbs(mixed.width() - 1.0 / 3.0) < 1e-9 && qAbs(mixed.height() - .25) < 1e-9,

@@ -14,7 +14,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   menús visibles quedan afuera aunque estén en otro borde; las franjas de activación de taskbar y Dock
   autoocultos se recuperan. Si la app ajena no acepta el tamaño o la posición, se intenta restaurar
   la geometría anterior y se muestra el error. Los atajos AHK anteriores no se migran automáticamente:
-  se eligen en el panel y se informan los choques con otra herramienta o con el sistema. En macOS mover ventanas ajenas requiere
+  se eligen en el panel (incluido Ctrl+Home) y se informan los choques con otra herramienta o con el sistema. En macOS mover ventanas ajenas requiere
   Accesibilidad; elegirlas puede requerir Grabación de pantalla. El selector no hace una captura del
   escritorio: superpone un contorno y actualiza las posiciones mientras está abierto.
 

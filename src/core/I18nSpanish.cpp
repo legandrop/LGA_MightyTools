@@ -728,7 +728,7 @@ const QHash<QString, QString> &spanishTable()
         E("Change shortcut", "Cambiar atajo"),
         E("Press a shortcut...", "Presionar atajo..."),
         E("Press the new combination. Esc cancels.", "Presionar la nueva combinación. Esc cancela."),
-        E("Use a letter, a number, F1-F12 or an arrow key.", "Usar una letra, un número, F1-F12 o una flecha."),
+        E("Use a letter, a number, F1-F12, an arrow key or Home.", "Usar una letra, un número, F1-F12, una flecha o Inicio."),
         E("Add ⌘, ⌥ or ⌃ so it doesn't take a plain key.", "Agregar ⌘, ⌥ o ⌃ para que no ocupe una tecla sola."),
         E("Add Ctrl, Alt or Win so it doesn't take a plain key.", "Agregar Ctrl, Alt o Win para que no ocupe una tecla sola."),
         E("Choose a valid area.", "Elegir un área válida."),

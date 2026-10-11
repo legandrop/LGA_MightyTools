@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.42:
+
+Al revisar los atajos de los scripts que Window Layouts reemplaza, se encontró que Ctrl+Home
+no podía registrarse desde el editor: la lista compartida de teclas admitía letras, números,
+funciones y flechas, pero no Home. Se agrega esa tecla al formato de atajo, al registro nativo
+de Windows y macOS y al mensaje de ayuda del grabador. El self-test verifica que se puedan
+interpretar las tres combinaciones anteriores: Ctrl+Alt+L, Ctrl+Alt+Shift+L y Ctrl+Home.
+No se asignan automáticamente al encender la herramienta; cada disposición sigue vacía
+hasta que el usuario elija su destino y atajo. La prueba de movimiento real y de los
+conflictos con otros programas queda para Lega.
+
+[ Window Layouts - Admitir Ctrl+Home entre los atajos ]
+
 v1.41:
 
 La primera compilación de Window Layouts en macOS no terminaba: el SDK entrega los tipos
