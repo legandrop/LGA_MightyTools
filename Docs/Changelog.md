@@ -1,5 +1,21 @@
 # Changelog — LGA Mighty Tools
 
+v1.46:
+
+La lista de Window Layouts mostraba cada atajo como una cadena de texto apagada,
+con un botón «Editar» separado al final de la fila. Se veía distinta de Nuke
+Shortcuts y costaba reconocer las teclas de un vistazo. Las disposiciones guardadas
+usan ahora la misma fila de atajos: una cápsula por tecla y el lápiz inmediatamente
+a la derecha. La miniatura del área y la descripción siguen presentes; el lápiz
+abre el editor completo de esa disposición, donde también se cambia el atajo y su
+prioridad. La fila compartida admite esa acción sin alterar el grabador directo que
+usan Nuke Shortcuts y otras herramientas. Los nombres largos se abrevian en la lista
+para que las teclas y el lápiz permanezcan visibles. Se revisó una combinación de
+cinco teclas con un nombre largo en una captura aislada y se comprobó el diseño
+junto a Nuke Shortcuts en el mismo tamaño de ventana.
+
+[ Window Layouts - Unificar filas de atajos con Nuke Shortcuts ]
+
 v1.45:
 
 Window Layouts rechazaba las combinaciones que otra aplicación ya había registrado,

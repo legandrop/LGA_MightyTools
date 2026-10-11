@@ -288,8 +288,9 @@ QWidget *WindowLayoutsModule::createPanel(QWidget *parent)
 
 QStringList WindowLayoutsModule::captureStates() const
 {
-    return {QStringLiteral("list"), QStringLiteral("editor"), QStringLiteral("priority"), QStringLiteral("minimize"),
-            QStringLiteral("picker"), QStringLiteral("draw")};
+    return {QStringLiteral("list"), QStringLiteral("long-name"), QStringLiteral("editor"),
+            QStringLiteral("priority"), QStringLiteral("minimize"), QStringLiteral("picker"),
+            QStringLiteral("draw")};
 }
 
 bool WindowLayoutsModule::applyCaptureState(const QString &state)
@@ -305,17 +306,20 @@ bool WindowLayoutsModule::applyCaptureState(const QString &state)
         layout.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Down"));
         layout.destination = LayoutDestination::Minimize;
         m_state.setCaptureLayouts({layout});
-    } else if (state == QLatin1String("list")) {
+    } else if (state == QLatin1String("list") || state == QLatin1String("long-name")) {
         WindowLayout a;
         a.id = 1;
-        a.name = QStringLiteral("Left third");
+        a.name = I18n::tr("Left third");
         a.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
         a.horizontal = {3, 0};
         WindowLayout b;
         b.id = 2;
-        b.name = QStringLiteral("Center third");
-        b.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+K"));
-        b.horizontal = {3, 1};
+        b.name = state == QLatin1String("long-name")
+            ? QStringLiteral("Long personalized layout name that should leave the shortcut and pencil visible")
+            : I18n::tr("Three quarters left");
+        b.shortcut = Shortcut::fromPortableString(QStringLiteral("Meta+Ctrl+Alt+Shift+Left"));
+        b.destination = LayoutDestination::Custom;
+        b.customArea = QRectF(0, 0, .75, 1);
         m_state.setCaptureLayouts({a, b});
     } else {
         m_state.setCaptureLayouts({});

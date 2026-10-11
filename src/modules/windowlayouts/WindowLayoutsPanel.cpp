@@ -459,24 +459,18 @@ void WindowLayoutsPanel::rebuildList()
     for (const WindowLayout &layout : layouts) {
         auto *row = new QWidget(m_rows);
         auto *line = new QHBoxLayout(row);
-        line->setContentsMargins(0, 7, 0, 7);
+        line->setContentsMargins(0, 10, 0, 10);
         line->setSpacing(9);
         auto *mini = new MiniLayout(row);
         mini->setArea(layout.normalizedArea(), layout.destination == LayoutDestination::Minimize);
-        line->addWidget(mini);
-        auto *texts = new QVBoxLayout();
-        texts->setSpacing(2);
-        auto *name = Ui::label(layout.name, "cardTitle", row);
-        name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-        texts->addWidget(name);
-        auto *detail = Ui::caption(description(layout), row);
-        texts->addWidget(detail);
-        line->addLayout(texts, 1);
-        auto *shortcut = Ui::caption(layout.shortcut.displayText(), row);
-        line->addWidget(shortcut);
-        auto *edit = Ui::button(I18n::tr("Edit"), QStringLiteral("ghost"), QStringLiteral("sm"), row);
-        line->addWidget(edit);
-        if (m_interactive) connect(edit, &QPushButton::clicked, this, [this, id = layout.id]() { editLayout(id); });
+        line->addWidget(mini, 0, Qt::AlignTop);
+        auto *shortcut = new ShortcutRow(layout.name, description(layout), row);
+        shortcut->setShortcut(layout.shortcut);
+        shortcut->editButton()->setAccessibleName(I18n::tr("Edit layout"));
+        if (m_interactive) {
+            shortcut->setEditHandler([this, id = layout.id]() { editLayout(id); });
+        }
+        line->addWidget(shortcut, 1);
         column->addWidget(row);
         Ui::addDivider(column, m_rows);
     }

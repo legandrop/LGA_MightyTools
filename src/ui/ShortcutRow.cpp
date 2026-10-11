@@ -11,6 +11,8 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QPushButton>
+#include <QResizeEvent>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 namespace {
@@ -36,6 +38,27 @@ int keyFromEvent(const QKeyEvent *event)
     return event->key();
 }
 
+class ElidedShortcutName : public QLabel
+{
+public:
+    ElidedShortcutName(const QString &name, QWidget *parent) : QLabel(name, parent), m_fullName(name)
+    {
+        setTextFormat(Qt::PlainText);
+        setAccessibleName(name);
+        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QLabel::resizeEvent(event);
+        setText(fontMetrics().elidedText(m_fullName, Qt::ElideRight, width()));
+    }
+
+private:
+    QString m_fullName;
+};
+
 } // namespace
 
 ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidget *parent)
@@ -50,7 +73,7 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     auto *row = new QHBoxLayout();
     row->setContentsMargins(0, 0, 0, 0);
     row->setSpacing(5);
-    m_name = new QLabel(name, this);
+    m_name = new ElidedShortcutName(name, this);
     m_name->setObjectName(QStringLiteral("shortcutName"));
     row->addWidget(m_name, 1);
 
@@ -94,6 +117,10 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     column->addWidget(m_caption);
 
     connect(m_editButton, &QPushButton::clicked, this, [this]() {
+        if (m_editHandler) {
+            m_editHandler();
+            return;
+        }
         if (m_recording) {
             cancelRecording();
         } else {
@@ -171,7 +198,7 @@ void ShortcutRow::startRecording()
     // Un click afuera (en otra fila, otra tarjeta, la barra lateral) cancela, como el umbral de un
     // disco lo confirma: la grabacion nunca queda colgada esperando teclas.
     qApp->installEventFilter(this);
-    qDebug() << "[ShortcutRow] Grabando atajo para" << m_name->text();
+    qDebug() << "[ShortcutRow] Grabando atajo para" << m_name->accessibleName();
 }
 
 void ShortcutRow::cancelRecording()
@@ -257,7 +284,7 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
         setError(I18n::tr("%1 Kept %2.").arg(error, previous.displayText()));
         return;
     }
-    qInfo() << "[ShortcutRow] Nuevo atajo para" << m_name->text() << ":" << candidate.toPortableString();
+    qInfo() << "[ShortcutRow] Nuevo atajo para" << m_name->accessibleName() << ":" << candidate.toPortableString();
     setError(QString());
     emit shortcutRecorded(candidate);
 }

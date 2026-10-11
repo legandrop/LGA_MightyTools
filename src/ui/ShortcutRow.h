@@ -16,8 +16,8 @@ class QPushButton;
 // Una fila de la tarjeta "Shortcuts": nombre de la accion, una caja por tecla, el lapiz para
 // cambiarla y la descripcion debajo.
 //
-// Al tocar el lapiz la fila GRABA: las teclas se reemplazan por un campo con borde violeta, la fila
-// toma el teclado (grabKeyboard) y guarda la primera combinacion completa que el usuario aprieta.
+// Al tocar el lapiz, la fila graba salvo que tenga un handler de edicion propio: las teclas se
+// reemplazan por un campo con borde violeta, la fila toma el teclado y guarda la combinacion.
 // Esc cancela. Antes de aceptarla le pregunta al validador; si la rechaza, la fila vuelve al atajo
 // anterior y muestra el motivo en rojo. Es el unico lugar de la app que usa el teclado.
 class ShortcutRow : public QWidget
@@ -33,6 +33,7 @@ public:
     void setShortcut(const Shortcut &shortcut);
     Shortcut shortcut() const { return m_shortcut; }
     void setValidator(Validator validator) { m_validator = std::move(validator); }
+    void setEditHandler(std::function<void()> handler) { m_editHandler = std::move(handler); }
 
     // Chip junto al nombre (Folder Switch: "In use" cuando otra app o herramienta ya tiene el
     // atajo). Tono vacio lo oculta. Aditivo: sin llamarlo, la fila se ve igual que antes.
@@ -67,6 +68,7 @@ private:
     Shortcut m_shortcut;
     QString m_description;
     Validator m_validator;
+    std::function<void()> m_editHandler;
     bool m_recording = false;
 
     QLabel *m_name = nullptr;
