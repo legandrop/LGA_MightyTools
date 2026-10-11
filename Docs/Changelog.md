@@ -1,5 +1,15 @@
 # Changelog — LGA Mighty Tools
 
+v1.39:
+
+El llamador del instalador local se había creado como `instalador_loca.bat`, sin la última letra.
+Se corrige el nombre a `instalador_local.bat` y se actualiza su referencia en el README. Sigue
+llamando al mismo `instalador.bat --local`, conservando los argumentos y el código de salida.
+No cambia el modo local ni el flujo de publicación: el paquete y SHA256SUMS se generan igual,
+sin preguntas de instalación ni de GitHub. Se comprueba la llamada desde una carpeta distinta
+con espacios en la ruta y la devolución del error del script principal.
+
+[ Build - Corregir el nombre de instalador_local.bat ]
 v1.38:
 
 Generar un instalador para probar cambios locales requería pasar por el flujo de publicación:
