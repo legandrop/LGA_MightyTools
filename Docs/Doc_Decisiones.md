@@ -5,6 +5,13 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-55 · Choques informativos de Window Layouts** (2026-10-11, Lega). Cuando una disposición
+  activa comparte un atajo detectable con otra app o el sistema, la barra lateral conserva el
+  estado normal de la herramienta: ese uso es una elección del usuario. El aviso queda solo dentro
+  del panel. Su punto y los marcadores junto a los interruptores son amarillos, con más espacio entre
+  marcador e interruptor. Un fallo real de activación sí conserva el estado de error y su detalle
+  por fila. Esta decisión ajusta la señal visual de D-54.
+
 - **D-54 · Control individual de Window Layouts** (2026-10-11, Lega). Cada disposición nueva queda
   activada y ofrece un interruptor propio debajo del lápiz de edición. Ya no existe la pausa global.
   Al apagar una disposición se libera solo su atajo; las demás siguen activas. En Windows todas las

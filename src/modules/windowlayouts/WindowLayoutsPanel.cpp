@@ -458,9 +458,9 @@ void WindowLayoutsPanel::refresh()
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          I18n::tr("Red dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
 #else
-                          I18n::tr("Red dots mark shortcuts also used elsewhere. The other app may respond too."),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
 #endif
                           QString(), QString(), QString());
     } else {
@@ -507,11 +507,11 @@ void WindowLayoutsPanel::rebuildList()
         auto *controls = new QWidget(shortcut);
         auto *controlRow = new QHBoxLayout(controls);
         controlRow->setContentsMargins(0, 0, 0, 0);
-        controlRow->setSpacing(5);
+        controlRow->setSpacing(10);
         if (m_module->hasExternalConflict(layout.id)) {
             auto *dot = new StatusDot(9, controls);
             dot->setObjectName(QStringLiteral("sharedShortcutDot"));
-            dot->setTone(QStringLiteral("err"));
+            dot->setTone(QStringLiteral("warn"));
             dot->setAttribute(Qt::WA_TransparentForMouseEvents, false);
             dot->setAccessibleName(I18n::tr("Also used elsewhere"));
 #ifdef Q_OS_WIN

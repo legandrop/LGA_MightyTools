@@ -277,11 +277,6 @@ ModuleStatus WindowLayoutsModule::status() const
     if (!m_lastError.isEmpty() || !m_registrationErrors.isEmpty()) {
         return {ModuleTone::Error, I18n::tr("Needs attention")};
     }
-    if (!m_externalConflicts.isEmpty()) {
-        const int shared = m_externalConflicts.size();
-        return {ModuleTone::Attention, shared == 1 ? I18n::tr("1 shared shortcut")
-                                                    : I18n::tr("%1 shared shortcuts").arg(shared)};
-    }
     int count = 0;
     for (const WindowLayout &layout : m_state.layouts()) count += layout.enabled;
     if (count == 0) {

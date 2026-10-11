@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.49:
+
+La v1.48 señalaba cinco combinaciones compartidas con un estado amarillo en la
+barra lateral, aunque eran atajos que el usuario había elegido mantener activos.
+El panel ya explicaba esos choques como información, pero los marcadores de las
+filas eran rojos y quedaban demasiado cerca de cada interruptor. Window Layouts
+vuelve a mostrar en la barra lateral su cantidad normal de disposiciones listas
+cuando solo hay combinaciones compartidas; los errores reales de activación
+siguen requiriendo atención. Dentro del panel, los puntos de los atajos
+compartidos usan ahora el mismo amarillo que el aviso superior. Se amplía de
+cinco a diez píxeles la separación entre cada punto y su interruptor, sin
+cambiar el registro, la prioridad ni el estado guardado de las disposiciones.
+
+[ Window Layouts - Tratar los atajos compartidos como información ]
+
 v1.48:
 
 Window Layouts solo mostraba el último error de registro porque cada fallo pisaba
