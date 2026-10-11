@@ -2,6 +2,7 @@
 
 #include "app/GeneralPage.h"
 #include "app/MainWindow.h"
+#include "app/ModuleContextImpl.h"
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
@@ -9,6 +10,8 @@
 #include "core/I18n.h"
 #include "core/UiScale.h"
 #include "modules/diskspace/DiskCard.h"
+#include "modules/diskspace/DiskReminderToast.h"
+#include "modules/diskspace/DiskSpaceModule.h"
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
@@ -22,6 +25,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QComboBox>
 #include <QCursor>
 #include <QDir>
 #include <QElapsedTimer>
@@ -1384,6 +1388,136 @@ int runCleanupSortProbe()
     return failures == 0 ? 0 : 1;
 }
 
+int runDiskReminderProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&](bool ok, const char *what) {
+        ++checks;
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", what);
+        failures += !ok;
+    };
+    MemorySettingsStore store;
+    HostOptions options;
+    options.automatedRun = true;
+    ModuleHost host({}, &store, options);
+    ModuleContextImpl context(&host, QStringLiteral("diskSpace"), QStringLiteral("Disk Space"), 1);
+    DiskSpaceModule module(context);
+    DiskState &state = *module.state();
+    DriveInfo drive = probeDrive();
+    state.addDiskWatch(drive.root, drive.name);
+    state.setDiskThreshold(drive.root, 250, DiskWatch::Unit::GB);
+    state.setDriveReadings({drive}, {}, true, QDateTime::currentDateTime());
+    const QDateTime now(QDate(2026, 10, 11), QTime(12, 0));
+    QWidget canvas;
+    canvas.setAttribute(Qt::WA_DontShowOnScreen);
+    DiskReminderToast toast(drive, state.diskWatches().first(), 15, &canvas);
+    auto *edit = toast.findChild<QLineEdit *>(QStringLiteral("reminderThreshold"));
+    auto *time = toast.findChild<QComboBox *>(QStringLiteral("reminderTime"));
+    auto *save = toast.findChild<QPushButton *>(QStringLiteral("reminderSave"));
+    auto *cleanup = toast.findChild<QPushButton *>(QStringLiteral("reminderCleanup"));
+    auto *error = toast.findChild<QLabel *>(QStringLiteral("reminderError"));
+    check(edit && time && save && cleanup && error, "el aviso construye los controles reales");
+    if (!edit || !time || !save || !cleanup || !error) {
+        return 1;
+    }
+    check(toast.width() == 364 && save->height() == 36 && cleanup->height() == 36, "ancho 364 y botones de 36");
+    check(edit->mapTo(&toast, QPoint()).y() == time->mapTo(&toast, QPoint()).y(), "tiempo y minimo en la misma fila");
+    check(edit->focusPolicy() == Qt::ClickFocus && time->focusPolicy() == Qt::NoFocus
+              && save->focusPolicy() == Qt::NoFocus, "solo el campo editable toma teclado por click");
+#ifdef Q_OS_WIN
+    check(QFontInfo(edit->font()).family() == QLatin1String("Segoe UI"), "el aviso usa Segoe UI, como el diseno aprobado");
+#endif
+    check(toast.unit() == DiskWatch::Unit::GB && time->currentData().toInt() == 15 && edit->text() == QLatin1String("250"),
+          "se heredan unidad, minimo y recordatorio");
+    int saved = 0;
+    QObject::connect(&toast, &DiskReminderToast::reminderRequested, &canvas, [&](int minutes, int value) {
+        check(module.saveReminder(drive.root, minutes, value, toast.unit(), now), "el modulo acepta el guardado valido");
+        ++saved;
+    });
+    edit->setText(QStringLiteral("180"));
+    time->setCurrentIndex(time->findData(60));
+    check(state.diskWatches().first().value == 250 && !state.alertState(drive.root).snoozedUntil.isValid(),
+          "editar no cambia ajustes ni aplaza avisos");
+    save->click();
+    check(saved == 1 && state.diskWatches().first().value == 180 && state.diskWatches().first().unit == DiskWatch::Unit::GB,
+          "Guardar conserva GB y aplica 180 al disco correcto");
+    check(state.alertState(drive.root).snoozedUntil == now.addSecs(3600) && state.remindMinutes() == 15,
+          "la hora elegida aplaza solo este aviso, no el intervalo general");
+    DiskState reloaded(&context);
+    check(reloaded.diskWatches().first().value == 180 && reloaded.alertState(drive.root).snoozedUntil == now.addSecs(3600),
+          "minimo y proximo aviso sobreviven al reinicio");
+    for (const QString &invalid : {QString(), QStringLiteral("0"), QStringLiteral("-1"), QStringLiteral("1.5"),
+                                  QStringLiteral("abc"), QStringLiteral("100001")}) {
+        edit->setText(invalid);
+        save->click();
+        check(saved == 1 && !error->isHidden() && state.diskWatches().first().value == 180, "un minimo invalido muestra error y no guarda");
+    }
+    edit->setText(QStringLiteral("100000"));
+    save->click();
+    check(saved == 2 && error->isHidden() && state.diskWatches().first().value == 100000, "el maximo GB valido se guarda y limpia el error");
+    edit->setText(QStringLiteral("150"));
+    toast.findChild<QPushButton *>(QStringLiteral("reminderClose"))->click();
+    check(saved == 2 && state.diskWatches().first().value == 100000, "cerrar con X no guarda lo escrito");
+    int cleanups = 0;
+    QObject::connect(&toast, &DiskReminderToast::cleanupRequested, &canvas, [&]() { ++cleanups; });
+    if (cleanup->isEnabled()) {
+        cleanup->click();
+        check(cleanups == 1 && saved == 2, "Liberar espacio solicita apertura, sin guardar el minimo");
+    }
+    state.setDiskThreshold(drive.root, 10, DiskWatch::Unit::Percent);
+    check(!module.saveReminder(drive.root, 15, 250, DiskWatch::Unit::GB, now) && state.diskWatches().first().value == 10,
+          "un aviso viejo no sobrescribe una unidad cambiada desde el panel");
+    DiskReminderToast percent(drive, state.diskWatches().first(), 30, &canvas);
+    auto *pctEdit = percent.findChild<QLineEdit *>(QStringLiteral("reminderThreshold"));
+    auto *pctSave = percent.findChild<QPushButton *>(QStringLiteral("reminderSave"));
+    int pctSaved = 0;
+    QObject::connect(&percent, &DiskReminderToast::reminderRequested, &canvas, [&](int minutes, int value) {
+        check(module.saveReminder(drive.root, minutes, value, percent.unit(), now), "guardar porcentaje valido");
+        ++pctSaved;
+    });
+    pctEdit->setText(QStringLiteral("100"));
+    pctSave->click();
+    check(pctSaved == 0 && state.diskWatches().first().value == 10, "100 por ciento se rechaza");
+    pctEdit->setText(QStringLiteral("5"));
+    pctSave->click();
+    check(pctSaved == 1 && state.diskWatches().first().unit == DiskWatch::Unit::Percent && state.diskWatches().first().value == 5,
+          "el aviso permite editar porcentaje sin convertir a GB");
+    check(!module.saveReminder(QStringLiteral("Z:/"), 15, 10, DiskWatch::Unit::GB, now)
+              && !module.saveReminder(drive.root, 7, 10, DiskWatch::Unit::Percent, now)
+              && !module.saveReminder(drive.root, 15, 0, DiskWatch::Unit::Percent, now),
+          "el modulo rechaza disco ajeno, plazo invalido y minimo fuera de rango");
+    state.removeDiskWatch(drive.root);
+    check(!module.saveReminder(drive.root, 15, 5, DiskWatch::Unit::Percent, now), "un disco retirado no se vuelve a agregar al guardar");
+    DiskReminderToast topLevel(drive, DiskWatch{drive.root, 250, DiskWatch::Unit::GB, {}}, 15);
+    topLevel.setAttribute(Qt::WA_DeleteOnClose, false);
+    check(!topLevel.isVisible() && topLevel.testAttribute(Qt::WA_ShowWithoutActivating)
+              && topLevel.windowType() == Qt::Tool, "construir el aviso no lo muestra y configura apertura sin activar");
+#ifdef Q_OS_MACOS
+    check(topLevel.testAttribute(Qt::WA_MacAlwaysShowToolWindow), "el aviso sigue visible con la app inactiva en macOS");
+#endif
+    topLevel.move(100, 100);
+    topLevel.show();
+    QApplication::processEvents();
+    const int bottom = topLevel.y() + topLevel.height();
+    auto *topEdit = topLevel.findChild<QLineEdit *>(QStringLiteral("reminderThreshold"));
+    topEdit->setText(QStringLiteral("0"));
+    topLevel.findChild<QPushButton *>(QStringLiteral("reminderSave"))->click();
+    QApplication::processEvents();
+    check(topLevel.y() + topLevel.height() == bottom, "el error crece hacia arriba sin sacar los botones de pantalla");
+    topEdit->setText(QStringLiteral("180"));
+    QKeyEvent enter(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+    QApplication::sendEvent(topEdit, &enter);
+    check(topEdit->text() == QLatin1String("180") && saved == 2, "Enter conserva el borrador sin guardar el recordatorio");
+    QKeyEvent escape(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(topEdit, &escape);
+    check(topEdit->text() == QLatin1String("250") && topLevel.y() + topLevel.height() == bottom,
+          "Escape restaura el minimo inicial y mantiene el borde inferior");
+    topLevel.close();
+    fprintf(stdout, "disk-reminder: %d/%d comprobaciones, %d fallas\n", checks - failures, checks, failures);
+    return failures ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -1392,6 +1526,9 @@ int runUiProbe(const QStringList &args)
         return 2;
     }
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
+    if (probe == QLatin1String("disk-reminder")) {
+        return runDiskReminderProbe();
+    }
     if (probe == QLatin1String("threshold-drag")) {
         return runThresholdDragProbe();
     }

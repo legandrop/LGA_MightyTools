@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.37
+- [improved] Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting.
+
 ## v1.33
 - [fixed][mac] Checking for updates works: version 1.31 could not connect, so download this version once from the download page.
 

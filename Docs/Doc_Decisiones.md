@@ -5,6 +5,13 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-51 · Editar el mínimo desde el recordatorio** (2026-10-11, Lega). Aviso propio con «Remind me
+  in» y «Only below» en paralelo. El mínimo se escribe y conserva GB o porcentaje según ese disco.
+  Dos botones de 36 píxeles: «Save and remind me» guarda el mínimo para los avisos siguientes y
+  pospone solo el próximo; «Free up space» abre la limpieza sin guardar la edición. Sin «Dismiss»:
+  la cruz cierra sin guardar. El aviso propio reemplaza al nativo de Disk Space para permitir la
+  distribución aprobada; los avisos generales de la app siguen usando el sistema.
+
 - **D-01 · Forma de la ventana: A, barra lateral** (2026-09-25). Lista de herramientas a la izquierda,
   con interruptor y línea de estado; el panel de la elegida a la derecha; «General» arriba de la lista.
 - **D-03 · Sin .NET** (2026-09-25). El hash de UserChoiceLatest que hoy calcula el helper `LGA_WinSetFTA`

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 # Unica fuente de verdad del numero de version: el codigo lo lee de MIGHTYTOOLS_VERSION, y el
 # Info.plist, el instalador y el zip lo derivan de aca. La mueve sync_version desde el changelog, de a
 # centesimos (0.01, 0.02...).
-project(LGA_MightyTools VERSION 1.36 LANGUAGES CXX)
+project(LGA_MightyTools VERSION 1.37 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,9 +28,7 @@ if(WIN32 AND NOT MSVC)
     set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
 endif()
 
-set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
 
 # Qt lo pasa el script de compilacion (-DCMAKE_PREFIX_PATH). Estos son los valores por defecto de
 # las maquinas de trabajo, por si se configura a mano.
@@ -42,7 +40,8 @@ if(NOT CMAKE_PREFIX_PATH)
     endif()
 endif()
 
-find_package(Qt6 COMPONENTS Core Gui Widgets Network REQUIRED)
+find_package(Qt6 6.5.3 COMPONENTS Core Gui Widgets Network REQUIRED)
+qt_standard_project_setup()
 
 if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
     # El FindWrapOpenGL de Qt 6.5 agrega "-framework AGL" aunque no lo encuentre: se saca de la interfaz
@@ -113,6 +112,7 @@ set(SOURCES
     src/core/UiScale.cpp
     src/modules/diskspace/DiskCard.cpp
     src/modules/diskspace/DiskMonitor.cpp
+    src/modules/diskspace/DiskReminderToast.cpp
     src/modules/diskspace/DiskSpace.cpp
     src/modules/diskspace/DiskSpaceModule.cpp
     src/modules/diskspace/DiskState.cpp
@@ -202,6 +202,7 @@ set(HEADERS
     src/core/UiScale.h
     src/modules/diskspace/DiskCard.h
     src/modules/diskspace/DiskMonitor.h
+    src/modules/diskspace/DiskReminderToast.h
     src/modules/diskspace/DiskSpace.h
     src/modules/diskspace/DiskSpaceModule.h
     src/modules/diskspace/DiskState.h
@@ -389,7 +390,7 @@ elseif(APPLE)
     )
 endif()
 
-add_executable(${PROJECT_NAME}
+qt_add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}
     ${RESOURCES}

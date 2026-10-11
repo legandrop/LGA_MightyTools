@@ -30,6 +30,19 @@ inline constexpr const char *kDivider = "#262626";
 // para no aproximar el color del diseno aprobado.
 inline constexpr const char *kTextareaRuleLine = "#222222";
 
+// Aviso de Disk Space (colores del diseno aprobado).
+
+inline constexpr const char *kReminderGradientStart = "#252323";
+inline constexpr const char *kReminderGradientEnd = "#202020";
+inline constexpr const char *kReminderBorder = "#363636";
+inline constexpr const char *kReminderFieldBorder = "#3c3c3c";
+inline constexpr const char *kReminderButtonBorder = "#404040";
+inline constexpr const char *kReminderText = "#f5f5f5";
+inline constexpr const char *kReminderBody = "#d0d0d0";
+inline constexpr const char *kReminderUnit = "#bebebe";
+inline constexpr const char *kReminderHeaderIcon = "#aaaaaa";
+inline constexpr const char *kReminderButton = "rgba(255,255,255,8)";
+
 // Texto
 inline constexpr const char *kText = "#B2B2B2";
 inline constexpr const char *kTextStrong = "#CCCCCC";

@@ -7,6 +7,7 @@
 #include "app/SettingsStore.h"
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskMonitor.h"
+#include "modules/diskspace/DiskReminderToast.h"
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/CleanupDialogs.h"
 #include "modules/diskspace/cleanup/CleanupQa.h"
@@ -19,11 +20,17 @@
 #include <QAction>
 #include <QDebug>
 #include <QEvent>
+#include <QGuiApplication>
+#include <QLineEdit>
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QScreen>
+#include <QTimer>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace {
 
@@ -440,6 +447,19 @@ DiskSpaceModule::DiskSpaceModule(ModuleContext &context)
             m_card->refresh();
         }
         emit statusChanged();
+        if (m_reminder) {
+            bool valid = false;
+            for (const DiskWatch &watch : m_state->lowWatches()) {
+                if (watch.root == m_reminder->root() && watch.unit == m_reminder->unit()
+                    && watch.value == m_reminder->threshold()) {
+                    valid = true;
+                    break;
+                }
+            }
+            if (!valid) {
+                m_reminder->close();
+            }
+        }
     });
 }
 
@@ -466,6 +486,8 @@ void DiskSpaceModule::stop()
     // El timer y la lectura de discos mueren con el monitor.
     delete m_monitor;
     m_monitor = nullptr;
+    m_pendingReminders.clear();
+    delete m_reminder.data();
     // La ventana de limpieza se va con la herramienta. Sus hilos no se esperan (terminan solos apenas
     // vuelve la llamada del sistema en curso); se les da un momento para que lo normal sea salir en cero.
     if (m_cleanup) {
@@ -552,31 +574,75 @@ QStringList DiskSpaceModule::trayTooltipLines() const
 
 void DiskSpaceModule::notifyLowSpace(const DriveInfo &drive, const DiskWatch &watch)
 {
-    // Con el desplegable "Remind me again in" (el valor de "Remind me every" preseleccionado): elegir
-    // otro plazo pospone SOLO el proximo recordatorio de este disco (decision de Lega, 2026-09-30).
-    // Queda en pantalla hasta que se elige algo (tambien pedido de Lega).
-    NoticeChoice choice;
-    choice.key = watch.root;
-    choice.label = I18n::tr("Remind me again in");
-    for (const int minutes : DiskSpace::remindChoices()) {
-        choice.options.append({QString::number(minutes), DiskSpace::intervalText(minutes)});
+    if (context().automatedRun() || context().captureMode()) {
+        qInfo() << "[DiskSpace] Aviso sin mostrar:" << drive.root << DiskSpace::thresholdText(watch);
+        return;
     }
-    choice.defaultId = QString::number(m_state->remindMinutes());
-    choice.button = I18n::tr("Remind me");
-    choice.action = QStringLiteral("snooze");
-    // Segundo boton: abre la ventana de limpieza de ese disco, en Clean up.
-    if (SystemPaths::cleanupSupported()) {
-        choice.extraButton = I18n::tr("Free up space");
-        choice.extraAction = QStringLiteral("cleanup");
+    // Un aviso por vez: los otros discos esperan, sin taparse entre si ni crecer fuera de la pantalla.
+    if ((m_reminder && m_reminder->root() == watch.root) || m_pendingReminders.contains(watch.root)) {
+        return;
     }
-    choice.persistent = true;
-    // Lo libre va en el titulo: el texto de un aviso de Windows no admite negrita, pero el titulo sale
-    // en negrita (pedido de Lega: resaltar cuanto queda).
-    context().notifyWithChoice(I18n::tr("%1 free on %2").arg(DiskSpace::formatBytes(drive.freeBytes), drive.label),
-                               I18n::tr("%1 is running low (%2 in total). You asked to be warned under %3.")
-                                   .arg(drive.label, DiskSpace::formatBytes(drive.totalBytes),
-                                        DiskSpace::thresholdText(watch)),
-                               choice);
+    m_pendingReminders.append(watch.root);
+    showNextReminder();
+}
+
+void DiskSpaceModule::showNextReminder()
+{
+    if (!m_monitor || m_reminder || context().automatedRun() || context().captureMode()) {
+        return;
+    }
+    while (!m_pendingReminders.isEmpty()) {
+        const QString root = m_pendingReminders.takeFirst();
+        const QList<DiskWatch> low = m_state->lowWatches();
+        auto it = std::find_if(low.cbegin(), low.cend(), [&root](const DiskWatch &watch) { return watch.root == root; });
+        DriveInfo drive;
+        if (it == low.cend() || !m_state->driveReading(root, &drive)) {
+            continue;
+        }
+        auto *notice = new DiskReminderToast(drive, *it, m_state->remindMinutes());
+        m_reminder = notice;
+        connect(notice, &DiskReminderToast::reminderRequested, this, [this, notice, root, unit = it->unit](int minutes, int value) {
+            if (saveReminder(root, minutes, value, unit, QDateTime::currentDateTime())) {
+                notice->close();
+            }
+        });
+        connect(notice, &DiskReminderToast::cleanupRequested, this, [this, notice, root]() {
+            notice->close();
+            openCleanup(root, CleanupWindow::CleanUp);
+        });
+        connect(notice, &DiskReminderToast::settingsRequested, this, [this]() { context().showPanel(); });
+        connect(notice, &QObject::destroyed, this, [this]() {
+            QTimer::singleShot(0, this, &DiskSpaceModule::showNextReminder);
+        });
+        QScreen *screen = QGuiApplication::primaryScreen();
+        if (context().window() && context().window()->isVisible()) {
+            if (QScreen *windowScreen = context().window()->screen()) {
+                screen = windowScreen;
+            }
+        }
+        if (screen) {
+            const QRect area = screen->availableGeometry();
+            notice->move(area.right() - notice->width() - 15, area.bottom() - notice->height() - 15);
+        }
+        notice->show();
+        break;
+    }
+}
+
+bool DiskSpaceModule::saveReminder(const QString &root, int minutes, int value, DiskWatch::Unit unit, const QDateTime &now)
+{
+    if (!now.isValid() || !DiskSpace::isValidRemind(minutes) || value != DiskSpace::clampValue(value, unit)) {
+        return false;
+    }
+    for (const DiskWatch &watch : m_state->diskWatches()) {
+        if (watch.root == root && watch.unit == unit) {
+            // Lo pospuesto es solo para el proximo aviso; el umbral queda guardado para los siguientes.
+            m_state->snooze(root, minutes, now);
+            m_state->setDiskThreshold(root, value, unit);
+            return true;
+        }
+    }
+    return false;
 }
 
 void DiskSpaceModule::noticeAction(const QString &action, const QString &key, const QString &choice)
@@ -611,6 +677,7 @@ QStringList DiskSpaceModule::captureStates() const
            << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
     // La ventana al tamano minimo (con lo elegido: la barra de abajo mas cargada) y Folders ordenada por nombre.
     states << QStringLiteral("cleanup-min") << QStringLiteral("cleanup-sorted");
+    states << QStringLiteral("reminder") << QStringLiteral("reminder-percent") << QStringLiteral("reminder-error");
 #ifdef Q_OS_MACOS
     // La franja que pide el acceso total al disco (D-43).
     states << QStringLiteral("cleanup-access");
@@ -635,6 +702,19 @@ bool DiskSpaceModule::applyCaptureState(const QString &state)
 
 QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *parent)
 {
+    if (state == QLatin1String("reminder") || state == QLatin1String("reminder-percent") || state == QLatin1String("reminder-error")) {
+        DriveInfo drive = fixtureDrive("T:/", "T:", "", 3726, 126);
+        DiskWatch watch;
+        watch.root = drive.root;
+        watch.unit = state == QLatin1String("reminder-percent") ? DiskWatch::Unit::Percent : DiskWatch::Unit::GB;
+        watch.value = watch.unit == DiskWatch::Unit::GB ? 250 : 10;
+        auto *notice = new DiskReminderToast(drive, watch, 15, parent);
+        if (state == QLatin1String("reminder-error")) {
+            notice->findChild<QLineEdit *>(QStringLiteral("reminderThreshold"))->setText(QStringLiteral("0"));
+            notice->findChild<QPushButton *>(QStringLiteral("reminderSave"))->click();
+        }
+        return notice;
+    }
     // La ventana de limpieza con datos fijos: sin motor, sin disco y sin nada conectado.
     if (CleanupWindow::fixtureStates().contains(state)) {
         auto *window = new CleanupWindow(m_state, nullptr, true, parent);

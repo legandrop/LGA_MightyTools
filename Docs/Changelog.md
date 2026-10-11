@@ -1,5 +1,19 @@
 # Changelog — LGA Mighty Tools
 
+v1.37:
+
+El aviso de Disk Space permitía posponer un recordatorio, pero para cambiar el mínimo de espacio
+había que abrir el panel. Ahora usa una ventana propia, porque el aviso nativo de Windows no permite
+poner dos campos en paralelo. «Remind me in» y «Only below» comparten una fila; el mínimo es editable
+y conserva la unidad del disco, GB o porcentaje. «Save and remind me» guarda ese mínimo y pospone
+solo el próximo aviso del mismo disco. «Free up space» abre su limpieza sin guardar la edición,
+y la cruz cierra sin cambios: se elimina el botón redundante de descartar. Los dos botones miden
+36 píxeles. El aviso nace solo cuando hace falta, se abre sin activar la ventana, desaparece al
+apagar la herramienta y encola los otros discos. Se verifican validación, persistencia, unidades y
+capturas en ambos idiomas sin tocar ajustes reales.
+
+[ Disk Space - Cambiar el minimo desde el recordatorio ]
+
 v1.36:
 
 El repo llevaba una copia propia del runner que corre los exes de prueba en un escritorio aparte

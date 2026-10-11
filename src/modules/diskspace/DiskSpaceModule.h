@@ -10,6 +10,7 @@
 class CleanupWindow;
 class DiskCard;
 class DiskMonitor;
+class DiskReminderToast;
 class DiskState;
 
 // Disk Space (id estable "diskSpace"): vigila los discos locales que elige el usuario y avisa cuando
@@ -42,9 +43,11 @@ public:
     QWidget *createCaptureWidget(const QString &state, QWidget *parent) override;
 
     DiskState *state() const { return m_state; }
+    bool saveReminder(const QString &root, int minutes, int value, DiskWatch::Unit unit, const QDateTime &now);
 
 private:
     void notifyLowSpace(const DriveInfo &drive, const DiskWatch &watch);
+    void showNextReminder();
     // tab: 0 Clean up, 1 Folders (los valores de CleanupWindow::Tab).
     void openCleanup(const QString &root, int tab);
 
@@ -53,6 +56,8 @@ private:
     QPointer<QWidget> m_panel;
     QPointer<DiskCard> m_card;
     QPointer<CleanupWindow> m_cleanup;
+    QPointer<DiskReminderToast> m_reminder;
+    QStringList m_pendingReminders;
 };
 
 ModuleDescriptor diskSpaceDescriptor();
