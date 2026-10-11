@@ -1,5 +1,22 @@
 # Changelog — LGA Mighty Tools
 
+v1.44:
+
+El modo local del instalador terminaba inmediatamente después de generar el archivo
+y su SHA256SUMS. Por eso `instalador_local.bat` omitía las dos preguntas que sí
+aparecían en el flujo habitual: instalar ahora y mostrar el archivo en Windows
+Explorer. Se mueve el salto de salida a continuación de ambas preguntas. El modo
+local sigue sin consultar Git ni GitHub y nunca ofrece commit o publicación. La
+protección para `--no-run` y para una ejecución sin consola interactiva conserva
+el comportamiento anterior: no abre el instalador ni Explorer. Se actualizan la
+ayuda del script y el README para describir el recorrido real. La compilación del
+paquete y la generación del hash permanecen obligatorias antes de ofrecer
+cualquiera de las dos acciones; si fallan, el script termina sin preguntas.
+La prueba local detectó que `Get-FileHash` podía no resolverse al invocar
+PowerShell desde `cmd`; el hash ahora se calcula con las clases .NET integradas.
+
+[ Build - Ofrecer instalar y mostrar el paquete en el modo local ]
+
 v1.43:
 
 La revisión de los atajos originales mostró que Ctrl+Home no reposiciona ventanas: se

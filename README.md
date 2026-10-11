@@ -30,8 +30,10 @@ Qt 6.5 and CMake (MinGW and Ninja on Windows, the official Qt 6.5 build on macOS
 
 - Windows: `compilar.bat` (Debug in `build\`), `compilar.bat --release`, `deploy.bat` (portable
   folder in `deploy\`) and `instalador.bat` (Inno Setup 6 installer).
-  Use `instalador_local.bat` (or `instalador.bat --local`) to generate only the installer and
-  SHA256SUMS in `installer/`, with no GitHub checks, publication or prompts.
+  Use `instalador_local.bat` (or `instalador.bat --local`) to generate the installer and
+  SHA256SUMS in `installer/` without GitHub checks or publication. In an interactive
+  console it offers to install and to show the installer in Windows Explorer.
+  Pass `--no-run` to skip both offers.
 - macOS: `./compilar.sh` (Debug in `build/`), `./compilar.sh --release` (universal: Apple Silicon and
   Intel), `./deploy.sh` (self-contained bundle, installed in `/Applications`) and
   `./deploy.sh --zip --dmg` (the update ZIP and the disk image, in `deploy/`).

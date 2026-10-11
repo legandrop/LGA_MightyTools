@@ -1,8 +1,8 @@
 @echo off
 setlocal enabledelayedexpansion
 REM Uso: instalador.bat [--local] [--no-run] [--replace]
-REM   --local    solo genera el instalador y su SHA256SUMS, sin Git/GitHub ni preguntas.
-REM              No ejecuta el instalador ni lo revela en Explorer; admite cambios locales.
+REM   --local    genera el instalador y su SHA256SUMS sin Git/GitHub ni publicacion.
+REM              Ofrece ejecutarlo y revelarlo en Explorer si hay consola interactiva.
 REM   --no-run   arma el instalador y su SHA256SUMS y no ofrece ejecutarlo ni revelarlo en el
 REM              Explorer. La parte de commit y release sigue igual.
 REM   --replace  si el release v<version> ya tiene el instalador de Windows, lo reemplaza.
@@ -47,7 +47,7 @@ set "GITHUB_LOCAL_ONLY_CONFIRMED=false"
 if defined LOCAL_ONLY (
     set "GITHUB_READY=false"
     set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
-    echo Modo local: solo se genera el instalador, sin Git/GitHub ni preguntas.
+    echo Modo local: sin Git/GitHub; al final se ofrece instalar y revelar el archivo.
     goto :BUILD_INSTALLER
 )
 
@@ -294,7 +294,8 @@ if %ERRORLEVEL% neq 0 (
 REM SHA256SUMS del release, formato sha256sum ("hash  nombre", LF, sin BOM), como en
 REM LGA_VideoDownloader. El auto-update de esta app hoy verifica con el digest del manifiesto de
 REM LGA_Updates, pero el contrato de Doc_Instaladores_Inno.md 7 pide este archivo en todo release.
-powershell -NoProfile -NonInteractive -Command "$n='LGA_MightyTools_Setup_v%VERSION%.exe'; $h=(Get-FileHash -Algorithm SHA256 ('installer\'+$n)).Hash.ToLower(); [IO.File]::WriteAllText('installer\SHA256SUMS', $h+'  '+$n+[char]10)"
+REM SHA-256 via .NET: Get-FileHash puede no estar disponible desde cmd aunque PowerShell funcione.
+powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; $n='LGA_MightyTools_Setup_v%VERSION%.exe'; $s=[IO.File]::OpenRead('installer\'+$n); try { $sha=[Security.Cryptography.SHA256]::Create(); try { $h=[BitConverter]::ToString($sha.ComputeHash($s)).Replace('-','').ToLowerInvariant() } finally { $sha.Dispose() } } finally { $s.Dispose() }; [IO.File]::WriteAllText('installer\SHA256SUMS', $h+'  '+$n+[char]10)"
 if errorlevel 1 (
     echo ERROR: No se pudo generar installer\SHA256SUMS.
     exit /b 1
@@ -307,8 +308,6 @@ echo SHA256SUMS: %SUMS_FILE%
 
 echo.
 echo Instalador creado: %OUTPUT_EXE%
-if defined LOCAL_ONLY goto :END
-
 REM ---------------------------------------------------------------- instalar local
 REM Primero se ofrece instalar / revelar el .exe; recien despues commit + GitHub.
 REM El instalador corre en primer plano para que las preguntas de release aparezcan
@@ -352,6 +351,8 @@ if defined OFFER_LOCAL (
         echo No se abrio Windows Explorer.
     )
 )
+
+if defined LOCAL_ONLY goto :END
 
 if not defined INTERACTIVE (
     echo Sin consola interactiva: no se ofrece commit ni release.
