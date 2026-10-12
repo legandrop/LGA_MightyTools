@@ -1,5 +1,18 @@
 # What's new in LGA Mighty Tools
 
+## v1.47
+
+- **Fixed:** Scrolling over the reminder time in Disk Space no longer changes your choice; choose a time from the menu to change it.
+
+## v1.43
+
+- **New:** Window Layouts lets you add window shortcuts to move or minimize the active window: combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds while keeping clear of visible system bars.
+- **New:** Window Layouts tries to take priority for active shortcuts, marks detected clashes with a yellow dot inside its panel, and lets you turn each layout on or off separately. (Windows only)
+
+## v1.37
+
+- **Improved:** Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting, in a smaller alert with aligned buttons and a clearer "Remind me again" action.
+
 ## v1.33 (2026-10-04)
 
 - **Fixed:** Checking for updates works: version 1.31 could not connect, so download this version once from the download page. (macOS only)
