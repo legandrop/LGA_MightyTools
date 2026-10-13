@@ -1,5 +1,21 @@
 # Changelog — LGA Mighty Tools
 
+v1.52:
+
+Window Layouts respondía al teclado físico, pero dejaba pasar las mismas
+combinaciones enviadas por Stream Deck. El receptor de prioridad descartaba
+toda pulsación simulada; por eso Ctrl+Alt+Shift+Win+O llegaba a Windows y abría
+Outlook en lugar de aplicar la disposición guardada. Ahora admite las macros
+externas y distingue las teclas que genera Mighty Tools mediante una marca
+propia, para no volver a capturar las combinaciones que devuelve a otra app.
+El estado de los modificadores sigue los eventos del teclado, incluidos ambos
+lados y sus liberaciones, para reconocer secuencias rápidas sin depender del
+estado asíncrono anterior. Se conserva una sola activación por pulsación y
+se intercepta también su liberación. Las pruebas recorren el receptor real
+con eventos en memoria, sin inyectar teclas ni mover ventanas del usuario.
+
+[ Window Layouts - Admitir atajos enviados por Stream Deck ]
+
 v1.51:
 
 El recordatorio de Disk Space tenía los botones inferiores con menos padding que

@@ -2,6 +2,7 @@
 
 #include "modules/folderswitch/FolderSwitchLogic.h"
 #include "modules/folderswitch/UiaTimeouts.h"
+#include "platform/win/InputOrigin.h"
 
 #include <QDebug>
 #include <QDir>
@@ -206,6 +207,7 @@ bool switchQtDialogImpl(HWND dlg, const QString &folder)
         in[0].type = INPUT_KEYBOARD;
         in[0].ki.wScan = static_cast<WORD>(lastChar.unicode());
         in[0].ki.dwFlags = KEYEVENTF_UNICODE;
+        in[0].ki.dwExtraInfo = kMightyToolsInputTag;
         in[1] = in[0];
         in[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
         const UINT sent = SendInput(2, in, sizeof(INPUT));

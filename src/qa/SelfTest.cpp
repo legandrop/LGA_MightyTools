@@ -23,6 +23,7 @@
 
 #ifdef Q_OS_WIN
 #include "qa/RegistryHiveTest.h"
+#include "qa/HotkeyPriorityTest.h"
 #endif
 
 #include <QXmlStreamReader>
@@ -952,6 +953,7 @@ int run()
     testUiScale(check);
 #ifdef Q_OS_WIN
     testOperations(check);
+    HotkeyPriorityTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[atajos Windows] ") + what); });
 #endif
 
     UpdateSelfTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[updates] ") + what); });

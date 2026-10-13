@@ -1,4 +1,5 @@
 #include "platform/InputInjector.h"
+#include "platform/win/InputOrigin.h"
 
 #include <windows.h>
 
@@ -13,6 +14,7 @@ INPUT keyInput(WORD vk, bool up)
     INPUT input{};
     input.type = INPUT_KEYBOARD;
     input.ki.wVk = vk;
+    input.ki.dwExtraInfo = kMightyToolsInputTag;
     input.ki.dwFlags = up ? KEYEVENTF_KEYUP : 0;
     // Las flechas y las teclas de la derecha son "extendidas": sin la marca, Down llega como el 2
     // del teclado numerico.

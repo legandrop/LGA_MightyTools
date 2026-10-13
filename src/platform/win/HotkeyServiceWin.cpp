@@ -1,4 +1,6 @@
 #include "platform/HotkeyService.h"
+#include "platform/win/InputOrigin.h"
+#include "qa/HotkeyPriorityTest.h"
 
 #include <QAbstractNativeEventFilter>
 #include <QCoreApplication>
@@ -46,6 +48,26 @@ UINT nativeKey(int key)
     return 0;
 }
 
+DWORD nativeModifier(const KBDLLHOOKSTRUCT &key)
+{
+    DWORD vk = key.vkCode;
+    if (vk == VK_CONTROL) vk = key.flags & LLKHF_EXTENDED ? VK_RCONTROL : VK_LCONTROL;
+    if (vk == VK_MENU) vk = key.flags & LLKHF_EXTENDED ? VK_RMENU : VK_LMENU;
+    if (vk == VK_SHIFT) vk = key.scanCode == 0x36 ? VK_RSHIFT : VK_LSHIFT;
+    return vk == VK_LCONTROL || vk == VK_RCONTROL || vk == VK_LMENU || vk == VK_RMENU
+        || vk == VK_LSHIFT || vk == VK_RSHIFT || vk == VK_LWIN || vk == VK_RWIN ? vk : 0;
+}
+
+QSet<DWORD> modifierSnapshot()
+{
+    QSet<DWORD> keys;
+    for (DWORD vk : {VK_LCONTROL, VK_RCONTROL, VK_LMENU, VK_RMENU,
+                     VK_LSHIFT, VK_RSHIFT, VK_LWIN, VK_RWIN}) {
+        if (GetAsyncKeyState(static_cast<int>(vk)) & 0x8000) keys.insert(vk);
+    }
+    return keys;
+}
+
 } // namespace
 
 // El hook vive fuera del hilo de la UI: Windows lo quita sin aviso si su callback tarda demasiado.
@@ -60,6 +82,8 @@ public:
     };
 
     explicit PriorityHookThread(DWORD ownerThread) : m_ownerThread(ownerThread) {}
+
+    static void selfTest(const std::function<void(bool, const QString &)> &check);
 
     bool begin()
     {
@@ -94,6 +118,7 @@ protected:
     void run() override
     {
         s_current = this;
+        m_modifiersDown = modifierSnapshot();
         HHOOK hook = SetWindowsHookExW(WH_KEYBOARD_LL, &PriorityHookThread::onKey,
                                        GetModuleHandleW(nullptr), 0);
         m_installed = hook != nullptr;
@@ -112,42 +137,65 @@ private:
         PriorityHookThread *self = s_current;
         if (!self || code != HC_ACTION) return CallNextHookEx(nullptr, code, message, data);
         const auto *key = reinterpret_cast<const KBDLLHOOKSTRUCT *>(data);
-        if (key->flags & LLKHF_INJECTED) return CallNextHookEx(nullptr, code, message, data);
+        // Una tecla fisica normal resincroniza liberaciones perdidas al bloquear la sesion.
+        // No consultar el estado asincrono durante una macro ni al cambiar el propio modificador.
+        QSet<DWORD> physicalModifiers;
+        const bool refresh = !(key->flags & LLKHF_INJECTED) && !nativeModifier(*key);
+        if (refresh) physicalModifiers = modifierSnapshot();
+        if (self->consumeKey(message, *key, [self](int id, quint64 generation) {
+                return PostThreadMessageW(self->m_ownerThread, kPriorityMessage,
+                                          static_cast<WPARAM>(id + kIdOffset),
+                                          static_cast<LPARAM>(generation)) != 0;
+            }, refresh ? &physicalModifiers : nullptr)) return 1;
+        return CallNextHookEx(nullptr, code, message, data);
+    }
+
+    bool consumeKey(WPARAM message, const KBDLLHOOKSTRUCT &key,
+                    const std::function<bool(int, quint64)> &deliver,
+                    const QSet<DWORD> *physicalModifiers = nullptr)
+    {
         const bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
         const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
-        if (!down && !up) return CallNextHookEx(nullptr, code, message, data);
+        if (!down && !up) return false;
+        if (physicalModifiers) m_modifiersDown = *physicalModifiers;
 
-        QMutexLocker lock(&self->m_mutex);
-        if (up && self->m_swallowed.remove(key->vkCode)) return 1;
-        if (!down) {
-            lock.unlock();
-            return CallNextHookEx(nullptr, code, message, data);
+        // El hook corre antes de actualizar GetAsyncKeyState: seguir la secuencia de la macro.
+        const DWORD modifier = nativeModifier(key);
+        if (modifier) {
+            if (down) m_modifiersDown.insert(modifier);
+            else m_modifiersDown.remove(modifier);
         }
-        if (self->m_swallowed.contains(key->vkCode)) return 1;
+        // Seguir tambien nuestras liberaciones de modificadores, pero nunca activar por inyeccion propia.
+        const bool injected = key.flags & LLKHF_INJECTED;
+        if (injected && key.dwExtraInfo == kMightyToolsInputTag) return false;
+
+        QMutexLocker lock(&m_mutex);
+        const quint64 keyToken = key.vkCode | (quint64(injected) << 32);
+        if (up && m_swallowed.remove(keyToken)) return true;
+        if (!down) return false;
+        if (m_swallowed.contains(keyToken)) return true;
 
         UINT modifiers = 0;
-        if (GetAsyncKeyState(VK_CONTROL) & 0x8000) modifiers |= MOD_CONTROL;
-        if ((GetAsyncKeyState(VK_MENU) & 0x8000) || (key->flags & LLKHF_ALTDOWN)) modifiers |= MOD_ALT;
-        if (GetAsyncKeyState(VK_SHIFT) & 0x8000) modifiers |= MOD_SHIFT;
-        if ((GetAsyncKeyState(VK_LWIN) | GetAsyncKeyState(VK_RWIN)) & 0x8000) modifiers |= MOD_WIN;
-        for (auto it = self->m_entries.cbegin(); it != self->m_entries.cend(); ++it) {
-            if (it->key != key->vkCode || it->modifiers != modifiers) continue;
-            if (PostThreadMessageW(self->m_ownerThread, kPriorityMessage,
-                                   static_cast<WPARAM>(it.key() + kIdOffset),
-                                   static_cast<LPARAM>(it->generation))) {
-                self->m_swallowed.insert(key->vkCode);
-                return 1;
+        if (m_modifiersDown.contains(VK_LCONTROL) || m_modifiersDown.contains(VK_RCONTROL)) modifiers |= MOD_CONTROL;
+        if (m_modifiersDown.contains(VK_LMENU) || m_modifiersDown.contains(VK_RMENU)) modifiers |= MOD_ALT;
+        if (m_modifiersDown.contains(VK_LSHIFT) || m_modifiersDown.contains(VK_RSHIFT)) modifiers |= MOD_SHIFT;
+        if (m_modifiersDown.contains(VK_LWIN) || m_modifiersDown.contains(VK_RWIN)) modifiers |= MOD_WIN;
+        for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it) {
+            if (it->key != key.vkCode || it->modifiers != modifiers) continue;
+            if (deliver(it.key(), it->generation)) {
+                m_swallowed.insert(keyToken);
+                return true;
             }
             break;
         }
-        lock.unlock();
-        return CallNextHookEx(nullptr, code, message, data);
+        return false;
     }
 
     DWORD m_ownerThread;
     QMutex m_mutex;
     QHash<int, Entry> m_entries;
-    QSet<DWORD> m_swallowed;
+    QSet<quint64> m_swallowed;
+    QSet<DWORD> m_modifiersDown;
     QSemaphore m_ready;
     bool m_installed = false;
     DWORD m_error = 0;
@@ -155,6 +203,114 @@ private:
 };
 
 thread_local PriorityHookThread *PriorityHookThread::s_current = nullptr;
+
+void PriorityHookThread::selfTest(const std::function<void(bool, const QString &)> &check)
+{
+    PriorityHookThread receiver(0);
+    const Shortcut obs = Shortcut::fromPortableString(QStringLiteral("Meta+Ctrl+Alt+Shift+O"));
+    receiver.add(12, obs, 41);
+    int activations = 0;
+    int lastId = 0;
+    quint64 lastGeneration = 0;
+    bool deliveryAllowed = true;
+    const auto deliver = [&](int id, quint64 generation) {
+        if (!deliveryAllowed) return false;
+        ++activations;
+        lastId = id;
+        lastGeneration = generation;
+        return true;
+    };
+    const auto send = [&](DWORD vk, bool up = false, DWORD flags = LLKHF_INJECTED,
+                          ULONG_PTR tag = 0, DWORD scan = 0, bool systemKey = false) {
+        KBDLLHOOKSTRUCT event{};
+        event.vkCode = vk;
+        event.scanCode = scan;
+        event.flags = flags | (up ? LLKHF_UP : 0);
+        event.dwExtraInfo = tag;
+        const WPARAM message = systemKey ? (up ? WM_SYSKEYUP : WM_SYSKEYDOWN) : (up ? WM_KEYUP : WM_KEYDOWN);
+        return receiver.consumeKey(message, event, deliver);
+    };
+    const auto modifiers = [&](bool up, DWORD flags = LLKHF_INJECTED, ULONG_PTR tag = 0) {
+        bool passed = true;
+        for (DWORD vk : {VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN}) passed &= !send(vk, up, flags, tag);
+        return passed;
+    };
+
+    check(modifiers(false) && send('O') && activations == 1 && lastId == 12 && lastGeneration == 41,
+          QStringLiteral("macro: cuatro modificadores seguidos y O activan OBS una vez"));
+    check(send('O') && activations == 1, QStringLiteral("macro: la repeticion no vuelve a activar"));
+    check(modifiers(true) && send('O', true) && receiver.m_swallowed.isEmpty(),
+          QStringLiteral("macro: soltar modificadores antes de O conserva la liberacion interceptada"));
+    check(!send('O') && !send('O', true) && activations == 1,
+          QStringLiteral("macro: despues de soltar, O sola pasa sin activar"));
+    check(modifiers(false) && send('O') && send('O', true) && modifiers(true) && activations == 2,
+          QStringLiteral("macro: una segunda pulsacion completa vuelve a funcionar"));
+
+    modifiers(false, 0);
+    check(send('O', false, 0) && !send('O', true) && send('O', true, 0) && activations == 3,
+          QStringLiteral("teclado: sigue funcionando y una liberacion inyectada no consume la fisica"));
+    modifiers(true, 0);
+    modifiers(false);
+    check(!send('P') && !send('P', true) && activations == 3,
+          QStringLiteral("macro: otra letra pasa sin interferencia"));
+    check(!send('O', false, LLKHF_INJECTED, kMightyToolsInputTag)
+              && !send('O', true, LLKHF_INJECTED, kMightyToolsInputTag) && activations == 3,
+          QStringLiteral("inyeccion propia: devolver el mismo atajo no lo recaptura"));
+    send('O');
+    check(!send('O', true, LLKHF_INJECTED, kMightyToolsInputTag) && send('O', true) && activations == 4,
+          QStringLiteral("inyeccion propia: su liberacion no consume la de una macro externa"));
+    check(modifiers(true, LLKHF_INJECTED, kMightyToolsInputTag) && !send('O') && !send('O', true),
+          QStringLiteral("inyeccion propia: liberar modificadores actualiza su estado sin activar"));
+
+    send(VK_CONTROL, false, LLKHF_INJECTED | LLKHF_EXTENDED);
+    send(VK_MENU, false, LLKHF_INJECTED | LLKHF_EXTENDED);
+    send(VK_SHIFT, false, LLKHF_INJECTED, 0, 0x36);
+    send(VK_RWIN);
+    send(VK_LCONTROL);
+    send(VK_LCONTROL, true);
+    check(send('O') && send('O', true) && activations == 5,
+          QStringLiteral("macro: modificadores derechos y soltar el izquierdo conservan la combinacion"));
+    send(VK_CONTROL, true, LLKHF_INJECTED | LLKHF_EXTENDED);
+    send(VK_MENU, true, LLKHF_INJECTED | LLKHF_EXTENDED);
+    send(VK_SHIFT, true, LLKHF_INJECTED, 0, 0x36);
+    send(VK_RWIN, true);
+    check(receiver.m_modifiersDown.isEmpty(), QStringLiteral("macro: ambos lados quedan liberados"));
+
+    modifiers(false, LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED);
+    check(send('O', false, LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED)
+              && send('O', true, LLKHF_INJECTED | LLKHF_LOWER_IL_INJECTED) && activations == 6,
+          QStringLiteral("macro: se admite tambien la inyeccion externa de menor integridad"));
+    deliveryAllowed = false;
+    check(!send('O') && !send('O', true) && activations == 6,
+          QStringLiteral("entrega fallida: no interceptar una accion que no llego a la UI"));
+    deliveryAllowed = true;
+    receiver.remove(12);
+    check(!send('O') && !send('O', true) && activations == 6,
+          QStringLiteral("disposicion apagada: el atajo deja de interceptarse"));
+    receiver.add(12, obs, 42);
+    check(send('O') && send('O', true) && lastGeneration == 42 && activations == 7,
+          QStringLiteral("registro renovado: el receptor entrega la generacion vigente"));
+    check(send('O', false, LLKHF_INJECTED | LLKHF_ALTDOWN, 0, 0, true)
+              && send('O', true, LLKHF_INJECTED | LLKHF_ALTDOWN, 0, 0, true) && activations == 8,
+          QStringLiteral("macro: los eventos de sistema con Alt activan e interceptan su liberacion"));
+    modifiers(true);
+    modifiers(false);
+    KBDLLHOOKSTRUCT physicalKey{};
+    physicalKey.vkCode = 'O';
+    const QSet<DWORD> releasedSnapshot;
+    check(!receiver.consumeKey(WM_KEYDOWN, physicalKey, deliver, &releasedSnapshot)
+              && receiver.m_modifiersDown.isEmpty() && activations == 8,
+          QStringLiteral("teclado: un estado fisico limpio corrige modificadores con liberaciones perdidas"));
+    const QSet<DWORD> heldSnapshot{VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_RWIN};
+    check(receiver.consumeKey(WM_KEYDOWN, physicalKey, deliver, &heldSnapshot)
+              && send('O', true, 0) && activations == 9,
+          QStringLiteral("teclado: los modificadores fisicos ya apretados tambien activan el atajo"));
+}
+
+void HotkeyPriorityTest::run(const std::function<void(bool, const QString &)> &check)
+{
+    PriorityHookThread::selfTest(check);
+}
 
 struct HotkeyService::Private : public QAbstractNativeEventFilter
 {
@@ -300,6 +456,7 @@ void HotkeyService::passThrough(const Shortcut &shortcut)
         input.type = INPUT_KEYBOARD;
         input.ki.wVk = code;
         input.ki.dwFlags = (up ? KEYEVENTF_KEYUP : 0) | (code == VK_LWIN ? KEYEVENTF_EXTENDEDKEY : 0);
+        input.ki.dwExtraInfo = kMightyToolsInputTag;
     };
     for (const Modifier &modifier : modifiers) {
         if ((shortcut.modifiers & modifier.qt) && !(GetAsyncKeyState(modifier.vk) & 0x8000)) {
