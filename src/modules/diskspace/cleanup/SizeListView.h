@@ -27,6 +27,7 @@ struct SizeListRow
     enum class Expander { None, Closed, Open };
 
     QString id;     ///< estable: lo que vuelve en las senales
+    QString prefix; ///< antes del nombre, en gris (la carpeta de la ruta relativa en What changed)
     QString name;
     QString detail; ///< ruta al lado del nombre, en gris, recortada por la izquierda
     QString note;   ///< aclaracion en cursiva despues del nombre ("counting…")
@@ -41,6 +42,7 @@ struct SizeListRow
     int tone = 0;        ///< color del peso: 0 normal, 1 crecio (ambar), 2 bajo (verde)
     bool selectable = true;
     bool muted = false; ///< fila secundaria, en gris y cursiva ("12,400 smaller files")
+    bool heading = false; ///< encabezado de un grupo: fondo de tarjeta, texto claro y en negrita
 };
 
 // La lista de la ventana de limpieza: filas de 28 px ordenadas por peso, con arbol opcional. Pinta solo
@@ -127,6 +129,31 @@ private:
     QWidget *m_tipAnchor = nullptr;
     bool m_interactive = true;
     bool m_tree = true;
+};
+
+// La barra de arriba de "What changed": reparte lo que crecio el disco entre las zonas que mas crecieron,
+// cada una con su color, y debajo una leyenda con el nombre y lo que crecio. Las partes que no entran en la
+// leyenda se dejan de nombrar (la barra las sigue mostrando). No toma foco ni recibe clicks.
+class ChangeShareBar : public QWidget
+{
+public:
+    struct Part
+    {
+        QString label;
+        qint64 bytes = 0; ///< positivo
+        QColor color;
+    };
+
+    explicit ChangeShareBar(QWidget *parent = nullptr);
+    // Sin partes, la barra se oculta.
+    void setParts(const QList<Part> &parts);
+    const QList<Part> &parts() const { return m_parts; }
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
+private:
+    QList<Part> m_parts;
 };
 
 #endif // MIGHTYTOOLS_SIZELISTVIEW_H

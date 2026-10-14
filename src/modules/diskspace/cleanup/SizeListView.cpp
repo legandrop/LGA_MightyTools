@@ -1,5 +1,6 @@
 #include "modules/diskspace/cleanup/SizeListView.h"
 
+#include "modules/diskspace/DiskSpace.h"
 #include "platform/WindowFrame.h"
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
@@ -294,7 +295,8 @@ bool SizeListView::nameIsCut(const SizeListRow &row) const
     const int limit = qMax(8, row.detail.isEmpty() ? available - extras : int(available * 0.6));
     QFont nameFont = Theme::uiFont(13);
     nameFont.setItalic(row.muted);
-    return textWidth(nameFont, row.name) > limit;
+    nameFont.setWeight(row.heading ? QFont::DemiBold : QFont::Normal);
+    return textWidth(nameFont, row.prefix + row.name) > limit;
 }
 
 void SizeListView::mouseMoveEvent(QMouseEvent *event)
@@ -392,6 +394,7 @@ void SizeListView::paintEvent(QPaintEvent *)
 
     const QFont nameFont = Theme::uiFont(13);
     const QFont sizeFont = Theme::uiFont(13, QFont::Medium);
+    const QFont headingFont = Theme::uiFont(13, QFont::DemiBold);
     const QFont dimFont = Theme::uiFont(12);
     QFont noteFont = dimFont;
     noteFont.setItalic(true);
@@ -415,6 +418,13 @@ void SizeListView::paintEvent(QPaintEvent *)
         const int top = kHeaderHeight + index * kRowHeight - offset;
         const QRect rowRect(0, top, width, kRowHeight);
         const bool selected = m_selected.contains(row.id);
+        if (row.heading) {
+            // El encabezado de un grupo: banda de tarjeta y una linea arriba que lo separa del grupo anterior.
+            painter.fillRect(rowRect, Theme::color(Theme::kCard));
+            if (index > 0) {
+                painter.fillRect(QRect(0, top, width, 1), Theme::color(Theme::kDivider));
+            }
+        }
         if (selected) {
             painter.fillRect(rowRect, Theme::color(Theme::kSideSelected));
         } else if (index == m_hovered && !row.muted) {
@@ -438,13 +448,26 @@ void SizeListView::paintEvent(QPaintEvent *)
         }
         int available = nameRight - x;
         if (available > 8) {
-            painter.setFont(row.muted ? mutedFont : nameFont);
-            painter.setPen(row.muted ? faint : (selected ? bright : text));
+            painter.setFont(row.muted ? mutedFont : (row.heading ? headingFont : nameFont));
+            const QColor namePen = row.muted ? faint : (selected || row.heading ? bright : text);
             // Con una ruta al lado, el nombre toma lo suyo (hasta el 60 %) y la ruta el resto.
             const int extras = (row.note.isEmpty() ? 0 : textWidth(noteFont, row.note) + kPartGap)
                                + (row.chip.isEmpty() ? 0 : textWidth(chipFont, row.chip) + 14 + kPartGap);
             const int fullWidth = textWidth(painter.font(), row.name);
-            const int nameLimit = row.detail.isEmpty() ? available - extras : int(available * 0.6);
+            int nameLimit = row.detail.isEmpty() ? available - extras : int(available * 0.6);
+            if (!row.prefix.isEmpty()) {
+                // La carpeta va antes, en gris, y es lo primero que se recorta (por la izquierda): el nombre se
+                // lee entero mientras entre.
+                const int prefixWidth = qMin(textWidth(painter.font(), row.prefix), nameLimit - qMin(fullWidth, nameLimit));
+                if (prefixWidth > 8) {
+                    painter.setPen(faint);
+                    painter.drawText(QRect(x, top, prefixWidth, kRowHeight), Qt::AlignRight | Qt::AlignVCenter,
+                                     QFontMetricsF(painter.font()).elidedText(row.prefix, Qt::ElideLeft, prefixWidth));
+                    x += prefixWidth;
+                    nameLimit -= prefixWidth;
+                }
+            }
+            painter.setPen(namePen);
             const int nameWidth = qMin(fullWidth, qMax(8, nameLimit));
             // Se recorta solo si de verdad no entra.
             painter.drawText(QRect(x, top, nameWidth, kRowHeight), Qt::AlignLeft | Qt::AlignVCenter,
@@ -489,7 +512,7 @@ void SizeListView::paintEvent(QPaintEvent *)
             const QString value = row.cells.value(c);
             switch (column.kind) {
             case SizeListColumn::Kind::Size: {
-                painter.setFont(row.muted ? mutedFont : sizeFont);
+                painter.setFont(row.muted ? mutedFont : (row.heading ? headingFont : sizeFont));
                 QColor color = row.muted ? faint : strong;
                 if (row.tone == 1) {
                     color = Theme::color(Theme::kWarn);
@@ -552,5 +575,97 @@ void SizeListView::paintEvent(QPaintEvent *)
         painter.drawText(QRect(columnX, 0, column.width, kHeaderHeight - 1), Qt::AlignRight | Qt::AlignVCenter,
                          headerTitle(column.title, c));
         columnX += column.width + kColumnGap;
+    }
+}
+
+// ------------------------------------------------------------------ ChangeShareBar
+
+namespace {
+
+// `.summary` del canvas: 8 arriba, barra de 10 con 2 entre partes, 8 hasta la leyenda, 18 entre items.
+constexpr int kShareTop = 8;
+constexpr int kShareBar = 10;
+constexpr int kShareGap = 2;
+constexpr int kLegendTop = 8;
+constexpr int kLegendLine = 18;
+constexpr int kLegendGap = 18;
+constexpr int kSwatch = 10;
+
+} // namespace
+
+ChangeShareBar::ChangeShareBar(QWidget *parent)
+    : QWidget(parent)
+{
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+    setFocusPolicy(Qt::NoFocus);
+    setFixedHeight(kShareTop + kShareBar + kLegendTop + kLegendLine + 6);
+    hide();
+}
+
+void ChangeShareBar::setParts(const QList<Part> &parts)
+{
+    m_parts.clear();
+    for (const Part &part : parts) {
+        if (part.bytes > 0) {
+            m_parts.append(part);
+        }
+    }
+    setVisible(!m_parts.isEmpty());
+    update();
+}
+
+void ChangeShareBar::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.fillRect(rect(), Theme::color(Theme::kWindow));
+    qint64 total = 0;
+    for (const Part &part : m_parts) {
+        total += part.bytes;
+    }
+    if (total <= 0) {
+        return;
+    }
+
+    // -- La barra: cada parte a escala, con un hueco fijo entre partes que se descuenta del ancho.
+    const int left = kPadX;
+    const int barWidth = width() - 2 * kPadX;
+    const double usable = barWidth - kShareGap * double(m_parts.size() - 1);
+    double x = left;
+    painter.setPen(Qt::NoPen);
+    for (const Part &part : m_parts) {
+        const double partWidth = qMax(2.0, usable * double(part.bytes) / double(total));
+        painter.setBrush(part.color);
+        painter.drawRoundedRect(QRectF(x, kShareTop, partWidth, kShareBar), 2, 2);
+        x += partWidth + kShareGap;
+    }
+
+    // -- La leyenda, en una sola linea: lo que no entra no se nombra.
+    const QFont labelFont = Theme::uiFont(12);
+    const QFont valueFont = Theme::uiFont(12, QFont::DemiBold);
+    const int top = kShareTop + kShareBar + kLegendTop;
+    int legendX = left;
+    for (const Part &part : m_parts) {
+        const QString value = QStringLiteral("+") + DiskSpace::formatSize(part.bytes);
+        // Una ruta larga se recorta por el medio: se leen el principio y la carpeta.
+        const QString label = QFontMetricsF(labelFont).elidedText(part.label, Qt::ElideMiddle, 260);
+        const int labelWidth = textWidth(labelFont, label);
+        const int valueWidth = textWidth(valueFont, value);
+        const int itemWidth = kSwatch + kPartGap + labelWidth + 5 + valueWidth;
+        if (legendX + itemWidth > left + barWidth) {
+            break;
+        }
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(part.color);
+        painter.drawRoundedRect(QRectF(legendX, top + (kLegendLine - kSwatch) / 2.0, kSwatch, kSwatch), 2, 2);
+        legendX += kSwatch + kPartGap;
+        painter.setFont(labelFont);
+        painter.setPen(Theme::color(Theme::kTextMuted));
+        painter.drawText(QRect(legendX, top, labelWidth, kLegendLine), Qt::AlignLeft | Qt::AlignVCenter, label);
+        legendX += labelWidth + 5;
+        painter.setFont(valueFont);
+        painter.setPen(Theme::color(Theme::kTextStrong));
+        painter.drawText(QRect(legendX, top, valueWidth, kLegendLine), Qt::AlignLeft | Qt::AlignVCenter, value);
+        legendX += valueWidth + kLegendGap;
     }
 }

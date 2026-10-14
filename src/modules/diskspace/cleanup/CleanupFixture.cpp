@@ -3,6 +3,7 @@
 #include "core/I18n.h"
 
 #include <QDateTime>
+#include <QDir>
 
 namespace {
 
@@ -151,6 +152,14 @@ Cleanup::Item item(const QString &name, const QString &path, double gib, int day
     return it;
 }
 
+// Una carpeta cuya app esta abierta: cuenta en el total pero no se puede tildar.
+Cleanup::Item inUse(Cleanup::Item it, const QString &app)
+{
+    it.blocked = true;
+    it.blockerLabel = app;
+    return it;
+}
+
 Cleanup::Category category(const QString &id, Cleanup::Group group, const QString &title, const QString &caption,
                            const QList<Cleanup::Item> &items, bool single = false)
 {
@@ -192,8 +201,8 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
                               item(QStringLiteral("Firefox"), home + QStringLiteral("/Library/Caches/Firefox/Profiles"), 0.10, 14, true, now)}));
         list.append(category(QStringLiteral("apps"), Cleanup::Group::Safe, I18n::tr("App caches"),
                              I18n::tr("Cache folders of desktop apps. Settings and logins stay."),
-                             {item(QStringLiteral("Studio"), home + QStringLiteral("/Library/Application Support/Studio"), 1.52, 0, true, now),
-                              item(QStringLiteral("Akiflow"), home + QStringLiteral("/Library/Application Support/Akiflow"), 0.24, 0, true, now),
+                             {inUse(item(QStringLiteral("Studio"), home + QStringLiteral("/Library/Application Support/Studio"), 1.52, 0, true, now), QStringLiteral("Studio")),
+                              inUse(item(QStringLiteral("Akiflow"), home + QStringLiteral("/Library/Application Support/Akiflow"), 0.24, 0, true, now), QStringLiteral("Akiflow")),
                               item(QStringLiteral("Spark Desktop"), home + QStringLiteral("/Library/Application Support/Spark Desktop"), 0.23, 0, true, now),
                               item(QStringLiteral("Code"), home + QStringLiteral("/Library/Application Support/Code"), 0.09, 0, true, now)}));
         list.append(category(QStringLiteral("updates"), Cleanup::Group::Safe, I18n::tr("App update downloads"),
@@ -268,7 +277,7 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
                              I18n::tr("Cache folders of desktop apps. Settings and logins stay."),
                              {item(QStringLiteral("ClickUp"), home + QStringLiteral("\\AppData\\Roaming\\ClickUp"), 0.54, 125, true, now),
                               item(QStringLiteral("Acrobat"), home + QStringLiteral("\\AppData\\Local\\Adobe\\Acrobat"), 0.35, 9, true, now),
-                              item(QStringLiteral("Todoist"), home + QStringLiteral("\\AppData\\Roaming\\Todoist"), 0.30, 0, true, now),
+                              inUse(item(QStringLiteral("Todoist"), home + QStringLiteral("\\AppData\\Roaming\\Todoist"), 0.30, 0, true, now), QStringLiteral("Todoist")),
                               item(QStringLiteral("Spark Desktop"), home + QStringLiteral("\\AppData\\Local\\Spark Desktop"), 0.21, 0, true, now),
                               item(QStringLiteral("discord"), home + QStringLiteral("\\AppData\\Roaming\\discord"), 0.18, 400, true, now)}));
         list.append(category(QStringLiteral("temp"), Cleanup::Group::Safe, I18n::tr("Temporary files"),
@@ -492,28 +501,49 @@ Data build(const QString &state, ScanEngine &engine)
         data.tab = 2;
     } else if (state == QLatin1String("changes")) {
         data.tab = 3;
+        // Anidado como un escaneo real: una zona con carpetas intermedias (que no se listan), hojas y resto,
+        // temporales del sistema, una zona que bajo y crecimiento que ninguna zona explica.
 #ifdef Q_OS_MACOS
+        const QString home = QDir::homePath();
+        const auto h = [&](const char *relative) { return home + QLatin1Char('/') + QLatin1String(relative); };
+        const QString temp = QStringLiteral("/private/var/folders/cx/qtyt758157x8qm7xl4fdjmqc0000gn");
         data.baseline.root = QStringLiteral("/");
         data.baseline.takenAt = QDateTime(QDate::currentDate().addDays(-1), QTime(18, 10));
-        data.usedDelta = gb(6.4);
-        data.changes = {{QStringLiteral("/private/var/folders/cx/qtyt758157x8qm7xl4fdjmqc0000gn/T"), gb(3.1), gb(5.0)},
-                        {QStringLiteral("/Users/lega/.codex"), gb(1.9), gb(12.5)},
-                        {QStringLiteral("/Users/lega/Desktop/Codin/LGA_PipeSync_2/build"), gb(1.2), gb(5.5)},
-                        {QStringLiteral("/Users/lega/Library/Caches/com.openai.codex"), gb(0.6), gb(1.6)},
-                        {QStringLiteral("/Users/lega/Library/Caches/pip"), gb(0.5), gb(0.5)},
-                        {QStringLiteral("/Users/lega/.Trash"), -gb(0.4), gb(2.5)},
-                        {QStringLiteral("/Users/lega/Desktop"), -gb(0.5), gb(95.3)}};
+        data.usedDelta = gb(62.0);
+        data.changes = {{h("Desktop/Codin"), gb(39.6), gb(88.1)},
+                        {h("Desktop/Codin/LGA_PipeSync_2"), gb(24.7), gb(37.3)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build-qa/Gantt Mac 2026-10-11"), gb(4.64), gb(4.64)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build_client-mcp-pack-20261013"), gb(4.42), gb(4.42)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build-mcp-pack-20261013"), gb(4.42), gb(4.42)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build-mtmac"), gb(3.65), gb(3.65)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build_client-release"), gb(2.18), gb(2.18)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build_client"), gb(1.85), gb(4.57)},
+                        {h("Desktop/Codin/LGA_PipeSync_2/build"), gb(1.64), gb(4.65)},
+                        {h("Desktop/Codin/LGA_App_El_Music"), gb(9.27), gb(9.27)},
+                        {h("Desktop/Codin/LGA_App_El_Music/.qa"), gb(6.77), gb(6.77)},
+                        {h("Desktop/Codin/LGA_RepoTools"), gb(2.12), gb(2.52)},
+                        {h("Desktop/Codin/LGA_RepoTools/RepoRules_Shared/repos"), gb(1.52), gb(1.82)},
+                        {h("Desktop/Codin/LGA_MediaTools"), gb(1.90), gb(11.9)},
+                        {h("Library"), gb(6.24), gb(414)},
+                        {h("Library/Caches"), gb(3.34), gb(12.9)},
+                        {h("Library/Caches/com.spotify.client/Data"), gb(1.63), gb(1.63)},
+                        {temp, gb(4.88), gb(9.66)},
+                        {temp + QStringLiteral("/T"), gb(2.84), gb(4.80)},
+                        {temp + QStringLiteral("/T/com.apple.fileproviderd/TemporaryItems"), gb(1.90), gb(1.90)},
+                        {temp + QStringLiteral("/X/com.google.Chrome.code_sign_clone"), gb(2.09), gb(2.09)},
+                        {h(".Trash"), -gb(0.4), gb(2.5)}};
 #else
         data.baseline.root = QStringLiteral("C:\\");
         data.baseline.takenAt = QDateTime(QDate::currentDate().addDays(-1), QTime(18, 10));
-        data.usedDelta = gb(6.4);
-        data.changes = {{QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Temp"), gb(3.1), gb(5.0)},
-                        {QStringLiteral("C:\\Users\\lega\\.codex"), gb(1.9), gb(12.5)},
-                        {QStringLiteral("C:\\Portable\\LGA_PipeSync_2\\build"), gb(1.2), gb(5.5)},
-                        {QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Packages"), gb(0.6), gb(25.8)},
-                        {QStringLiteral("C:\\Users\\lega\\AppData\\Local\\pip"), gb(0.5), gb(10.4)},
-                        {QStringLiteral("C:\\$Recycle.Bin"), -gb(0.4), gb(9.1)},
-                        {QStringLiteral("C:\\Users\\lega\\Desktop"), -gb(0.5), gb(25.2)}};
+        data.usedDelta = gb(18.0);
+        data.changes = {{QStringLiteral("C:\\Portable"), gb(12.0), gb(88.1)},
+                        {QStringLiteral("C:\\Portable\\LGA_PipeSync_2"), gb(8.0), gb(37.3)},
+                        {QStringLiteral("C:\\Portable\\LGA_PipeSync_2\\build-qa"), gb(4.6), gb(4.6)},
+                        {QStringLiteral("C:\\Portable\\LGA_PipeSync_2\\build"), gb(1.6), gb(4.65)},
+                        {QStringLiteral("C:\\Portable\\LGA_MediaTools"), gb(1.9), gb(11.9)},
+                        {QStringLiteral("C:\\Users\\lega\\AppData\\Local\\Temp"), gb(3.1), gb(5.0)},
+                        {QStringLiteral("C:\\Users\\lega\\.gradle"), gb(1.9), gb(12.5)},
+                        {QStringLiteral("C:\\$Recycle.Bin"), -gb(0.4), gb(9.1)}};
 #endif
     }
     return data;

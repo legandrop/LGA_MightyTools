@@ -648,6 +648,28 @@ void selfTestSandbox(const Check &check)
     check(changes.size() == 3 && changes.at(0).path == at("A/B") && changes.at(0).delta == 500 * mb
               && changes.at(1).path == at("D") && changes.at(2).path == at("C") && changes.at(2).delta == -300 * mb,
           QStringLiteral("resumen: lo que cambio, con la carpeta mas profunda que lo explica (%1 cambios)").arg(changes.size()));
+    // Zonas: Z crecio 10 GB; adentro Z/P (6, intermedia) con Z/P/a (2) y Z/P/b (1.5), y Z/q (1). La intermedia no
+    // se lista; el resto de la zona es 10 - 2 - 1.5 - 1. "Zq" no esta adentro de "Z" (limite de carpeta).
+    const QList<ScanSnapshot::Change> nested = {{at("Z"), 10000 * mb, 0},     {at("Z/P"), 6000 * mb, 0}, {at("Z/P/a"), 2000 * mb, 0},
+                                                {at("Z/P/b"), 1500 * mb, 0}, {at("Z/q"), 1000 * mb, 0}, {at("Zq"), 300 * mb, 0}};
+    const QList<ScanSnapshot::Zone> zones = ScanSnapshot::zones(nested);
+    const auto zoneAt = [&](const QString &path) {
+        for (const ScanSnapshot::Zone &zone : zones) {
+            if (zone.top.path == path) {
+                return zone;
+            }
+        }
+        return ScanSnapshot::Zone();
+    };
+    const ScanSnapshot::Zone z = zoneAt(at("Z"));
+    QStringList leafPaths;
+    for (const ScanSnapshot::Change &leaf : z.leaves) {
+        leafPaths.append(leaf.path);
+    }
+    leafPaths.sort();
+    check(zones.size() == 2 && leafPaths == QStringList({at("Z/P/a"), at("Z/P/b"), at("Z/q")}) && z.rest == 5500 * mb
+              && zoneAt(at("Zq")).leaves.isEmpty() && zoneAt(at("Zq")).rest == 0,
+          QStringLiteral("zonas: cada carpeta una sola vez, sin intermedias, y el resto suma el cambio de la zona (%1 zonas)").arg(zones.size()));
     const QString store = sandbox + sep + QStringLiteral("scans");
     check(!ScanSnapshot::store(before) && ScanSnapshot::store(before, true, store) && ScanSnapshot::store(after, true, store),
           QStringLiteral("resumen: en una corrida automatizada no se escribe en los ajustes del usuario; en la carpeta de prueba, si"));

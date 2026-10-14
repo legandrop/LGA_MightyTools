@@ -124,6 +124,47 @@ QList<ScanSnapshot::Change> ScanSnapshot::diff(const ScanSnapshot &before, const
     return result;
 }
 
+QList<ScanSnapshot::Zone> ScanSnapshot::zones(const QList<Change> &changes)
+{
+    QList<Zone> result;
+    for (const Change &change : changes) {
+        bool hasParent = false;
+        for (const Change &other : changes) {
+            if (DeleteGuard::isInside(change.path, other.path)) {
+                hasParent = true;
+                break;
+            }
+        }
+        if (hasParent) {
+            continue;
+        }
+        Zone zone;
+        zone.top = change;
+        // Adentro, solo las mas profundas: una que tiene otra de la lista adentro ya esta explicada por ella
+        // y por el resto de la zona.
+        qint64 explained = 0;
+        for (const Change &inner : changes) {
+            if (!DeleteGuard::isInside(inner.path, change.path)) {
+                continue;
+            }
+            bool hasChild = false;
+            for (const Change &other : changes) {
+                if (DeleteGuard::isInside(other.path, inner.path)) {
+                    hasChild = true;
+                    break;
+                }
+            }
+            if (!hasChild) {
+                zone.leaves.append(inner);
+                explained += inner.delta;
+            }
+        }
+        zone.rest = zone.leaves.isEmpty() ? 0 : change.delta - explained;
+        result.append(zone);
+    }
+    return result;
+}
+
 QString ScanSnapshot::storageDir()
 {
     return QFileInfo(AppSettings::filePath()).absoluteDir().filePath(QStringLiteral("scans"));

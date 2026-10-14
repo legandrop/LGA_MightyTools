@@ -193,6 +193,50 @@ bool sortsBefore(const SortKey &a, const SortKey &b, bool byName, bool descendin
     return compareNames(a.name, b.name) < 0;
 }
 
+// Como se nombra una zona de "What changed": los temporales del sistema por lo que son (la ruta va al lado,
+// en gris) y, en mac, la carpeta del usuario como "~".
+struct ZoneName
+{
+    QString label;
+    QString detail;
+};
+
+ZoneName zoneName(const QString &path)
+{
+#ifdef Q_OS_MACOS
+    const QString systemTemp = QStringLiteral("/private/var/folders");
+    if (DeleteGuard::samePath(path, systemTemp) || DeleteGuard::isInside(path, systemTemp)) {
+        return {I18n::tr("System temporary files"), path};
+    }
+    const QString home = QDir::homePath();
+    if (DeleteGuard::samePath(path, home)) {
+        return {QStringLiteral("~"), QString()};
+    }
+    if (DeleteGuard::isInside(path, home)) {
+        return {QStringLiteral("~") + path.mid(home.size()), QString()};
+    }
+#else
+    const QString temp = QDir::toNativeSeparators(QDir::tempPath());
+    if (DeleteGuard::samePath(path, temp) || DeleteGuard::isInside(path, temp)) {
+        return {I18n::tr("Temporary files"), path};
+    }
+#endif
+    return {path, QString()};
+}
+
+// El ultimo tramo de una ruta (la carpeta) y lo que va antes, con su separador al final. Solo el separador
+// del sistema: en mac una barra invertida es valida dentro de un nombre.
+QPair<QString, QString> splitLast(const QString &relative)
+{
+    const int cut = relative.lastIndexOf(QDir::separator());
+    return cut < 0 ? qMakePair(QString(), relative) : qMakePair(relative.left(cut + 1), relative.mid(cut + 1));
+}
+
+QString signedSize(qint64 delta)
+{
+    return (delta >= 0 ? QStringLiteral("+") : QStringLiteral("−")) + DiskSpace::formatSize(qAbs(delta));
+}
+
 // Nombre de cada lista en settings.ini y cuantas columnas tiene ademas del nombre.
 const char *sortSettingName(CleanupWindow::Tab tab)
 {
@@ -643,11 +687,19 @@ void CleanupWindow::buildUi()
     filesLayout->addWidget(m_files, 1);
     m_stack->addWidget(filesPage);
 
-    m_changesList = new SizeListView(m_stack);
+    // "What changed": la barra que reparte el crecimiento entre zonas y, debajo, la lista agrupada por zona.
+    auto *changesPage = new QWidget(m_stack);
+    auto *changesLayout = new QVBoxLayout(changesPage);
+    changesLayout->setContentsMargins(0, 0, 0, 0);
+    changesLayout->setSpacing(0);
+    m_changeBar = new ChangeShareBar(changesPage);
+    changesLayout->addWidget(m_changeBar);
+    m_changesList = new SizeListView(changesPage);
     m_changesList->setTree(false);
     m_changesList->setColumns(I18n::trc("column", "Folder"), {{I18n::trc("column", "Change"), 96, SizeListColumn::Kind::Size},
                                                               {I18n::trc("column", "Size now"), 84, SizeListColumn::Kind::Text}});
-    m_stack->addWidget(m_changesList);
+    changesLayout->addWidget(m_changesList, 1);
+    m_stack->addWidget(changesPage);
     root->addWidget(m_stack, 1);
 
     // ---- Barra de acciones (`.abar`).
@@ -1228,28 +1280,115 @@ void CleanupWindow::refreshFiles()
 
 void CleanupWindow::refreshChanges()
 {
+    // Agrupado por zona: la carpeta mas alta que cambio y, adentro, solo las mas profundas (ninguna fila
+    // contiene a otra) mas "Other folders in ...", asi la columna suma sin contar nada dos veces. Al final,
+    // lo que ninguna zona explica. Columnas: 0 Change (con signo), 1 Size now.
     QList<SizeListRow> rows;
-    // Columnas: 0 Change (lo que crecio, con signo), 1 Size now.
-    QList<ScanSnapshot::Change> changes = m_changes;
+    QList<ScanSnapshot::Zone> zones = ScanSnapshot::zones(m_changes);
     const bool byName = m_changeSort.column == SizeListView::kNameColumn;
     const int column = m_changeSort.column;
     const bool descending = m_changeSort.descending;
-    std::sort(changes.begin(), changes.end(), [=](const ScanSnapshot::Change &a, const ScanSnapshot::Change &b) {
+    const auto before = [=](const ScanSnapshot::Change &a, const ScanSnapshot::Change &b) {
         return sortsBefore({a.path, column == 1 ? a.bytes : a.delta, qAbs(a.delta)}, {b.path, column == 1 ? b.bytes : b.delta, qAbs(b.delta)},
                            byName, descending);
+    };
+    // Las zonas se ordenan por el nombre que se ve ("~/Library", "System temporary files"), no por la ruta.
+    std::sort(zones.begin(), zones.end(), [&](const ScanSnapshot::Zone &a, const ScanSnapshot::Zone &b) {
+        return sortsBefore({zoneName(a.top.path).label, column == 1 ? a.top.bytes : a.top.delta, qAbs(a.top.delta)},
+                           {zoneName(b.top.path).label, column == 1 ? b.top.bytes : b.top.delta, qAbs(b.top.delta)}, byName, descending);
     });
     m_changesList->setSort(m_changeSort.column, m_changeSort.descending);
-    for (const ScanSnapshot::Change &change : changes) {
+
+    QList<ChangeShareBar::Part> parts;
+    const QList<QColor> partColors = {Theme::color(Theme::kWarn), Theme::color(Theme::kLink), Theme::color(Theme::kOk)};
+    qint64 zonesDelta = 0;
+    qint64 otherGrowth = 0;
+    QList<const ScanSnapshot::Zone *> byGrowth;
+    for (ScanSnapshot::Zone &zone : zones) {
+        std::sort(zone.leaves.begin(), zone.leaves.end(), before);
+        zonesDelta += zone.top.delta;
+        byGrowth.append(&zone);
+
+        const ZoneName name = zoneName(zone.top.path);
+        SizeListRow head;
+        head.id = zone.top.path;
+        head.name = name.label;
+        head.detail = name.detail;
+        head.tooltip = zone.top.path;
+        head.heading = true;
+        head.selectable = false;
+        head.tone = zone.top.delta > 0 ? 1 : 2;
+        head.cells = {signedSize(zone.top.delta), DiskSpace::formatSize(zone.top.bytes)};
+        rows.append(head);
+        for (const ScanSnapshot::Change &leaf : zone.leaves) {
+            QString relative = leaf.path.mid(zone.top.path.size());
+            while (relative.startsWith(QDir::separator())) {
+                relative.remove(0, 1);
+            }
+            const QPair<QString, QString> split = splitLast(relative);
+            SizeListRow row;
+            row.id = leaf.path;
+            row.depth = 1;
+            row.prefix = split.first;
+            row.name = split.second;
+            row.tooltip = leaf.path;
+            row.selectable = false;
+            row.tone = leaf.delta > 0 ? 1 : 2;
+            row.cells = {signedSize(leaf.delta), DiskSpace::formatSize(leaf.bytes)};
+            rows.append(row);
+        }
+        if (qAbs(zone.rest) >= kChangeMin) {
+            const QString where = name.detail.isEmpty() ? splitLast(name.label).second : name.label;
+            SizeListRow rest;
+            rest.id = QStringLiteral("rest:") + zone.top.path;
+            rest.depth = 1;
+            rest.hasIcon = false;
+            rest.name = I18n::tr("Other folders in %1").arg(where.isEmpty() ? name.label : where);
+            rest.muted = true;
+            rest.selectable = false;
+            rest.cells = {signedSize(zone.rest), QString()};
+            rows.append(rest);
+        }
+    }
+
+    // Lo que crecio el disco y ninguna zona explica: carpetas que cambiaron menos de 100 MB cada una y lo que
+    // el escaneo no ve. Va aunque ninguna carpeta haya cambiado 100 MB: el pie igual dice cuanto crecio.
+    const bool compared = m_scanState == ScanState::Complete && m_baseline.isValid();
+    const qint64 elsewhere = compared ? m_usedDelta - zonesDelta : 0;
+    if (compared && qAbs(elsewhere) >= kChangeMin) {
+        const QString label = m_driveKnown ? m_drive.label : DiskSpace::labelForRoot(m_root, QString());
         SizeListRow row;
-        row.id = change.path;
-        row.name = change.path;
-        row.tooltip = change.path;
+        row.id = QStringLiteral("elsewhere");
+        row.name = I18n::tr("Elsewhere on %1").arg(label);
+        row.detail = I18n::tr("smaller changes and space the scan does not reach");
+        row.heading = true;
+        row.hasIcon = false;
         row.selectable = false;
-        row.tone = change.delta > 0 ? 1 : 2;
-        row.cells = {(change.delta > 0 ? QStringLiteral("+") : QStringLiteral("−")) + DiskSpace::formatSize(qAbs(change.delta)),
-                     DiskSpace::formatSize(change.bytes)};
+        row.cells = {signedSize(elsewhere), QString()};
         rows.append(row);
     }
+
+    // La barra: las tres zonas que mas crecieron, y el resto del crecimiento junto en gris.
+    if (compared && !zones.isEmpty() && m_usedDelta > 0) {
+        std::sort(byGrowth.begin(), byGrowth.end(), [](const ScanSnapshot::Zone *a, const ScanSnapshot::Zone *b) {
+            return a->top.delta > b->top.delta;
+        });
+        for (const ScanSnapshot::Zone *zone : byGrowth) {
+            if (zone->top.delta <= 0) {
+                continue;
+            }
+            if (parts.size() < partColors.size()) {
+                parts.append({zoneName(zone->top.path).label, zone->top.delta, partColors.at(parts.size())});
+            } else {
+                otherGrowth += zone->top.delta;
+            }
+        }
+        otherGrowth += qMax<qint64>(0, elsewhere);
+        if (otherGrowth > 0) {
+            parts.append({I18n::tr("Everything else"), otherGrowth, Theme::color(Theme::kBarFill)});
+        }
+    }
+    m_changeBar->setParts(parts);
     QString empty;
     if (m_scanState != ScanState::Complete) {
         empty = I18n::tr("What changed appears when the scan finishes.");

@@ -36,6 +36,18 @@ struct ScanSnapshot
     // rama se lista la carpeta mas profunda que explica el cambio (no cada una de sus madres).
     static QList<Change> diff(const ScanSnapshot &before, const ScanSnapshot &after, qint64 minDelta);
 
+    // Una zona de "What changed": una carpeta de `diff` sin madre en la lista, con las carpetas mas
+    // profundas de la lista que tiene adentro (ninguna contiene a otra: no se cuenta dos veces) y lo
+    // que no explican (`rest` = su cambio menos el de esas carpetas). Sin carpetas adentro, sin resto.
+    struct Zone
+    {
+        Change top;
+        QList<Change> leaves;
+        qint64 rest = 0;
+    };
+    // Agrupa el resultado de `diff`, sin ordenar.
+    static QList<Zone> zones(const QList<Change> &changes);
+
     // ---- Archivo. `dir` vacia: la carpeta de ajustes de la app.
     static QString storageDir();
     // Guarda `snapshot` como el actual de su volumen. Con `rotate`, el que habia pasa a "anterior"; sin

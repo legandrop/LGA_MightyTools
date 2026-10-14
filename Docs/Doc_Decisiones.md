@@ -5,6 +5,14 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-58 · Totales de Clean up y agrupación de What changed** (2026-10-14, Lega). En Clean up, el chip
+  de cada tarjeta y el tamaño de cada fila muestran «lo que se va de lo que hay» cuando no se va todo; sin
+  nada tildado, el total va en gris. Una categoría con carpetas retenidas por apps abiertas tiene la casilla a
+  medias y cuenta cuántas están en uso. What changed agrupa por zona (la carpeta más alta que cambió), lista
+  adentro solo las carpetas más profundas con su ruta relativa y una fila «Otras carpetas en …», cierra con
+  lo que ninguna zona explica y lleva arriba una barra con las tres zonas que más crecieron. Opciones A y 1
+  de la propuesta.
+
 - **D-57 · Presentación del recordatorio de Disk Space** (2026-10-11, Lega). Las dos acciones inferiores
   tienen el mismo ancho, separación y padding horizontal que los campos del plazo y el mínimo, y un
   hover visible. El aviso completo es un poco más compacto y todos sus textos bajan una unidad de

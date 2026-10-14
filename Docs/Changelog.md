@@ -1,5 +1,20 @@
 # Changelog — LGA Mighty Tools
 
+v1.53:
+
+La ventana de Disk Space mostraba en Clean up el total de cada tarjeta y de cada
+categoría, pero no cuánto se iba a borrar: con apps abiertas, «App caches»
+marcaba 3.25 GB con la casilla llena y se borraban 4 MB, porque el estado de la
+casilla no contaba lo bloqueado. Ahora el chip de la tarjeta y el tamaño de cada
+fila dicen «lo que se va de lo que hay», la casilla queda a medias y la fila
+cuenta cuántas carpetas están en uso. What changed listaba carpetas anidadas en
+una lista plana (Codin incluía a PipeSync_2 y a sus builds) y la columna sumaba
+más que el disco. Ahora agrupa por zona: la carpeta más alta que cambió, adentro
+solo las más profundas con su ruta relativa y «Otras carpetas en …», al final lo
+que ninguna zona explica, y arriba una barra que reparte el crecimiento.
+
+[ Disk Space - Mostrar lo elegido y agrupar los cambios por zona ]
+
 v1.52:
 
 Window Layouts respondía al teclado físico, pero dejaba pasar las mismas

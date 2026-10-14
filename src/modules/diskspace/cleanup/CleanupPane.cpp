@@ -19,10 +19,10 @@
 namespace {
 
 // Medidas del canvas (`.crow`, `.irow`): flecha de 16, casilla de 14, 10 entre piezas, el peso en una
-// columna de 126. Un renglon arranca debajo del nombre de su categoria: 16 + 10 + 14 + 10 = 50.
+// columna de 140. Un renglon arranca debajo del nombre de su categoria: 16 + 10 + 14 + 10 = 50.
 constexpr int kGap = 10;
 constexpr int kExpander = 16;
-constexpr int kSizeWidth = 126;
+constexpr int kSizeWidth = 140;
 constexpr int kItemIndent = kExpander + kGap + 14 + kGap;
 constexpr int kVisibleItems = 10;
 constexpr int kItemsBeforeFolding = 12;
@@ -117,6 +117,16 @@ qint64 checkedBytes(const Cleanup::Category &category)
         }
     }
     return total;
+}
+
+// Lo que retiene una app abierta: esta en el total pero no se puede borrar ahora.
+int blockedCount(const Cleanup::Category &category)
+{
+    int count = 0;
+    for (const Cleanup::Item &item : category.items) {
+        count += item.blocked ? 1 : 0;
+    }
+    return count;
 }
 
 } // namespace
@@ -290,11 +300,13 @@ QWidget *CleanupPane::groupCard(Cleanup::Group group, QWidget *parent)
 {
     QList<const Cleanup::Category *> categories;
     qint64 total = 0;
+    qint64 checked = 0;
     for (const Cleanup::Category &category : m_categories) {
         if (category.group == group) {
             categories.append(&category);
             if (!category.info) {
                 total += totalBytes(category);
+                checked += checkedBytes(category);
             }
         }
     }
@@ -338,8 +350,12 @@ QWidget *CleanupPane::groupCard(Cleanup::Group group, QWidget *parent)
         connect(open, &QPushButton::clicked, this, &CleanupPane::systemCleanupRequested);
         head->addWidget(open, 0, Qt::AlignVCenter);
     } else if (!m_measuring && total > 0) {
+        // Lo que se va de lo que hay: el resto lo retienen apps abiertas o no esta tildado.
         auto *chip = new Chip(card);
-        chip->set(QStringLiteral("src"), DiskSpace::formatSize(total));
+        chip->set(QStringLiteral("src"), checked >= total ? DiskSpace::formatSize(total)
+                                                          : I18n::tr("%1 of %2").arg(checked > 0 ? DiskSpace::formatSize(checked)
+                                                                                                 : QStringLiteral("0"),
+                                                                                     DiskSpace::formatSize(total)));
         head->addWidget(chip, 0, Qt::AlignVCenter);
     }
     layout->addLayout(head);
@@ -372,6 +388,11 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         }
     }
     const Cleanup::Item *only = category.single && !category.items.isEmpty() ? &category.items.first() : nullptr;
+    const int blocked = blockedCount(category);
+    const qint64 picked = checkedBytes(category);
+    // La casilla se ve a medias si una app abierta retiene parte, aunque todo lo demas este tildado. El
+    // click sigue a `checkState`, que no cuenta lo bloqueado: con todo lo posible tildado, destilda.
+    const int shownState = state == 2 && blocked > 0 ? 1 : state;
 
     // ---- La fila de la categoria.
     auto *row = new QWidget(parent);
@@ -399,7 +420,7 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         line->addWidget(gap);
     } else {
         auto *box = new TriBox(row);
-        box->setState(state);
+        box->setState(shownState);
         box->setEnabled(m_interactive && checkable > 0);
         connect(box, &QAbstractButton::clicked, this, [this, id]() { emit categoryToggled(id); });
         line->addWidget(box, 0, Qt::AlignVCenter);
@@ -431,9 +452,9 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         connect(review, &QPushButton::clicked, this, [this, path]() { emit reviewRequested(path); });
         line->addWidget(review, 0, Qt::AlignVCenter);
     } else if (only && only->blocked) {
-        QLabel *blocked = Ui::label(I18n::tr("%1 is open").arg(only->blockerLabel), "meta", row);
-        blocked->setProperty("tone", QStringLiteral("warn"));
-        line->addWidget(blocked, 0, Qt::AlignVCenter);
+        QLabel *openLabel = Ui::label(I18n::tr("%1 is open").arg(only->blockerLabel), "meta", row);
+        openLabel->setProperty("tone", QStringLiteral("warn"));
+        line->addWidget(openLabel, 0, Qt::AlignVCenter);
     } else if (expandable) {
         const int count = int(category.items.size());
         QString meta;
@@ -442,7 +463,15 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         } else {
             meta = count == 1 ? I18n::tr("1 item") : I18n::tr("%1 items").arg(count);
         }
-        line->addWidget(Ui::label(meta, "meta", row), 0, Qt::AlignVCenter);
+        meta = meta.toHtmlEscaped();
+        if (blocked > 0) {
+            // Cuantas no se pueden borrar porque su app esta abierta: explica el "de" del tamano.
+            meta += QStringLiteral(" · <span style=\"color:%1\">%2</span>")
+                        .arg(QLatin1String(Theme::kWarn), I18n::tr("%1 in use").arg(blocked).toHtmlEscaped());
+        }
+        QLabel *metaLabel = Ui::label(meta, "meta", row);
+        metaLabel->setTextFormat(Qt::RichText);
+        line->addWidget(metaLabel, 0, Qt::AlignVCenter);
     }
     if (id.startsWith(QLatin1String("rule:"))) {
         auto *remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), row);
@@ -459,14 +488,17 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         sizeText = QStringLiteral("—");
     } else if (m_measuring) {
         sizeText = QStringLiteral("…");
-    } else if (state == 1 && !category.info) {
+    } else if (!category.info && picked > 0 && picked < total) {
+        // Lo que se va de lo que hay: destildado o retenido por una app abierta.
         sizeText = QStringLiteral("%1 <span style=\"color:%2; font-weight:400\">%3</span>")
-                       .arg(DiskSpace::formatSize(checkedBytes(category)), QLatin1String(Theme::kTextFaint),
+                       .arg(DiskSpace::formatSize(picked), QLatin1String(Theme::kTextFaint),
                             I18n::tr("of %1").arg(DiskSpace::formatSize(total)));
     } else {
         sizeText = DiskSpace::formatSize(total);
     }
-    line->addWidget(sizeLabel(sizeText, m_measuring || !category.measurable, row), 0, Qt::AlignVCenter);
+    // Sin nada tildado, el total va en gris: no se va nada de ahi.
+    const bool nothingGoes = !category.info && picked == 0;
+    line->addWidget(sizeLabel(sizeText, m_measuring || !category.measurable || nothingGoes, row), 0, Qt::AlignVCenter);
     layout->addWidget(row);
 
     if (!open) {

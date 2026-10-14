@@ -1325,8 +1325,31 @@ int runCleanupSortProbe()
         window.applyFixture(QStringLiteral("changes"));
         SizeListView *changes = window.listForTab(CleanupWindow::Changes);
         const QStringList byChange = ids(changes->rows());
+        // Agrupado por zona: las zonas A-Z entre si y las carpetas de cada una por su ruta relativa (lo gris
+        // va antes del nombre). "Elsewhere" cierra la lista, fuera del orden.
+        const auto changeNames = [](const QList<SizeListRow> &rows) {
+            QList<SizeListRow> named;
+            for (SizeListRow row : rows) {
+                if (row.id == QLatin1String("elsewhere")) {
+                    continue;
+                }
+                row.name = row.prefix + row.name;
+                named.append(row);
+            }
+            return named;
+        };
+        const auto zoneCount = [](const QList<SizeListRow> &rows) {
+            int count = 0;
+            for (const SizeListRow &row : rows) {
+                count += row.heading && row.depth == 0 ? 1 : 0;
+            }
+            return count;
+        };
+        const QList<SizeListRow> &grouped = changes->rows();
+        check(zoneCount(grouped) == 5 && grouped.first().heading && grouped.last().id == QLatin1String("elsewhere"),
+              QStringLiteral("What changed: agrupado en zonas, con \"Elsewhere\" al final (%1 zonas)").arg(zoneCount(grouped)));
         window.sortList(CleanupWindow::Changes, SizeListView::kNameColumn);
-        check(byChange.size() > 2 && namesInOrder(changes->rows(), false), QStringLiteral("What changed por carpeta: A-Z"));
+        check(byChange.size() > 2 && namesInOrder(changeNames(changes->rows()), false), QStringLiteral("What changed por carpeta: A-Z"));
         window.sortList(CleanupWindow::Changes, 0);
         check(ids(changes->rows()) == byChange, QStringLiteral("What changed por Change: lo que mas crecio primero, como de fabrica"));
         window.sortList(CleanupWindow::Changes, 1);

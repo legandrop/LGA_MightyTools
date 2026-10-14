@@ -24,6 +24,7 @@ class QLabel;
 class QPushButton;
 class QStackedWidget;
 class QTimer;
+class ChangeShareBar;
 class SizeListView;
 class TitleBar;
 class UsageBar;
@@ -250,6 +251,7 @@ private:
     SizeListView *m_folders = nullptr;
     SizeListView *m_files = nullptr;
     SizeListView *m_changesList = nullptr;
+    ChangeShareBar *m_changeBar = nullptr;
     QList<QPushButton *> m_filterChips;
     QLabel *m_actionText = nullptr;
     QPushButton *m_actionPrimary = nullptr;

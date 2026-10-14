@@ -10,6 +10,10 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.53
+- [improved] Disk Space's Clean up shows how much each group and row will actually free next to its total, and how many of its folders are held by open apps.
+- [improved] Disk Space's What changed groups the folders that grew by area, lists each one only once so the numbers add up, and shows how the growth splits between areas.
+
 ## v1.47
 - [fixed] Scrolling over the reminder time in Disk Space no longer changes your choice; choose a time from the menu to change it.
 
