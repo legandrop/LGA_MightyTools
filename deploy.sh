@@ -9,7 +9,8 @@
 # ruta y de la firma de la copia instalada.
 #
 # Uso: ./deploy.sh [--no-install] [--no-open] [--zip] [--dmg] [--install] [--publish [--dry-run] [--replace]]
-#   (sin flags)   Compila, arma, firma, instala en /Applications y abre la app
+#   (sin flags)   Con terminal pregunta primero si publicar (si falta el bump, ofrece ./bump_version.sh);
+#                 si no, compila, arma, firma, instala en /Applications y abre la app
 #   --no-install  Deja el bundle en deploy/ sin copiarlo a /Applications
 #   --no-open     Instala pero no abre la app al terminar
 #   --zip         Arma deploy/LGA_MightyTools_Mac_v<version>.zip (actualizacion) y lo verifica
@@ -47,8 +48,11 @@ DRY_RUN=false
 REPLACE=false
 
 usage() {
-    sed -n 2,22p "$0" | sed 's/^# \{0,1\}//'
+    sed -n 2,23p "$0" | sed 's/^# \{0,1\}//'
 }
+
+# Sin ningun flag y con terminal, mas abajo se pregunta si publicar.
+ARG_COUNT=$#
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -114,6 +118,26 @@ ZIP_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.zip"
 DMG_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.dmg"
 EXE_NAME="${ARTIFACT_NAME}_Setup_v${APP_VERSION}.exe"
 echo "Deploy de $APP_NAME v$APP_VERSION"
+
+# Sin flags y con terminal se pregunta si publicar, igual que en las otras apps LGA. Si se dice que no,
+# sigue el deploy de siempre (compila, instala y abre). Sin el bump de version no hay release: publicar
+# arranca por ./bump_version.sh, que sube el numero, commitea, pushea y despues ofrece ./deploy.sh --publish.
+if [ "$ARG_COUNT" -eq 0 ] && [ -t 0 ]; then
+    if bumpout="$(sh ./bump_version.sh --check 2>&1)"; then
+        read -r -p "Publicar el release $TAG en GitHub ($RELEASE_REPO)? [y/N] " answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; PACKAGING=true; INSTALL=false
+        fi
+    else
+        echo "Falta el bump de version para publicar:"
+        printf '%s\n' "$bumpout" | sed 's/^/       /'
+        read -r -p "Publicar en GitHub? Primero corre ./bump_version.sh, que despues ofrece publicar [y/N] " answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            exec sh ./bump_version.sh
+        fi
+        echo "Deploy local de v$APP_VERSION, sin publicar."
+    fi
+fi
 
 # ==== VERIFICACIONES: inicio
 

@@ -199,11 +199,22 @@ if "%VERSION%"=="" (
 echo OK: Version detectada: %VERSION%
 
 REM El release sale de una version bumpeada: CMakeLists.txt, VERSION y el changelog dicen lo mismo. Sin
-REM el bump, CMakeLists.txt sigue en la ultima publicada: se arma solo el instalador local.
+REM el bump, con consola la pregunta por publicar se hace igual: publicar arranca por bump_version.bat,
+REM que sube el numero, commitea, pushea y despues ofrece este mismo instalador. Si se dice que no,
+REM CMakeLists.txt sigue en la ultima publicada y se arma solo el instalador local.
 if /i "!GITHUB_READY!"=="true" (
     call "%~dp0bump_version.bat" --check
     if errorlevel 1 (
-        echo AVISO: falta el bump de version ^(correr bump_version.bat^). Se arma solo el instalador local.
+        echo Falta el bump de version para publicar.
+        if defined INTERACTIVE (
+            choice /C YN /M "Publicar en GitHub? Primero corre bump_version.bat, que despues ofrece publicar"
+            if !errorlevel! EQU 1 (
+                call "%~dp0bump_version.bat"
+                exit /b !errorlevel!
+            )
+            set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
+        )
+        echo Se arma solo el instalador local.
         set "GITHUB_READY=false"
     )
 )

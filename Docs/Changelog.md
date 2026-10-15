@@ -2,6 +2,12 @@
 
 v1.53:
 
+`./deploy.sh` sin flags e `instalador.bat` preguntan siempre si publicar en
+GitHub y, si falta el bump, ofrecen correrlo; antes `deploy.sh` publicaba solo
+con `--publish` e `instalador.bat` armaba lo local sin preguntar.
+
+[ Deploy - Preguntar siempre si publicar ]
+
 El bump de versión podía meter en su commit trabajo sin commitear: commiteaba
 `CMakeLists.txt` y `VERSION` enteros aunque trajeran otros cambios, y recién
 miraba la identidad de git después de haber escrito los archivos. Ahora
