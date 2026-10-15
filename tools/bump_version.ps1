@@ -14,8 +14,8 @@
     instalado en la maquina salvo Qt. La version va de a centesimos (1.52, 1.53...): con otro formato
     el script falla. Sin consola interactiva, toda pregunta se contesta que no.
 .PARAMETER Check
-    No escribe nada: sale 0 si CMakeLists.txt, VERSION y el changelog dicen lo mismo (listo para
-    publicar) y 1 si no.
+    No escribe nada: sale 0 si CMakeLists.txt, VERSION y el changelog dicen lo mismo y el bump esta
+    commiteado (listo para publicar), 1 si no. Lo usan instalador.bat y deploy.sh --publish.
 .PARAMETER Commit
     Commitea y pushea el bump sin preguntar.
 .PARAMETER NoCommit
@@ -97,17 +97,24 @@ try {
     Write-Host "[bump_version] Publicada (CMakeLists.txt): $cmakeVersion | En desarrollo (changelog): $changelogVersion | VERSION: $shownFile"
 
     if ($Check) {
-        if ($cmakeVersion -eq $changelogVersion -and $fileVersion -eq $changelogVersion) {
-            Write-Host "[bump_version] OK: todo en $changelogVersion."
-            exit 0
+        if ($cmakeVersion -ne $changelogVersion -or $fileVersion -ne $changelogVersion) {
+            Write-Host '[bump_version] ERROR: CMakeLists.txt, VERSION y el changelog no dicen lo mismo: falta correr bump_version.bat y commitear.'
+            exit 1
         }
-        Write-Host '[bump_version] ERROR: CMakeLists.txt, VERSION y el changelog no dicen lo mismo: falta correr bump_version.bat y commitear.'
-        exit 1
+        # Un bump hecho pero sin commitear no sirve para publicar: el tag apuntaria a otro estado.
+        $null = Invoke-Git diff --quiet HEAD -- CMakeLists.txt VERSION
+        if ($gitExit -ne 0) {
+            Write-Host "[bump_version] ERROR: el bump a $changelogVersion esta hecho pero sin commitear: commitearlo, o descartarlo con git checkout -- CMakeLists.txt VERSION y volver a correr bump_version.bat."
+            exit 1
+        }
+        Write-Host "[bump_version] OK: todo en $changelogVersion."
+        exit 0
     }
 
     # Antes de escribir nada, si se va a commitear: el bump sale de main al dia con origin (si la otra
-    # maquina ya bumpeo y publico, aca falta un pull) y del changelog commiteado (si no, se pushea un main
-    # donde CMakeLists.txt y el changelog no coinciden).
+    # maquina ya bumpeo y publico, aca falta un pull), del changelog commiteado (si no, se pushea un main
+    # donde CMakeLists.txt y el changelog no coinciden), de CMakeLists.txt y VERSION sin otros cambios
+    # (el commit los lleva enteros) y con la identidad de legandrop.
     if ($commitMode -ne 'no') {
         $branch = (Invoke-Git rev-parse --abbrev-ref HEAD | Out-String).Trim()
         if ($branch -ne 'main') { throw "La rama es '$branch': el bump se hace en main." }
@@ -117,6 +124,11 @@ try {
         if ($gitExit -ne 0) { throw 'main esta atras de origin/main: hacer git pull antes del bump.' }
         $null = Invoke-Git diff --quiet HEAD -- Docs/Changelog.md
         if ($gitExit -ne 0) { throw 'Docs/Changelog.md tiene cambios sin commitear: commitearlos antes del bump.' }
+        $null = Invoke-Git diff --quiet HEAD -- CMakeLists.txt VERSION
+        if ($gitExit -ne 0) { throw 'CMakeLists.txt o VERSION tienen cambios sin commitear: commitearlos o descartarlos antes del bump (si son de un bump anterior sin commitear, alcanza con git checkout -- CMakeLists.txt VERSION y volver a correrlo).' }
+        # GitHub atribuye por email: con otra identidad el commit queda fuera de la cuenta.
+        $email = (Invoke-Git config user.email | Out-String).Trim()
+        if ($email -ne $expectedEmail) { throw "git user.email es '$email' y se esperaba '$expectedEmail'." }
     }
 
     if ((Get-Key $changelogVersion) -lt (Get-Key $cmakeVersion)) {
@@ -142,7 +154,8 @@ try {
     if ($fileVersion -ne $changelogVersion) { [IO.File]::WriteAllText($versionPath, "$changelogVersion`n", $utf8) }
     $version = $changelogVersion
 
-    # ---- Commit y push: SOLO los archivos del bump, nunca un `git add -A` que arrastre trabajo en curso.
+    # ---- Commit y push: el commit lleva SOLO los archivos del bump, nunca un `git add -A` que arrastre
+    # trabajo en curso. El push lleva ademas los commits locales previos, que se listan antes.
     if ($commitMode -eq 'no') { Write-Host '[bump_version] Sin commit: los cambios quedan en el arbol.'; exit 0 }
     $status = Invoke-Git status --porcelain -- CMakeLists.txt VERSION
     if ($gitExit -ne 0) { throw "git status fallo: $status" }
@@ -150,19 +163,21 @@ try {
     if ($changed.Count -gt 0) {
         Write-Host '[bump_version] Archivos del bump:'
         $changed | ForEach-Object { Write-Host "  $_" }
+        $ahead = @(Invoke-Git log '--format=  %h %s' origin/main..HEAD | Where-Object { $_ -match '\S' })
+        if ($ahead.Count -gt 0) {
+            Write-Host '[bump_version] El push lleva tambien estos commits locales que todavia no estan en origin:'
+            $ahead | ForEach-Object { Write-Host $_ }
+        }
         if ($commitMode -eq 'ask' -and -not (Ask "Commitear y pushear el bump a v$version")) {
             Write-Host '[bump_version] Commit omitido: los cambios quedan en el arbol.'
             exit 0
         }
-        # GitHub atribuye por email: con otra identidad el commit queda fuera de la cuenta.
-        $email = (Invoke-Git config user.email | Out-String).Trim()
-        if ($email -ne $expectedEmail) { throw "git user.email es '$email' y se esperaba '$expectedEmail'. Commit cancelado." }
         $out = Invoke-Git add -- @changed
         if ($gitExit -ne 0) { throw "git add fallo: $out" }
         $out = Invoke-Git commit -q -m "Version: bump a v$version" -- @changed
         if ($gitExit -ne 0) { throw "Fallo el commit; los cambios quedan stageados. $out" }
         Write-Host (Invoke-Git log -1 '--format=[bump_version] Commit %h: %s')
-        $out = Invoke-Git push -q
+        $out = Invoke-Git push -q origin main
         if ($gitExit -ne 0) { throw "Fallo el push; el commit queda local. Revisar credenciales y reintentar a mano. $out" }
         Write-Host '[bump_version] Pusheado.'
     }

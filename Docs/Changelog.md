@@ -1,5 +1,18 @@
 # Changelog — LGA Mighty Tools
 
+v1.53:
+
+El bump de versión podía meter en su commit trabajo sin commitear: commiteaba
+`CMakeLists.txt` y `VERSION` enteros aunque trajeran otros cambios, y recién
+miraba la identidad de git después de haber escrito los archivos. Ahora
+`bump_version` no arranca si esos dos archivos tienen cambios sin commitear o si
+la identidad no es la de legandrop, avisa qué commits locales salen en el mismo
+push, y `--check` exige además que el bump esté commiteado, así `deploy.sh
+--publish` e `instalador.bat` no publican un bump a medias. Son los mismos
+controles que ya tienen los bumps de MediaTools y ThetaExplorer.
+
+[ Versión - Bump más estricto antes de commitear y publicar ]
+
 v1.52:
 
 Cada tanda subía la versión con `sync_version`: el número avanzaba aunque nada

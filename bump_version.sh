@@ -14,8 +14,9 @@
 #
 # Uso: ./bump_version.sh [--check] [--commit|--no-commit] [--publish|--no-publish]
 #   (sin flags)   Sube la version y pregunta si commitear y pushear, y despues si publicar
-#   --check       No escribe nada: sale 0 si CMakeLists.txt, VERSION y el changelog dicen lo mismo (listo
-#                 para publicar) y 1 si no. Lo usa deploy.sh --publish.
+#   --check       No escribe nada: sale 0 si CMakeLists.txt, VERSION y el changelog dicen lo mismo y el
+#                 bump esta commiteado (listo para publicar), 1 si no. Lo usan deploy.sh --publish e
+#                 instalador.bat.
 #   --commit      Commitea y pushea el bump sin preguntar
 #   --no-commit   Deja el bump sin commitear y no pregunta (tampoco ofrece publicar)
 #   --publish     Despues del push publica sin preguntar: ./deploy.sh --publish (archivos de macOS)
@@ -39,7 +40,7 @@ for arg in "$@"; do
         --no-commit) COMMIT_MODE=no ;;
         --publish) PUBLISH_MODE=yes ;;
         --no-publish) PUBLISH_MODE=no ;;
-        -h|--help) sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h|--help) sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "[bump_version] ERROR: flag desconocido: $arg"; exit 2 ;;
     esac
 done
@@ -88,17 +89,23 @@ key() { echo "$1" | awk -F. '{ print $1 * 1000 + $2 }'; }
 echo "[bump_version] Publicada (CMakeLists.txt): $CM_VERSION | En desarrollo (changelog): $CL_VERSION | VERSION: ${FILE_VERSION:-falta}"
 
 if [ "$CHECK" = "true" ]; then
-    if [ "$CM_VERSION" = "$CL_VERSION" ] && [ "$FILE_VERSION" = "$CL_VERSION" ]; then
-        echo "[bump_version] OK: todo en $CL_VERSION."
-        exit 0
+    if [ "$CM_VERSION" != "$CL_VERSION" ] || [ "$FILE_VERSION" != "$CL_VERSION" ]; then
+        echo "[bump_version] ERROR: CMakeLists.txt, VERSION y el changelog no dicen lo mismo: falta correr ./bump_version.sh y commitear."
+        exit 1
     fi
-    echo "[bump_version] ERROR: CMakeLists.txt, VERSION y el changelog no dicen lo mismo: falta correr ./bump_version.sh y commitear."
-    exit 1
+    # Un bump hecho pero sin commitear no sirve para publicar: el tag apuntaria a otro estado.
+    if ! git -C "$ROOT" diff --quiet HEAD -- CMakeLists.txt VERSION; then
+        echo "[bump_version] ERROR: el bump a $CL_VERSION esta hecho pero sin commitear: commitearlo, o descartarlo con git checkout -- CMakeLists.txt VERSION y volver a correr ./bump_version.sh."
+        exit 1
+    fi
+    echo "[bump_version] OK: todo en $CL_VERSION."
+    exit 0
 fi
 
 # Antes de escribir nada, si se va a commitear: el bump sale de main al dia con origin (si la otra
-# maquina ya bumpeo y publico, aca falta un pull) y del changelog commiteado (si no, se pushea un main
-# donde CMakeLists.txt y el changelog no coinciden).
+# maquina ya bumpeo y publico, aca falta un pull), del changelog commiteado (si no, se pushea un main
+# donde CMakeLists.txt y el changelog no coinciden), de CMakeLists.txt y VERSION sin otros cambios (el
+# commit los lleva enteros) y con la identidad de legandrop.
 if [ "$COMMIT_MODE" != "no" ]; then
     branch=$(git -C "$ROOT" rev-parse --abbrev-ref HEAD)
     [ "$branch" = "main" ] || fail "la rama es '$branch': el bump se hace en main."
@@ -107,6 +114,11 @@ if [ "$COMMIT_MODE" != "no" ]; then
         || fail "main esta atras de origin/main: hacer git pull antes del bump."
     git -C "$ROOT" diff --quiet HEAD -- Docs/Changelog.md \
         || fail "Docs/Changelog.md tiene cambios sin commitear: commitearlos antes del bump."
+    git -C "$ROOT" diff --quiet HEAD -- CMakeLists.txt VERSION \
+        || fail "CMakeLists.txt o VERSION tienen cambios sin commitear: commitearlos o descartarlos antes del bump (si son de un bump anterior sin commitear, alcanza con git checkout -- CMakeLists.txt VERSION y volver a correrlo)."
+    # GitHub atribuye por email: con otra identidad el commit queda fuera de la cuenta.
+    email=$(git -C "$ROOT" config user.email || true)
+    [ "$email" = "$EXPECTED_EMAIL" ] || fail "git user.email es '$email' y se esperaba '$EXPECTED_EMAIL'."
 fi
 
 [ "$(key "$CL_VERSION")" -ge "$(key "$CM_VERSION")" ] \
@@ -132,24 +144,27 @@ if [ "$FILE_VERSION" != "$CL_VERSION" ]; then
 fi
 VERSION="$CL_VERSION"
 
-# ---- Commit y push: SOLO los archivos del bump, nunca un `git add -A` que arrastre trabajo en curso.
+# ---- Commit y push: el commit lleva SOLO los archivos del bump, nunca un `git add -A` que arrastre
+# trabajo en curso. El push lleva ademas los commits locales previos, que se listan antes.
 [ "$COMMIT_MODE" = "no" ] && { echo "[bump_version] Sin commit: los cambios quedan en el arbol."; exit 0; }
 cd "$ROOT"
 CHANGED=$(git status --porcelain -- CMakeLists.txt VERSION | sed -E 's/^.{3}//')
 if [ -n "$CHANGED" ]; then
     echo "[bump_version] Archivos del bump:"
     printf '  %s\n' $CHANGED
+    AHEAD=$(git log --format='  %h %s' origin/main..HEAD)
+    if [ -n "$AHEAD" ]; then
+        echo "[bump_version] El push lleva tambien estos commits locales que todavia no estan en origin:"
+        printf '%s\n' "$AHEAD"
+    fi
     if [ "$COMMIT_MODE" = "ask" ] && ! ask "Commitear y pushear el bump a v$VERSION"; then
         echo "[bump_version] Commit omitido: los cambios quedan en el arbol."
         exit 0
     fi
-    # GitHub atribuye por email: con otra identidad el commit queda fuera de la cuenta.
-    email=$(git config user.email || true)
-    [ "$email" = "$EXPECTED_EMAIL" ] || fail "git user.email es '$email' y se esperaba '$EXPECTED_EMAIL'. Commit cancelado."
     git add -- $CHANGED
     git commit -q -m "Version: bump a v$VERSION" -- $CHANGED || fail "fallo el commit; los cambios quedan stageados."
-    git log -1 --format='[bump_version] Commit %h: %s'
-    git push -q || fail "fallo el push; el commit queda local. Revisar credenciales y reintentar a mano."
+    git --no-pager log -1 --format='[bump_version] Commit %h: %s'
+    git push -q origin main || fail "fallo el push; el commit queda local. Revisar credenciales y reintentar a mano."
     echo "[bump_version] Pusheado."
 else
     echo "[bump_version] No hay cambios de version para commitear."
