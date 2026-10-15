@@ -2,6 +2,12 @@
 
 v1.53:
 
+Publicar desde la pregunta de `./deploy.sh` (sin flags) ya no deja la app sin
+instalar: esa rama apagaba la instalación, en contra de D-60. Ahora termina
+instalada en `/Applications` y abierta, igual que con `--publish`.
+
+[ Deploy Mac - Publicar desde la pregunta tambien instala ]
+
 `./deploy.sh` termina siempre con la app instalada en `/Applications` y abierta,
 también con `--zip`, `--dmg` o `--publish` (antes empaquetar o publicar no
 instalaba nada, D-60). La instalación la hace `tools/macos/install_to_applications.sh`,

@@ -115,7 +115,8 @@ if [ "$ARG_COUNT" -eq 0 ] && [ -t 0 ]; then
     if bumpout="$(sh ./bump_version.sh --check 2>&1)"; then
         read -r -p "Publicar el release $TAG en GitHub ($RELEASE_REPO)? [y/N] " answer
         if [[ "$answer" =~ ^[Yy]$ ]]; then
-            PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; PACKAGING=true; INSTALL=false
+            # Publicar tambien termina instalando y abriendo (D-60).
+            PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; PACKAGING=true
         fi
     else
         echo "Falta el bump de version para publicar:"
