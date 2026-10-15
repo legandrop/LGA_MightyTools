@@ -106,7 +106,17 @@ if [ -f CMakeCache.txt ] && [ "$CACHED_ARCHS" != "$OSX_ARCHS" ]; then
     mkdir -p "$BUILD_DIR"
     cd "$BUILD_DIR"
 fi
-if [ ! -f CMakeCache.txt ] || [ "$CACHED_TYPE" != "$BUILD_TYPE" ]; then
+# Y si quedo con OTRO SDK: CMake guarda el sysroot la primera vez que configura, y al actualizarse Xcode
+# ese SDK desaparece. El build falla entonces con "'type_traits' file not found" en cada header de Qt.
+CACHED_SYSROOT=""
+if [ -f CMakeCache.txt ]; then
+    CACHED_SYSROOT="$(sed -n 's/^CMAKE_OSX_SYSROOT:[^=]*=//p' CMakeCache.txt | head -1)"
+fi
+if [ -n "$CACHED_SYSROOT" ] && [ "$CACHED_SYSROOT" != "$SDK_PATH" ]; then
+    echo "SDK de macOS cacheado distinto del actual ($(basename "$CACHED_SYSROOT") -> $(basename "$SDK_PATH")): reconfigurando."
+fi
+if [ ! -f CMakeCache.txt ] || [ "$CACHED_TYPE" != "$BUILD_TYPE" ] \
+   || { [ -n "$CACHED_SYSROOT" ] && [ "$CACHED_SYSROOT" != "$SDK_PATH" ]; }; then
     echo "Configurando CMake ($BUILD_TYPE)..."
     cmake .. -G "Unix Makefiles" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \

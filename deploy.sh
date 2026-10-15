@@ -1,7 +1,7 @@
 #!/bin/bash
 # Deploy de macOS de LGA Mighty Tools: compila Release UNIVERSAL (arm64 + x86_64), arma un bundle
-# AUTOCONTENIDO en deploy/, lo firma y, segun los flags, lo instala en /Applications o lo empaqueta
-# (ZIP de actualizacion, DMG de primera instalacion) y lo publica. Esquema de LGA_Base_QT_C_Py/deploy.sh
+# AUTOCONTENIDO en deploy/, lo firma, segun los flags lo empaqueta (ZIP de actualizacion, DMG de
+# primera instalacion) y lo publica, y al final lo instala en /Applications y lo abre. Esquema de LGA_Base_QT_C_Py/deploy.sh
 # (ver su docs/Doc_Deploy_macOS.md) y de LGA_VideoDownloader/deploy.sh para el empaquetado.
 #
 # En mac la app se prueba INSTALADA, nunca desde build/: el inicio con la sesion (SMAppService), la
@@ -15,7 +15,7 @@
 #   --no-open     Instala pero no abre la app al terminar
 #   --zip         Arma deploy/LGA_MightyTools_Mac_v<version>.zip (actualizacion) y lo verifica
 #   --dmg         Arma deploy/LGA_MightyTools_Mac_v<version>.dmg (primera instalacion)
-#   --install     Con --zip/--dmg: ademas instala (por defecto empaquetar NO instala ni abre nada)
+#   --install     Sin efecto: instalar y abrir es lo de siempre, tambien al empaquetar o publicar
 #   --publish     Arma el .zip y el .dmg y los publica en el release v<version> de legandrop/LGA_MightyTools:
 #                 si el release no existe lo crea (tag anotado sobre HEAD + release), si ya existe (lo creo
 #                 Windows con instalador.bat) suma lo de macOS; el orden de las plataformas da igual
@@ -74,23 +74,12 @@ if [ "$CREATE_ZIP" = "true" ] || [ "$CREATE_DMG" = "true" ]; then
     PACKAGING=true
 fi
 
-# Empaquetar o publicar NO instala ni abre nada, salvo --install explicito (copia instalada de la
-# maquina de desarrollo = la que esta usando su dueño). Sin flags de empaquetado, todo igual que siempre.
-if [ "$PACKAGING" = "true" ]; then
-    INSTALL="$EXPLICIT_INSTALL"
-else
-    INSTALL="$INSTALL_DEFAULT"
-fi
+# Todo deploy de macOS termina con la app instalada en /Applications y abierta, tambien cuando
+# empaqueta o publica (regla LGA, ../LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md §6). --install queda
+# aceptado por compatibilidad y no cambia nada.
+INSTALL="$INSTALL_DEFAULT"
 if [ "$EXPLICIT_INSTALL" = "true" ] && [ "$INSTALL_DEFAULT" = "false" ]; then
     echo "ERROR: --install y --no-install se contradicen."
-    exit 1
-fi
-if [ "$EXPLICIT_INSTALL" = "true" ] && [ "$PACKAGING" = "false" ]; then
-    echo "ERROR: --install solo tiene sentido con --zip o --dmg (sin ellos ya instala)."
-    exit 1
-fi
-if [ "$PUBLISH" = "true" ] && [ "$EXPLICIT_INSTALL" = "true" ]; then
-    echo "ERROR: --publish no se combina con --install: publicar nunca toca /Applications."
     exit 1
 fi
 if [ "$DRY_RUN" = "true" ] && [ "$PUBLISH" != "true" ]; then
@@ -807,7 +796,8 @@ if [ "$INSTALL" = "false" ]; then
 fi
 
 # Cerrar las copias abiertas antes de pisar la instalada: primero pedirle a la residente que salga sola
-# (--quit, como «Quit» del menu, se lleva el icono de la barra), y por las dudas por ruta exacta.
+# (--quit, como «Quit» del menu, se lleva el icono de la barra), y por las dudas por ruta exacta. La de
+# build/ tambien: es residente y de instancia unica, y con ella abierta la instalada no se quedaria.
 TARGET="$INSTALL_DIR/$APP_NAME.app"
 for COPY in "$TARGET" "$PWD/build/$APP_NAME.app"; do
     BIN="$COPY/Contents/MacOS/$APP_NAME"
@@ -818,16 +808,8 @@ for COPY in "$TARGET" "$PWD/build/$APP_NAME.app"; do
     fi
 done
 
-rm -rf "$TARGET"
-ditto "deploy/$APP_NAME.app" "$TARGET"
-# Que LaunchServices vea la copia nueva (tipos de documento, URLs, icono).
-LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-touch "$TARGET"
-[ -x "$LSREG" ] && "$LSREG" -f "$TARGET" >/dev/null 2>&1 || true
-echo "Instalada en $TARGET"
-
-if [ "$OPEN_AFTER" = "true" ]; then
-    # Con `open` y no lanzando el binario: asi macOS atribuye los permisos a la app y no a la terminal.
-    open "$TARGET"
-    echo "Abierta."
-fi
+# Instalar y abrir: la pieza canonica de la Base (cierre por ruta de lo que quede, ditto, lsregister,
+# verificacion de la firma y `open`, asi macOS atribuye los permisos a la app y no a la terminal).
+INSTALL_ARGS=(--dest "$INSTALL_DIR")
+[ "$OPEN_AFTER" = "false" ] && INSTALL_ARGS+=(--no-open)
+bash "./tools/macos/install_to_applications.sh" "deploy/$APP_NAME.app" "${INSTALL_ARGS[@]}" || exit 1
