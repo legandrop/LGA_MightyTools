@@ -2,6 +2,20 @@
 
 v1.53:
 
+La publicación de macOS pasa a la pieza común de las apps LGA:
+`tools/macos/publish_release.sh`, copia idéntica de la de LGA_Base_QT_C_Py, con
+lo propio de esta app en `tools/macos/release.conf` (repo, versión de a
+centésimos, `bump_version.sh --check`, `SHA256SUMS` fusionado con el instalador
+de Windows, What's new y el certificado fijado, que `deploy.sh` ahora lee de ahí).
+`deploy.sh` la llama antes de compilar y otra vez con el .zip y el .dmg armados,
+y conserva lo suyo: build universal, self-test de las dos mitades, verificación
+del ZIP y del certificado de la hoja. Cambia de comportamiento en dos cosas: si
+la publicación falla, la app se instala igual y el script sale con error, y
+suma `--no-publish` y `--yes` (sin preguntar en el control de las notas).
+Nombres de archivos, tag y release, iguales.
+
+[ Deploy Mac - Publicar con la pieza comun publish_release.sh ]
+
 Publicar desde la pregunta de `./deploy.sh` (sin flags) ya no deja la app sin
 instalar: esa rama apagaba la instalación, en contra de D-60. Ahora termina
 instalada en `/Applications` y abierta, igual que con `--publish`.

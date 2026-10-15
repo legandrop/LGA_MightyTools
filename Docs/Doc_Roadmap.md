@@ -103,7 +103,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    3. **Release de mac: lo que queda.** El paquete, el actualizador y la publicación están hechos (v1.30
       y v1.31, D-47 y D-49): `./deploy.sh --zip --dmg` arma el ZIP y el DMG universales; `./deploy.sh
       --publish` (Mac) e `instalador.bat` (Windows) publican en el mismo release en cualquier orden
-      (`--publish --dry-run` ensaya sin escribir nada). Después de publicar: `git pull` (las notas dejan
+      (`--publish --dry-run` ensaya sin escribir nada). En Mac publica `tools/macos/publish_release.sh`,
+      la pieza común de la Base (copia idéntica; lo propio, en `tools/macos/release.conf`; contrato en
+      `../LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md` §5). Después de publicar: `git pull` (las notas dejan
       un commit en `main` con `WHATS_NEW.md`, hecho por la API). Falta:
       - **`instalador.bat` publicando de verdad** (Lega, en Windows): en un runner de GitHub ya corrió
         entero en modo local (compila, analiza el tag y el release, genera el instalador; build «Build
