@@ -2,6 +2,17 @@
 
 v1.53:
 
+`./deploy.sh` termina siempre con la app instalada en `/Applications` y abierta,
+también con `--zip`, `--dmg` o `--publish` (antes empaquetar o publicar no
+instalaba nada, D-60). La instalación la hace `tools/macos/install_to_applications.sh`,
+copia idéntica de la pieza canónica de LGA_Base_QT_C_Py (cierre por ruta, `ditto`,
+`lsregister`, verificación de la firma y `open`), después del cierre con `--quit`
+de la copia instalada y la de `build/`. `--install` queda sin efecto. Además
+`compilar.sh` reconfigura si el SDK de macOS cacheado ya no es el actual: después
+de actualizar Xcode el build fallaba con "'type_traits' file not found".
+
+[ Deploy Mac - Instalar en Applications y abrir tambien al publicar ]
+
 `./deploy.sh` sin flags e `instalador.bat` preguntan siempre si publicar en
 GitHub y, si falta el bump, ofrecen correrlo; antes `deploy.sh` publicaba solo
 con `--publish` e `instalador.bat` armaba lo local sin preguntar.

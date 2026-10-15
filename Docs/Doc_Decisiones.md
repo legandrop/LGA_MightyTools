@@ -5,6 +5,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-60 · macOS: `deploy.sh` termina siempre instalada y abierta** (2026-10-15, Lega: «todos los
+  deploy.sh de mac deberían instalar en applications la app y dejarla abierta al terminar»). También
+  cuando empaqueta o publica: reemplaza la regla anterior de que empaquetar o publicar no tocaba
+  `/Applications`. El paso lo hace `tools/macos/install_to_applications.sh`, copia idéntica de la pieza
+  canónica de la Base; `--no-install` y `--no-open` siguen, y `--install` queda sin efecto.
 - **D-59 · La versión se sube al publicar, no en cada cambio** (2026-10-14, Lega). Como en FileManagerS3
   y PipeSync: `CMakeLists.txt` y `VERSION` guardan la última versión publicada y el primer encabezado del
   changelog, la que está en desarrollo. Las tandas suman entradas a esa versión sin subirla; al publicar,
