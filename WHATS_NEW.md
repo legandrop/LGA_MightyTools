@@ -1,5 +1,11 @@
 # What's new in LGA Mighty Tools
 
+## v1.52 (2026-10-14)
+
+- **Improved:** Disk Space's Clean up shows how much each group and row will actually free next to its total, and how many of its folders are held by open apps.
+- **Improved:** Disk Space's What changed groups the folders that grew by area, lists each one only once so the numbers add up, and shows how the growth splits between areas.
+- **Fixed:** Window Layouts shortcuts sent by Stream Deck apply the layout instead of reaching Windows or other apps. (Windows only)
+
 ## v1.47
 
 - **Fixed:** Scrolling over the reminder time in Disk Space no longer changes your choice; choose a time from the menu to change it.
