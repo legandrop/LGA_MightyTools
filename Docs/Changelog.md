@@ -1,6 +1,21 @@
 # Changelog — LGA Mighty Tools
 
-v1.53:
+v1.52:
+
+Cada tanda subía la versión con `sync_version`: el número avanzaba aunque nada
+se publicara, y entre la v1.51 y el próximo release ya iban dos versiones que
+ningún usuario vio. Además, sin un paso de publicación propio, los archivos de
+macOS dejaron de subirse desde la v1.33. Ahora la versión se maneja como en
+FileManagerS3 y PipeSync: `CMakeLists.txt` y `VERSION` guardan la última versión
+publicada y el changelog abre la siguiente, donde se juntan las entradas. Al
+publicar se corre `bump_version.sh` o `bump_version.bat`, que sube esos dos
+archivos, commitea y pushea solo ellos y ofrece publicar: `deploy.sh --publish`
+en macOS e `instalador.bat` en Windows, sobre el mismo release. `--check` dice
+si la versión está lista: sin bump, `deploy.sh --publish` no publica e
+`instalador.bat` arma solo el instalador local. `sync_version` se retira y lo
+de la v1.53 pasa a la v1.52.
+
+[ Versión - Subirla solo al publicar, con bump_version ]
 
 La ventana de Disk Space mostraba en Clean up el total de cada tarjeta y de cada
 categoría, pero no cuánto se iba a borrar: con apps abiertas, «App caches»
@@ -14,8 +29,6 @@ solo las más profundas con su ruta relativa y «Otras carpetas en …», al fin
 que ninguna zona explica, y arriba una barra que reparte el crecimiento.
 
 [ Disk Space - Mostrar lo elegido y agrupar los cambios por zona ]
-
-v1.52:
 
 Window Layouts respondía al teclado físico, pero dejaba pasar las mismas
 combinaciones enviadas por Stream Deck. El receptor de prioridad descartaba

@@ -5,6 +5,13 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-59 · La versión se sube al publicar, no en cada cambio** (2026-10-14, Lega). Como en FileManagerS3
+  y PipeSync: `CMakeLists.txt` y `VERSION` guardan la última versión publicada y el primer encabezado del
+  changelog, la que está en desarrollo. Las tandas suman entradas a esa versión sin subirla; al publicar,
+  Lega corre `bump_version.sh` (mac) o `bump_version.bat` (Windows), que sube los dos archivos, commitea y
+  pushea, y ofrece publicar. Un solo bump para Windows y macOS: las dos plataformas publican en el mismo
+  release. Reemplaza a `sync_version`. Las v1.52 y v1.53, que nunca se publicaron, quedan juntas en v1.52.
+
 - **D-58 · Totales de Clean up y agrupación de What changed** (2026-10-14, Lega). En Clean up, el chip
   de cada tarjeta y el tamaño de cada fila muestran «lo que se va de lo que hay» cuando no se va todo; sin
   nada tildado, el total va en gris. Una categoría con carpetas retenidas por apps abiertas tiene la casilla a
@@ -253,7 +260,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
     app hace hoy, no lo del diseño.
 
 - **D-02 · Numeración.** Versión continua de a centésimos desde 0.01, con 1.00 como primer release
-  público. Mientras tanto: esa.
+  público. Mientras tanto: esa. Cuándo se sube: D-59.
 - **D-05 · Open in NukeX y Link Redirector apagados** con entradas del sistema. Mientras tanto: paso
   directo del host, sin cargar el módulo; nunca se pierde lo que el usuario abrió.
 - **D-07 · Identidad en mac.** Mientras tanto: bundle id nuevo `com.lga.mightytools`.

@@ -462,9 +462,9 @@ publish_preflight() {
         PRE_ERRORS=$((PRE_ERRORS + 1))
     fi
 
-    # VERSION, CMakeLists.txt y el changelog tienen que decir lo mismo.
-    if ! syncout="$(sh ./sync_version.sh --check 2>&1)"; then
-        pre_fail "la version no esta sincronizada (correr ./sync_version.sh y commitear):"
+    # VERSION, CMakeLists.txt y el changelog tienen que decir lo mismo: el bump ya se hizo y se commiteo.
+    if ! syncout="$(sh ./bump_version.sh --check 2>&1)"; then
+        pre_fail "falta el bump de version (correr ./bump_version.sh, que commitea y pushea):"
         printf '%s\n' "$syncout" | sed 's/^/       /'
     fi
 

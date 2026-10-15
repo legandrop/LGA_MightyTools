@@ -253,7 +253,7 @@ Medición (criterio de aceptación desde la fase 2, cada número anotado en el c
 
 ### 4.8 Versión, updater e instalador
 
-- Versión continua de a centésimos, con `sync_version` como Nuke Shortcuts (D-02).
+- Versión de a centésimos (D-02); la sube `bump_version` solo al publicar, como FileManagerS3 (D-59).
 - `UpdateService` de Nuke Shortcuts con el slug `legandrop/LGA_MightyTools`; alta en
   `LGA_Updates/repos.json` y en el catálogo del sitio.
 - Inno Setup sin permisos de administrador (`PrivilegesRequired=lowest`), cierre por ruta con

@@ -184,8 +184,8 @@ if %ISCC%=="" (
 
 REM ============================================================================
 REM VERSION: la fuente unica es CMakeLists.txt (`project(LGA_MightyTools
-REM VERSION x.y ...)`). No hay archivo VERSION ni sync_version.bat: se extrae
-REM directo de la linea `project(...)` antes de compilar.
+REM VERSION x.y ...)`), que lleva la version a publicar despues de correr
+REM bump_version.bat. Se extrae directo de la linea `project(...)` antes de compilar.
 REM ============================================================================
 echo Extrayendo version desde CMakeLists.txt...
 set "VERSION="
@@ -197,6 +197,16 @@ if "%VERSION%"=="" (
     exit /b 1
 )
 echo OK: Version detectada: %VERSION%
+
+REM El release sale de una version bumpeada: CMakeLists.txt, VERSION y el changelog dicen lo mismo. Sin
+REM el bump, CMakeLists.txt sigue en la ultima publicada: se arma solo el instalador local.
+if /i "!GITHUB_READY!"=="true" (
+    call "%~dp0bump_version.bat" --check
+    if errorlevel 1 (
+        echo AVISO: falta el bump de version ^(correr bump_version.bat^). Se arma solo el instalador local.
+        set "GITHUB_READY=false"
+    )
+)
 
 REM Notas para el usuario [What's new]: el control va ANTES de compilar porque puede preguntar. Si
 REM corta, no se publica: se arma el instalador local, igual que con cualquier otro chequeo de GitHub.
