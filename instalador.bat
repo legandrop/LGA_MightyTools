@@ -273,7 +273,6 @@ if defined CL_VERSION if not "!CL_VERSION!"=="%VERSION%" (
     set "MENU_ACTION=bump"
     set "MENU_LABEL=Bump a v!CL_VERSION! [commit + push] y publicarla"
     set "MENU_NOTE="
-    if "!REL_STATE!"=="other" set "MENU_NOTE=[Para sumar el instalador a v%VERSION% con el codigo de ese release: git checkout v%VERSION%]"
     if not exist "%SCRIPT_DIR%bump_version.bat" (
         set "MENU_ACTION="
         set "MENU_NOTE=Para publicar v!CL_VERSION! falta el bump, y no esta bump_version.bat."

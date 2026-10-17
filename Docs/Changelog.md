@@ -2,6 +2,15 @@
 
 v1.53:
 
+Windows: con el release existente sin el instalador de Windows y el changelog
+adelante, el menú de `instalador.bat` sugería `git checkout v<versión>` para
+sumarlo con el código de ese release. En Windows ese camino no llega a ningún
+lado: publicar exige estar en `main`, y desde el tag el menú solo deja el
+instalador local. Se sacó la nota; Windows saltea esa versión y sale en la
+siguiente, con el bump.
+
+[ Instalador - Sin la nota de git checkout en Windows ]
+
 Windows: el menú de publicación de `instalador.bat` tenía tres detalles. Con la
 versión ya publicada salía antes del menú «Para reemplazarlo, correr con
 --replace» aunque lo que correspondía era el bump: ahora `--replace` se sugiere
