@@ -9,7 +9,8 @@
 # ruta y de la firma de la copia instalada.
 #
 # Uso: ./deploy.sh [--no-install] [--no-open] [--zip] [--dmg] [--publish [--dry-run] [--replace] [--yes] | --no-publish]
-#   (sin flags)   Con terminal pregunta primero si publicar (si falta el bump, ofrece ./bump_version.sh);
+#   (sin flags)   Con terminal mira GitHub y pregunta primero, con una tecla: publicar (o sumar macOS al
+#                 release), el bump si esa version ya esta publicada o falta, build local o cancelar;
 #                 despues compila, arma, firma, instala en /Applications y abre la app
 #   --no-install  Deja el bundle en deploy/ sin copiarlo a /Applications
 #   --no-open     Instala pero no abre la app al terminar
@@ -110,25 +111,33 @@ if ! [[ "$SIGN_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]]; then
 fi
 echo "Deploy de $APP_NAME v$APP_VERSION"
 
-# Sin flags y con terminal se pregunta si publicar, igual que en las otras apps LGA. Si se dice que no,
-# sigue el deploy de siempre (compila, instala y abre). Sin el bump de version no hay release: publicar
-# arranca por ./bump_version.sh, que sube el numero, commitea, pushea y despues ofrece ./deploy.sh --publish.
+# Sin flags y con terminal se decide ACA, antes de compilar, si se publica: `publish_release.sh --decide`
+# (pieza canonica de la Base) mira el release en GitHub y pregunta con UNA tecla: publicar o sumar macOS al
+# release que ya existe (lo pudo crear Windows), el bump (BUMP_CMD de tools/macos/release.conf, que sube el
+# numero, commitea y pushea) si esa version ya esta publicada o falta, build local o cancelar. Si vuelve
+# con "publicar", el preflight ya paso con la version que haya dejado el bump. Publicar tambien termina
+# instalando y abriendo (D-60).
+DECIDED=false
 if [ "$ARG_COUNT" -eq 0 ] && [ -t 0 ]; then
-    if bumpout="$(sh ./bump_version.sh --check 2>&1)"; then
-        read -r -p "Publicar el release $TAG en GitHub? [y/N] " answer
-        if [[ "$answer" =~ ^[Yy]$ ]]; then
-            # Publicar tambien termina instalando y abriendo (D-60).
-            PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; PACKAGING=true
-        fi
-    else
-        echo "Falta el bump de version para publicar:"
-        printf '%s\n' "$bumpout" | sed 's/^/       /'
-        read -r -p "Publicar en GitHub? Primero corre ./bump_version.sh, que despues ofrece publicar [y/N] " answer
-        if [[ "$answer" =~ ^[Yy]$ ]]; then
-            exec sh ./bump_version.sh
-        fi
-        echo "Deploy local de v$APP_VERSION, sin publicar."
-    fi
+    DECIDE_RC=0
+    bash ./tools/macos/publish_release.sh --decide || DECIDE_RC=$?
+    case "$DECIDE_RC" in
+        0)
+            PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; PACKAGING=true; DECIDED=true
+            # El bump pudo cambiar la version.
+            APP_VERSION="$(tr -d '\r\n' < VERSION)"
+            TAG="v${APP_VERSION}"
+            ZIP_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.zip"
+            DMG_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.dmg"
+            echo "Deploy de $APP_NAME v$APP_VERSION"
+            ;;
+        10) echo "Deploy local de v$APP_VERSION, sin publicar." ;;
+        20)
+            echo "Cancelado. No se compilo nada."
+            exit 1
+            ;;
+        *) echo "AVISO: no se pudo decidir la publicacion (ver arriba): deploy local de v$APP_VERSION." ;;
+    esac
 fi
 
 # ==== VERIFICACIONES: inicio
@@ -276,10 +285,13 @@ run_self_tests() {  # <.app>
 # fijado y las notas; junta todos los problemas y corta sin gastar el build) y --expect-head con el .zip
 # y el .dmg ya armados y verificados (vuelve a comprobar todo, porque Windows pudo publicar en el medio,
 # y publica). Contrato: ../LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md §5.
+# Con --decide el preflight ya corrio: no se repite.
 PUBLISH_HEAD=""
 if [ "$PUBLISH" = "true" ]; then
     PUBLISH_HEAD="$(git rev-parse HEAD)"
-    bash ./tools/macos/publish_release.sh --preflight ${PUBLISH_ARGS[@]+"${PUBLISH_ARGS[@]}"}
+    if [ "$DECIDED" != "true" ]; then
+        bash ./tools/macos/publish_release.sh --preflight ${PUBLISH_ARGS[@]+"${PUBLISH_ARGS[@]}"}
+    fi
 fi
 
 # Release en build-release/, un arbol separado del de desarrollo. Universal (arm64 + x86_64).

@@ -2,6 +2,18 @@
 
 v1.53:
 
+Solo Mac: `./deploy.sh` sin flags ya no pregunta «¿publicar?» a ciegas ni pasa
+el control a `bump_version.sh` cuando falta el bump. Llama a
+`tools/macos/publish_release.sh --decide` (pieza de la Base v0.158, re-copiada),
+que mira el release en GitHub antes de compilar y pregunta con una tecla, sin
+Enter: publicar o sumar macOS al release; si la versión ya está publicada para
+macOS o falta el bump, el bump (`BUMP_CMD` en `release.conf`, con commit y push)
+y publicar esa; build local; o cancelar. Si lo elegido no pasa el preflight,
+ofrece seguir local. Las preguntas S/N del script pasan a una tecla. Probado en
+la Mac con un clon descartable; falta `instalador.bat`.
+
+[ Deploy Mac - Menu de publicacion de una tecla antes de compilar ]
+
 La publicación de macOS pasa a la pieza común de las apps LGA:
 `tools/macos/publish_release.sh`, copia idéntica de la de LGA_Base_QT_C_Py, con
 lo propio de esta app en `tools/macos/release.conf` (repo, versión de a
