@@ -2,6 +2,17 @@
 
 v1.53:
 
+Mac: se suma `deploy_local.sh`, copia de la pieza canónica de la Base. Compila
+en Release, arma y verifica el bundle igual que `./deploy.sh`, lo instala en
+`/Applications` y abre la app, sin ZIP, sin DMG, sin publicar y sin preguntar
+nada: llama a `./deploy.sh --no-publish` con la entrada estándar cerrada. Es la
+forma de dejarle a Lega cada cambio instalado sin pasar por el menú de
+publicación. Acepta `--no-open`, `--no-install` (solo compila y verifica el
+bundle de `deploy/`) y rechaza `--zip`, `--dmg` y `--publish`. Probado con
+`./deploy_local.sh --no-install`.
+
+[ Deploy Mac - Deploy local sin publicar ]
+
 Windows: con el release existente sin el instalador de Windows y el changelog
 adelante, el menú de `instalador.bat` sugería `git checkout v<versión>` para
 sumarlo con el código de ese release. En Windows ese camino no llega a ningún
