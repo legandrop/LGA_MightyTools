@@ -2,6 +2,18 @@
 
 v1.53:
 
+Windows: `instalador.bat` decide la publicación antes de compilar con el mismo
+menú de una tecla que `deploy.sh`. Mira el release en GitHub y ofrece publicar
+v<versión>, sumar el instalador al release que creó la Mac, o, si el changelog
+va adelante, el bump (`bump_version.bat --commit --no-publish`, con commit y
+push) y publicar esa; además instalador local o cancelar. Rama distinta de
+`main`, árbol sucio o GitHub no listo ya no abortan: el menú dice el motivo y
+ofrece solo local o cancelar. Se van las preguntas S/N de publicar y la de
+seguir local; sin consola y con `--local` no cambia nada. Con `--replace` se
+ofrece reemplazar el instalador ya publicado.
+
+[ Instalador - Menu de publicacion de una tecla antes de compilar ]
+
 Solo Mac: `./deploy.sh` sin flags ya no pregunta «¿publicar?» a ciegas ni pasa
 el control a `bump_version.sh` cuando falta el bump. Llama a
 `tools/macos/publish_release.sh --decide` (pieza de la Base v0.158, re-copiada),

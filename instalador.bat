@@ -8,6 +8,8 @@ REM              Explorer. La parte de commit y release sigue igual.
 REM   --replace  si el release v<version> ya tiene el instalador de Windows, lo reemplaza.
 REM El release v<version> lo crea la primera plataforma que publica, Windows o la Mac: si ya
 REM existe, este script le suma el instalador y fusiona SHA256SUMS en vez de crearlo.
+REM Sin --local, con consola, la publicacion se decide ANTES de compilar con un menu de una tecla:
+REM publicar / sumar al release / bump y publicar, instalador local, o cancelar. Ver :PUBLISH_MENU.
 set "NO_RUN="
 set "REPLACE="
 set "LOCAL_ONLY="
@@ -42,11 +44,9 @@ REM mismo tag: se crea una sola vez, se pushea a origin, y se publica ahi.
 set "PUBLIC_RELEASE_REPO=legandrop/LGA_MightyTools"
 set "GITHUB_READY=true"
 set "GH_CMD="
-set "GITHUB_LOCAL_ONLY_CONFIRMED=false"
 
 if defined LOCAL_ONLY (
     set "GITHUB_READY=false"
-    set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
     echo Modo local: sin Git/GitHub; al final se ofrece instalar y revelar el archivo.
     goto :BUILD_INSTALLER
 )
@@ -87,11 +87,13 @@ if "!CURRENT_BRANCH!"=="" (
     echo OK: Branch activo detectado: !CURRENT_BRANCH!
 )
 
+REM Rama, arbol sucio o GitHub no listo impiden PUBLICAR, no armar el instalador local: el menu de
+REM publicacion dice el motivo y ofrece solo local o cancelar.
+set "PUBLISH_BLOCKER="
 if /i "!CURRENT_BRANCH!" NEQ "main" (
-    echo ERROR: El branch activo es '!CURRENT_BRANCH!' y este instalador debe generarse desde 'main'.
-    echo Abortando...
-    pause
-    exit /b 1
+    echo AVISO: El branch activo es '!CURRENT_BRANCH!': solo se publica desde 'main'.
+    set "PUBLISH_BLOCKER=el branch activo es '!CURRENT_BRANCH!', no 'main'"
+    set "GITHUB_READY=false"
 )
 
 set "HAS_PREEXISTING_CHANGES=false"
@@ -101,12 +103,10 @@ for /f "tokens=*" %%S in ('git status --porcelain 2^>nul') do (
 
 if "!HAS_PREEXISTING_CHANGES!"=="true" (
     echo.
-    echo ERROR: Hay cambios sin commitear antes de crear el instalador:
+    echo AVISO: Hay cambios sin commitear:
     git status --short
-    echo.
-    echo Abortando para evitar mezclar cambios previos con el commit del installer.
-    pause
-    exit /b 1
+    set "PUBLISH_BLOCKER=hay cambios sin commitear"
+    set "GITHUB_READY=false"
 ) else (
     echo OK: El repositorio esta limpio antes de crear el instalador.
 )
@@ -148,25 +148,6 @@ if "!GH_CMD!"=="" (
     )
 )
 
-if /i "!GITHUB_READY!" NEQ "true" (
-    echo.
-    echo Los chequeos de GitHub fallaron.
-    echo Se podra generar el instalador local, pero no publicar la release desde este .bat.
-    echo.
-    if not defined INTERACTIVE (
-        echo Sin consola interactiva: se sigue solo con la generacion local, sin preguntar.
-    ) else (
-        choice /C YN /M "Continuar solo con la generacion local del instalador?"
-        if !errorlevel! NEQ 1 (
-            echo Operacion cancelada por el usuario.
-            pause
-            exit /b 1
-        )
-        echo OK: Se continuara solo con la generacion local del instalador.
-    )
-    set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
-)
-
 :BUILD_INSTALLER
 echo Creando instalador de LGA Mighty Tools...
 
@@ -198,33 +179,159 @@ if "%VERSION%"=="" (
 )
 echo OK: Version detectada: %VERSION%
 
-REM El release sale de una version bumpeada: CMakeLists.txt, VERSION y el changelog dicen lo mismo. Sin
-REM el bump, con consola la pregunta por publicar se hace igual: publicar arranca por bump_version.bat,
-REM que sube el numero, commitea, pushea y despues ofrece este mismo instalador. Si se dice que no,
-REM CMakeLists.txt sigue en la ultima publicada y se arma solo el instalador local.
-if /i "!GITHUB_READY!"=="true" (
-    call "%~dp0bump_version.bat" --check
-    if errorlevel 1 (
-        echo Falta el bump de version para publicar.
-        if defined INTERACTIVE (
-            choice /C YN /M "Publicar en GitHub? Primero corre bump_version.bat, que despues ofrece publicar"
-            if !errorlevel! EQU 1 (
-                call "%~dp0bump_version.bat"
-                exit /b !errorlevel!
-            )
-            set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
-        )
-        echo Se arma solo el instalador local.
-        set "GITHUB_READY=false"
+REM ---- Publicacion: se decide ACA, antes de compilar ----
+REM Se mira GitHub y se pregunta UNA vez, con una tecla y sin Enter [choice], con el criterio de
+REM publish_release.sh --decide en la Mac:
+REM   - v<version> no existe: publicarla como release nuevo.
+REM   - existe sin el instalador de Windows [la Mac publico primero]: sumarlo al mismo release.
+REM   - el changelog va adelante [falta el bump]: bump a la version que lo encabeza, con commit y
+REM     push [bump_version.bat], y publicar esa.
+REM   - ya tiene el instalador de Windows y el changelog no abrio una version nueva: no hay nada que
+REM     publicar. Con --replace se ofrece reemplazarlo.
+REM   - siempre: instalador local sin subir nada, o cancelar.
+REM Va antes de compilar porque el numero queda adentro del binario: el bump no puede ir despues.
+REM Si lo elegido no se puede hacer [bump, notas, tag], se vuelve a ofrecer local o cancelar.
+REM Sin consola no hay a quien preguntarle: solo el instalador local, como siempre.
+if defined LOCAL_ONLY goto :PUBLISH_DECIDED_OK
+if not defined INTERACTIVE (
+    echo Sin consola interactiva: se arma solo el instalador local, sin preguntar.
+    goto :PUBLISH_LOCAL
+)
+set "CL_VERSION="
+for /f "tokens=1 delims=:" %%L in ('findstr /r /b /c:"v[0-9][0-9.]*[ ]*:" "Docs\Changelog.md"') do if not defined CL_VERSION set "CL_VERSION=%%L"
+if defined CL_VERSION set "CL_VERSION=!CL_VERSION:v=!"
+if defined CL_VERSION set "CL_VERSION=!CL_VERSION: =!"
+set "MENU_ACTION="
+set "MENU_LABEL="
+set "MENU_STATUS="
+set "MENU_NOTE="
+if /i "!GITHUB_READY!" NEQ "true" goto :PUBLISH_MENU
+REM :release_check sale con 1 tambien cuando el release ya tiene este instalador [sin --replace]:
+REM eso no es un error, es el estado "ya publicada".
+set "TAG=v%VERSION%"
+call :release_check
+set "REL_RC=!errorlevel!"
+set "REL_STATE=error"
+if "!REL_RC!"=="0" (
+    set "REL_STATE=none"
+    if defined REL_EXISTS set "REL_STATE=other"
+    if "!REL_OWN!"=="1" set "REL_STATE=replace"
+) else if "!REL_OWN!!REL_DRAFT!"=="10" set "REL_STATE=mine"
+if "!REL_STATE!"=="none" (
+    set "MENU_STATUS=v%VERSION% no esta publicada en GitHub."
+    set "MENU_ACTION=publish"
+    set "MENU_LABEL=Publicar v%VERSION% como release nuevo"
+)
+if "!REL_STATE!"=="other" (
+    set "MENU_STATUS=v%VERSION% esta en GitHub, sin el instalador de Windows."
+    set "MENU_ACTION=publish"
+    set "MENU_LABEL=Sumar el instalador de Windows al release v%VERSION%"
+)
+if "!REL_STATE!"=="mine" (
+    set "MENU_STATUS=v%VERSION% ya esta publicada en GitHub con el instalador de Windows."
+    set "MENU_NOTE=Para publicar, primero la version nueva en el changelog."
+)
+if "!REL_STATE!"=="replace" (
+    set "MENU_STATUS=v%VERSION% ya esta publicada en GitHub con el instalador de Windows."
+    set "MENU_ACTION=publish"
+    set "MENU_LABEL=Reemplazar el instalador de Windows en el release v%VERSION% [--replace]"
+)
+if "!REL_STATE!"=="error" (
+    set "PUBLISH_BLOCKER=el release v%VERSION% no se puede tocar [ver el AVISO de arriba]"
+    set "GITHUB_READY=false"
+)
+if defined CL_VERSION if not "!CL_VERSION!"=="%VERSION%" (
+    set "MENU_ACTION=bump"
+    set "MENU_LABEL=Bump a v!CL_VERSION! [commit + push] y publicarla"
+    set "MENU_NOTE="
+    if "!REL_STATE!"=="other" set "MENU_NOTE=[Para sumar el instalador a v%VERSION% con el codigo de ese release: git checkout v%VERSION%]"
+    if not exist "%SCRIPT_DIR%bump_version.bat" (
+        set "MENU_ACTION="
+        set "MENU_NOTE=Para publicar v!CL_VERSION! falta el bump, y no esta bump_version.bat."
     )
 )
 
-REM Notas para el usuario [What's new]: el control va ANTES de compilar porque puede preguntar. Si
-REM corta, no se publica: se arma el instalador local, igual que con cualquier otro chequeo de GitHub.
-if /i "!GITHUB_READY!"=="true" (
-    call :notes_check
-    if errorlevel 1 set "GITHUB_READY=false"
+:PUBLISH_MENU
+echo.
+echo ============================================================
+echo  Publicacion en GitHub [LGA Mighty Tools, Windows]
+echo ============================================================
+if defined MENU_STATUS echo !MENU_STATUS!
+if defined CL_VERSION if not "!CL_VERSION!"=="%VERSION%" echo El changelog tiene v!CL_VERSION! en desarrollo.
+if defined MENU_NOTE echo !MENU_NOTE!
+if /i "!GITHUB_READY!" NEQ "true" (
+    set "MENU_ACTION="
+    echo No se puede publicar:
+    if defined PUBLISH_BLOCKER echo   - !PUBLISH_BLOCKER!
+    if not defined PUBLISH_BLOCKER echo   - GitHub no esta listo [ver los AVISO de arriba]
 )
+echo.
+if not defined MENU_ACTION goto :PUBLISH_FALLBACK
+echo   1. !MENU_LABEL!
+echo   2. Instalador local, sin subir a GitHub
+echo   3. Cancelar
+choice /C 123 /N /M "Opcion: "
+set "MENU_KEY=!errorlevel!"
+if "!MENU_KEY!"=="2" goto :PUBLISH_LOCAL
+if not "!MENU_KEY!"=="1" goto :PUBLISH_CANCEL
+if "!MENU_ACTION!"=="bump" goto :PUBLISH_BUMP
+REM Publicar o sumar: lo que se va a exigir al publicar se controla ahora, antes de compilar.
+call "%SCRIPT_DIR%bump_version.bat" --check
+if errorlevel 1 goto :PUBLISH_FALLBACK
+call :notes_check %VERSION%
+if errorlevel 1 goto :PUBLISH_FALLBACK
+call :publish_analysis
+if errorlevel 1 goto :PUBLISH_FALLBACK
+goto :PUBLISH_DECIDED_OK
+
+:PUBLISH_BUMP
+REM Antes, las notas de la version DESTINO: si fallan no se toca nada.
+echo.
+call :notes_check !CL_VERSION!
+if errorlevel 1 (
+    echo No se hizo el bump.
+    goto :PUBLISH_FALLBACK
+)
+echo.
+echo Bump a v!CL_VERSION! [commit + push]...
+call "%SCRIPT_DIR%bump_version.bat" --commit --no-publish
+if errorlevel 1 (
+    echo ERROR: el bump fallo [ver arriba].
+    goto :PUBLISH_FALLBACK
+)
+set "VERSION="
+for /f "tokens=1-4" %%A in ('findstr /B /C:"project(LGA_MightyTools" CMakeLists.txt') do set "VERSION=%%C"
+call "%SCRIPT_DIR%bump_version.bat" --check
+if errorlevel 1 (
+    echo ERROR: el bump no quedo completo [ver arriba].
+    goto :PUBLISH_FALLBACK
+)
+call :publish_analysis
+if errorlevel 1 goto :PUBLISH_FALLBACK
+echo OK: Version %VERSION%. Se publica al terminar.
+goto :PUBLISH_DECIDED_OK
+
+:PUBLISH_FALLBACK
+echo.
+echo   2. Instalador local, sin subir a GitHub
+echo   3. Cancelar
+choice /C 23 /N /M "Opcion: "
+if errorlevel 2 goto :PUBLISH_CANCEL
+if not errorlevel 1 goto :PUBLISH_CANCEL
+goto :PUBLISH_LOCAL
+
+:PUBLISH_CANCEL
+echo Operacion cancelada por el usuario. No se compilo nada.
+exit /b 1
+
+:PUBLISH_LOCAL
+REM Despues de un bump que se hizo pero no llego a publicarse, la version cambio: se relee.
+set "VERSION="
+for /f "tokens=1-4" %%A in ('findstr /B /C:"project(LGA_MightyTools" CMakeLists.txt') do set "VERSION=%%C"
+set "GITHUB_READY=false"
+echo OK: Se genera solo el instalador local, sin publicar.
+
+:PUBLISH_DECIDED_OK
 
 REM Cerrar SOLO las copias que corren desde deploy\ y build-release\ de ESTE repo, para evitar
 REM bloqueos durante deploy/installer. Antes era "taskkill /F /IM", que cerraba tambien la
@@ -260,33 +367,6 @@ if errorlevel 1 (
     exit /b 1
 )
 echo OK: El binario reporta la version %VERSION%.
-
-REM Estado del tag y del release v<version>: pueden no existir (se crean), o existir porque la Mac
-REM publico primero (se les suma el instalador). Frena si el tag es otro codigo, si el release es un
-REM borrador o si ya tiene este instalador sin --replace. Ver :publish_analysis.
-if /i "!GITHUB_READY!"=="true" (
-    call :publish_analysis
-    if errorlevel 1 set "GITHUB_READY=false"
-)
-
-if /i "!GITHUB_READY!" NEQ "true" if /i "!GITHUB_LOCAL_ONLY_CONFIRMED!" NEQ "true" (
-    echo.
-    echo No se podra publicar la release v%VERSION% desde este .bat.
-    echo Se podra generar el instalador local igualmente.
-    echo.
-    if not defined INTERACTIVE (
-        echo Sin consola interactiva: se sigue solo con la generacion local, sin preguntar.
-    ) else (
-        choice /C YN /M "Continuar solo con la generacion local del instalador?"
-        if !errorlevel! NEQ 1 (
-            echo Operacion cancelada por el usuario.
-            pause
-            exit /b 1
-        )
-        echo OK: Se continuara solo con la generacion local del instalador.
-    )
-    set "GITHUB_LOCAL_ONLY_CONFIRMED=true"
-)
 
 if not exist "%INSTALLER_DIR%" mkdir "%INSTALLER_DIR%"
 
@@ -468,11 +548,8 @@ if not exist "%SUMS_FILE%" (
     set "RELEASE_ALLOWED=false"
 )
 
+REM Publicar ya se decidio en el menu, antes de compilar: no se vuelve a preguntar.
 if /i "!RELEASE_ALLOWED!" NEQ "true" goto :END
-
-echo.
-choice /C YN /M "Desea subir el instalador como release v%VERSION% a GitHub?"
-if !errorlevel! NEQ 1 goto :END
 
 echo.
 REM Se vuelve a mirar el tag y el release: pasaron la compilacion y las preguntas, y la Mac pudo
@@ -622,6 +699,7 @@ REM ==== PUBLICAR: subrutinas. Todas se llaman con call y devuelven con exit /b.
 :notes_check
 REM Notas para el usuario [What's new]: la logica vive en LGA_RepoTools; LGA_REPOTOOLS apunta a otra
 REM copia. Deja WN_BAT y WN_FILE para :publish_notes. exit /b 1 si faltan, fallan o se contesto que no.
+REM Recibe la version a controlar: la actual, o la del bump antes de hacerlo.
 set "WN_REPOTOOLS=%LGA_REPOTOOLS%"
 if not defined WN_REPOTOOLS set "WN_REPOTOOLS=%SCRIPT_DIR%..\LGA_RepoTools"
 set "WN_BAT=%WN_REPOTOOLS%\WhatsNew_Win\whats_new_release.bat"
@@ -631,17 +709,18 @@ if not exist "%WN_BAT%" (
     echo Clonar LGA_RepoTools al lado de este repo o definir LGA_REPOTOOLS. Sin notas no se publica.
     exit /b 1
 )
-echo Verificando las notas para el usuario [What's new] de v%VERSION%...
-call "%WN_BAT%" check "%WN_FILE%" "%VERSION%"
+echo Verificando las notas para el usuario [What's new] de v%~1...
+call "%WN_BAT%" check "%WN_FILE%" "%~1"
 if errorlevel 1 (
-    echo AVISO: faltan o fallan las notas de v%VERSION%, o se contesto que no. No se publica.
+    echo AVISO: faltan o fallan las notas de v%~1, o se contesto que no. No se publica.
     exit /b 1
 )
 exit /b 0
 
 :publish_analysis
 REM Estado del tag y del release v<version> en origin. Deja TAG, TAG_REMOTE, TAG_COMMIT y REL_EXISTS.
-REM exit /b 1 si no se puede publicar. Corre despues de compilar y otra vez justo antes de publicar.
+REM exit /b 1 si no se puede publicar. Corre al elegir publicar, antes de compilar, y otra vez justo
+REM antes de publicar.
 REM  - El tag no existe: se crea mas adelante sobre HEAD [como siempre].
 REM  - El tag existe en origin [lo creo la Mac, o una corrida anterior]: el instalador tiene que salir
 REM    de ese mismo codigo, ver :tag_matches.
