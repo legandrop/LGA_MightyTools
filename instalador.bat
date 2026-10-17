@@ -87,12 +87,14 @@ if "!CURRENT_BRANCH!"=="" (
     echo OK: Branch activo detectado: !CURRENT_BRANCH!
 )
 
-REM Rama, arbol sucio o GitHub no listo impiden PUBLICAR, no armar el instalador local: el menu de
-REM publicacion dice el motivo y ofrece solo local o cancelar.
-set "PUBLISH_BLOCKER="
+REM Rama, arbol sucio, commits sin pushear o GitHub no listo impiden PUBLICAR, no armar el
+REM instalador local: el menu de publicacion lista todos los motivos [:add_blocker] y ofrece solo
+REM local o cancelar.
+set "BLOCKERS=0"
+set "ORIGIN_OK="
 if /i "!CURRENT_BRANCH!" NEQ "main" (
     echo AVISO: El branch activo es '!CURRENT_BRANCH!': solo se publica desde 'main'.
-    set "PUBLISH_BLOCKER=el branch activo es '!CURRENT_BRANCH!', no 'main'"
+    call :add_blocker "el branch activo es '!CURRENT_BRANCH!', no 'main'"
     set "GITHUB_READY=false"
 )
 
@@ -105,7 +107,7 @@ if "!HAS_PREEXISTING_CHANGES!"=="true" (
     echo.
     echo AVISO: Hay cambios sin commitear:
     git status --short
-    set "PUBLISH_BLOCKER=hay cambios sin commitear"
+    call :add_blocker "hay cambios sin commitear"
     set "GITHUB_READY=false"
 ) else (
     echo OK: El repositorio esta limpio antes de crear el instalador.
@@ -122,29 +124,53 @@ if !errorlevel! EQU 0 (
 
 if "!GH_CMD!"=="" (
     echo AVISO: GitHub CLI [gh] no esta instalado.
+    call :add_blocker "GitHub CLI [gh] no esta instalado"
     set "GITHUB_READY=false"
 ) else (
     echo OK: GitHub CLI encontrado.
     "!GH_CMD!" auth status >nul 2>nul
     if !errorlevel! NEQ 0 (
         echo AVISO: GitHub CLI no esta autenticado.
+        call :add_blocker "GitHub CLI no esta autenticado [gh auth login]"
         set "GITHUB_READY=false"
     ) else (
         echo OK: GitHub CLI autenticado.
         git ls-remote --exit-code origin HEAD >nul 2>nul
         if !errorlevel! NEQ 0 (
             echo AVISO: No se pudo acceder al remoto origin.
+            call :add_blocker "no se pudo acceder al remoto origin"
             set "GITHUB_READY=false"
         ) else (
             echo OK: Acceso al remoto origin confirmado.
+            set "ORIGIN_OK=1"
             "!GH_CMD!" repo view "%PUBLIC_RELEASE_REPO%" --json name -q .name >nul 2>nul
             if !errorlevel! NEQ 0 (
                 echo AVISO: No se pudo acceder al repo publico de releases %PUBLIC_RELEASE_REPO%.
+                call :add_blocker "no se pudo acceder al repo publico de releases %PUBLIC_RELEASE_REPO%"
                 set "GITHUB_READY=false"
             ) else (
                 echo OK: Acceso al repo publico de releases confirmado.
             )
         )
+    )
+)
+
+REM Commits locales sin pushear: el tag se crea sobre HEAD y tiene que estar en origin/main. Se mira
+REM ANTES del menu, como el preflight de la Mac, y no despues de compilar.
+if /i "!CURRENT_BRANCH!"=="main" if defined ORIGIN_OK (
+    set "AHEAD_COUNT="
+    git fetch -q origin main >nul 2>nul
+    if !errorlevel! EQU 0 for /f %%N in ('git rev-list --count origin/main..HEAD 2^>nul') do set "AHEAD_COUNT=%%N"
+    if not defined AHEAD_COUNT (
+        echo AVISO: No se pudo comparar HEAD con origin/main.
+        call :add_blocker "no se pudo comparar HEAD con origin/main"
+        set "GITHUB_READY=false"
+    ) else if !AHEAD_COUNT! GTR 0 (
+        echo AVISO: Hay !AHEAD_COUNT! commit[s] locales sin pushear a origin/main.
+        call :add_blocker "hay !AHEAD_COUNT! commit[s] locales sin pushear a origin/main [git push]"
+        set "GITHUB_READY=false"
+    ) else (
+        echo OK: No hay commits locales sin pushear.
     )
 )
 
@@ -209,8 +235,11 @@ if /i "!GITHUB_READY!" NEQ "true" goto :PUBLISH_MENU
 REM :release_check sale con 1 tambien cuando el release ya tiene este instalador [sin --replace]:
 REM eso no es un error, es el estado "ya publicada".
 set "TAG=v%VERSION%"
+REM RC_QUIET: aca no se sugiere --replace; el menu dice que corresponde [bump o --replace].
+set "RC_QUIET=1"
 call :release_check
 set "REL_RC=!errorlevel!"
+set "RC_QUIET="
 set "REL_STATE=error"
 if "!REL_RC!"=="0" (
     set "REL_STATE=none"
@@ -229,7 +258,7 @@ if "!REL_STATE!"=="other" (
 )
 if "!REL_STATE!"=="mine" (
     set "MENU_STATUS=v%VERSION% ya esta publicada en GitHub con el instalador de Windows."
-    set "MENU_NOTE=Para publicar, primero la version nueva en el changelog."
+    set "MENU_NOTE=Para publicar, primero la version nueva en el changelog. Para reemplazar este instalador: instalador.bat --replace"
 )
 if "!REL_STATE!"=="replace" (
     set "MENU_STATUS=v%VERSION% ya esta publicada en GitHub con el instalador de Windows."
@@ -237,7 +266,7 @@ if "!REL_STATE!"=="replace" (
     set "MENU_LABEL=Reemplazar el instalador de Windows en el release v%VERSION% [--replace]"
 )
 if "!REL_STATE!"=="error" (
-    set "PUBLISH_BLOCKER=el release v%VERSION% no se puede tocar [ver el AVISO de arriba]"
+    call :add_blocker "el release v%VERSION% no se puede tocar [ver el AVISO de arriba]"
     set "GITHUB_READY=false"
 )
 if defined CL_VERSION if not "!CL_VERSION!"=="%VERSION%" (
@@ -262,11 +291,12 @@ if defined MENU_NOTE echo !MENU_NOTE!
 if /i "!GITHUB_READY!" NEQ "true" (
     set "MENU_ACTION="
     echo No se puede publicar:
-    if defined PUBLISH_BLOCKER echo   - !PUBLISH_BLOCKER!
-    if not defined PUBLISH_BLOCKER echo   - GitHub no esta listo [ver los AVISO de arriba]
+    for /l %%I in (1,1,!BLOCKERS!) do echo   - !BLOCKER_%%I!
+    if !BLOCKERS! EQU 0 echo   - GitHub no esta listo [ver los AVISO de arriba]
 )
-echo.
+REM :PUBLISH_FALLBACK pone su propia linea en blanco.
 if not defined MENU_ACTION goto :PUBLISH_FALLBACK
+echo.
 echo   1. !MENU_LABEL!
 echo   2. Instalador local, sin subir a GitHub
 echo   3. Cancelar
@@ -696,6 +726,12 @@ endlocal & exit /b %FINAL_EXIT%
 
 REM ==== PUBLICAR: subrutinas. Todas se llaman con call y devuelven con exit /b.
 
+:add_blocker
+REM Suma un motivo que impide publicar: el menu los lista todos, uno por linea.
+set /a "BLOCKERS+=1"
+set "BLOCKER_%BLOCKERS%=%~1"
+exit /b 0
+
 :notes_check
 REM Notas para el usuario [What's new]: la logica vive en LGA_RepoTools; LGA_REPOTOOLS apunta a otra
 REM copia. Deja WN_BAT y WN_FILE para :publish_notes. exit /b 1 si faltan, fallan o se contesto que no.
@@ -823,7 +859,7 @@ if "%REL_DRAFT%"=="1" (
     exit /b 1
 )
 if "%REL_OWN%"=="1" if not defined REPLACE (
-    echo AVISO: El release %TAG% ya tiene %MT_OWN_ASSET%. Para reemplazarlo, correr con --replace.
+    if not defined RC_QUIET echo AVISO: El release %TAG% ya tiene %MT_OWN_ASSET%. Para reemplazarlo, correr con --replace.
     exit /b 1
 )
 if "%REL_OTHER%"=="1" if "%REL_SUMS%"=="0" (

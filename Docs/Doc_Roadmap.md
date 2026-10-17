@@ -110,8 +110,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       - **`instalador.bat` publicando de verdad** (Lega, en Windows): en un runner de GitHub ya corrió
         entero en modo local (compila, analiza el tag y el release, genera el instalador; build «Build
         Windows», que además instala en silencio, corre el self-test de la copia instalada y
-        desinstala). Lo que nunca se ejecutó es la subida: en la primera corrida real, leer las líneas
-        `OK:` del análisis antes de aceptar. Las Windows instaladas hasta la 1.21 no pueden actualizarse
+        desinstala). Lo que nunca se ejecutó es la subida: en la primera corrida real, leer el estado
+        del release que muestra el menú de publicación antes de apretar `1`, porque después no hay otra
+        pregunta: compila y publica. Las Windows instaladas hasta la 1.21 no pueden actualizarse
         solas: hay que instalar una vez a mano.
       - Observación del runner: el `--self-test` falló una vez de ocho en la copia recién instalada
         (`[diskSpace] motor`: el escaneo de la carpeta de pruebas no terminó en los 5 s de `waitScan`,

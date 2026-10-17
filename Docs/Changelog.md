@@ -2,6 +2,17 @@
 
 v1.53:
 
+Windows: el menú de publicación de `instalador.bat` tenía tres detalles. Con la
+versión ya publicada salía antes del menú «Para reemplazarlo, correr con
+--replace» aunque lo que correspondía era el bump: ahora `--replace` se sugiere
+solo cuando el changelog no abrió una versión nueva. Los commits locales sin
+pushear recién se detectaban después de compilar, al ir a crear el tag: ahora se
+miran antes del menú, como en la Mac, y solo se ofrece local o cancelar. Y si
+había varios motivos para no publicar se mostraba uno solo: ahora se listan
+todos, uno por línea, sin la línea en blanco de más.
+
+[ Instalador - Menu de publicacion: commits sin pushear y todos los motivos ]
+
 Windows: `instalador.bat` decide la publicación antes de compilar con el mismo
 menú de una tecla que `deploy.sh`. Mira el release en GitHub y ofrece publicar
 v<versión>, sumar el instalador al release que creó la Mac, o, si el changelog
