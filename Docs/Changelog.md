@@ -2,6 +2,10 @@
 
 v1.53:
 
+Mac: `deploy_local.sh` se re-copia de la pieza canonica de la Base (v0.161): ahora arma siempre el DMG (le pasa `--dmg` a `./deploy.sh`, que por eso corre tambien los self-tests antes de empaquetar), para tener listo lo que se le manda a alguien sin otra corrida. Al terminar imprime la ruta de cada DMG de esa corrida y, solo con terminal, pregunta con una tecla si los muestra en Finder; sale con error si el deploy no dejo ningun DMG. Reglas del repo actualizadas.
+
+[ Deploy Mac - deploy_local.sh arma el DMG y ofrece Finder ]
+
 Mac: se suma `deploy_local.sh`, copia de la pieza canónica de la Base. Compila
 en Release, arma y verifica el bundle igual que `./deploy.sh`, lo instala en
 `/Applications` y abre la app, sin ZIP, sin DMG, sin publicar y sin preguntar
