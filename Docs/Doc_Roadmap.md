@@ -143,6 +143,13 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    está abierta, la abre; si está abierta sin foco, la trae al frente (y la restaura si estaba
    minimizada); si ya tiene el foco, la minimiza. Reemplaza el Win+E de XYplorer de
    `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`. Falta definir si además puede maximizar, como opción por app.
+   - **Segunda app: OBS** (Lega, 2026-10-30). Hoy lo hace `C:\Leg_AHKs\ahk-open_OBS.ahk`: si `obs64.exe`
+     no corre, abre `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OBS Studio\OBS Studio (64bit).lnk`
+     (`obs64.exe --disable-shutdown-check`, con `bin\64bit` como directorio de trabajo); si corre, minimiza
+     o trae al frente la ventana «OBS». La herramienta tiene que guardar exe, argumentos y directorio de
+     trabajo, no un `.lnk`: el instalador de OBS 33 le cambió el nombre al acceso y el AHK dejó de abrirlo.
+   - **La misma tanda que crea la sección deja configuradas estas dos entradas, XYplorer y OBS,** en la PC
+     de Lega, con los mismos atajos con que hoy se disparan esos AHK, y dice qué AHK quedan para apagar.
 9. **Herramienta nueva, para más adelante: Disk Image** (nombre provisorio; sólo Windows). Imagen del
    disco de sistema con un pendrive WinPE propio y DISM, en lugar de un programa de terceros. La sección
    muestra cuándo fue la última imagen (fecha, tamaño, dónde está) y las instrucciones paso a paso para
