@@ -166,7 +166,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 10. **Herramienta nueva, para más adelante: botones del mouse por app** (nombre provisorio; Lega,
     2026-10-30). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo único que Lega
     usaba (`XMBCSettings.xml` del backup) era un perfil para `photoshop.exe`: mientras se mantiene apretado
-    el botón del medio, simula Espacio + clic izquierdo, o sea, mover la imagen con la rueda como en Nuke.
+    el botón del medio, simula Espacio + clic izquierdo, o sea, mover la imagen con el botón del medio.
     El resto de los botones, en todas las apps, quedaba sin tocar. Forma mínima: reglas «proceso → botón →
     teclas/clics mientras está apretado», con un gancho de mouse de bajo nivel que sólo actúa con esa app
     al frente. X-Mouse corría como administrador; ver si hace falta para Photoshop o si alcanza sin.
