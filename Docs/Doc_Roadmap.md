@@ -163,5 +163,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    - El ADK (~4 GB) no viaja con la app: detectarlo y ofrecer instalarlo.
    - En una prueba automatizada nada borra ni instala: como la limpieza de Disk Space, sólo simula.
    - Avisar cuando la última imagen tiene más de N días, como el recordatorio de Disk Space.
-10. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+10. **Herramienta nueva, para más adelante: botones del mouse por app** (nombre provisorio; Lega,
+    2026-10-30). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo único que Lega
+    usaba (`XMBCSettings.xml` del backup) era un perfil para `photoshop.exe`: mientras se mantiene apretado
+    el botón del medio, simula Espacio + clic izquierdo, o sea, mover la imagen con la rueda como en Nuke.
+    El resto de los botones, en todas las apps, quedaba sin tocar. Forma mínima: reglas «proceso → botón →
+    teclas/clics mientras está apretado», con un gancho de mouse de bajo nivel que sólo actúa con esa app
+    al frente. X-Mouse corría como administrador; ver si hace falta para Photoshop o si alcanza sin.
+11. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
