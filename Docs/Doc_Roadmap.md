@@ -143,5 +143,18 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    está abierta, la abre; si está abierta sin foco, la trae al frente (y la restaura si estaba
    minimizada); si ya tiene el foco, la minimiza. Reemplaza el Win+E de XYplorer de
    `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`. Falta definir si además puede maximizar, como opción por app.
-9. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+9. **Herramienta nueva, para más adelante: Disk Image** (nombre provisorio; sólo Windows). Imagen del
+   disco de sistema con un pendrive WinPE propio y DISM, en lugar de un programa de terceros. La sección
+   muestra cuándo fue la última imagen (fecha, tamaño, dónde está) y las instrucciones paso a paso para
+   capturar y restaurar, y tiene un botón para armar el pendrive. El motor ya existe y anda como scripts
+   aparte (`ImagenDisco_Win`: instalar el ADK, armar el pendrive, capturar, restaurar, verificar); la
+   captura y la restauración corren en el pendrive, con Windows apagado, así que la app sólo prepara,
+   informa y verifica. A resolver al diseñarla:
+   - El armado BORRA el pendrive y pide administrador: elevar sólo esa acción (la app sigue sin
+     administrador), elegir el disco por número de serie en la UI (no por letra ni con un archivo editado
+     a mano), aceptar sólo USB de 8-256 GB y confirmar escribiendo el final de la serie.
+   - El ADK (~4 GB) no viaja con la app: detectarlo y ofrecer instalarlo.
+   - En una prueba automatizada nada borra ni instala: como la limpieza de Disk Space, sólo simula.
+   - Avisar cuando la última imagen tiene más de N días, como el recordatorio de Disk Space.
+10. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
