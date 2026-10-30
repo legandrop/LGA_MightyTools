@@ -136,5 +136,8 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    atajos del descriptor de Folder Switch están copiados entre `FolderSwitchModule.cpp` y
    `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez que se compile en Windows); el CI de mac
    (`.github/workflows/build-macos.yml`) no se corrió después del cambio de orden de sus pasos.
-7. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+7. **Herramienta nueva, para más adelante: Desktop Icons.** Guarda y restaura la posición de los íconos del
+   escritorio: snapshots manuales y uno automático por día, sólo con la PC despierta hace al menos una hora;
+   quedan los últimos 5 automáticos más los manuales. Diseño en `Docs/Roadmap_Desktop_Icons.md`.
+8. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
