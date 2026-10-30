@@ -139,5 +139,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 7. **Herramienta nueva, para más adelante: Desktop Icons.** Guarda y restaura la posición de los íconos del
    escritorio: snapshots manuales y uno automático por día, sólo con la PC despierta hace al menos una hora;
    quedan los últimos 5 automáticos más los manuales. Diseño en `Docs/Roadmap_Desktop_Icons.md`.
-8. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
+8. **Herramienta nueva, para más adelante: App Toggle.** Un atajo por app con tres casos: si la app no
+   está abierta, la abre; si está abierta sin foco, la trae al frente (y la restaura si estaba
+   minimizada); si ya tiene el foco, la minimiza. Reemplaza el Win+E de XYplorer de
+   `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`. Falta definir si además puede maximizar, como opción por app.
+9. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
    LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
