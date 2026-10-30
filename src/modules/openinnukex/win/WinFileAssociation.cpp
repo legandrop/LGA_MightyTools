@@ -16,7 +16,22 @@
 #include <shellapi.h>
 #include <shlobj.h>
 
+namespace WinShellCom {
+
+// IOpenWithLauncher: el mismo IID a mano que usaba el cliente v1.83 (MinGW ignora __declspec(uuid)).
+// FUERA del namespace anonimo a proposito: ahi el tipo es local a este archivo y, como ninguna clase
+// del programa lo implementa (lo implementa Windows, en otro proceso), GCC en Release dio la llamada
+// virtual a Launch() por imposible y la cambio por un salto a una direccion invalida (crash de v1.52).
+struct IOpenWithLauncher : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE Launch(HWND hWndParent, const wchar_t *lpszPath, int flags) = 0;
+};
+
+} // namespace WinShellCom
+
 namespace {
+
+using WinShellCom::IOpenWithLauncher;
 
 constexpr wchar_t kProgIdW[] = L"LGA.NukeScript.1";
 constexpr wchar_t kExtensionW[] = L".nk";
@@ -217,12 +232,6 @@ bool missingOnPresentLocalDrive(const QString &exePath)
 }
 
 // ─── Fallbacks de UI del sistema ───────────────────────────────────────────
-
-// IOpenWithLauncher: el mismo IID a mano que usaba el cliente v1.83 (MinGW ignora __declspec(uuid)).
-struct IOpenWithLauncher : public IUnknown
-{
-    virtual HRESULT STDMETHODCALLTYPE Launch(HWND hWndParent, const wchar_t *lpszPath, int flags) = 0;
-};
 
 bool launchOpenWithPicker(HWND parentHwnd)
 {

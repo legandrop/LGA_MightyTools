@@ -10,6 +10,9 @@ platforms: [win, mac]
 
 ## Unreleased
 
+## v1.53
+- [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.
+
 ## v1.52
 - [fixed][win] Window Layouts shortcuts sent by Stream Deck apply the layout instead of reaching Windows or other apps.
 - [improved] Disk Space's Clean up shows how much each group and row will actually free next to its total, and how many of its folders are held by open apps.

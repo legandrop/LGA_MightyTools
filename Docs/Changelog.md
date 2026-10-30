@@ -2,6 +2,10 @@
 
 v1.53:
 
+Windows: Apply de Open in NukeX cerraba la app entera cuando la asociación silenciosa del `.nk` no quedaba escrita y tocaba abrir el selector «Abrir con» de Windows (crash BEX64, salto a una dirección inválida). Causa: la interfaz COM `IOpenWithLauncher`, declarada a mano dentro del namespace anónimo, era local al archivo y ninguna clase del programa la implementa; GCC en Release dio por imposible la llamada virtual a `Launch()` y la reemplazó por un salto a basura (en Debug no pasaba). Se la declara fuera del namespace anónimo; en el exe Release vuelve a aparecer la llamada por la vtable.
+
+[ Open in NukeX - Apply ya no crashea al abrir el selector de Windows ]
+
 Mac: `deploy_local.sh` se re-copia de la pieza canonica de la Base (v0.161): ahora arma siempre el DMG (le pasa `--dmg` a `./deploy.sh`, que por eso corre tambien los self-tests antes de empaquetar), para tener listo lo que se le manda a alguien sin otra corrida. Al terminar imprime la ruta de cada DMG de esa corrida y, solo con terminal, pregunta con una tecla si los muestra en Finder; sale con error si el deploy no dejo ningun DMG. Reglas del repo actualizadas.
 
 [ Deploy Mac - deploy_local.sh arma el DMG y ofrece Finder ]
