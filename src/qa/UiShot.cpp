@@ -1638,6 +1638,93 @@ int runPageFitProbe()
     return failures ? 1 : 0;
 }
 
+// Animacion del switch (D-64): un click la anima y termina en su lugar; setChecked() del codigo salta
+// sin animar (reflejar un estado, capturas). El switch se muestra fuera de pantalla.
+int runSwitchAnimProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const char *what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", what);
+        failures += ok ? 0 : 1;
+    };
+    const auto waitMs = [](int ms) {
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < ms) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+            QThread::msleep(5);
+        }
+    };
+    ToggleSwitch toggle;
+    toggle.setAttribute(Qt::WA_DontShowOnScreen, true);
+    toggle.show();
+    // Un click de mouse de verdad (press + release): es el camino del usuario, donde Qt pone
+    // blockRefresh y no llama a checkStateSet(). click() publico es otro camino y se prueba aparte.
+    const auto mouseClick = [&toggle]() {
+        const QPointF center = QRectF(toggle.rect()).center();
+        const QPointF global = toggle.mapToGlobal(center);
+        QMouseEvent press(QEvent::MouseButtonPress, center, global, Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent release(QEvent::MouseButtonRelease, center, global, Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&toggle, &press);
+        QCoreApplication::sendEvent(&toggle, &release);
+    };
+
+    toggle.setChecked(true);
+    check(toggle.knobPosition() == 1.0, "setChecked(true) salta al final sin animar");
+    toggle.setChecked(false);
+    check(toggle.knobPosition() == 0.0, "setChecked(false) salta al principio sin animar");
+
+    mouseClick();
+    check(toggle.isChecked(), "el click de mouse prende");
+    check(toggle.knobPosition() < 1.0, "justo despues del click la perilla todavia no llego");
+    waitMs(60);
+    const qreal mid = toggle.knobPosition();
+    check(mid > 0.0 && mid < 1.0, "a mitad de camino la perilla esta entre los dos lados");
+    waitMs(250);
+    check(toggle.knobPosition() == 1.0, "a los 160 ms la perilla llego al final");
+
+    mouseClick();
+    waitMs(250);
+    check(!toggle.isChecked() && toggle.knobPosition() == 0.0, "el segundo click vuelve al principio");
+
+    // Un panel que refresca apenas se hizo click repite el mismo estado: la animacion sigue.
+    mouseClick();
+    waitMs(40);
+    toggle.setChecked(true);
+    const qreal afterRepeat = toggle.knobPosition();
+    check(afterRepeat > 0.0 && afterRepeat < 1.0, "setChecked con el mismo destino no corta la animacion");
+    waitMs(250);
+    check(toggle.knobPosition() == 1.0, "y llega al final igual");
+
+    // Un setChecked al reves en medio de la animacion (un modulo que rechaza) la corta y salta.
+    mouseClick();
+    waitMs(40);
+    toggle.setChecked(true);
+    check(toggle.knobPosition() == 1.0, "setChecked contrario a mitad de la animacion salta a su lugar");
+    waitMs(250);
+    check(toggle.isChecked() && toggle.knobPosition() == 1.0, "y la animacion cortada no vuelve a mover la perilla");
+
+    // Rechazo dentro de toggled durante el click de mouse: queda apagado y dibujado apagado.
+    toggle.setChecked(false);
+    const QMetaObject::Connection reject =
+        QObject::connect(&toggle, &QAbstractButton::toggled, &toggle, [&toggle](bool on) {
+            if (on) toggle.setChecked(false);
+        });
+    mouseClick();
+    QObject::disconnect(reject);
+    waitMs(250);
+    check(!toggle.isChecked() && toggle.knobPosition() == 0.0, "un rechazo dentro de toggled queda dibujado apagado");
+
+    // click() publico (el que usa el texto de SwitchRow) tambien anima y termina en su lugar.
+    toggle.click();
+    check(toggle.isChecked() && toggle.knobPosition() < 1.0, "click() publico arranca la animacion");
+    waitMs(250);
+    check(toggle.knobPosition() == 1.0, "click() publico llega al final");
+
+    fprintf(stdout, "%s\n", failures ? "switch-anim FALLO" : "switch-anim ok");
+    return failures ? 1 : 0;
+}
+
 int runWindowLayoutsEditorScrollProbe()
 {
     MemorySettingsStore store;
@@ -1708,6 +1795,9 @@ int runUiProbe(const QStringList &args)
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
     if (probe == QLatin1String("window-layouts-editor-scroll")) {
         return runWindowLayoutsEditorScrollProbe();
+    }
+    if (probe == QLatin1String("switch-anim")) {
+        return runSwitchAnimProbe();
     }
     if (probe == QLatin1String("page-fit")) {
         return runPageFitProbe();

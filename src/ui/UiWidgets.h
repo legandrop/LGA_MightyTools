@@ -14,6 +14,7 @@ class QMouseEvent;
 class QTextDocument;
 class QPainter;
 class QPushButton;
+class QVariantAnimation;
 
 // Piezas chicas compartidas: iconos vectoriales, chips y label con elipsis. Copia recortada de
 // uiwidgets.h de LGA_VideoDownloader (mismos trazos y medidas). Todo se pinta con QPainter a la
@@ -140,14 +141,31 @@ private:
 
 // Interruptor de encendido de una herramienta (30 x 17, el `.sw` del canvas). Checkable: toggled()
 // avisa el cambio. No toma foco de teclado (regla de la app).
+// Animacion «Suave» (D-64): con un click del usuario la perilla desliza 160 ms con frenado al final y
+// el color se funde parejo en el mismo tiempo. Un setChecked() del codigo (reflejar un estado) salta
+// al final sin animar.
 class ToggleSwitch : public QAbstractButton
 {
     Q_OBJECT
 public:
     explicit ToggleSwitch(QWidget *parent = nullptr);
     QSize sizeHint() const override;
+    // Posicion de la perilla que se esta dibujando (0 apagado, 1 prendido). Para QA.
+    qreal knobPosition() const { return m_knob; }
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void nextCheckState() override;
+    void checkStateSet() override;
+private:
+    void animateTo(qreal target);
+
+    QVariantAnimation *m_anim = nullptr; // se crea con el primer click
+    bool m_byUser = false;
+    qreal m_target = 0; // hacia donde va la animacion en marcha
+    qreal m_knob = 0;  // posicion de la perilla: 0 apagado, 1 prendido (con la curva)
+    qreal m_tint = 0;  // mezcla de colores: 0 apagado, 1 prendido (lineal)
+    qreal m_knobFrom = 0;
+    qreal m_tintFrom = 0;
 };
 
 // Una opcion de encendido y apagado: texto (y descripcion opcional debajo) a la izquierda y el switch a

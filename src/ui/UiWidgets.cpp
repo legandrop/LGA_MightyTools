@@ -23,6 +23,9 @@
 #include <QTextDocument>
 #include <QTextLayout>
 #include <QVariant>
+#include <QVariantAnimation>
+#include <QPointer>
+#include <QEasingCurve>
 #include <QtMath>
 
 namespace {
@@ -626,20 +629,98 @@ QSize ToggleSwitch::sizeHint() const
     return QSize(30, 17);
 }
 
+void ToggleSwitch::nextCheckState()
+{
+    // Todo click del usuario pasa por aca (mouse, o click() desde el texto de su SwitchRow). Con el
+    // mouse, Qt pone blockRefresh y su setChecked NO llama a checkStateSet() (qabstractbutton.cpp,
+    // igual que QCheckBox): la animacion se arranca aca, al volver de la base. El guard cubre un
+    // handler de toggled que borre el switch.
+    QPointer<ToggleSwitch> guard(this);
+    m_byUser = true;
+    QAbstractButton::nextCheckState();
+    if (!guard) {
+        return;
+    }
+    m_byUser = false;
+    animateTo(isChecked() ? 1.0 : 0.0);
+}
+
+void ToggleSwitch::checkStateSet()
+{
+    // Un setChecked() del codigo: refleja un estado y salta al final. Si repite el destino de una
+    // animacion en marcha (un panel que refresca apenas se hizo click), la deja seguir.
+    if (m_byUser) {
+        return;
+    }
+    const qreal target = isChecked() ? 1.0 : 0.0;
+    if (m_anim && m_anim->state() == QAbstractAnimation::Running && target == m_target) {
+        return;
+    }
+    if (m_anim) {
+        m_anim->stop();
+    }
+    m_knob = m_tint = m_target = target;
+    update();
+}
+
+void ToggleSwitch::animateTo(qreal target)
+{
+    m_target = target;
+    if (!isVisible()) {
+        if (m_anim) {
+            m_anim->stop();
+        }
+        m_knob = m_tint = target;
+        update();
+        return;
+    }
+    if (!m_anim) {
+        m_anim = new QVariantAnimation(this);
+        m_anim->setStartValue(0.0);
+        m_anim->setEndValue(1.0);
+        m_anim->setDuration(160);
+        // El tiempo corre lineal: el color se funde parejo y la perilla toma la curva en valueChanged.
+        connect(m_anim, &QVariantAnimation::valueChanged, this, [this](const QVariant &value) {
+            // cubic-bezier(.2, .8, .2, 1) del mockup: arranca rapido y frena al llegar, sin rebote.
+            static const QEasingCurve knobCurve = [] {
+                QEasingCurve curve(QEasingCurve::BezierSpline);
+                curve.addCubicBezierSegment(QPointF(0.2, 0.8), QPointF(0.2, 1.0), QPointF(1.0, 1.0));
+                return curve;
+            }();
+            const qreal f = value.toReal();
+            m_knob = m_knobFrom + (m_target - m_knobFrom) * knobCurve.valueForProgress(f);
+            m_tint = m_tintFrom + (m_target - m_tintFrom) * f;
+            update();
+        });
+    }
+    // Un click en medio de una animacion arranca la vuelta desde donde esta.
+    m_anim->stop();
+    m_knobFrom = m_knob;
+    m_tintFrom = m_tint;
+    m_anim->start();
+}
+
 void ToggleSwitch::paintEvent(QPaintEvent *)
 {
     // Medidas del canvas: caja 30 x 17 con borde de 1 y radio 9; perilla de 11 a 2 px del borde
-    // interno (left 2 apagado, left 15 prendido).
+    // interno (left 2 apagado, left 15 prendido). Durante la animacion los colores se mezclan por
+    // m_tint y la perilla va por m_knob; quieto, son los tokens de siempre.
+    const auto mix = [this](const char *off, const char *on) {
+        const QColor a = Theme::color(off);
+        const QColor b = Theme::color(on);
+        const qreal t = m_tint;
+        return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
+                                a.blueF() + (b.blueF() - a.blueF()) * t, a.alphaF() + (b.alphaF() - a.alphaF()) * t);
+    };
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    const bool on = isChecked();
     const QRectF box = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
-    painter.setPen(QPen(Theme::color(on ? Theme::kPrimaryBorder : Theme::kSwitchOffBorder), 1.0));
-    painter.setBrush(Theme::color(on ? Theme::kPrimary : Theme::kSwitchOff));
+    painter.setPen(QPen(mix(Theme::kSwitchOffBorder, Theme::kPrimaryBorder), 1.0));
+    painter.setBrush(mix(Theme::kSwitchOff, Theme::kPrimary));
     painter.drawRoundedRect(box, 8.5, 8.5);
     painter.setPen(Qt::NoPen);
-    painter.setBrush(Theme::color(on ? Theme::kSwitchKnobOn : Theme::kSwitchKnobOff));
-    const qreal left = 1 + (on ? 15 : 2);
+    painter.setBrush(mix(Theme::kSwitchKnobOff, Theme::kSwitchKnobOn));
+    const qreal left = 1 + 2 + 13 * m_knob;
     painter.drawEllipse(QRectF(left, 1 + 2, 11, 11));
 }
 

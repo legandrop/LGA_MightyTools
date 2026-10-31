@@ -2,6 +2,10 @@
 
 v1.53:
 
+UI: el switch saltaba de un lado al otro sin transición. Lega eligió la animación «Suave» del mockup (D-64): con un click la perilla desliza 160 ms con la curva `cubic-bezier(.2,.8,.2,1)` y el fondo, el borde y la perilla funden su color linealmente en el mismo tiempo. `ToggleSwitch` anima al volver de `nextCheckState()` (con el mouse Qt no llama a `checkStateSet()`, como en `QCheckBox`); un `setChecked()` del código salta al final, salvo que repita el destino de la animación en marcha. Los atajos de Window Layouts aplican el cambio a los 180 ms, después de deslizar. Nueva `--ui-probe switch-anim` con clicks de mouse simulados.
+
+[ UI - Animacion suave del switch ]
+
 UI: las páginas se aplastaban en vez de mostrar la barra de scroll (Open in NukeX en español con el tamaño 1 cortaba líneas y botones). Causa: el panel se arma con la página oculta y, al mostrarla, Qt no vuelve a repartir el alto de los textos de varias líneas. `MainWindow::relayoutCurrentPage()` invalida los layouts de la página y le pide a la `QScrollArea` que recalcule, al elegir página y al mostrar la ventana; lo controla `--ui-probe page-fit`. Además se sacan todas las casillas: nuevo `SwitchRow` (texto, descripción y switch a la derecha) en General, Folder Switch, Open in NukeX y Window Layouts, donde la opción de ventanas de administrador sube debajo del encabezado. Se borran el estilo de casilla y `check.png`.
 
 [ UI - Paginas sin aplastarse y switches en lugar de casillas ]

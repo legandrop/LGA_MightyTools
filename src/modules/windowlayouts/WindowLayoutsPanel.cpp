@@ -577,8 +577,9 @@ void WindowLayoutsPanel::rebuildList()
         shortcut->setTrailingWidget(controls);
         if (m_interactive) {
             shortcut->setEditHandler([this, id = layout.id]() { editLayout(id); });
+            // Aplicarlo rearma la lista y borra este switch: se espera a que termine de deslizar (160 ms).
             connect(toggle, &ToggleSwitch::toggled, this, [this, id = layout.id](bool enabled) {
-                QTimer::singleShot(0, this, [this, id, enabled]() { m_module->setLayoutEnabled(id, enabled); });
+                QTimer::singleShot(180, this, [this, id, enabled]() { m_module->setLayoutEnabled(id, enabled); });
             });
         }
         line->addWidget(shortcut, 1);

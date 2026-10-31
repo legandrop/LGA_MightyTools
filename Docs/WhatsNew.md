@@ -13,7 +13,7 @@ platforms: [win, mac]
 ## v1.53
 - [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.
 - [improved] La barra de scroll es más finita y General ya no tiene la sección «About».
-- [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas.
+- [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas, y el switch se desliza suave al tocarlo.
 - [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» arriba de su panel.
 - [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.
 

@@ -5,6 +5,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-64 · Animación «Suave» del switch** (2026-10-31, Lega eligió la B entre seis del mockup). La
+  perilla desliza 160 ms y frena al llegar; el color se funde en el mismo tiempo; sin rebote ni
+  cambios con el mouse encima. Solo anima un click del usuario.
 - **D-63 · Switches en lugar de casillas** (2026-10-31, Lega). Toda opción de encender y apagar usa el
   switch (`SwitchRow`: texto y descripción a la izquierda, switch a la derecha), también donde el canvas
   dibujaba una casilla. La animación del switch la elige Lega sobre un mockup.
