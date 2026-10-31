@@ -40,15 +40,15 @@ int clampLevel(int level)
 
 qreal factor(int level)
 {
-    // Pasos chicos: el 2 es "un puntito mas" que el 1. Con la ventana mas grande (largestWindow, 960 x 676),
-    // el 2 pide 1152 x 812 de area util.
+    // Pasos chicos: el 2 es "un puntito mas" que el 1. Con la ventana mas grande (largestWindow, 960 x 700),
+    // el 2 pide 1152 x 840 de area util.
     static constexpr qreal kFactors[kMaxLevel + 1] = {1.0, 1.1, 1.2};
     return kFactors[clampLevel(level)];
 }
 
 QSize largestWindow()
 {
-    return QSize(960, 676);
+    return QSize(960, 700);
 }
 
 int maxFittingLevel(const QSize &unscaledArea)
@@ -59,7 +59,10 @@ int maxFittingLevel(const QSize &unscaledArea)
     const QSize window = largestWindow();
     for (int level = kMaxLevel; level > 0; --level) {
         const qreal f = factor(level);
-        if (window.width() * f <= unscaledArea.width() && window.height() * f <= unscaledArea.height()) {
+        // La tolerancia absorbe el error de coma flotante: 700 * 1.1 da 770.0000000000001.
+        constexpr qreal kEpsilon = 1e-6;
+        if (window.width() * f <= unscaledArea.width() + kEpsilon
+            && window.height() * f <= unscaledArea.height() + kEpsilon) {
             return level;
         }
     }

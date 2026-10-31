@@ -19,7 +19,7 @@ AreaPicker::AreaPicker(Mode mode, bool captureMode, QWidget *parent)
     setMouseTracking(true);
     if (captureMode) {
         setWindowFlags(Qt::Widget);
-        setFixedSize(780, 676);
+        setFixedSize(780, 700);
         m_windows = {{QStringLiteral("XYplorer"), QRect(75, 130, 345, 282)},
                      {QStringLiteral("OBS Studio"), QRect(287, 200, 405, 333)}};
         m_hovered = 1;

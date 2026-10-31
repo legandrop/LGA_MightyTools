@@ -32,7 +32,7 @@ public:
     enum class Mode { Normal, Capture };
 
     static constexpr int kWidth = 780;
-    static constexpr int kHeight = 676;
+    static constexpr int kHeight = 700;
     static inline const QString kGeneral = QStringLiteral("general");
 
     // appStore: donde se guarda la posicion (nullptr en captura).

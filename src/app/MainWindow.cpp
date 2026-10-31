@@ -138,7 +138,6 @@ void MainWindow::buildUi()
         m_general = new GeneralPage(m_host, content);
         column->addWidget(m_general);
         column->addStretch(1);
-        connect(m_general, &GeneralPage::helpRequested, this, &MainWindow::helpRequested);
         connect(m_general, &GeneralPage::toolToggleRequested, this, &MainWindow::toggleRequested);
     }
 

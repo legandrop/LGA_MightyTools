@@ -23,8 +23,8 @@ struct UpdateRowState
     QString version; ///< la ultima publicada (Latest y Available)
 };
 
-// Pagina "General" (canvas, secciones 2 y 7): inicio con el sistema, updates, version, las
-// herramientas cargadas y "About". En el primer arranque (nada prendido todavia) muestra la
+// Pagina "General" (canvas, secciones 2 y 7): inicio con el sistema, updates, version y las
+// herramientas cargadas (sin "About", D-62). En el primer arranque (nada prendido todavia) muestra la
 // bienvenida con una tarjeta por herramienta y solo la tarjeta "App".
 //
 // No escribe nada por su cuenta: avisa con senales y quien la arma (MainWindow/AppController)
@@ -54,7 +54,6 @@ signals:
     void checkUpdatesAtStartupToggled(bool check);
     void checkNowRequested();
     void updateRequested();
-    void helpRequested();
     void toolToggleRequested(const QString &id, bool on);
     // El usuario eligio otro idioma ("en" / "es").
     void languageChangeRequested(const QString &code);
@@ -67,7 +66,6 @@ private:
     void buildWelcome();
     QFrame *buildAppCard();
     QFrame *buildToolsCard();
-    QFrame *buildAboutCard();
 
     ModuleHost *m_host = nullptr;
     bool m_firstRun = false;
@@ -76,7 +74,6 @@ private:
     QFrame *m_welcome = nullptr;
     QList<ToggleSwitch *> m_welcomeSwitches;
     QFrame *m_toolsCard = nullptr;
-    QFrame *m_aboutCard = nullptr;
 
     QCheckBox *m_autoStart = nullptr;
     QLabel *m_firstRunCaption = nullptr;

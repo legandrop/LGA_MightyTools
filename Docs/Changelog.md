@@ -2,6 +2,10 @@
 
 v1.53:
 
+General: se saca la tarjeta «About», que repetía la versión y la ayuda (D-62). Con el tamaño de interfaz 1 en español, la página de Open in NukeX no entraba en los 676 de alto y la tarjeta «Versión de Nuke preferida» se aplastaba: cortaba una línea y los botones de versión, porque la página encoge los textos de varias líneas en vez de mostrar la barra. La ventana pasa a 700 de alto (`MainWindow::kHeight` y `UiScale::largestWindow()`), y el cálculo del nivel que entra en pantalla tolera el error de coma flotante (700 × 1,1). La barra de scroll vertical pasa de 8 a 5 px de grosor.
+
+[ General - Sin About, ventana mas alta y barra de scroll mas finita ]
+
 Windows: Window Layouts no hacía nada con el Administrador de tareas ni con otras apps abiertas como administrador. Con UAC encendido, Windows (UIPI) no le entrega a un proceso sin elevar las teclas dirigidas a una ventana elevada ni lo deja moverla, así que el hook de los atajos no se enteraba. Nueva casilla «Also move administrator windows» (apagada por defecto, D-61): lanza el mismo exe elevado con `--admin-window-helper`, que escucha los mismos atajos (solo con Ctrl, Alt o Win) en su propio hook y solo actúa si la ventana del frente es elevada; con cualquier otra deja pasar la combinación. La app sigue sin elevar y el cartel de permiso se espera en otro hilo. Se comunican por un pipe local con nombre al azar, cada lado verifica el proceso del otro, y el ayudante sale solo cuando la app se cierra o apaga la opción.
 
 [ Window Layouts - Mover tambien ventanas de administrador con un ayudante elevado ]

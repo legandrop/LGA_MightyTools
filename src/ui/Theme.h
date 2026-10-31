@@ -86,7 +86,6 @@ inline constexpr const char *kModIconBg = "#1f1d27";
 inline constexpr const char *kModIconBorder = "#2e2a40";
 inline constexpr const char *kPlatBorder = "#2c2c2c";
 inline constexpr const char *kMiniCard = "#191919";     ///< tarjetas de la bienvenida
-inline constexpr const char *kAboutName = "#9f84d6";
 // Interruptor
 inline constexpr const char *kPrimary = "#443a91";
 inline constexpr const char *kPrimaryBorder = "#5243a8";

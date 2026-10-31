@@ -5,6 +5,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-62 · General sin «About», ventana de 700 de alto y barra de scroll más finita** (2026-10-31,
+  Lega). La tarjeta About no sumaba nada: la versión ya está en App y la ayuda en el «?» de la barra de
+  título. La ventana principal pasa de 676 a 700 de alto para que Open in NukeX entre entera con el
+  tamaño de interfaz 1 en español (en 1366×768 sigue entrando el 0, D-35). La barra de scroll vertical
+  pasa de 8 a 5 px de grosor visible (Lega pidió la mitad o un 60%).
 - **D-61 · Ventanas de administrador con un ayudante elevado, no con la app entera elevada**
   (2026-10-31, Lega). Con UAC encendido, Window Layouts no recibía los atajos ni podía mover el
   Administrador de tareas ni otras apps elevadas. Lega comparó «Always run as administrator» (como
@@ -169,7 +174,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   fábrica**. Las capturas de QA siguen en 0 (el tamaño del diseño aprobado) salvo `--ui-scale`. Aplicada con el factor de escala global de Qt (`QT_SCALE_FACTOR`, fijado
   antes de crear la app y borrado enseguida para que no lo herede NukeX). No se reescalan las medidas a
   mano: con el factor de Qt todo crece parejo y el layout no cambia. Elegir otro tamaño reinicia la app.
-  **Límite por pantalla** (Lega, mismo día): un tamaño vale solo si la ventana más grande (960×676
+  **Límite por pantalla** (Lega, mismo día): un tamaño vale solo si la ventana más grande (960×700
   lógicos) entra entera en el área útil de la pantalla principal; si no, se usa el mayor que entra, sin
   tocar lo guardado (en una pantalla grande vuelve solo), y General apaga los que no entran. En 1366×768
   solo entra el 0.

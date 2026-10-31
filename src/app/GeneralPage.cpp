@@ -76,8 +76,6 @@ GeneralPage::GeneralPage(ModuleHost *host, QWidget *parent)
     column->addWidget(buildAppCard());
     m_toolsCard = buildToolsCard();
     column->addWidget(m_toolsCard);
-    m_aboutCard = buildAboutCard();
-    column->addWidget(m_aboutCard);
 
     setFirstRun(false);
     refreshTools();
@@ -318,31 +316,6 @@ QFrame *GeneralPage::buildToolsCard()
     return card;
 }
 
-QFrame *GeneralPage::buildAboutCard()
-{
-    QFrame *card = Ui::card(this);
-    auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
-    layout->setSpacing(0);
-    addHead(layout, QStringLiteral("About"), card);
-    auto *row = new QHBoxLayout();
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(5);
-    QLabel *name = Ui::label(QStringLiteral("LGA Mighty Tools <span style=\"color:%1;\">v" MIGHTYTOOLS_VERSION "</span>")
-                                 .arg(QLatin1String(Theme::kTextStrong)),
-                             "aboutName", card);
-    name->setTextFormat(Qt::RichText);
-    row->addWidget(name, 1, Qt::AlignVCenter);
-    QPushButton *help = Ui::button(I18n::tr("Help"), QString(), QStringLiteral("sm"), card);
-    help->setObjectName(QStringLiteral("aboutHelp"));
-    row->addWidget(help, 0, Qt::AlignVCenter);
-    layout->addLayout(row);
-    layout->addWidget(Ui::caption(I18n::tr("Developed by Lega Pugliese"), card));
-    layout->addWidget(new LinkLabel(QStringLiteral("lega.com.ar"), QStringLiteral("https://lega.com.ar"), card));
-    connect(help, &QPushButton::clicked, this, &GeneralPage::helpRequested);
-    return card;
-}
-
 void GeneralPage::showSessionUiSize()
 {
     m_uiSizeSwitch->setCurrent(UiScale::sessionLevel());
@@ -355,7 +328,6 @@ void GeneralPage::setFirstRun(bool firstRun)
     m_welcome->setVisible(firstRun);
     m_firstRunCaption->setVisible(firstRun);
     m_toolsCard->setVisible(!firstRun);
-    m_aboutCard->setVisible(!firstRun);
 }
 
 void GeneralPage::refreshTools()

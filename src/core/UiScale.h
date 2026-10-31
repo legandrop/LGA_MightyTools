@@ -33,7 +33,7 @@ int clampLevel(int level);
 
 // Limite por pantalla (D-35): un nivel solo vale si la ventana mas grande de la app entra entera en el
 // area util de la pantalla principal. La ventana de limpieza es la mas ancha (960) y la principal la
-// mas alta (676); el self-test controla que ninguna crezca sin pasar por aca.
+// mas alta (700); el self-test controla que ninguna crezca sin pasar por aca.
 QSize largestWindow();
 // El nivel mas alto con el que largestWindow() entra en `unscaledArea` (pixeles logicos del sistema, sin
 // el factor de la app). El 0 siempre vale. Un area invalida no limita (kMaxLevel).

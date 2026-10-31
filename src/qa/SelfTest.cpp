@@ -762,18 +762,18 @@ void testUiScale(const Check &check)
     check(UiScale::clampLevel(-1) == 1 && UiScale::clampLevel(3) == 1 && qFuzzyCompare(UiScale::factor(7), 1.1),
           QStringLiteral("tamano de interfaz: un nivel fuera de rango vale como el de fabrica (1)"));
     check(UiScale::readSavedLevel() == UiScale::kDefaultLevel && UiScale::kDefaultLevel == 1, QStringLiteral("tamano de interfaz: sin settings.ini (en memoria) arranca en 1"));
-    // Limite por pantalla: 960 x 676 por el factor tiene que entrar en el area util.
+    // Limite por pantalla: 960 x 700 por el factor tiene que entrar en el area util.
     check(UiScale::maxFittingLevel(QSize(1920, 1032)) == 2 && UiScale::maxFittingLevel(QSize(3440, 1392)) == 2,
           QStringLiteral("tamano de interfaz: en 1920x1080 y 3440x1440 entran los tres"));
-    check(UiScale::maxFittingLevel(QSize(1400, 760)) == 1, QStringLiteral("tamano de interfaz: con 760 de alto util, hasta el 1"));
+    check(UiScale::maxFittingLevel(QSize(1400, 780)) == 1, QStringLiteral("tamano de interfaz: con 780 de alto util, hasta el 1"));
     check(UiScale::maxFittingLevel(QSize(1366, 728)) == 0 && UiScale::fitLevel(1, QSize(1366, 728)) == 0,
           QStringLiteral("tamano de interfaz: en 1366x768 solo el 0 (ni el 1 de fabrica)"));
-    check(UiScale::fitLevel(2, QSize(1400, 760)) == 1 && UiScale::fitLevel(0, QSize(1366, 728)) == 0,
+    check(UiScale::fitLevel(2, QSize(1400, 780)) == 1 && UiScale::fitLevel(0, QSize(1366, 728)) == 0,
           QStringLiteral("tamano de interfaz: lo guardado se recorta, nunca se agranda"));
     check(UiScale::maxFittingLevel(QSize()) == UiScale::kMaxLevel, QStringLiteral("tamano de interfaz: sin dato de pantalla no se limita"));
-    // Bordes exactos: 960 x 676 por 1,1 = 1056 x 743,6 y por 1,2 = 1152 x 811,2.
-    check(UiScale::maxFittingLevel(QSize(1056, 744)) == 1 && UiScale::maxFittingLevel(QSize(1056, 743)) == 0
-              && UiScale::maxFittingLevel(QSize(1152, 812)) == 2 && UiScale::maxFittingLevel(QSize(1151, 812)) == 1,
+    // Bordes exactos: 960 x 700 por 1,1 = 1056 x 770 y por 1,2 = 1152 x 840.
+    check(UiScale::maxFittingLevel(QSize(1056, 770)) == 1 && UiScale::maxFittingLevel(QSize(1056, 769)) == 0
+              && UiScale::maxFittingLevel(QSize(1152, 840)) == 2 && UiScale::maxFittingLevel(QSize(1151, 840)) == 1,
           QStringLiteral("tamano de interfaz: los bordes exactos de cada nivel"));
 #ifdef Q_OS_WIN
     // En Windows siempre hay pantalla (en mac, una sesion sin servidor de ventanas no tiene ninguna).

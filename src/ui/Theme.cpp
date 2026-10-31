@@ -293,8 +293,8 @@ QLabel#sideStatus[tone="warn"] { color: @warn; }
 QLabel#sideStatus[tone="err"] { color: @error; }
 QScrollArea#pane, QWidget#paneContent { background-color: @window; border: none; }
 /* Scroll vertical fino y oscuro (el canvas no lo dibuja; el de Fusion es claro y con flechas). */
-QScrollBar:vertical { background: transparent; width: 10px; margin: 2px 2px 2px 0px; }
-QScrollBar::handle:vertical { background: #333333; border-radius: 4px; min-height: 30px; }
+QScrollBar:vertical { background: transparent; width: 7px; margin: 2px 2px 2px 0px; }
+QScrollBar::handle:vertical { background: #333333; border-radius: 2px; min-height: 30px; }
 QScrollBar::handle:vertical:hover { background: #444444; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
@@ -307,7 +307,6 @@ QLabel#welcomeTitle { color: @textStrong; font-size: @fs16; font-weight: 600; }
 QFrame#miniCard { background-color: @miniCard; border: 1px solid transparent; border-radius: 8px; }
 QLabel#miniTitle { color: @textStrong; font-size: @fs13; font-weight: 600; }
 QLabel#runningText { color: @text; font-size: @fs13; }
-QLabel#aboutName { color: @aboutName; font-size: @fs13_5; font-weight: 600; }
 QLabel#meta[tone="ok"] { color: @ok; }
 QLabel#meta[tone="warn"] { color: @warn; }
 QLabel#linkLabel { color: #8C7ED9; font-size: @fs13; font-weight: 500; text-decoration: none; }
@@ -366,7 +365,7 @@ QLineEdit#ruleField:disabled { color: @textPlaceholder; }
     const QList<QPair<const char *, QString>> tokens = {
         {"@statusOk", kStatusOk}, {"@sideSelected", kSideSelected}, {"@side", kSide},
         {"@modIconBg", kModIconBg}, {"@modIconBorder", kModIconBorder}, {"@platBorder", kPlatBorder},
-        {"@miniCard", kMiniCard}, {"@aboutName", kAboutName}, {"@dotPaused", kDotPaused},
+        {"@miniCard", kMiniCard}, {"@dotPaused", kDotPaused},
         {"@chosenBg", kChosenBg}, {"@chosenBorder", kChosenBorder}, {"@chosenText", kChosenText},
         {"@okBg", kOkBg}, {"@okBorder", kOkBorder}, {"@errBg", kErrBg}, {"@errBorder", kErrBorder},
         {"@window", kWindow}, {"@card", kCard}, {"@tile", kTile}, {"@fieldBorder", kFieldBorder},
