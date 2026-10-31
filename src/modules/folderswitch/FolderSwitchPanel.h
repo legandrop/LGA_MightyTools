@@ -10,7 +10,7 @@
 
 class Chip;
 class ElidedLabel;
-class QCheckBox;
+class SwitchRow;
 class QFrame;
 class QLabel;
 class ShortcutRow;
@@ -64,7 +64,7 @@ private:
     ViewState m_state;
 
     StatusCard *m_status = nullptr;
-    QCheckBox *m_autoSwitch = nullptr;
+    SwitchRow *m_autoSwitch = nullptr;
     ShortcutRow *m_manualRow = nullptr;
     ShortcutRow *m_recentRow = nullptr;
 

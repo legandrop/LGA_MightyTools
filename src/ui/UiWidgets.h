@@ -9,6 +9,8 @@
 #include <QWidget>
 
 class QBoxLayout;
+class QHBoxLayout;
+class QMouseEvent;
 class QTextDocument;
 class QPainter;
 class QPushButton;
@@ -146,6 +148,32 @@ public:
     QSize sizeHint() const override;
 protected:
     void paintEvent(QPaintEvent *event) override;
+};
+
+// Una opcion de encendido y apagado: texto (y descripcion opcional debajo) a la izquierda y el switch a
+// la derecha. Reemplaza a las casillas de verificacion (Lega, 2026-10-31: todo con switch). Un click en
+// el texto tambien cambia el switch. clicked() sale solo por accion del usuario; setChecked() no avisa.
+class SwitchRow : public QWidget
+{
+    Q_OBJECT
+public:
+    SwitchRow(const QString &text, const QString &caption, QWidget *parent = nullptr);
+    bool isChecked() const;
+    void setChecked(bool checked);
+    ToggleSwitch *toggle() const { return m_switch; }
+    // nullptr si se creo sin descripcion.
+    QLabel *captionLabel() const { return m_caption; }
+    // Controles que van entre el texto y el switch (un resultado, un boton).
+    void addTrailingWidget(QWidget *widget);
+signals:
+    void clicked(bool checked);
+protected:
+    void mouseReleaseEvent(QMouseEvent *event) override;
+private:
+    QHBoxLayout *m_row = nullptr;
+    QLabel *m_caption = nullptr;
+    ToggleSwitch *m_switch = nullptr;
+    QList<QWidget *> m_trailing;
 };
 
 // Switch segmentado: varias opciones, una sola elegida. Es un campo como el desplegable (#fieldButton):

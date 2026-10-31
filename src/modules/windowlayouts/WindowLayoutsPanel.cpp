@@ -8,7 +8,6 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
-#include <QCheckBox>
 #include <QGuiApplication>
 #include <QHideEvent>
 #include <QHBoxLayout>
@@ -25,10 +24,6 @@
 #include <QVBoxLayout>
 
 namespace {
-
-#ifdef Q_OS_WIN
-constexpr int kCheckIndent = 26;
-#endif
 
 struct Preset
 {
@@ -281,6 +276,25 @@ QWidget *WindowLayoutsPanel::createListPage()
     auto *column = new QVBoxLayout(page);
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
+#ifdef Q_OS_WIN
+    // Primero, debajo del encabezado (Lega): es una opcion de toda la herramienta, no de un atajo.
+    auto *adminCard = Ui::card(page);
+    auto *adminColumn = new QVBoxLayout(adminCard);
+    adminColumn->setContentsMargins(14, 12, 14, 12);
+    adminColumn->setSpacing(0);
+    m_adminWindows = new SwitchRow(
+        I18n::tr("Also move administrator windows"),
+        I18n::tr("For Task Manager and apps opened as administrator. A helper runs with administrator permission; Windows may ask for it each time the helper starts."),
+        adminCard);
+    m_adminWindows->setObjectName(QStringLiteral("adminWindowsRow"));
+    adminColumn->addWidget(m_adminWindows);
+    if (m_interactive) {
+        connect(m_adminWindows, &SwitchRow::clicked, this, [this](bool checked) {
+            m_module->setAdminWindowsEnabled(checked);
+        });
+    }
+    column->addWidget(adminCard);
+#endif
     m_statusCard = new StatusCard(page);
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
@@ -310,28 +324,6 @@ QWidget *WindowLayoutsPanel::createListPage()
     addRow->addWidget(add, 0, Qt::AlignVCenter);
     if (m_interactive) connect(add, &QPushButton::clicked, this, [this]() { editLayout(); });
     column->addWidget(addCard);
-#ifdef Q_OS_WIN
-    // Casilla con caption indentada, como «Switch automatically» de Folder Switch.
-    auto *adminCard = Ui::card(page);
-    auto *adminColumn = new QVBoxLayout(adminCard);
-    adminColumn->setContentsMargins(14, 12, 14, 12);
-    adminColumn->setSpacing(0);
-    m_adminWindows = new QCheckBox(I18n::tr("Also move administrator windows"), adminCard);
-    m_adminWindows->setObjectName(QStringLiteral("adminWindowsCheck"));
-    adminColumn->addWidget(m_adminWindows);
-    auto *adminCaption = Ui::caption(
-        I18n::tr("For Task Manager and apps opened as administrator. A helper runs with administrator permission; Windows may ask for it each time the helper starts."),
-        adminCard);
-    adminCaption->setWordWrap(true);
-    adminCaption->setContentsMargins(kCheckIndent, 3, 0, 0);
-    adminColumn->addWidget(adminCaption);
-    if (m_interactive) {
-        connect(m_adminWindows, &QCheckBox::clicked, this, [this](bool checked) {
-            m_module->setAdminWindowsEnabled(checked);
-        });
-    }
-    column->addWidget(adminCard);
-#endif
     column->addStretch();
     return page;
 }
@@ -527,7 +519,6 @@ void WindowLayoutsPanel::refresh()
         m_editorError->show();
     }
     if (m_adminWindows) {
-        const QSignalBlocker block(m_adminWindows);
         m_adminWindows->setChecked(m_module->adminWindowsEnabled());
     }
     rebuildList();

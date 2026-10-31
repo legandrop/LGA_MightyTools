@@ -11,7 +11,7 @@
 
 class ModuleContext;
 class Chip;
-class QCheckBox;
+class SwitchRow;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -110,7 +110,7 @@ private:
     QLineEdit *m_pathField = nullptr;
     QPushButton *m_browseButton = nullptr;
     QPushButton *m_saveButton = nullptr;
-    QCheckBox *m_showNoticeCheck = nullptr;
+    SwitchRow *m_showNoticeCheck = nullptr;
 
     // "Nuke Bridge"
     Chip *m_bridgeChip = nullptr;

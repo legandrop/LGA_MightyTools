@@ -9,7 +9,7 @@ class Chip;
 class SegmentedSwitch;
 class ModuleHeader;
 class ModuleHost;
-class QCheckBox;
+class SwitchRow;
 class QFrame;
 class QLabel;
 class QPushButton;
@@ -47,8 +47,6 @@ public:
     void setAutoStart(bool enabled, bool installedCopy);
     void setCheckUpdatesAtStartup(bool check);
 
-    QCheckBox *autoStartCheck() const { return m_autoStart; }
-
 signals:
     void autoStartToggled(bool enabled);
     void checkUpdatesAtStartupToggled(bool check);
@@ -75,9 +73,9 @@ private:
     QList<ToggleSwitch *> m_welcomeSwitches;
     QFrame *m_toolsCard = nullptr;
 
-    QCheckBox *m_autoStart = nullptr;
+    SwitchRow *m_autoStart = nullptr;
     QLabel *m_firstRunCaption = nullptr;
-    QCheckBox *m_checkUpdates = nullptr;
+    SwitchRow *m_checkUpdates = nullptr;
     QLabel *m_updateResult = nullptr;
     QPushButton *m_updateButton = nullptr;
     QPushButton *m_languageButton = nullptr;

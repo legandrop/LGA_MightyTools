@@ -11,9 +11,10 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
-- [improved] La ventana es un poco más alta: Open in NukeX entra entera, sin textos ni botones cortados.
+- [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.
 - [improved] La barra de scroll es más finita y General ya no tiene la sección «About».
-- [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» en su panel.
+- [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas.
+- [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» arriba de su panel.
 - [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.
 
 ## v1.52

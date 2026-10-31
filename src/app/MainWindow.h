@@ -88,6 +88,8 @@ private:
     void refreshGeneralItem();
     // Pone en la pagina de `id` su panel (si esta prendida y la pagina se esta viendo) o el de apagado.
     void syncBody(const QString &id);
+    // Vuelve a repartir el alto de la pagina que se ve (ver la nota en el .cpp).
+    void relayoutCurrentPage();
     void refreshOffNotices();
     void restorePosition();
     void savePosition();

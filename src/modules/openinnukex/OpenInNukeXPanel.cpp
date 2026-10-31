@@ -16,7 +16,6 @@
 #include "modules/openinnukex/mac/MacFileAssociation.h"
 #endif
 
-#include <QCheckBox>
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QDir>
@@ -317,15 +316,14 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
     pathRow->addWidget(m_saveButton);
     layout->addLayout(pathRow);
 
-    m_showNoticeCheck = new QCheckBox(I18n::tr("Show a notice while a new NukeX opens"), card);
+    m_showNoticeCheck = new SwitchRow(I18n::tr("Show a notice while a new NukeX opens"),
+                                      I18n::tr("A small window that closes itself after 3 seconds."), card);
     layout->addWidget(m_showNoticeCheck);
-    auto *noticeCaption = Ui::caption(I18n::tr("A small window that closes itself after 3 seconds."), card);
-    layout->addWidget(noticeCaption);
 
     if (m_interactive) {
         connect(m_browseButton, &QPushButton::clicked, this, &OpenInNukeXPanel::onBrowseNukeXClicked);
         connect(m_saveButton, &QPushButton::clicked, this, &OpenInNukeXPanel::onSaveNukeXClicked);
-        connect(m_showNoticeCheck, &QCheckBox::toggled, this, &OpenInNukeXPanel::onShowLaunchNoticeToggled);
+        connect(m_showNoticeCheck, &SwitchRow::clicked, this, &OpenInNukeXPanel::onShowLaunchNoticeToggled);
         // Enter guarda y suelta el campo; Escape lo suelta reponiendo lo guardado; un click afuera
         // dispara editingFinished solo (tambien guarda), igual que el umbral de disco (DiskCard).
         connect(m_pathField, &QLineEdit::editingFinished, this, [this]() {

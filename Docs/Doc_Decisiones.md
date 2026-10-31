@@ -5,6 +5,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-63 · Switches en lugar de casillas** (2026-10-31, Lega). Toda opción de encender y apagar usa el
+  switch (`SwitchRow`: texto y descripción a la izquierda, switch a la derecha), también donde el canvas
+  dibujaba una casilla. La animación del switch la elige Lega sobre un mockup.
 - **D-62 · General sin «About», ventana de 700 de alto y barra de scroll más finita** (2026-10-31,
   Lega). La tarjeta About no sumaba nada: la versión ya está en App y la ayuda en el «?» de la barra de
   título. La ventana principal pasa de 676 a 700 de alto para que Open in NukeX entre entera con el
@@ -14,7 +17,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   (2026-10-31, Lega). Con UAC encendido, Window Layouts no recibía los atajos ni podía mover el
   Administrador de tareas ni otras apps elevadas. Lega comparó «Always run as administrator» (como
   PowerToys) con un ayudante y eligió el ayudante: la app sigue sin elevar, así que navegador, Nuke y
-  carpetas nunca se abren como administrador. Es una casilla de Window Layouts, apagada por defecto; el
+  carpetas nunca se abren como administrador. Es un switch arriba del panel de Window Layouts, apagado por defecto; el
   ayudante es el mismo exe lanzado con «runas», solo mientras la opción y algún atajo estén encendidos.
   Una herramienta futura que necesite tocar ventanas elevadas (botones del mouse, App Toggle) suma su
   acción a este ayudante.

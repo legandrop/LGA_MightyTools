@@ -1554,6 +1554,90 @@ int runDiskReminderProbe()
     return failures ? 1 : 0;
 }
 
+// Cada pagina de la ventana, con su alto real y con uno corto que obliga a desplazar: ningun texto de
+// varias lineas ni control puede quedar mas bajo de lo que necesita. Si el contenido no entra, la pagina
+// tiene que mostrar la barra, no aplastar lo que tiene adentro.
+int runPageFitProbe()
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!canvasFixture(host, QString())) {
+        fprintf(stderr, "page-fit: no se pudo preparar la ventana\n");
+        return 1;
+    }
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        if (canvasOff(d.id) && !enable(host, d.id, QString())) {
+            fprintf(stderr, "page-fit: %s no se pudo prender\n", qPrintable(d.id));
+            return 1;
+        }
+    }
+    QStringList pages{MainWindow::kGeneral};
+    for (const ModuleDescriptor &d : host.descriptors()) pages << d.id;
+
+    int failures = 0;
+    const I18n::Language before = I18n::language();
+    for (const I18n::Language language : {I18n::Language::English, I18n::Language::Spanish})
+    for (const int height : {MainWindow::kHeight, 420}) {
+        I18n::setLanguage(language);
+        MainWindow window(&host, MainWindow::Mode::Capture, nullptr);
+        window.setAttribute(Qt::WA_DontShowOnScreen, true);
+        window.setFixedSize(MainWindow::kWidth, height);
+        // La fila de actualizaciones con su resultado a la vista es la mas ancha de General.
+        UpdateRowState latest;
+        latest.kind = UpdateRowState::Kind::Latest;
+        latest.version = QStringLiteral(MIGHTYTOOLS_VERSION);
+        window.generalPage()->setUpdateState(latest);
+        const QString lang = language == I18n::Language::Spanish ? QStringLiteral("es") : QStringLiteral("en");
+        for (const QString &page : pages) {
+            window.selectPage(page);
+            settle(window);
+            QScrollArea *scroll = nullptr;
+            for (QScrollArea *candidate : window.findChildren<QScrollArea *>(QStringLiteral("pane"))) {
+                if (candidate->isVisibleTo(&window)) scroll = candidate;
+            }
+            if (!scroll || !scroll->widget()) {
+                fprintf(stdout, "FAIL %s alto=%d: pagina sin area desplazable\n", qPrintable(page), height);
+                ++failures;
+                continue;
+            }
+            QStringList squeezed;
+            for (QWidget *child : scroll->widget()->findChildren<QWidget *>()) {
+                if (!child->isVisibleTo(scroll->widget()) || child->width() <= 0) continue;
+                const int need = child->hasHeightForWidth() ? child->heightForWidth(child->width())
+                                                            : child->minimumSizeHint().height();
+                // Un alto fijado a proposito (maximo menor que lo que pide) no es un aplastamiento.
+                if (need > 0 && child->height() + 1 < need && child->maximumHeight() >= need) {
+                    const auto *label = qobject_cast<QLabel *>(child);
+                    squeezed << QStringLiteral("%1 '%2' %3<%4")
+                                    .arg(QString::fromLatin1(child->metaObject()->className()),
+                                         label ? label->text().left(32) : child->objectName())
+                                    .arg(child->height())
+                                    .arg(need);
+                }
+            }
+            // A lo ancho no hay barra: si el contenido pide mas que el viewport, se corta a la derecha.
+            if (scroll->widget()->minimumSizeHint().width() > scroll->viewport()->width()) {
+                squeezed << QStringLiteral("ancho minimo %1>%2")
+                                .arg(scroll->widget()->minimumSizeHint().width())
+                                .arg(scroll->viewport()->width());
+            }
+            const bool ok = squeezed.isEmpty();
+            failures += ok ? 0 : 1;
+            QWidget *inner = scroll->widget();
+            fprintf(stdout, "%s %s %s alto=%d barra=%d contenido=%d hfw=%d min=%d%s%s\n", ok ? "ok  " : "FAIL", qPrintable(lang),
+                    qPrintable(page), height, scroll->verticalScrollBar()->maximum(), inner->height(),
+                    inner->hasHeightForWidth() ? inner->heightForWidth(inner->width()) : -1,
+                    inner->minimumSizeHint().height(), ok ? "" : " aplastado: ",
+                    qPrintable(squeezed.join(QStringLiteral(" | "))));
+        }
+    }
+    I18n::setLanguage(before);
+    fprintf(stdout, "%s\n", failures ? "page-fit FALLO" : "page-fit ok");
+    return failures ? 1 : 0;
+}
+
 int runWindowLayoutsEditorScrollProbe()
 {
     MemorySettingsStore store;
@@ -1624,6 +1708,9 @@ int runUiProbe(const QStringList &args)
     const QString probe = args.value(args.indexOf(QStringLiteral("--ui-probe")) + 1);
     if (probe == QLatin1String("window-layouts-editor-scroll")) {
         return runWindowLayoutsEditorScrollProbe();
+    }
+    if (probe == QLatin1String("page-fit")) {
+        return runPageFitProbe();
     }
     if (probe == QLatin1String("disk-reminder")) {
         return runDiskReminderProbe();

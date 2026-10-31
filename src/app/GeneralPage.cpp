@@ -9,7 +9,6 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
-#include <QCheckBox>
 #include <QGridLayout>
 #include <QGuiApplication>
 #include <QScreen>
@@ -20,9 +19,6 @@
 #include <QVBoxLayout>
 
 namespace {
-
-// Sangria de lo que va debajo de un checkbox: indicador (16) + spacing (10).
-constexpr int kCheckIndent = 26;
 
 // Encabezado de tarjeta (`.head`): titulo de 22 de alto, lo de la derecha y 8 de aire abajo.
 QHBoxLayout *addHead(QVBoxLayout *layout, const QString &title, QWidget *parent)
@@ -144,33 +140,25 @@ QFrame *GeneralPage::buildAppCard()
     layout->setSpacing(0);
     addHead(layout, QStringLiteral("App"), card);
 
-    // El checkbox queda habilitado tambien desde una salida de desarrollo: el click EXPLICITO del
+    // El switch queda habilitado tambien desde una salida de desarrollo: el click EXPLICITO del
     // usuario se respeta siempre; lo prohibido es la escritura automatica (ver AutoStart.h).
-    m_autoStart = new QCheckBox(AutoStart::checkboxText(), card);
-    // Del ancho de su texto: asi la flecha del tooltip le apunta a la casilla y no al medio de la tarjeta.
-    m_autoStart->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
+    m_autoStart = new SwitchRow(AutoStart::checkboxText(),
+                                I18n::tr("Turns on by itself with the first tool you turn on."), card);
+    m_autoStart->setObjectName(QStringLiteral("autoStartRow"));
+    m_firstRunCaption = m_autoStart->captionLabel();
     layout->addWidget(m_autoStart);
-    m_firstRunCaption = Ui::caption(I18n::tr("Turns on by itself with the first tool you turn on."), card);
-    m_firstRunCaption->setContentsMargins(kCheckIndent, 3, 0, 0);
-    layout->addWidget(m_firstRunCaption);
-    connect(m_autoStart, &QCheckBox::clicked, this, &GeneralPage::autoStartToggled);
+    connect(m_autoStart, &SwitchRow::clicked, this, &GeneralPage::autoStartToggled);
 
-    m_checkUpdates = new QCheckBox(I18n::tr("Check for updates at startup"), card);
+    m_checkUpdates = new SwitchRow(I18n::tr("Check for updates at startup"),
+                                   I18n::tr("Installed version: v%1").arg(QStringLiteral(MIGHTYTOOLS_VERSION)), card);
     m_updateResult = Ui::label(QString(), "meta", card);
     m_updateButton = Ui::button(I18n::tr("Check now"), QString(), QStringLiteral("sm"), card);
     m_updateButton->setObjectName(QStringLiteral("checkNowButton"));
+    m_checkUpdates->addTrailingWidget(m_updateResult);
+    m_checkUpdates->addTrailingWidget(m_updateButton);
     Ui::addDivider(layout, card);
-    auto *row = new QHBoxLayout();
-    row->setContentsMargins(0, 0, 0, 0);
-    row->setSpacing(12);
-    row->addWidget(m_checkUpdates, 1);
-    row->addWidget(m_updateResult, 0, Qt::AlignVCenter);
-    row->addWidget(m_updateButton, 0, Qt::AlignVCenter);
-    auto *rowWidget = new QWidget(card);
-    rowWidget->setLayout(row);
-    rowWidget->setMinimumHeight(26);
-    layout->addWidget(rowWidget);
-    connect(m_checkUpdates, &QCheckBox::clicked, this, &GeneralPage::checkUpdatesAtStartupToggled);
+    layout->addWidget(m_checkUpdates);
+    connect(m_checkUpdates, &SwitchRow::clicked, this, &GeneralPage::checkUpdatesAtStartupToggled);
     connect(m_updateButton, &QPushButton::clicked, this, [this]() {
         if (m_updateState.kind == UpdateRowState::Kind::Available) {
             emit updateRequested();
@@ -178,10 +166,6 @@ QFrame *GeneralPage::buildAppCard()
             emit checkNowRequested();
         }
     });
-
-    QLabel *version = Ui::caption(I18n::tr("Installed version: v%1").arg(QStringLiteral(MIGHTYTOOLS_VERSION)), card);
-    version->setContentsMargins(kCheckIndent, 3, 0, 0);
-    layout->addWidget(version);
 
     // Idioma y tamano de la interfaz: el mismo desplegable que "Remind me every" de Disk Space, en una
     // grilla para que los dos desplegables arranquen en la misma columna. Cada idioma con su nombre en
@@ -382,17 +366,15 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
 void GeneralPage::setAutoStart(bool enabled, bool installedCopy)
 {
     // Reflejar no es escribir: con las senales bloqueadas no se dispara autoStartToggled.
-    m_autoStart->blockSignals(true);
     m_autoStart->setChecked(enabled);
-    m_autoStart->blockSignals(false);
 #ifdef Q_OS_MACOS
-    // La copia instalada no lleva tooltip: la casilla ya dice lo que hace. La de desarrollo, si.
-    CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
+    // La copia instalada no lleva tooltip: el switch ya dice lo que hace. La de desarrollo, si.
+    CustomTooltip::instance()->setToolTip(m_autoStart->toggle(), installedCopy
                                                            ? QString()
                                                            : I18n::tr("Registers THIS development copy to open when you log in"));
 #else
-    // La copia instalada no lleva tooltip: la casilla ya dice lo que hace. La de desarrollo, si.
-    CustomTooltip::instance()->setToolTip(m_autoStart, installedCopy
+    // La copia instalada no lleva tooltip: el switch ya dice lo que hace. La de desarrollo, si.
+    CustomTooltip::instance()->setToolTip(m_autoStart->toggle(), installedCopy
                                                            ? QString()
                                                            : I18n::tr("Registers THIS development copy to start when you sign in"));
 #endif
@@ -400,7 +382,5 @@ void GeneralPage::setAutoStart(bool enabled, bool installedCopy)
 
 void GeneralPage::setCheckUpdatesAtStartup(bool check)
 {
-    m_checkUpdates->blockSignals(true);
     m_checkUpdates->setChecked(check);
-    m_checkUpdates->blockSignals(false);
 }

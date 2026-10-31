@@ -10,7 +10,6 @@
 #include <functional>
 
 class Chip;
-class QCheckBox;
 class QLabel;
 class QPushButton;
 class StatusDot;

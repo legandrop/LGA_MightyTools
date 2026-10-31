@@ -2,6 +2,10 @@
 
 v1.53:
 
+UI: las páginas se aplastaban en vez de mostrar la barra de scroll (Open in NukeX en español con el tamaño 1 cortaba líneas y botones). Causa: el panel se arma con la página oculta y, al mostrarla, Qt no vuelve a repartir el alto de los textos de varias líneas. `MainWindow::relayoutCurrentPage()` invalida los layouts de la página y le pide a la `QScrollArea` que recalcule, al elegir página y al mostrar la ventana; lo controla `--ui-probe page-fit`. Además se sacan todas las casillas: nuevo `SwitchRow` (texto, descripción y switch a la derecha) en General, Folder Switch, Open in NukeX y Window Layouts, donde la opción de ventanas de administrador sube debajo del encabezado. Se borran el estilo de casilla y `check.png`.
+
+[ UI - Paginas sin aplastarse y switches en lugar de casillas ]
+
 General: se saca la tarjeta «About», que repetía la versión y la ayuda (D-62). Con el tamaño de interfaz 1 en español, la página de Open in NukeX no entraba en los 676 de alto y la tarjeta «Versión de Nuke preferida» se aplastaba: cortaba una línea y los botones de versión, porque la página encoge los textos de varias líneas en vez de mostrar la barra. La ventana pasa a 700 de alto (`MainWindow::kHeight` y `UiScale::largestWindow()`), y el cálculo del nivel que entra en pantalla tolera el error de coma flotante (700 × 1,1). La barra de scroll vertical pasa de 8 a 5 px de grosor.
 
 [ General - Sin About, ventana mas alta y barra de scroll mas finita ]

@@ -236,16 +236,6 @@ QFrame#chip[tone="keyDim"] QLabel { color: @icon; }
 QFrame#chip[tone="warn"] { background-color: #2d2614; border-color: #4d4020; }
 QFrame#chip[tone="warn"] QLabel { color: @warn; }
 
-/* Checkbox: tokens LGA (LGA_LinkRedirector/docs/UI_STYLE_LGA_APPS.md). El fondo del widget se
-   declara transparente en todos los estados porque el hover del indicador se filtra al fondo del
-   QCheckBox. La tilde es PNG y no SVG a proposito: el exe no carga Qt6Svg y el deploy no lleva el
-   plugin qsvg, asi que un SVG desapareceria en la copia instalada sin ningun error. */
-QCheckBox, QCheckBox:hover, QCheckBox:checked, QCheckBox:unchecked { background: transparent; color: @text; spacing: 10px; font-size: @fs13_5; min-height: 20px; }
-QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #3a3744; background-color: #2a2832; }
-QCheckBox::indicator:unchecked:hover { background-color: #3a3744; }
-QCheckBox::indicator:checked { border: 1px solid #4c4770; background-color: #393455; image: url(:/icons/check.png); }
-QCheckBox::indicator:checked:hover { background-color: #4c4770; }
-
 /* Menu del tray: paleta y medidas de LGA_Base_QT_C_Py/docs/Doc_MenuContextual.md. Sin radio: un
    QMenu de nivel superior sin translucidez pinta las esquinas de negro. */
 QMenu { background-color: #262626; border: 1px solid #3a3a3a; padding: 5px 0px; }

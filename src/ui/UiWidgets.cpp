@@ -643,6 +643,75 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     painter.drawEllipse(QRectF(left, 1 + 2, 11, 11));
 }
 
+// ------------------------------------------------------------------ SwitchRow
+
+SwitchRow::SwitchRow(const QString &text, const QString &caption, QWidget *parent)
+    : QWidget(parent)
+{
+    setCursor(Qt::PointingHandCursor);
+    m_row = new QHBoxLayout(this);
+    m_row->setContentsMargins(0, 0, 0, 0);
+    m_row->setSpacing(12);
+    auto *texts = new QVBoxLayout();
+    texts->setContentsMargins(0, 0, 0, 0);
+    texts->setSpacing(3);
+    // Con wordWrap el texto no fija el ancho minimo de la fila: si no entra (espanol, tamano 2, controles
+    // sumados con addTrailingWidget) baja de linea en vez de empujar el switch fuera de la pagina.
+    QLabel *title = Ui::label(text, "optionLabel", this);
+    title->setWordWrap(true);
+    texts->addWidget(title);
+    if (!caption.isEmpty()) {
+        m_caption = Ui::caption(caption, this);
+        m_caption->setWordWrap(true);
+        texts->addWidget(m_caption);
+    }
+    m_row->addLayout(texts, 1);
+    m_switch = new ToggleSwitch(this);
+    m_switch->setAccessibleName(text);
+    m_row->addWidget(m_switch, 0, Qt::AlignVCenter);
+    connect(m_switch, &QAbstractButton::clicked, this, &SwitchRow::clicked);
+}
+
+bool SwitchRow::isChecked() const
+{
+    return m_switch->isChecked();
+}
+
+void SwitchRow::setChecked(bool checked)
+{
+    const QSignalBlocker block(m_switch);
+    m_switch->setChecked(checked);
+}
+
+void SwitchRow::addTrailingWidget(QWidget *widget)
+{
+    m_row->insertWidget(m_row->indexOf(m_switch), widget, 0, Qt::AlignVCenter);
+    m_trailing.append(widget);
+    // La mano de la fila solo donde un click hace algo.
+    if (!qobject_cast<QAbstractButton *>(widget)) {
+        widget->setCursor(Qt::ArrowCursor);
+    }
+}
+
+void SwitchRow::mouseReleaseEvent(QMouseEvent *event)
+{
+    // Click en el texto o en el aire de la fila: como un click en el switch. Lo que se sumo con
+    // addTrailingWidget (un resultado, un boton) no cambia la opcion.
+    const QPoint pos = event->position().toPoint();
+    QWidget *hit = childAt(pos);
+    for (QWidget *trailing : std::as_const(m_trailing)) {
+        if (hit && (hit == trailing || trailing->isAncestorOf(hit))) {
+            QWidget::mouseReleaseEvent(event);
+            return;
+        }
+    }
+    if (event->button() == Qt::LeftButton && isEnabled() && rect().contains(pos)) {
+        m_switch->click();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
 // ------------------------------------------------------------------ StatusDot
 
 StatusDot::StatusDot(int diameter, QWidget *parent)

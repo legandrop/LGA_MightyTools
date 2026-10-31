@@ -5,7 +5,6 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
-#include <QCheckBox>
 #include <QDir>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -13,10 +12,6 @@
 #include <QVBoxLayout>
 
 namespace {
-
-// Sangria de lo que va debajo de un checkbox: indicador (16) + spacing (10). Mismo valor que
-// GeneralPage (app/GeneralPage.cpp, kCheckIndent).
-constexpr int kCheckIndent = 26;
 
 // Encabezado de tarjeta (`.head`), igual al de GeneralPage: titulo de 22 de alto y 8 de aire abajo.
 // `right` es lo que va a la derecha del titulo (chips, hora): vacio si no hace falta.
@@ -73,13 +68,11 @@ QFrame *FolderSwitchPanel::buildShortcutsCard()
     layout->setContentsMargins(14, 12, 14, 12);
     layout->setSpacing(0);
 
-    // "Switch automatically" (canvas: chk(true,'Switch automatically') + caption indentada).
-    m_autoSwitch = new QCheckBox(I18n::tr("Switch automatically"), card);
+    // "Switch automatically": switch con su descripcion (era una casilla en el canvas).
+    m_autoSwitch = new SwitchRow(I18n::tr("Switch automatically"),
+                                 I18n::tr("When you return to a dialog from the file manager."), card);
     layout->addWidget(m_autoSwitch);
-    QLabel *autoCaption = Ui::caption(I18n::tr("When you return to a dialog from the file manager."), card);
-    autoCaption->setContentsMargins(kCheckIndent, 3, 0, 0);
-    layout->addWidget(autoCaption);
-    connect(m_autoSwitch, &QCheckBox::clicked, this, &FolderSwitchPanel::autoSwitchToggled);
+    connect(m_autoSwitch, &SwitchRow::clicked, this, &FolderSwitchPanel::autoSwitchToggled);
 
     Ui::addDivider(layout, card);
 
@@ -159,9 +152,7 @@ void FolderSwitchPanel::setState(const ViewState &state)
                       I18n::tr("Resume"), QStringLiteral("primary"), QString());
     }
 
-    m_autoSwitch->blockSignals(true);
     m_autoSwitch->setChecked(state.autoSwitch);
-    m_autoSwitch->blockSignals(false);
 
     if (!m_manualRow->isRecording()) {
         m_manualRow->setShortcut(state.manualShortcut);

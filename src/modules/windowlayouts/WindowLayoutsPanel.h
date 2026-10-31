@@ -5,7 +5,7 @@
 
 #include <QWidget>
 
-class QCheckBox;
+class SwitchRow;
 class QHideEvent;
 class QLabel;
 class QLineEdit;
@@ -53,7 +53,7 @@ private:
     WorkAreaPreview *m_preview = nullptr;
     ShortcutRow *m_shortcut = nullptr;
     QPushButton *m_remove = nullptr;
-    QCheckBox *m_adminWindows = nullptr;
+    SwitchRow *m_adminWindows = nullptr;
     WindowLayout m_draft;
     bool m_autoName = false;
     bool m_confirmDelete = false;

@@ -213,12 +213,30 @@ void MainWindow::selectPage(const QString &id)
     }
     if (target == kGeneral) {
         m_stack->setCurrentWidget(m_generalScroll);
+        relayoutCurrentPage();
         return;
     }
     syncBody(target);
     // Elegir una herramienta en la barra lateral tambien relee su estado.
     refreshItem(target);
     m_stack->setCurrentWidget(m_pages.value(target).scroll);
+    relayoutCurrentPage();
+}
+
+void MainWindow::relayoutCurrentPage()
+{
+    // El panel se arma con la pagina todavia oculta, y al mostrarla Qt no vuelve a repartir el alto de
+    // los textos de varias lineas: la pagina los aplastaba en vez de mostrar la barra (Open in NukeX en
+    // espanol con el tamano 1). Invalidar todos sus layouts y pedirle a la QScrollArea que recalcule
+    // reparte de nuevo con heightForWidth. Lo controla `--ui-probe page-fit`.
+    auto *scroll = m_stack ? qobject_cast<QScrollArea *>(m_stack->currentWidget()) : nullptr;
+    if (!scroll || !scroll->widget()) {
+        return;
+    }
+    for (QLayout *layout : scroll->widget()->findChildren<QLayout *>()) {
+        layout->invalidate();
+    }
+    QCoreApplication::postEvent(scroll, new QEvent(QEvent::LayoutRequest));
 }
 
 void MainWindow::syncBody(const QString &id)
@@ -297,6 +315,10 @@ void MainWindow::onModuleToggled(const QString &id, bool)
     refreshItem(id);
     syncBody(id);
     m_general->refreshTools();
+    // Prender una herramienta con su pagina a la vista cambia el panel de apagado por el real.
+    if (id == m_current) {
+        relayoutCurrentPage();
+    }
 }
 
 void MainWindow::refreshItem(const QString &id)
@@ -414,6 +436,8 @@ void MainWindow::showEvent(QShowEvent *event)
         refreshOffNotices();
     }
     QMainWindow::showEvent(event);
+    // La pagina pudo armarse con la ventana oculta en la bandeja.
+    relayoutCurrentPage();
 }
 
 void MainWindow::hideEvent(QHideEvent *event)
