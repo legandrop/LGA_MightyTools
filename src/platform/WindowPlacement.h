@@ -33,6 +33,14 @@ bool moveForeground(const QRectF &normalizedArea, QString *error = nullptr, bool
 // En dryRun no consulta ni modifica ventanas del sistema.
 bool minimizeForeground(QString *error = nullptr, bool dryRun = false);
 
+#ifdef Q_OS_WIN
+// La ventana del frente es una ventana comun de una app abierta como administrador. Desde un
+// proceso sin elevar, un proceso cuya elevacion no se puede leer cuenta como elevado.
+bool foregroundIsElevated();
+// Este proceso corre como administrador.
+bool currentProcessElevated();
+#endif
+
 } // namespace WindowPlacement
 
 #endif // MIGHTYTOOLS_WINDOWPLACEMENT_H

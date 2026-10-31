@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» en su panel.
 - [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.
 
 ## v1.52

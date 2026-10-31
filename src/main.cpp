@@ -14,6 +14,7 @@
 #include "core/UiScale.h"
 #ifdef Q_OS_WIN
 #include "modules/openinnukex/win/OldClientMigration.h"
+#include "platform/AdminWindowHelper.h"
 #endif
 #include "platform/AutoStart.h"
 #include "platform/ComApartment.h"
@@ -204,6 +205,15 @@ int main(int argc, char *argv[])
     AppPaths::init(argc > 0 ? argv[0] : nullptr);
     // COM en modo apartment, una vez, antes de cualquier modulo (plan 4.4).
     const ComApartment com;
+
+#ifdef Q_OS_WIN
+    // --admin-window-helper (lo lanza Window Layouts, elevado): solo escucha atajos y mueve ventanas de
+    // administrador mientras viva la app que lo lanzo. Sin bandeja, ventana, instancia unica, settings
+    // ni registro LGA.
+    if (hasArg(argc, argv, "--admin-window-helper")) {
+        return AdminWindowHelper::runHelper(argc, argv);
+    }
+#endif
 
     // --uninstall-cleanup (lo llama el desinstalador): ANTES de todo lo demas (modo corto, registro
     // LGA, instancia unica, ventanas). QCoreApplication, sin dialogos; el detalle va a stdout y, con

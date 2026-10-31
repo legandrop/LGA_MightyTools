@@ -348,6 +348,31 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
     return true;
 }
 
+bool currentProcessElevated()
+{
+    bool own = false;
+    return elevated(GetCurrentProcess(), &own) && own;
+}
+
+bool foregroundIsElevated()
+{
+    HWND hwnd = GetForegroundWindow();
+    DWORD pid = 0;
+    if (hwnd) GetWindowThreadProcessId(hwnd, &pid);
+    if (!pid || pid == GetCurrentProcessId() || !isOrdinaryWindow(hwnd)) {
+        return false;
+    }
+    HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+    if (!process) {
+        return false;
+    }
+    bool target = false;
+    const bool known = elevated(process, &target);
+    CloseHandle(process);
+    // Sin elevar, Windows puede negar leer el token de una app elevada: se la trata como tal.
+    return known ? target : !currentProcessElevated();
+}
+
 bool minimizeForeground(QString *error, bool dryRun)
 {
     if (error) error->clear();

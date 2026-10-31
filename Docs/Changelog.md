@@ -2,6 +2,10 @@
 
 v1.53:
 
+Windows: Window Layouts no hacía nada con el Administrador de tareas ni con otras apps abiertas como administrador. Con UAC encendido, Windows (UIPI) no le entrega a un proceso sin elevar las teclas dirigidas a una ventana elevada ni lo deja moverla, así que el hook de los atajos no se enteraba. Nueva casilla «Also move administrator windows» (apagada por defecto, D-61): lanza el mismo exe elevado con `--admin-window-helper`, que escucha los mismos atajos (solo con Ctrl, Alt o Win) en su propio hook y solo actúa si la ventana del frente es elevada; con cualquier otra deja pasar la combinación. La app sigue sin elevar y el cartel de permiso se espera en otro hilo. Se comunican por un pipe local con nombre al azar, cada lado verifica el proceso del otro, y el ayudante sale solo cuando la app se cierra o apaga la opción.
+
+[ Window Layouts - Mover tambien ventanas de administrador con un ayudante elevado ]
+
 Windows: Apply de Open in NukeX cerraba la app entera cuando la asociación silenciosa del `.nk` no quedaba escrita y tocaba abrir el selector «Abrir con» de Windows (crash BEX64, salto a una dirección inválida). Causa: la interfaz COM `IOpenWithLauncher`, declarada a mano dentro del namespace anónimo, era local al archivo y ninguna clase del programa la implementa; GCC en Release dio por imposible la llamada virtual a `Launch()` y la reemplazó por un salto a basura (en Debug no pasaba). Se la declara fuera del namespace anónimo; en el exe Release vuelve a aparecer la llamada por la vtable.
 
 [ Open in NukeX - Apply ya no crashea al abrir el selector de Windows ]

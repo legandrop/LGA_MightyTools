@@ -5,6 +5,7 @@
 
 #include <QObject>
 
+#include <functional>
 #include <memory>
 
 // Atajos globales del sistema. Una implementacion por plataforma:
@@ -25,6 +26,12 @@ public:
     // False si el sistema lo rechazo: otra app ya tiene esa combinacion.
     bool registerHotkey(int id, const Shortcut &shortcut);
     bool registerPriorityHotkey(int id, const Shortcut &shortcut);
+#ifdef Q_OS_WIN
+    // Solo Windows. Lo consulta el hook de prioridad, en su propio hilo, cada vez que coincide una
+    // combinacion: si devuelve false, la combinacion sigue a los demas hooks y apps como si no
+    // estuviera registrada. Tiene que ser rapido y no tocar objetos Qt.
+    void setPriorityFilter(std::function<bool()> filter);
+#endif
     void unregisterHotkey(int id);
     void unregisterAll();
     bool isRegistered(int id) const;

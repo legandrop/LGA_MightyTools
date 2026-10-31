@@ -5,11 +5,15 @@
 #include "modules/windowlayouts/LayoutGeometry.h"
 #include "modules/windowlayouts/WindowLayoutsPanel.h"
 #include "platform/WindowPlacement.h"
+#ifdef Q_OS_WIN
+#include "platform/AdminWindowHelper.h"
+#endif
 #include "ui/Theme.h"
 
 #include <QPainter>
 #include <QPainterPath>
 #include <QHash>
+#include <QWidget>
 
 namespace {
 
@@ -148,6 +152,49 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     check(module.setLayoutEnabled(firstId, false) && module.registrationFailureCount() == 1
               && module.registrationError(firstId).isEmpty() && !module.registrationError(secondId).isEmpty(),
           QStringLiteral("registro: apagar uno conserva el fallo del otro"));
+#ifdef Q_OS_WIN
+    module.setAdminWindowsEnabled(true);
+    check(module.adminWindowsEnabled() && !module.adminHelperActive() && module.lastError().isEmpty(),
+          QStringLiteral("administrador: una corrida automatizada nunca lanza el ayudante elevado"));
+    AdminWindowHelper::Entry half;
+    half.id = 3;
+    half.shortcut = Shortcut::fromPortableString(QStringLiteral("Meta+Alt+Left"));
+    half.area = QRectF(0, 0, .5, 1);
+    AdminWindowHelper::Entry hide;
+    hide.id = 4;
+    hide.shortcut = Shortcut::fromPortableString(QStringLiteral("Meta+Alt+Down"));
+    hide.minimize = true;
+    QList<AdminWindowHelper::Entry> decoded;
+    QString language;
+    check(AdminWindowHelper::decodeEntries(AdminWindowHelper::encodeEntries({half, hide}, QStringLiteral("es")),
+                                           &decoded, &language)
+              && decoded.size() == 2 && language == QLatin1String("es") && decoded.first().id == 3
+              && decoded.first().shortcut == half.shortcut && decoded.first().area == half.area
+              && !decoded.first().minimize && decoded.last().minimize,
+          QStringLiteral("administrador: los atajos llegan al ayudante con su area y su accion"));
+    check(!AdminWindowHelper::decodeEntries(
+              QByteArrayLiteral("{\"layouts\":[{\"id\":1,\"shortcut\":\"Ctrl+Alt+L\",\"area\":[0,0,2,1]}]}"),
+              nullptr, nullptr),
+          QStringLiteral("administrador: un area fuera del monitor se rechaza"));
+    check(!AdminWindowHelper::acceptsShortcut(Shortcut::fromPortableString(QStringLiteral("F9")))
+              && !AdminWindowHelper::acceptsShortcut(Shortcut::fromPortableString(QStringLiteral("Shift+A")))
+              && AdminWindowHelper::acceptsShortcut(Shortcut::fromPortableString(QStringLiteral("Alt+A")))
+              && !AdminWindowHelper::decodeEntries(
+                  QByteArrayLiteral("{\"layouts\":[{\"id\":1,\"shortcut\":\"A\",\"minimize\":true}]}"), nullptr, nullptr),
+          QStringLiteral("administrador: el ayudante nunca intercepta teclas sin Ctrl, Alt o Win"));
+    QList<AdminWindowHelper::Entry> many;
+    for (int i = 1; i <= 65; ++i) {
+        AdminWindowHelper::Entry entry = hide;
+        entry.id = i;
+        many.append(entry);
+    }
+    check(!AdminWindowHelper::decodeEntries(AdminWindowHelper::encodeEntries({hide, hide}, QString()), nullptr, nullptr)
+              && !AdminWindowHelper::decodeEntries(AdminWindowHelper::encodeEntries(many, QString()), nullptr, nullptr)
+              && AdminWindowHelper::decodeEntries(AdminWindowHelper::encodeEntries(many.mid(0, 64), QString()),
+                                                  nullptr, nullptr),
+          QStringLiteral("administrador: ids repetidos y listas de mas de 64 atajos se rechazan"));
+    module.setAdminWindowsEnabled(false);
+#endif
     module.stop();
 }
 
@@ -178,6 +225,9 @@ void WindowLayoutsModule::stop()
         return;
     }
     m_started = false;
+    syncAdminHelper();
+    m_adminFailed = false;
+    m_adminError.clear();
     if (m_picker) {
         m_picker->close();
         m_picker->deleteLater();
@@ -242,8 +292,110 @@ void WindowLayoutsModule::registerLayouts()
             );
         }
     }
+    syncAdminHelper();
     emit statusChanged();
     emit layoutsChanged();
+}
+
+bool WindowLayoutsModule::adminWindowsEnabled() const
+{
+#ifdef Q_OS_WIN
+    return context().value(QStringLiteral("adminWindows"), false).toBool();
+#else
+    return false;
+#endif
+}
+
+bool WindowLayoutsModule::adminHelperActive() const
+{
+#ifdef Q_OS_WIN
+    return m_adminHelper != nullptr;
+#else
+    return false;
+#endif
+}
+
+void WindowLayoutsModule::setAdminWindowsEnabled(bool enabled)
+{
+#ifdef Q_OS_WIN
+    context().setValue(QStringLiteral("adminWindows"), enabled);
+    // Tildar de nuevo es la forma de reintentar despues de un permiso negado.
+    m_adminFailed = false;
+    m_adminError.clear();
+    syncAdminHelper();
+    emit statusChanged();
+    emit layoutsChanged();
+#else
+    Q_UNUSED(enabled);
+#endif
+}
+
+void WindowLayoutsModule::syncAdminHelper()
+{
+#ifdef Q_OS_WIN
+    QList<AdminWindowHelper::Entry> entries;
+    for (const WindowLayout &layout : m_state.layouts()) {
+        if (!m_started || !layout.enabled || !m_declaredIds.contains(layout.id)) continue;
+        AdminWindowHelper::Entry entry;
+        entry.id = layout.id;
+        entry.shortcut = layout.shortcut;
+        entry.minimize = layout.destination == LayoutDestination::Minimize;
+        entry.area = layout.normalizedArea();
+        // El ayudante solo acepta combinaciones con Ctrl, Alt o Win: una tecla suelta queda en la app.
+        if (AdminWindowHelper::acceptsShortcut(entry.shortcut)
+            && (entry.minimize || LayoutGeometry::validArea(entry.area))) {
+            entries.append(entry);
+        }
+    }
+    // Sin atajos encendidos no hace falta el ayudante, ni si la app ya corre como administrador. Una
+    // corrida automatizada o una captura nunca lanza un proceso elevado.
+    const bool wanted = !entries.isEmpty() && adminWindowsEnabled() && !context().automatedRun()
+        && !context().captureMode() && !WindowPlacement::currentProcessElevated();
+    if (!wanted) {
+        if (m_adminHelper) {
+            disconnect(m_adminHelper, nullptr, this, nullptr);
+            m_adminHelper->stop();
+            m_adminHelper->deleteLater();
+            m_adminHelper = nullptr;
+        }
+        return;
+    }
+    if (m_adminHelper) {
+        m_adminHelper->setEntries(entries);
+        return;
+    }
+    // Despues de un fallo no se insiste solo: cada intento puede abrir el cartel de permiso de Windows.
+    if (m_adminFailed) {
+        return;
+    }
+    m_adminHelper = new AdminWindowHelper(this);
+    connect(m_adminHelper, &AdminWindowHelper::actionFinished, this, [this](int, const QString &error) {
+        if (error == m_lastError) return;
+        m_lastError = error;
+        emit statusChanged();
+        emit layoutsChanged();
+    });
+    connect(m_adminHelper, &AdminWindowHelper::failed, this, [this](const QString &error) {
+        disconnect(m_adminHelper, nullptr, this, nullptr);
+        m_adminHelper->deleteLater();
+        m_adminHelper = nullptr;
+        m_adminFailed = true;
+        m_adminError = error + QLatin1Char(' ') + I18n::tr("Turn the option off and on to try again.");
+        emit statusChanged();
+        emit layoutsChanged();
+    });
+    m_adminHelper->setEntries(entries);
+    // Con la ventana a la vista (el usuario tildo la casilla), el cartel de permiso sale al frente.
+    QWidget *window = context().window();
+    const quintptr owner = window && window->isVisible() ? quintptr(window->winId()) : 0;
+    QString error;
+    if (!m_adminHelper->start(&error, owner)) {
+        delete m_adminHelper;
+        m_adminHelper = nullptr;
+        m_adminFailed = true;
+        m_adminError = error + QLatin1Char(' ') + I18n::tr("Turn the option off and on to try again.");
+    }
+#endif
 }
 
 void WindowLayoutsModule::onHotkey(int id)
@@ -255,6 +407,14 @@ void WindowLayoutsModule::onHotkey(int id)
         if (layout.id != id || !layout.enabled) {
             continue;
         }
+#ifdef Q_OS_WIN
+        // Si el atajo llego aca con una ventana de administrador al frente, la mueve el ayudante.
+        if (m_adminHelper && m_adminHelper->isConnected() && !context().automatedRun()
+            && WindowPlacement::foregroundIsElevated()) {
+            m_adminHelper->run(id);
+            break;
+        }
+#endif
         QString error;
         const bool succeeded = layout.destination == LayoutDestination::Minimize
             ? WindowPlacement::minimizeForeground(&error, context().automatedRun())
@@ -274,7 +434,7 @@ void WindowLayoutsModule::onHotkey(int id)
 
 ModuleStatus WindowLayoutsModule::status() const
 {
-    if (!m_lastError.isEmpty() || !m_registrationErrors.isEmpty()) {
+    if (!lastError().isEmpty() || !m_registrationErrors.isEmpty()) {
         return {ModuleTone::Error, I18n::tr("Needs attention")};
     }
     int count = 0;

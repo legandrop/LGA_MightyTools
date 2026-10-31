@@ -5,6 +5,14 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-61 · Ventanas de administrador con un ayudante elevado, no con la app entera elevada**
+  (2026-10-31, Lega). Con UAC encendido, Window Layouts no recibía los atajos ni podía mover el
+  Administrador de tareas ni otras apps elevadas. Lega comparó «Always run as administrator» (como
+  PowerToys) con un ayudante y eligió el ayudante: la app sigue sin elevar, así que navegador, Nuke y
+  carpetas nunca se abren como administrador. Es una casilla de Window Layouts, apagada por defecto; el
+  ayudante es el mismo exe lanzado con «runas», solo mientras la opción y algún atajo estén encendidos.
+  Una herramienta futura que necesite tocar ventanas elevadas (botones del mouse, App Toggle) suma su
+  acción a este ayudante.
 - **D-60 · macOS: `deploy.sh` termina siempre instalada y abierta** (2026-10-15, Lega: «todos los
   deploy.sh de mac deberían instalar en applications la app y dejarla abierta al terminar»). También
   cuando empaqueta o publica: reemplaza la regla anterior de que empaquetar o publicar no tocaba

@@ -303,6 +303,8 @@ if(WIN32)
         src/modules/openinnukex/win/OldClientMigration.cpp
         src/modules/openinnukex/win/UserChoiceLatest.cpp
         src/modules/openinnukex/win/WinFileAssociation.cpp
+        # Ayudante elevado de Window Layouts para ventanas de administrador.
+        src/platform/win/AdminWindowHelperWin.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
         src/platform/win/DirEnumeratorWin.cpp
@@ -341,6 +343,7 @@ if(WIN32)
         src/modules/folderswitch/WindowUtils.cpp
     )
     list(APPEND HEADERS
+        src/platform/AdminWindowHelper.h
         src/modules/openinnukex/win/OldClientMigration.h
         src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h

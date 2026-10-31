@@ -10,6 +10,7 @@
 #include <QHash>
 #include <QSet>
 
+class AdminWindowHelper;
 class ModuleHotkeys;
 class WindowLayoutsPanel;
 
@@ -30,7 +31,11 @@ public:
     QWidget *createCaptureWidget(const QString &state, QWidget *parent) override;
 
     const WindowLayoutsState &layoutsState() const { return m_state; }
-    QString lastError() const { return m_lastError; }
+    QString lastError() const { return m_lastError.isEmpty() ? m_adminError : m_lastError; }
+    // Solo Windows: un ayudante elevado mueve tambien las ventanas de apps abiertas como administrador.
+    bool adminWindowsEnabled() const;
+    void setAdminWindowsEnabled(bool enabled);
+    bool adminHelperActive() const;
     int registrationFailureCount() const { return m_registrationErrors.size(); }
     int externalConflictCount() const { return m_externalConflicts.size(); }
     QString registrationError(int id) const { return m_registrationErrors.value(id); }
@@ -47,6 +52,7 @@ signals:
 private:
     void registerLayouts();
     void onHotkey(int id);
+    void syncAdminHelper();
 
     WindowLayoutsState m_state;
     bool m_started = false;
@@ -56,7 +62,12 @@ private:
     QSet<int> m_externalConflicts;
     QPointer<AreaPicker> m_picker;
     QString m_lastError;
+    QString m_adminError;
+    bool m_adminFailed = false;
     QString m_captureState;
+#ifdef Q_OS_WIN
+    AdminWindowHelper *m_adminHelper = nullptr;
+#endif
 };
 
 ModuleDescriptor windowLayoutsDescriptor();

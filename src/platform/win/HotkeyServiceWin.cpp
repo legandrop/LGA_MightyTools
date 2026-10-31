@@ -95,6 +95,12 @@ public:
 
     DWORD error() const { return m_error; }
 
+    void setFilter(std::function<bool()> filter)
+    {
+        QMutexLocker lock(&m_mutex);
+        m_filter = std::move(filter);
+    }
+
     void add(int id, const Shortcut &shortcut, quint64 generation)
     {
         QMutexLocker lock(&m_mutex);
@@ -182,7 +188,8 @@ private:
         if (m_modifiersDown.contains(VK_LWIN) || m_modifiersDown.contains(VK_RWIN)) modifiers |= MOD_WIN;
         for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it) {
             if (it->key != key.vkCode || it->modifiers != modifiers) continue;
-            if (deliver(it.key(), it->generation)) {
+            // Sin filtro o con filtro aceptado se come la combinacion; si no, sigue al proximo hook.
+            if ((!m_filter || m_filter()) && deliver(it.key(), it->generation)) {
                 m_swallowed.insert(keyToken);
                 return true;
             }
@@ -194,6 +201,7 @@ private:
     DWORD m_ownerThread;
     QMutex m_mutex;
     QHash<int, Entry> m_entries;
+    std::function<bool()> m_filter;
     QSet<quint64> m_swallowed;
     QSet<DWORD> m_modifiersDown;
     QSemaphore m_ready;
@@ -305,6 +313,13 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
     check(receiver.consumeKey(WM_KEYDOWN, physicalKey, deliver, &heldSnapshot)
               && send('O', true, 0) && activations == 9,
           QStringLiteral("teclado: los modificadores fisicos ya apretados tambien activan el atajo"));
+    bool filterAccepts = false;
+    receiver.setFilter([&filterAccepts]() { return filterAccepts; });
+    check(!send('O', false, 0) && !send('O', true, 0) && activations == 9,
+          QStringLiteral("filtro: si rechaza, la combinacion sigue al proximo hook sin activar"));
+    filterAccepts = true;
+    check(send('O', false, 0) && send('O', true, 0) && activations == 10,
+          QStringLiteral("filtro: si acepta, la combinacion se intercepta y activa"));
 }
 
 void HotkeyPriorityTest::run(const std::function<void(bool, const QString &)> &check)
@@ -319,6 +334,7 @@ struct HotkeyService::Private : public QAbstractNativeEventFilter
     QHash<int, quint64> priorityGeneration;
     quint64 nextGeneration = 0;
     std::unique_ptr<PriorityHookThread> priorityHook;
+    std::function<bool()> priorityFilter;
 
     bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr * /*result*/) override
     {
@@ -384,6 +400,7 @@ bool HotkeyService::registerPriorityHotkey(int id, const Shortcut &shortcut)
     if (nativeKey(shortcut.key) == 0) return false;
     if (!d->priorityHook) {
         d->priorityHook = std::make_unique<PriorityHookThread>(GetCurrentThreadId());
+        d->priorityHook->setFilter(d->priorityFilter);
         if (!d->priorityHook->begin()) {
             qWarning() << "[HotkeyService] No se pudo instalar el hook de prioridad:"
                        << d->priorityHook->error();
@@ -415,6 +432,12 @@ void HotkeyService::unregisterHotkey(int id)
     }
     qDebug() << "[HotkeyService] Liberado" << d->registered.value(id).toPortableString() << "id" << id;
     d->registered.remove(id);
+}
+
+void HotkeyService::setPriorityFilter(std::function<bool()> filter)
+{
+    d->priorityFilter = std::move(filter);
+    if (d->priorityHook) d->priorityHook->setFilter(d->priorityFilter);
 }
 
 void HotkeyService::unregisterAll()
