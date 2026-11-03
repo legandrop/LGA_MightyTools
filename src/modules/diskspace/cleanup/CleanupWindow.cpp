@@ -11,6 +11,9 @@
 #include "modules/diskspace/cleanup/CleanupPane.h"
 #include "modules/diskspace/cleanup/CleanupRules.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
+#ifdef Q_OS_WIN
+#include "modules/diskspace/cleanup/InstallerCleanup.h"
+#endif
 #include "platform/FileSystemOps.h"
 #include "platform/LocalDrives.h"
 #include "platform/SystemPaths.h"
@@ -531,7 +534,8 @@ CleanupWindow::CleanupWindow(DiskState *state, ModuleContext *context, bool capt
 
 CleanupWindow::~CleanupWindow()
 {
-    // Nada espera a un hilo: el motor y el trabajo levantan su bandera y los hilos terminan solos.
+    // Nada espera a un hilo: el motor y el trabajo levantan su bandera y los hilos terminan solos. El
+    // paso elevado de los instaladores (hijo de la ventana) corta su pipe al destruirse y para solo.
     m_engine.cancel();
     m_job.cancel();
     // El tamano se guarda al irse (cerrarla, o apagar la herramienta con la ventana abierta).
@@ -550,6 +554,15 @@ bool CleanupWindow::isDeleting() const
 bool CleanupWindow::busy() const
 {
     return m_jobKind != JobKind::None || m_scanState == ScanState::Scanning;
+}
+
+bool CleanupWindow::installersRunning() const
+{
+#ifdef Q_OS_WIN
+    return m_installers && m_installers->isRunning();
+#else
+    return false;
+#endif
 }
 
 void CleanupWindow::refreshAccessStrip()
@@ -804,6 +817,11 @@ void CleanupWindow::buildUi()
     connect(m_actionPrimary, &QPushButton::clicked, this, [this]() {
         if (m_jobKind != JobKind::None) {
             m_job.cancel();
+#ifdef Q_OS_WIN
+            if (m_installers) {
+                m_installers->cancel();
+            }
+#endif
         } else {
             runCleanup();
         }
@@ -902,7 +920,7 @@ void CleanupWindow::poll()
 {
     static_cast<ScanLine *>(m_scanLine)->update();
     if (m_jobKind != JobKind::None) {
-        if (!m_job.isRunning()) {
+        if (!m_job.isRunning() && !installersRunning()) {
             onJobFinished();
         } else {
             refreshActionBar();
@@ -1448,7 +1466,13 @@ void CleanupWindow::refreshActionBar()
     const int tab = m_tabs->current();
     if (m_jobKind != JobKind::None) {
         const CleanupJob::Progress progress = m_job.progress();
-        text = I18n::tr("Deleting… %1 files · %2").arg(grouped(progress.files), DiskSpace::formatSize(progress.bytes));
+#ifdef Q_OS_WIN
+        const bool asking = m_installers && m_installers->isWaitingForPermission() && !progress.running;
+#else
+        const bool asking = false;
+#endif
+        text = asking ? I18n::tr("Waiting for administrator permission…")
+                      : I18n::tr("Deleting… %1 files · %2").arg(grouped(progress.files), DiskSpace::formatSize(progress.bytes));
         primary = I18n::tr("Stop");
         primaryEnabled = true;
         primaryStrong = false;
@@ -1463,9 +1487,12 @@ void CleanupWindow::refreshActionBar()
                        .arg(QLatin1String(Theme::kTextFaint), I18n::tr("The scan was stopped. Press Rescan to see what can be cleaned."));
             primary = I18n::tr("Clean up");
         } else if (selected > 0) {
-            text = I18n::tr("%1 · %2 goes from %3 to %4 free")
-                       .arg(strong(I18n::tr("%1 selected").arg(DiskSpace::formatSize(selected))), label,
-                            DiskSpace::formatSize(m_drive.freeBytes), DiskSpace::formatSize(m_drive.freeBytes + selected));
+            // Lo que va a la Papelera (los instaladores huerfanos) no libera nada hasta vaciarla.
+            const qint64 freed = CleanupRules::freedBytes(m_categories);
+            const QString picked = strong(I18n::tr("%1 selected").arg(DiskSpace::formatSize(selected)));
+            text = freed > 0 ? I18n::tr("%1 · %2 goes from %3 to %4 free")
+                                   .arg(picked, label, DiskSpace::formatSize(m_drive.freeBytes), DiskSpace::formatSize(m_drive.freeBytes + freed))
+                             : I18n::tr("%1 · to the Recycle Bin, with administrator permission").arg(picked);
             primary = I18n::tr("Clean up %1").arg(DiskSpace::formatSize(selected));
             primaryEnabled = true;
             exportShown = true;
@@ -1929,6 +1956,7 @@ void CleanupWindow::deletePicked(bool toTrash)
     if (!m_job.start(m_requests, m_guard)) {
         return;
     }
+    m_installerNames.clear();
     m_jobKind = JobKind::Manual;
     m_notice.clear();
     for (SizeListView *list : {m_folders, m_files}) {
@@ -1951,6 +1979,10 @@ void CleanupWindow::runCleanup()
     };
     QList<Line> lines;
     QList<CleanupJob::Request> requests;
+    QStringList installerNames;
+    QHash<QString, QString> installerLabels;
+    QString installerDir;
+    int binLines = 0;
     qint64 total = 0;
     for (const Cleanup::Category &category : m_categories) {
         if (category.info) {
@@ -1962,6 +1994,19 @@ void CleanupWindow::runCleanup()
             }
             lines.append(Line{category.single ? category.title : item.name, item.bytes});
             total += item.bytes;
+            if (CleanupRules::goesToRecycleBin(item)) {
+                // Un instalador huerfano: lo mueve el paso elevado, que recibe solo su nombre.
+                ++binLines;
+                for (const Cleanup::Target &target : item.targets) {
+                    const QFileInfo file(target.path);
+                    if (target.action == Cleanup::Action::InstallerPackage && !installerLabels.contains(file.fileName().toCaseFolded())) {
+                        installerNames.append(file.fileName());
+                        installerLabels.insert(file.fileName().toCaseFolded(), QStringLiteral("%1 · %2").arg(category.title, item.name));
+                        installerDir = QDir::toNativeSeparators(file.absolutePath());
+                    }
+                }
+                continue;
+            }
             for (const Cleanup::Target &target : item.targets) {
                 CleanupJob::Request request;
                 request.id = int(requests.size());
@@ -1975,7 +2020,10 @@ void CleanupWindow::runCleanup()
             }
         }
     }
-    if (requests.isEmpty()) {
+#ifndef Q_OS_WIN
+    installerNames.clear(); // solo hay instaladores huerfanos en Windows
+#endif
+    if (requests.isEmpty() && installerNames.isEmpty()) {
         return;
     }
     std::stable_sort(lines.begin(), lines.end(), [](const Line &a, const Line &b) { return a.bytes > b.bytes; });
@@ -1992,9 +2040,12 @@ void CleanupWindow::runCleanup()
     }
     const QPointer<CleanupWindow> self(this);
     const QString rootBefore = m_root;
+    const CleanupDialogs::BinPart binPart = binLines == 0 ? CleanupDialogs::BinPart::None
+                                                          : (binLines == lines.size() ? CleanupDialogs::BinPart::All : CleanupDialogs::BinPart::Some);
+    const qint64 freed = CleanupRules::freedBytes(m_categories);
     QDialog *dialog = CleanupDialogs::confirmCleanup(this, m_drive.label, DiskSpace::formatSize(total), shown, rest, int(rest.size()),
                                                      DiskSpace::formatSize(moreBytes), DiskSpace::formatSize(m_drive.freeBytes),
-                                                     DiskSpace::formatSize(m_drive.freeBytes + total));
+                                                     DiskSpace::formatSize(m_drive.freeBytes + freed), binPart);
     const int choice = dialog->exec();
     delete dialog;
     if (!self || choice != QDialog::Accepted || busy() || m_root != rootBefore || m_scanState != ScanState::Complete) {
@@ -2003,9 +2054,22 @@ void CleanupWindow::runCleanup()
     m_requests = requests;
     m_jobItems.clear();
     m_freeBeforeJob = m_drive.freeBytes;
+    // Siempre se arranca (aunque no tenga pedidos): asi sus resultados son los de esta limpieza.
     if (!m_job.start(m_requests, m_guard)) {
         return;
     }
+    m_installerNames = installerNames;
+    m_installerLabels = installerLabels;
+    m_installerDir = installerDir;
+#ifdef Q_OS_WIN
+    if (!m_installerNames.isEmpty()) {
+        if (!m_installers) {
+            m_installers = new InstallerCleanup(this);
+        }
+        // Un solo pedido de administrador para toda la lista. Si no arranca, su resultado lo dice.
+        m_installers->start(m_installerNames, quintptr(winId()));
+    }
+#endif
     m_jobKind = JobKind::CleanUp;
     m_banner.clear();
     m_cleanPane->setBanner(QString());
@@ -2089,6 +2153,69 @@ void CleanupWindow::onJobFinished()
         }
     }
 
+    // Los instaladores huerfanos: lo que contesto el paso elevado, archivo por archivo.
+    int installersMoved = 0;
+    qint64 installersMovedBytes = 0;
+#ifdef Q_OS_WIN
+    if (kind == JobKind::CleanUp && !m_installerNames.isEmpty()) {
+        const InstallerCleanup::Outcome result = m_installers ? m_installers->outcome() : InstallerCleanup::Outcome();
+        const QString title = I18n::tr("Orphaned installer files");
+        int answered = 0;
+        for (const InstallerOrphans::FileResult &file : result.files) {
+            ++answered;
+            const QString label = m_installerLabels.value(file.name.toCaseFolded(), title);
+            QString why;
+            switch (file.result) {
+            case InstallerOrphans::Result::Trashed:
+                ++installersMoved;
+                installersMovedBytes += file.bytes;
+                break;
+            case InstallerOrphans::Result::Missing:
+                break; // ya no estaba: no hay nada que contar
+            case InstallerOrphans::Result::Claimed:
+                why = I18n::tr("Used by an installed program");
+                break;
+            case InstallerOrphans::Result::TooNew:
+                why = I18n::tr("Changed in the last 24 hours");
+                break;
+            case InstallerOrphans::Result::Busy:
+                why = I18n::tr("An installation is running");
+                break;
+            case InstallerOrphans::Result::Incomplete:
+                why = I18n::tr("Could not check every installed program");
+                break;
+            case InstallerOrphans::Result::NotAllowed:
+                why = I18n::tr("Protected, not deleted");
+                break;
+            case InstallerOrphans::Result::TrashFailed:
+                why = I18n::tr("Could not be moved to the Recycle Bin");
+                break;
+            }
+            if (!why.isEmpty()) {
+                skippedLines.append({label, why});
+            }
+        }
+        if (result.denied) {
+            skippedLines.append({title, I18n::tr("Administrator permission was not given")});
+        } else if (!result.finished && answered < m_installerNames.size()) {
+            skippedLines.append({title, I18n::tr("The administrator step did not finish")});
+        }
+        // La carpeta de instaladores se vuelve a leer: ahi falta lo que se movio.
+        if (installersMoved > 0 && !m_installerDir.isEmpty()) {
+            ScanTree::Index node = ScanTree::kNone;
+            {
+                const auto lock = m_engine.lock();
+                node = m_engine.tree().find(m_installerDir);
+            }
+            if (node != ScanTree::kNone) {
+                rescan.append(node);
+            }
+        }
+    }
+#endif
+    m_installerNames.clear();
+    m_installerLabels.clear();
+
     if (kind == JobKind::Manual) {
         // Los archivos sueltos de las carpetas tocadas se vuelven a listar.
         const QList<ScanTree::Index> open = m_expanded.values();
@@ -2136,6 +2263,15 @@ void CleanupWindow::onJobFinished()
         m_banner = freed > 0 ? I18n::tr("Freed %1. %2 has %3 free.")
                                    .arg(DiskSpace::formatSize(freed), m_drive.label, DiskSpace::formatSize(m_drive.freeBytes))
                              : QString();
+        if (installersMoved > 0) {
+            // Lo movido a la Papelera no libera nada todavia: se dice aparte.
+            const QString moved = installersMoved == 1
+                                      ? I18n::tr("1 installer file went to the Recycle Bin (%1).").arg(DiskSpace::formatSize(installersMovedBytes))
+                                      : I18n::tr("%1 installer files went to the Recycle Bin (%2).")
+                                            .arg(installersMoved)
+                                            .arg(DiskSpace::formatSize(installersMovedBytes));
+            m_banner = m_banner.isEmpty() ? moved : m_banner + QLatin1Char(' ') + moved;
+        }
         m_cleanPane->setBanner(m_banner);
         // Las listas se rearman con lo que quedo: lo elegido a mano en Folders y Largest files se suelta.
         m_folders->clearSelection();

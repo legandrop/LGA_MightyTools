@@ -58,7 +58,7 @@ namespace CleanupDialogs {
 
 QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QString &total, const QList<QPair<QString, QString>> &lines,
                         const QList<QPair<QString, QString>> &rest, int moreCount, const QString &moreSize, const QString &freeBefore,
-                        const QString &freeAfter)
+                        const QString &freeAfter, BinPart binPart)
 {
     auto *dialog = new QDialog(parent);
     dialog->setWindowTitle(I18n::tr("Clean up"));
@@ -66,7 +66,9 @@ QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QStrin
 #ifdef Q_OS_MACOS
     QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Trash:"), "dialogLine", dialog);
 #else
-    QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Recycle Bin:"), "dialogLine", dialog);
+    QLabel *intro = Ui::label(binPart == BinPart::All ? I18n::tr("These go to the Recycle Bin, with administrator permission:")
+                                                      : I18n::tr("These are deleted for good, not moved to the Recycle Bin:"),
+                              "dialogLine", dialog);
 #endif
     intro->setWordWrap(true);
     layout->addWidget(intro);
@@ -118,8 +120,17 @@ QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QStrin
         }
     }
     layout->addLayout(list);
-    auto *note = new CaptionLabel(I18n::tr("Files in use are skipped. %1 goes from %2 to %3 free.").arg(driveLabel, freeBefore, freeAfter),
-                                  dialog);
+    QString noteText;
+    if (binPart == BinPart::All) {
+        noteText = I18n::tr("Windows may ask for administrator permission once. The space is freed when the Recycle Bin is emptied.");
+    } else {
+        noteText = I18n::tr("Files in use are skipped. %1 goes from %2 to %3 free.").arg(driveLabel, freeBefore, freeAfter);
+        if (binPart == BinPart::Some) {
+            noteText += QLatin1Char(' ')
+                        + I18n::tr("Orphaned installer files go to the Recycle Bin instead; Windows may ask for administrator permission once.");
+        }
+    }
+    auto *note = new CaptionLabel(noteText, dialog);
     layout->addWidget(note);
 
     auto *buttons = new QHBoxLayout();

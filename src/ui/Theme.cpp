@@ -330,8 +330,8 @@ QLabel#cleanSize { color: @textStrong; font-size: @fs13; font-weight: 500; }
 QLabel#cleanSize[dim="true"] { color: @textFaint; font-weight: 400; }
 QLabel#itemSize { color: @textStrong; font-size: @fs13; }
 QLabel#itemSize[dim="true"] { color: @textFaint; }
-QLabel#itemName { color: @text; font-size: @fs13; }
-QLabel#itemName[off="true"] { color: @textFaint; }
+QLabel#itemName, ElidedLabel#itemName { color: @text; font-size: @fs13; }
+QLabel#itemName[off="true"], ElidedLabel#itemName[off="true"] { color: @textFaint; }
 ElidedLabel#itemPath { color: @textFaint; font-size: @fs12; }
 QWidget#cleanItem { border-radius: 4px; background-color: transparent; }
 QWidget#cleanItem:hover { background-color: #1b1b1b; }

@@ -2,6 +2,7 @@
 #define MIGHTYTOOLS_CLEANUPRULES_H
 
 #include "modules/diskspace/cleanup/CleanupModel.h"
+#include "modules/diskspace/cleanup/InstallerOrphans.h"
 #include "platform/SystemPaths.h"
 
 #include <QList>
@@ -50,9 +51,18 @@ Cleanup::Item makeItem(const QString &name, const QString &shownPath, const QStr
                        const Context &context);
 // La carpeta tiene la marca del estandar (los primeros bytes de su CACHEDIR.TAG son la firma).
 bool hasCacheTagSignature(const QString &dir);
+// "Orphaned installer files" (Windows): un renglon por copia huerfana, o, si la consulta no esta
+// completa, una linea sin casilla que dice por que. Sin huerfanos (o sin carpeta), una categoria sin id:
+// no se muestra. Pura: la usan las reglas de Windows con lo leido y la captura de QA con datos armados.
+Cleanup::Category installerCategory(const InstallerOrphans::Verdict &verdict, const QString &installerDir);
 
 // Total tildado (lo que borraria "Clean up").
 qint64 selectedBytes(const QList<Cleanup::Category> &categories);
+// Lo tildado que libera espacio al limpiar: sin lo que va a la Papelera (los instaladores huerfanos), que
+// ocupa lo mismo hasta que se la vacia.
+qint64 freedBytes(const QList<Cleanup::Category> &categories);
+// El renglon va a la Papelera (con permiso de administrador) en vez de borrarse.
+bool goesToRecycleBin(const Cleanup::Item &item);
 // 2 todo tildado, 1 una parte, 0 nada (sobre los items que se pueden tildar).
 int checkState(const Cleanup::Category &category);
 

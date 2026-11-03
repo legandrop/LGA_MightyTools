@@ -18,12 +18,17 @@ class QPushButton;
 // captura de QA lo dibuja sin exec()); quien lo usa llama a exec().
 namespace CleanupDialogs {
 
+// Que parte de lo elegido va a la Papelera (los instaladores huerfanos, con permiso de administrador)
+// en vez de borrarse.
+enum class BinPart { None, Some, All };
+
 // "Clean up 60.2 GB on C:?": las lineas mas pesadas, un "N more" y como queda el disco.
 // `lines`: nombre y peso ya formateado. `rest`: las que quedan detras de "N more" (el link las
-// despliega; vacia, el link no hace nada). Acepta con "Clean up".
+// despliega; vacia, el link no hace nada). `freeAfter` cuenta solo lo que se borra (lo que va a la
+// Papelera sigue ocupando hasta vaciarla). Acepta con "Clean up".
 QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QString &total, const QList<QPair<QString, QString>> &lines,
                         const QList<QPair<QString, QString>> &rest, int moreCount, const QString &moreSize, const QString &freeBefore,
-                        const QString &freeAfter);
+                        const QString &freeAfter, BinPart binPart = BinPart::None);
 
 // "Delete 2 folders permanently?": las rutas con su peso. El resultado de exec() es Result.
 // (Distintos de QDialog::Accepted: aceptar el cartel por otro camino nunca cuenta como "Delete".)

@@ -675,6 +675,10 @@ QStringList DiskSpaceModule::captureStates() const
     }
     states << QStringLiteral("cleanup-confirm") << QStringLiteral("cleanup-confirm-all") << QStringLiteral("cleanup-delete")
            << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
+#ifdef Q_OS_WIN
+    // El cartel de Clean up con instaladores huerfanos (van a la Papelera, con permiso de administrador).
+    states << QStringLiteral("cleanup-confirm-installers");
+#endif
     // La ventana al tamano minimo (con lo elegido: la barra de abajo mas cargada) y Folders ordenada por nombre.
     states << QStringLiteral("cleanup-min") << QStringLiteral("cleanup-sorted");
     states << QStringLiteral("reminder") << QStringLiteral("reminder-percent") << QStringLiteral("reminder-error");
@@ -763,6 +767,14 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
             }
         }
         return dialog;
+    }
+    if (state == QLatin1String("cleanup-confirm-installers")) {
+        return CleanupDialogs::confirmCleanup(parent, QStringLiteral("C:"), QStringLiteral("33.6 GB"),
+                                              {{QStringLiteral("uv cache"), QStringLiteral("21.6 GB")},
+                                               {QStringLiteral("pip cache"), QStringLiteral("10.3 GB")},
+                                               {QStringLiteral("Boris FX Mocha Plug-ins 2026.5 for OFX"), QStringLiteral("1.33 GB")}},
+                                              {}, 1, QStringLiteral("321 MB"), QStringLiteral("32.3 GB"), QStringLiteral("64.2 GB"),
+                                              CleanupDialogs::BinPart::Some);
     }
     if (state == QLatin1String("cleanup-delete")) {
         return CleanupDialogs::confirmDelete(parent,

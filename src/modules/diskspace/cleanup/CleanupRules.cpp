@@ -87,6 +87,17 @@ void measureItem(Cleanup::Item &item, const ScanTree &tree, const QString &volum
             item.newest = qMax(item.newest, measure.newest);
             break;
         }
+        case Cleanup::Action::InstallerPackage: {
+            // Un archivo suelto de la carpeta de instaladores: lo que pesa hoy, sin seguir un enlace.
+            const QFileInfo info(target.path);
+            if (info.isFile() && !info.isSymLink()) {
+                item.bytes += info.size();
+                item.files += 1;
+                const qint64 created = info.birthTime().isValid() ? info.birthTime().toSecsSinceEpoch() : 0;
+                item.newest = qMax(item.newest, qMax(created, info.lastModified().toSecsSinceEpoch()));
+            }
+            break;
+        }
         case Cleanup::Action::Contents:
         case Cleanup::Action::Entire: {
             const ScanTree::Index node = tree.find(target.path);
@@ -128,7 +139,7 @@ bool covers(const QList<Cleanup::Category> &categories, const QString &path)
     for (const Cleanup::Category &category : categories) {
         for (const Cleanup::Item &item : category.items) {
             for (const Cleanup::Target &target : item.targets) {
-                if (target.action == Cleanup::Action::RecycleBin) {
+                if (target.action == Cleanup::Action::RecycleBin || target.action == Cleanup::Action::InstallerPackage) {
                     continue;
                 }
                 if (DeleteGuard::samePath(path, target.path) || DeleteGuard::isInside(path, target.path)
@@ -207,6 +218,46 @@ bool hasCacheTagSignature(const QString &dir)
         return false;
     }
     return file.read(43) == QByteArrayLiteral("Signature: 8a477f597d28d172789f06886806bc55");
+}
+
+Cleanup::Category installerCategory(const InstallerOrphans::Verdict &verdict, const QString &installerDir)
+{
+    Cleanup::Category category;
+    if (installerDir.isEmpty() || verdict.status == InstallerOrphans::Status::Unavailable
+        || (verdict.status == InstallerOrphans::Status::Ok && verdict.orphans.isEmpty())) {
+        return category;
+    }
+    category.id = QStringLiteral("installers");
+    category.group = Cleanup::Group::Yours;
+    category.title = I18n::tr("Orphaned installer files");
+    if (verdict.status != InstallerOrphans::Status::Ok) {
+        // Completa o nada: sin la consulta entera no se lista ningun archivo, solo el motivo.
+        category.single = true;
+        category.info = true;
+        category.measurable = false;
+        category.caption = verdict.status == InstallerOrphans::Status::Busy
+                               ? I18n::tr("An installation is running. Rescan when it finishes.")
+                               : I18n::tr("Checking which ones no installed program uses needs administrator permission.");
+        Cleanup::Item item;
+        item.name = category.title;
+        item.path = installerDir;
+        category.items.append(item);
+        return category;
+    }
+    category.caption = I18n::tr("Copies of installers that no installed program uses anymore. They go to the Recycle Bin, with administrator permission.");
+    for (const InstallerPackages::FileFacts &file : verdict.orphans) {
+        Cleanup::Item item;
+        // El producto (asunto del paquete) y, al lado, quien lo hizo y el archivo.
+        item.name = file.subject.isEmpty() ? file.name : file.subject;
+        item.detail = file.author.isEmpty() ? file.name : QStringLiteral("%1 · %2").arg(file.author, file.name);
+        item.path = file.path;
+        item.targets.append(Cleanup::Target{file.path, Cleanup::Action::InstallerPackage, 0});
+        item.bytes = file.bytes;
+        item.files = 1;
+        item.newest = qMax(file.created, file.modified);
+        category.items.append(item);
+    }
+    return category;
 }
 
 QList<Cleanup::Category> build(const Context &context)
@@ -405,7 +456,9 @@ QList<Cleanup::Category> refresh(const Context &context, ScanEngine &engine, con
             if (!category.info) {
                 bool refused = false;
                 for (const Cleanup::Target &target : item.targets) {
-                    if (target.action == Cleanup::Action::RecycleBin) {
+                    // La Papelera va por su API; un instalador huerfano lo vuelve a verificar el paso
+                    // elevado con sus propias guardas (esta dentro de Windows: DeleteGuard lo rechazaria).
+                    if (target.action == Cleanup::Action::RecycleBin || target.action == Cleanup::Action::InstallerPackage) {
                         continue;
                     }
                     DeleteGuard::Scope scope = DeleteGuard::Scope::Entire;
@@ -458,6 +511,27 @@ qint64 selectedBytes(const QList<Cleanup::Category> &categories)
         }
     }
     return total;
+}
+
+qint64 freedBytes(const QList<Cleanup::Category> &categories)
+{
+    qint64 total = 0;
+    for (const Cleanup::Category &category : categories) {
+        if (category.info) {
+            continue;
+        }
+        for (const Cleanup::Item &item : category.items) {
+            if (item.checked && !item.blocked && !goesToRecycleBin(item)) {
+                total += item.bytes;
+            }
+        }
+    }
+    return total;
+}
+
+bool goesToRecycleBin(const Cleanup::Item &item)
+{
+    return !item.targets.isEmpty() && item.targets.first().action == Cleanup::Action::InstallerPackage;
 }
 
 int checkState(const Cleanup::Category &category)

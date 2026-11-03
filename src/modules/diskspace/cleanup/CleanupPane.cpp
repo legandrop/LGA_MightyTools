@@ -26,6 +26,7 @@ constexpr int kSizeWidth = 140;
 constexpr int kItemIndent = kExpander + kGap + 14 + kGap;
 constexpr int kVisibleItems = 10;
 constexpr int kItemsBeforeFolding = 12;
+constexpr int kNameMaxWidth = 300; ///< renglon con detalle: el nombre no empuja al detalle fuera de la fila
 
 // Zona que responde al click sin ser un boton (el nombre de una categoria la despliega).
 class ClickArea : public QWidget
@@ -524,13 +525,25 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         connect(box, &QAbstractButton::clicked, this, [this, id, i]() { emit itemToggled(id, i); });
         itemLine->addWidget(box, 0, Qt::AlignVCenter);
 
-        QLabel *itemName = Ui::label(item.name, "itemName", itemRow);
-        itemName->setProperty("off", !item.checked || item.blocked);
-        itemLine->addWidget(itemName, 0, Qt::AlignVCenter);
+        if (item.detail.isEmpty()) {
+            QLabel *itemName = Ui::label(item.name, "itemName", itemRow);
+            itemName->setProperty("off", !item.checked || item.blocked);
+            itemLine->addWidget(itemName, 0, Qt::AlignVCenter);
+        } else {
+            // Un nombre que viene de afuera (el producto de un instalador) puede ser largo: tiene un
+            // tope y se recorta, con el texto entero en su tooltip.
+            auto *itemName = new ElidedLabel(itemRow);
+            itemName->setObjectName(QStringLiteral("itemName"));
+            itemName->setProperty("off", !item.checked || item.blocked);
+            itemName->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+            itemName->setMaximumWidth(kNameMaxWidth);
+            itemName->setText(item.name);
+            itemLine->addWidget(itemName, 0, Qt::AlignVCenter);
+        }
         auto *path = new ElidedLabel(itemRow);
         path->setObjectName(QStringLiteral("itemPath"));
-        path->setElideMode(Qt::ElideLeft);
-        path->setText(item.path);
+        path->setElideMode(item.detail.isEmpty() ? Qt::ElideLeft : Qt::ElideMiddle);
+        path->setText(item.detail.isEmpty() ? item.path : item.detail);
         itemLine->addWidget(path, 1, Qt::AlignVCenter);
 
         QLabel *age = Ui::label(item.blocked ? I18n::tr("%1 is open").arg(item.blockerLabel) : DiskSpace::ageText(item.newest, now),

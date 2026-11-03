@@ -2,7 +2,11 @@
 
 #include "core/I18n.h"
 #include "modules/diskspace/cleanup/DeleteGuard.h"
+#include "modules/diskspace/cleanup/InstallerOrphans.h"
+#include "platform/InstallerPackages.h"
+#include "platform/WindowPlacement.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -15,7 +19,11 @@
 //  - Navegadores Chromium: solo `Cache`, `Code Cache`, `GPUCache` de cada perfil y los shaders de
 //    `User Data`. Nunca cookies, historial, `Service Worker`, `IndexedDB` ni `Local Storage`.
 //  - Afuera: `.nuget\packages` (es el almacen instalado, no una cache), la cache de miniaturas de
-//    Windows (la tiene abierta el Explorador), `C:\Windows\Installer`, WinSxS y Package Cache.
+//    Windows (la tiene abierta el Explorador), WinSxS y Package Cache.
+//  - `C:\Windows\Installer` (pedido de Lega, 2026-11-03; primera excepcion a "lo que pide administrador
+//    solo se informa"): solo las copias .msi/.msp que ya no reclama NINGUN producto ni parche instalado,
+//    y solo si esa consulta esta completa (InstallerOrphans). Las mueve a la Papelera un paso elevado
+//    que antes las vuelve a verificar (InstallerCleanup).
 //  - Con costo, por eso en "Yours to decide": la cache de Adobe Bridge (purgarla puede perder
 //    etiquetas y puntajes de archivos sin XMP) y las imagenes de maquina virtual de apps de escritorio.
 
@@ -138,6 +146,24 @@ QStringList appDataDirs(const Context &context)
         }
     }
     return dirs;
+}
+
+// Las copias huerfanas de la carpeta de instaladores, o la linea que dice por que no se pueden ver.
+// Sin administrador la consulta es la de la maquina y este usuario (InstallerOrphans::status decide si
+// alcanza); con administrador, la de todos.
+Cleanup::Category orphanedInstallers(const Context &context)
+{
+    const InstallerPackages::Scope scope =
+        WindowPlacement::currentProcessElevated() ? InstallerPackages::Scope::AllUsers : InstallerPackages::Scope::CurrentUser;
+    const InstallerPackages::Survey survey = InstallerPackages::survey(scope);
+    if (survey.installerDir.isEmpty() || !DeleteGuard::isInside(survey.installerDir, context.volumeRoot)) {
+        return Cleanup::Category();
+    }
+    InstallerOrphans::Verdict verdict = InstallerOrphans::evaluate(survey, QDateTime::currentSecsSinceEpoch());
+    for (InstallerPackages::FileFacts &file : verdict.orphans) {
+        InstallerPackages::summary(file.path, &file.author, &file.subject);
+    }
+    return CleanupRules::installerCategory(verdict, survey.installerDir);
 }
 
 } // namespace
@@ -366,22 +392,9 @@ QList<Cleanup::Category> systemCategories(const Context &context)
         categories.append(sessions);
     }
     if (!b.systemRoot.isEmpty() && DeleteGuard::isInside(b.systemRoot, context.volumeRoot)) {
-        const QString installer = join(b.systemRoot, QStringLiteral("Installer"));
-        if (QFileInfo(installer).isDir()) {
-            Cleanup::Category msi;
-            msi.id = QStringLiteral("msi");
-            msi.group = Cleanup::Group::Yours;
-            msi.single = true;
-            msi.info = true;
-            msi.title = I18n::tr("Windows Installer patches");
-            msi.caption = I18n::tr("Programs need most of them to update or uninstall. Not cleaned from here.");
-            msi.reviewPath = installer;
-            Cleanup::Item item;
-            item.name = msi.title;
-            item.path = installer;
-            item.targets.append(Cleanup::Target{installer, Cleanup::Action::Entire, 0});
-            msi.items.append(item);
-            categories.append(msi);
+        const Cleanup::Category installers = orphanedInstallers(context);
+        if (!installers.id.isEmpty()) {
+            categories.append(installers);
         }
     }
     return categories;

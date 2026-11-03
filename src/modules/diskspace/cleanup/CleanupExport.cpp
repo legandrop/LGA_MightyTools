@@ -69,6 +69,8 @@ QString howText(const Cleanup::Target &target)
         return I18n::tr("The whole folder is deleted for good");
     case Cleanup::Action::OldChildren:
         return I18n::tr("Only what is older than %1 days and not in use, deleted for good").arg(target.minAgeDays);
+    case Cleanup::Action::InstallerPackage:
+        return I18n::tr("The file goes to the Recycle Bin, with administrator permission, after checking again that no installed program uses it");
     case Cleanup::Action::RecycleBin:
         break;
     }
@@ -139,6 +141,8 @@ QList<Entry> entriesForChecked(const QList<Cleanup::Category> &categories)
             entry.group = category.group == Cleanup::Group::Safe ? I18n::tr("Safe to delete") : I18n::tr("Yours to decide");
             entry.how = howText(item.targets.first());
             entry.partial = item.targets.first().action == Cleanup::Action::OldChildren;
+            // Un instalador huerfano es un archivo: no hay nada adentro que listar.
+            entry.isDir = item.targets.first().action != Cleanup::Action::InstallerPackage;
             for (const Cleanup::Target &target : item.targets) {
                 if (target.action != Cleanup::Action::RecycleBin) {
                     entry.targets.append(target.path);
