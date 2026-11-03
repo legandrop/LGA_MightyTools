@@ -159,7 +159,8 @@ private:
     QPointer<DictationOverlay> m_overlay;
     QTimer *m_tick = nullptr;
     QElapsedTimer m_clock;
-    bool m_escRegistered = false;
+    bool m_escRegistered = false;     ///< Esc sola
+    bool m_escHeldRegistered = false; ///< Esc con los modificadores del atajo (mantener Win+H)
     QList<DictationFlow::Entry> m_history;
 
     // Captura (--ui-shot): el estado de prueba, sin leer nada del sistema.

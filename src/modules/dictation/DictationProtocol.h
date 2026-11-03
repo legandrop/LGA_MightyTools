@@ -28,17 +28,39 @@ constexpr int kMaxSamples = kMaxSeconds * kSampleRate;
 // Cuerpo mas grande que se acepta: un mensaje de audio de 1 s pesa 64 KB.
 constexpr quint32 kMaxBody = 4 * 1024 * 1024;
 
-// Sin voz no hay texto: Whisper sobre silencio o ruido de fondo inventa frases ("Gracias por ver el video.",
-// "Gracias."). Se mide el tramo de 30 ms mas fuerte del audio (RMS, en dBFS). Medido el 2026-11-03: las
-// cinco grabaciones reales de Lega dan de -23,1 a -19,2 dBFS; el silencio digital, -120; el ruido bajo
-// de la auditoria, -54,7. Por debajo de este piso no se transcribe nada (22 dB por debajo de la voz mas
-// baja medida, para quien habla bajo o lejos del microfono).
+// Sin voz no hay texto: Whisper sobre silencio, ruido de fondo o un click inventa frases ("Gracias por ver
+// el video.", "¡Gracias!", "Fijate si el roto anda bien."). Se cuenta cuanto audio tiene voz: tramos de
+// 30 ms con RMS en o sobre el piso. Medido el 2026-11-03: las cinco grabaciones reales de Lega tienen su
+// tramo mas fuerte de -23,1 a -19,2 dBFS; el silencio digital, -120; el ruido bajo de la auditoria, -54,7
+// (22 dB de margen bajo la voz mas baja, para quien habla bajo o lejos del microfono).
 constexpr float kVoiceFloorDb = -45.0f;
+constexpr int kFrameSamples = kSampleRate * 30 / 1000;
+// Tramos sobre el piso que hacen falta para transcribir (180 ms): un pico solo no alcanza. Medido por la
+// auditoria: un click da 1 o 2 tramos, un golpe en el ruido 2, "Okay" 13, una frase a -42 dBFS 9, las
+// grabaciones de Lega de 82 a 377.
+constexpr int kMinVoiceFrames = 6;
+// Con menos de esto (~1 s de voz), un final que es un pedazo seguido de la frase de contexto de 4 palabras
+// o mas es Whisper repitiendo el contexto, no lo que se dijo.
+constexpr int kShortVoiceFrames = 33;
+// Antes de transcribir se saca el silencio de antes y de despues de la voz, dejando este margen: con
+// segundos de silencio delante Whisper escribe basura ("simplific tapar pasteored z...").
+constexpr int kTrimMarginSamples = kSampleRate * 300 / 1000;
 // Un tramo de 30 s que Whisper da por "sin voz" con esta probabilidad o mas se descarta aunque el modelo
 // haya escrito algo (su propio corte exige ademas poca confianza, y una frase inventada sale confiada).
 constexpr float kNoSpeechProb = 0.6f;
+
+// Cuanta voz hay en un audio.
+struct Voice
+{
+    int frames = 0;            ///< tramos de 30 ms en o sobre el piso
+    float loudestDb = -120.0f; ///< el tramo mas fuerte (-120 sin audio o con silencio digital)
+    size_t from = 0;           ///< lo que conviene transcribir: desde el primer tramo con voz menos el margen...
+    size_t to = 0;             ///< ...hasta el ultimo mas el margen (from == to sin voz)
+    bool enough() const { return frames >= kMinVoiceFrames; }
+};
+Voice measureVoice(const float *pcm, size_t count);
 // El tramo de 30 ms mas fuerte de `pcm`, en dBFS (-120 si no hay audio o es silencio digital).
-float loudestFrameDb(const float *pcm, size_t count);
+inline float loudestFrameDb(const float *pcm, size_t count) { return measureVoice(pcm, count).loudestDb; }
 // Error(sesion 0) con este prefijo: los archivos del motor no son los que se verificaron al bajarlo (sigue
 // el archivo que fallo). El motor no cargo nada.
 constexpr char kDamagedPrefix[] = "engine-files:";

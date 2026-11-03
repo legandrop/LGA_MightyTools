@@ -509,10 +509,19 @@ quint32 audioMs(size_t samples)
     return quint32(quint64(samples) * 1000 / DictationProtocol::kSampleRate);
 }
 
-bool hasVoice(const std::vector<float> &pcm, float *db)
+// El audio sin el silencio de antes y de despues de la voz (con su margen).
+std::vector<float> voicedPart(const std::vector<float> &pcm, const DictationProtocol::Voice &voice)
 {
-    *db = DictationProtocol::loudestFrameDb(pcm.data(), pcm.size());
-    return *db >= DictationProtocol::kVoiceFloorDb;
+    return std::vector<float>(pcm.begin() + qsizetype(voice.from), pcm.begin() + qsizetype(voice.to));
+}
+
+QString describe(const DictationProtocol::Voice &voice, size_t samples)
+{
+    return QStringLiteral("%1 tramos de 30 ms con voz, el mas fuerte %2 dBFS, la voz con su margen ocupa %3 de %4 ms")
+        .arg(voice.frames)
+        .arg(double(voice.loudestDb), 0, 'f', 1)
+        .arg(audioMs(voice.to - voice.from))
+        .arg(audioMs(samples));
 }
 
 } // namespace
@@ -541,11 +550,11 @@ int run(int argc, char *argv[])
         sendError(0, QStringLiteral("uso: --dictation-worker <carpeta del motor> <modelo>"));
         return 2;
     }
-    // Antes de cargar ninguna DLL: cada archivo del motor tiene que ser el que se verifico al bajarlo, y no
-    // puede haber DLL de mas (el motor carga las de su carpeta). Aca y no en la app: es el mismo proceso que
-    // las carga, y la app no se traba leyendo 56 MB.
+    // Antes de cargar ninguna DLL: cada archivo del motor tiene que ser el del paquete 0.4.1 (tabla fija en el
+    // codigo, no el marcador del disco), y no puede haber DLL de mas (el motor carga las de su carpeta). Aca y
+    // no en la app: es el mismo proceso que las carga, y la app no se traba leyendo 56 MB.
     QString damaged;
-    if (!DictationModels::checkEngineFiles(engineDir, &damaged)) {
+    if (!DictationModels::checkEngineFiles(engineDir, DictationModels::engineFiles041(), &damaged)) {
         note(QStringLiteral("Motor danado: %1").arg(damaged));
         sendError(0, QLatin1String(DictationProtocol::kDamagedPrefix) + damaged);
         return 1;
@@ -563,7 +572,6 @@ int run(int argc, char *argv[])
 
     quint64 liveVersion = 0;
     auto liveInterval = std::chrono::milliseconds(kLiveInterval);
-    quint32 voiceSession = 0; // la sesion que ya tuvo voz: no se vuelve a medir
     for (;;) {
         std::unique_lock<std::mutex> lock(shared->mutex);
         for (;;) {
@@ -591,21 +599,24 @@ int run(int argc, char *argv[])
             g_abortFinal = false;
             lock.unlock();
             Pass pass;
-            float db = 0.0f;
-            if (!hasVoice(job.audio, &db)) {
-                // Sin voz no se transcribe: Whisper inventaria una frase. Final vacio, no se escribe nada.
-                note(QStringLiteral("Final sin voz (tramo mas fuerte %1 dBFS): no se transcribe").arg(double(db), 0, 'f', 1));
+            const DictationProtocol::Voice voice = DictationProtocol::measureVoice(job.audio.data(), job.audio.size());
+            if (!voice.enough()) {
+                // Sin voz (silencio, ruido, un click) no se transcribe: Whisper inventaria una frase. Final
+                // vacio, no se escribe nada.
+                note(QStringLiteral("Final sin voz suficiente (%1): no se transcribe").arg(describe(voice, job.audio.size())));
                 pass.ok = true;
             } else {
-                pass = engine.run(job.audio, job.params, &g_abortFinal);
+                pass = engine.run(voicedPart(job.audio, voice), job.params, &g_abortFinal);
                 if (pass.dropped > 0) {
                     note(QStringLiteral("Final: %1 tramo(s) sin voz descartados (probabilidad %2)").arg(pass.dropped).arg(double(pass.noSpeech), 0, 'f', 2));
                 }
-                if (pass.ok && DictationText::finalEchoesContext(pass.text, job.params.vocabulary, job.params.prompt)) {
+                // Con poca voz, un pedazo de 4 palabras de la frase de contexto ya es el contexto repetido.
+                const int run = voice.frames < DictationProtocol::kShortVoiceFrames ? 4 : 8;
+                if (pass.ok && DictationText::finalEchoesContext(pass.text, job.params.vocabulary, job.params.prompt, run)) {
                     note(QStringLiteral("Final que solo repite el contexto: se descarta"));
                     pass.text.clear();
                 }
-                note(QStringLiteral("Final: tramo mas fuerte %1 dBFS, sin voz %2").arg(double(db), 0, 'f', 1).arg(double(pass.noSpeech), 0, 'f', 2));
+                note(QStringLiteral("Final: %1, sin voz %2").arg(describe(voice, job.audio.size())).arg(double(pass.noSpeech), 0, 'f', 2));
             }
             lock.lock();
             shared->runningFinal = 0;
@@ -640,13 +651,13 @@ int run(int argc, char *argv[])
         shared->lastStart = Clock::now();
         g_abortLive = false;
         lock.unlock();
-        // Mientras no hubo voz, la ventanita no muestra nada (ni se gasta una pasada).
-        float db = 0.0f;
-        if (session != voiceSession && !hasVoice(pcm, &db)) {
+        // Mientras no hubo voz suficiente, la ventanita no muestra nada (ni se gasta una pasada). Con voz, la
+        // pasada va sin el silencio de antes y de despues, como la final, y con al menos 1 s de audio.
+        const DictationProtocol::Voice voice = DictationProtocol::measureVoice(pcm.data(), pcm.size());
+        if (!voice.enough() || voice.to - voice.from < size_t(kMinLiveSamples)) {
             continue;
         }
-        voiceSession = session;
-        const Pass pass = engine.run(pcm, params, &g_abortLive, true);
+        const Pass pass = engine.run(voicedPart(pcm, voice), params, &g_abortLive, true);
         liveInterval = qMax(std::chrono::milliseconds(kLiveInterval), std::chrono::milliseconds(2 * qint64(pass.ms)));
         lock.lock();
         const bool current = !pass.aborted && !shared->quit && epoch == shared->epoch;

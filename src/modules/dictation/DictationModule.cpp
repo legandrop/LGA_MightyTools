@@ -152,6 +152,7 @@ void DictationModule::unregisterAll()
     m_hotkeys->declare(kShortcutId, Shortcut());
     m_hotkeys = nullptr;
     m_escRegistered = false;
+    m_escHeldRegistered = false;
 }
 
 void DictationModule::openModels()
@@ -375,21 +376,26 @@ void DictationModule::setActive(bool active)
             connect(m_tick, &QTimer::timeout, this, [this]() { m_flow.tick(m_clock.elapsed()); });
         }
         m_tick->start();
-        if (m_hotkeys && !m_escRegistered) {
-            Shortcut escape;
-            escape.key = Qt::Key_Escape;
+        if (!m_hotkeys) {
+            return;
+        }
+        // Cada Esc con su propio flag: si una no se pudo registrar, la otra igual se registra y se retira.
+        Shortcut escape;
+        escape.key = Qt::Key_Escape;
+        if (!m_escRegistered) {
             m_escRegistered = m_hotkeys->registerPriorityHotkey(kEscapeId, escape);
-            escape.modifiers = shortcut().modifiers;
-            if (escape.modifiers != Qt::NoModifier) m_hotkeys->registerPriorityHotkey(kEscapeHeldId, escape);
+        }
+        escape.modifiers = shortcut().modifiers;
+        if (!m_escHeldRegistered && escape.modifiers != Qt::NoModifier) {
+            m_escHeldRegistered = m_hotkeys->registerPriorityHotkey(kEscapeHeldId, escape);
         }
         return;
     }
     if (m_tick) m_tick->stop();
-    if (m_hotkeys && m_escRegistered) {
-        m_hotkeys->unregisterHotkey(kEscapeId);
-        m_hotkeys->unregisterHotkey(kEscapeHeldId);
-    }
+    if (m_hotkeys && m_escRegistered) m_hotkeys->unregisterHotkey(kEscapeId);
+    if (m_hotkeys && m_escHeldRegistered) m_hotkeys->unregisterHotkey(kEscapeHeldId);
     m_escRegistered = false;
+    m_escHeldRegistered = false;
 }
 
 // ------------------------------------------------------------------ Ajustes
@@ -785,7 +791,7 @@ qint64 DictationModule::enginePidForQa() const
 
 bool DictationModule::escapeRegisteredForQa() const
 {
-    return m_escRegistered;
+    return m_escRegistered || m_escHeldRegistered;
 }
 
 // ------------------------------------------------------------------ Descriptor y ayuda

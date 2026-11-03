@@ -26,6 +26,7 @@
 #include <QHash>
 #include <QNetworkAccessManager>
 #include <QProcess>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
@@ -185,22 +186,47 @@ std::vector<float> noise(int samples, float rmsDb)
     return pcm;
 }
 
+// `part` copiado dentro de `pcm` desde la muestra `at`.
+std::vector<float> with(std::vector<float> pcm, const std::vector<float> &part, size_t at)
+{
+    std::copy(part.begin(), part.end(), pcm.begin() + qsizetype(at));
+    return pcm;
+}
+
 void testVoiceGate(const Check &check)
 {
     using DictationProtocol::kVoiceFloorDb;
-    using DictationProtocol::loudestFrameDb;
+    using DictationProtocol::measureVoice;
+    using DictationProtocol::Voice;
+    const auto voiceOf = [](const std::vector<float> &pcm) { return measureVoice(pcm.data(), pcm.size()); };
     const std::vector<float> silence(16000 * 3 / 2, 0.0f);
-    check(loudestFrameDb(silence.data(), silence.size()) < kVoiceFloorDb && loudestFrameDb(nullptr, 0) < kVoiceFloorDb,
-          QStringLiteral("voz: 1,5 s de silencio no llegan al piso: el final sale vacio sin transcribir"));
+    const Voice quiet = voiceOf(silence);
+    check(quiet.frames == 0 && !quiet.enough() && quiet.loudestDb < kVoiceFloorDb && !measureVoice(nullptr, 0).enough(),
+          QStringLiteral("voz: 1,5 s de silencio no tienen voz: el final sale vacio sin transcribir"));
     const std::vector<float> hum = noise(32000, -50.0f);
-    const float humDb = loudestFrameDb(hum.data(), hum.size());
-    check(humDb < kVoiceFloorDb, QStringLiteral("voz: 2 s de ruido a -50 dBFS (%1 dBFS) tampoco").arg(double(humDb), 0, 'f', 1));
-    // Un poco de voz (300 ms a -20 dBFS) en medio de 2 s de ruido bajo.
-    std::vector<float> spoken = hum;
-    const std::vector<float> word = noise(4800, -20.0f);
-    std::copy(word.begin(), word.end(), spoken.begin() + 16000);
-    check(loudestFrameDb(spoken.data(), spoken.size()) >= kVoiceFloorDb,
-          QStringLiteral("voz: una palabra a -20 dBFS entre el ruido alcanza para transcribir"));
+    const Voice humVoice = voiceOf(hum);
+    check(humVoice.frames == 0 && !humVoice.enough(),
+          QStringLiteral("voz: 2 s de ruido a -50 dBFS (%1 dBFS) tampoco").arg(double(humVoice.loudestDb), 0, 'f', 1));
+    // Un click: un tramo de 30 ms a -33 dBFS en el silencio (toque_click_corto_1p5s.wav de la auditoria daba
+    // "Fijate si el roto anda bien."). Un golpe: 60 ms a -30 dBFS en el ruido ("¡Gracias!").
+    const Voice click = voiceOf(with(silence, noise(480, -33.0f), 24000 - 480 * 30));
+    const Voice knock = voiceOf(with(hum, noise(960, -30.0f), 480 * 40));
+    check(click.frames == 1 && click.loudestDb > kVoiceFloorDb && !click.enough() && knock.frames == 2 && !knock.enough(),
+          QStringLiteral("voz: un click (%1 tramo) y un golpe (%2 tramos) pasan el piso pero no son voz: no se transcriben")
+              .arg(click.frames)
+              .arg(knock.frames));
+    // Una palabra corta y baja ("Okay" a -42 dBFS: 270 ms, 9 tramos) si alcanza.
+    const Voice okay = voiceOf(with(hum, noise(4320, -42.0f), 480 * 30));
+    check(okay.enough(), QStringLiteral("voz: una palabra corta a -42 dBFS (%1 tramos) se transcribe").arg(okay.frames));
+    // 300 ms a -20 dBFS en medio de 2 s de ruido: se transcribe solo esa parte, con 300 ms de margen.
+    const Voice word = voiceOf(with(hum, noise(4800, -20.0f), 16000));
+    check(word.enough() && word.from <= 11200 && word.from + 480 > 11200 && word.to >= 25600 && word.to < 25600 + 480,
+          QStringLiteral("voz: se transcribe de %1 a %2 (la voz va de 16000 a 20800, margen 4800)").arg(word.from).arg(word.to));
+    // 8 s de silencio digital antes de hablar: se recortan (Whisper escribia basura sobre ellos).
+    const Voice late = voiceOf(with(std::vector<float>(16000 * 9, 0.0f), noise(16000, -20.0f), 16000 * 8));
+    check(late.enough() && late.from <= size_t(16000 * 8 - 4800) && late.from + 480 > size_t(16000 * 8 - 4800)
+              && late.to == size_t(16000 * 9),
+          QStringLiteral("voz: con 8 s de silencio delante se transcribe desde 7,7 s (%1)").arg(late.from));
 
     using DictationText::finalEchoesContext;
     check(finalEchoesContext(QStringLiteral("Glossary: Nuke Studio, Hiero."), kVocabulary, kPrompt)
@@ -211,7 +237,17 @@ void testVoiceGate(const Check &check)
               && !finalEchoesContext(QStringLiteral("El roto anda bien."), kVocabulary, kPrompt)
               && !finalEchoesContext(QStringLiteral("Fijate si el roto anda bien."), kVocabulary, kPrompt)
               && !finalEchoesContext(QStringLiteral("Gracias."), kVocabulary, kPrompt),
-          QStringLiteral("voz: un final corto con palabras del contexto puede ser de verdad y se escribe"));
+          QStringLiteral("voz: con voz de sobra, un final corto con palabras del contexto puede ser de verdad y se escribe"));
+    check(finalEchoesContext(QStringLiteral("Fijate si el roto anda bien."), kVocabulary, kPrompt, 4)
+              && finalEchoesContext(QStringLiteral("¿vos ya revisaste el"), kVocabulary, kPrompt, 4)
+              && !finalEchoesContext(QStringLiteral("el roto anda"), kVocabulary, kPrompt, 4)
+              && !finalEchoesContext(QStringLiteral("Fijate si el render anda bien."), kVocabulary, kPrompt, 4),
+          QStringLiteral("voz: con menos de 1 s de voz, 4 palabras seguidas de la frase de contexto son el contexto repetido"));
+
+    using DictationText::hasWords;
+    check(!hasWords(QStringLiteral(".")) && !hasWords(QStringLiteral(" ¡! ...")) && !hasWords(QString())
+              && hasWords(QStringLiteral("Ok.")) && hasWords(QStringLiteral("3")) && hasWords(QStringLiteral("¿Qué?")),
+          QStringLiteral("voz: un final sin letras ni digitos (\".\") no cuenta como texto"));
 }
 
 // ---------------------------------------------------------------- Texto
@@ -276,9 +312,13 @@ void testText(const Check &check)
               && echoesContext(QStringLiteral("Glossary, Nuke, Nuke, Nuke, Nuke,"), kVocabulary, QString())
               && echoesContext(QStringLiteral("Fijate si el roto anda bien"), {}, kPrompt) && echoesContext(QString(), {}, {}),
           QStringLiteral("texto: una pasada en vivo que solo repite el contexto se reconoce (resultados 02 y de esta prueba)"));
+    check(echoesContext(QStringLiteral("Glossary, Nuke, Nuke Studio, Nuke… Nu"), kVocabulary, QString()),
+          QStringLiteral("texto: el contexto repetido con la ultima palabra cortada tambien se reconoce (auditoria)"));
     check(!echoesContext(QStringLiteral("parece que anda bastante bien"), kVocabulary, QString())
-              && !echoesContext(QStringLiteral("Fijate que anda bastante"), kVocabulary, kPrompt),
-          QStringLiteral("texto: una pasada con una sola palabra fuera del contexto no se descarta"));
+              && !echoesContext(QStringLiteral("Fijate que anda bastante"), kVocabulary, kPrompt)
+              && !echoesContext(QStringLiteral("Nu, Nuke"), kVocabulary, QString())
+              && !echoesContext(QStringLiteral("Nuke Studio parece"), kVocabulary, QString()),
+          QStringLiteral("texto: una pasada con una sola palabra fuera del contexto no se descarta (cortada solo vale al final)"));
 
     using DictationText::applyReplacements;
     const DictationText::Replacements jairo = {{QStringLiteral("Jairo"), QStringLiteral("Hiero")}};
@@ -451,6 +491,8 @@ void testModels(const Check &check)
         engine.relativePath = QStringLiteral("transcribe.cpp/test-engine");
         engine.archiveFolder = QStringLiteral("inner");
         engine.requiredFile = QStringLiteral("transcribe.dll");
+        engine.files = {{QStringLiteral("transcribe.dll"), 9, sha256Hex("MZ prueba")},
+                        {QStringLiteral("licenses/LICENSE"), 3, sha256Hex("MIT")}};
         const QString engineDir = QDir(root).filePath(engine.relativePath);
         // Una carpeta vieja sin marcador: la instalacion la reemplaza.
         writeBytes(QDir(engineDir).filePath(QStringLiteral("viejo.txt")), QByteArrayLiteral("viejo"));
@@ -473,23 +515,45 @@ void testModels(const Check &check)
         again.refresh();
         check(again.state(engine.id) == State::Ready, QStringLiteral("descargas: el motor instalado queda listo en el proximo arranque"));
 
-        // Cada archivo del motor queda en el marcador con su tamano y SHA-256, y se revisa antes de cargarlo.
-        QFile marker(QDir(engineDir).filePath(QStringLiteral(".verified")));
-        const QByteArray markerText = marker.open(QIODevice::ReadOnly) ? marker.readAll() : QByteArray();
-        marker.close();
+        // Los archivos del motor se verifican contra la tabla fija del paquete; el marcador solo guarda tamano y
+        // fecha de cada uno para ver barato, al arrancar, que nada cambio.
+        const QString dll = QDir(engineDir).filePath(QStringLiteral("transcribe.dll"));
+        const QString markerPath = QDir(engineDir).filePath(QStringLiteral(".verified"));
+        const auto readMarker = [&]() {
+            QFile marker(markerPath);
+            return marker.open(QIODevice::ReadOnly) ? marker.readAll() : QByteArray();
+        };
+        const QByteArray markerText = readMarker();
+        const QByteArray stamp = "file=transcribe.dll|9|" + QByteArray::number(QFileInfo(dll).lastModified().toMSecsSinceEpoch());
         QString problem;
-        check(markerText.contains("file=transcribe.dll|9|" + sha256Hex("MZ prueba"))
-                  && markerText.contains("file=licenses/LICENSE|3|") && DictationModels::checkEngineFiles(engineDir, &problem),
-              QStringLiteral("motor: el marcador guarda tamano y SHA-256 de cada archivo y la carpeta los cumple (%1)").arg(problem));
-        writeBytes(QDir(engineDir).filePath(QStringLiteral("transcribe.dll")), QByteArrayLiteral("MZ otro!!"));
-        check(!DictationModels::checkEngineFiles(engineDir, &problem) && problem == QLatin1String("transcribe.dll"),
-              QStringLiteral("motor: una DLL cambiada (mismo tamano) no pasa: no se carga nada"));
-        writeBytes(QDir(engineDir).filePath(QStringLiteral("transcribe.dll")), QByteArrayLiteral("MZ prueba"));
+        check(markerText.contains(stamp) && markerText.contains("file=licenses/LICENSE|3|")
+                  && DictationModels::checkEngineFiles(engineDir, engine.files, &problem),
+              QStringLiteral("motor: el marcador guarda tamano y fecha de cada archivo y la carpeta cumple la tabla (%1)").arg(problem));
+        writeBytes(dll, QByteArrayLiteral("MZ otro!!"));
+        DictationModels changed(root, {engine});
+        changed.refresh();
+        check(!DictationModels::checkEngineFiles(engineDir, engine.files, &problem) && problem == QLatin1String("transcribe.dll")
+                  && changed.state(engine.id) == State::Missing,
+              QStringLiteral("motor: una DLL cambiada (mismo tamano) no pasa la tabla, y la pagina ya no la da por lista (otra fecha)"));
+        // Un marcador reescrito para la DLL cambiada no la vuelve buena: la tabla no se lee del disco.
+        QByteArray forged = readMarker();
+        forged.replace(stamp, "file=transcribe.dll|9|" + QByteArray::number(QFileInfo(dll).lastModified().toMSecsSinceEpoch()));
+        writeBytes(markerPath, forged);
+        check(!DictationModels::checkEngineFiles(engineDir, engine.files, &problem) && problem == QLatin1String("transcribe.dll"),
+              QStringLiteral("motor: con el marcador reescrito para la DLL cambiada tampoco pasa (no se carga nada)"));
+        writeBytes(dll, QByteArrayLiteral("MZ prueba"));
         writeBytes(QDir(engineDir).filePath(QStringLiteral("ggml-extra.dll")), QByteArrayLiteral("MZ"));
-        check(!DictationModels::checkEngineFiles(engineDir, &problem) && problem == QLatin1String("ggml-extra.dll"),
-              QStringLiteral("motor: una DLL que no vino en el paquete tampoco (el motor carga las de su carpeta)"));
+        check(!DictationModels::checkEngineFiles(engineDir, engine.files, &problem) && problem == QLatin1String("ggml-extra.dll"),
+              QStringLiteral("motor: una DLL que no viene en el paquete tampoco (el motor carga las de su carpeta)"));
         QFile::remove(QDir(engineDir).filePath(QStringLiteral("ggml-extra.dll")));
-        check(DictationModels::checkEngineFiles(engineDir, &problem), QStringLiteral("motor: sacada la de mas, vuelve a pasar"));
+        check(DictationModels::checkEngineFiles(engineDir, engine.files, &problem)
+                  && !DictationModels::checkEngineFiles(engineDir, {}, &problem),
+              QStringLiteral("motor: sacada la de mas, vuelve a pasar; sin tabla no pasa nada"));
+        const QList<DictationModels::File> table = DictationModels::engineFiles041();
+        qint64 tableBytes = 0;
+        for (const DictationModels::File &file : table) tableBytes += file.size;
+        check(table.size() == 18 && tableBytes == 56238591 && DictationModels::defaultPieces().first().files.size() == 18,
+              QStringLiteral("motor: la tabla del paquete 0.4.1 tiene sus 18 archivos (%1 bytes)").arg(tableBytes));
         again.markDamaged(engine.id, QStringLiteral("danado"));
         check(again.state(engine.id) == State::Error && again.errorText(engine.id) == QLatin1String("danado"),
               QStringLiteral("motor: si el proceso del motor lo rechaza, la pieza queda en error en la pagina"));
@@ -643,9 +707,15 @@ int simulateTranscribe(const QStringList &args)
     for (const auto &recording : std::as_const(recordings)) {
         const QVector<float> &samples = recording.second;
         out(QStringLiteral("\n=== %1 (%2 s de audio, entra en tiempo real)").arg(recording.first).arg(samples.size() / 16000.0, 0, 'f', 1));
-        out(QStringLiteral("  nivel: tramo de 30 ms mas fuerte %1 dBFS (piso de voz %2 dBFS)")
-                .arg(double(DictationProtocol::loudestFrameDb(samples.constData(), size_t(samples.size()))), 0, 'f', 1)
-                .arg(double(DictationProtocol::kVoiceFloorDb), 0, 'f', 0));
+        const DictationProtocol::Voice voice = DictationProtocol::measureVoice(samples.constData(), size_t(samples.size()));
+        out(QStringLiteral("  nivel: tramo de 30 ms mas fuerte %1 dBFS, %2 tramos con voz (piso %3 dBFS, hacen falta %4), "
+                           "se transcribe de %5 a %6 s")
+                .arg(double(voice.loudestDb), 0, 'f', 1)
+                .arg(voice.frames)
+                .arg(double(DictationProtocol::kVoiceFloorDb), 0, 'f', 0)
+                .arg(DictationProtocol::kMinVoiceFrames)
+                .arg(voice.from / 16000.0, 0, 'f', 2)
+                .arg(voice.to / 16000.0, 0, 'f', 2));
         confirmed.clear();
         previous.clear();
         gotFinal = false;
@@ -1070,6 +1140,15 @@ void testFlow(const Check &check)
               QStringLiteral("recorrido: un final vacio no escribe nada ni queda en Recent"));
     }
     {
+        // 20 s de silencio y "Okay" daban "." (auditoria): sin letras ni digitos no se escribe.
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.release(900);
+        r.flow.final(QStringLiteral(" . "));
+        check(r.clean() && r.io.typedTexts.isEmpty() && r.entries.isEmpty() && !r.io.overlayShown,
+              QStringLiteral("recorrido: un final que es solo puntuacion (\".\") no escribe nada ni queda en Recent"));
+    }
+    {
         FlowRig r;
         r.flow.press(0);
         r.flow.partial(QStringLiteral("esto no va"));
@@ -1228,8 +1307,14 @@ public:
     QHash<int, Shortcut> registered;
     QHash<int, Shortcut> declared;
     Shortcut takenByOther;
+    QSet<int> refused; ///< ids que el registro rechaza (como un atajo tomado por otro programa)
     bool registerHotkey(int id, const Shortcut &keys) override { registered.insert(id, keys); return true; }
-    bool registerPriorityHotkey(int id, const Shortcut &keys) override { registered.insert(id, keys); return true; }
+    bool registerPriorityHotkey(int id, const Shortcut &keys) override
+    {
+        if (refused.contains(id)) return false;
+        registered.insert(id, keys);
+        return true;
+    }
     void unregisterHotkey(int id) override { registered.remove(id); }
     void unregisterAll() override { registered.clear(); }
     bool isRegistered(int id) const override { return registered.contains(id); }
@@ -1432,6 +1517,21 @@ void testModule(const Check &check)
         check(module.phase() == Phase::Idle && !module.captureOpen && context.fake.registered.isEmpty()
                   && module.engineCancels == 3,
               QStringLiteral("modulo: apagar con un dictado en curso cierra el microfono, cancela el motor y suelta los atajos"));
+    }
+    {
+        // Esc sola no se pudo registrar: Win+Esc igual se registra, cancela y se retira (cada una con su flag).
+        QaModule module(context);
+        module.fakeEngine = true;
+        module.start();
+        context.fake.refused.insert(2);
+        context.fake.press(1);
+        const bool onlyHeld = context.fake.registered.size() == 2 && context.fake.registered.contains(3)
+                           && module.escapeRegisteredForQa();
+        context.fake.press(3);
+        check(onlyHeld && module.phase() == Phase::Idle && context.fake.registered.size() == 1 && !module.escapeRegisteredForQa(),
+              QStringLiteral("modulo: sin Esc sola, Win+Esc cancela y tambien se retira (no queda registrada)"));
+        context.fake.refused.clear();
+        module.stop();
     }
     {
         // El motor no se carga al arrancar la app; si al prenderla el usuario (sin piezas no se lanza nada).

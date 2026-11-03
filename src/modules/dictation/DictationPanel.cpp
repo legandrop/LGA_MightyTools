@@ -274,7 +274,8 @@ QWidget *DictationPanel::buildModelCard()
 {
     QVBoxLayout *column = nullptr;
     QFrame *card = titledCard(this, I18n::tr("Model"), &column);
-    column->addWidget(Ui::caption(I18n::tr("Models folder"), card));
+    // Rotulo de campo como «Folder» en las reglas de Disk Space y «Language» en General.
+    column->addWidget(Ui::label(I18n::tr("Models folder"), "optionLabel", card));
     auto *rootRow = new QHBoxLayout();
     rootRow->setSpacing(6);
     m_root = field(QString(), I18n::tr("Models folder"), card);

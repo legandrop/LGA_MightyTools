@@ -4,6 +4,8 @@
 #include <QSet>
 #include <QStringList>
 
+#include <algorithm>
+
 namespace {
 
 QStringList words(const QString &text)
@@ -47,22 +49,43 @@ QString normalizedWord(const QString &word)
     return out;
 }
 
+bool hasWords(const QString &text)
+{
+    for (const QChar c : text) {
+        if (c.isLetterOrNumber()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool echoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt)
 {
     QSet<QString> context = {QStringLiteral("glossary")};
     for (const QString &word : words(prompt + QLatin1Char(' ') + vocabulary.join(QLatin1Char(' ')))) {
         context.insert(normalizedWord(word));
     }
+    QStringList said;
     for (const QString &word : words(hypothesis)) {
         const QString normalized = normalizedWord(word);
-        if (!normalized.isEmpty() && !context.contains(normalized)) {
+        if (!normalized.isEmpty()) said << normalized;
+    }
+    for (qsizetype i = 0; i < said.size(); ++i) {
+        if (context.contains(said.at(i))) {
+            continue;
+        }
+        // La ultima palabra puede venir cortada ("Glossary, Nuke, Nuke Studio, Nuke... Nu"): vale si es el
+        // principio de una palabra del contexto.
+        const bool cut = i == said.size() - 1
+                      && std::any_of(context.cbegin(), context.cend(), [&](const QString &w) { return w.startsWith(said.at(i)); });
+        if (!cut) {
             return false;
         }
     }
     return true;
 }
 
-bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt)
+bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt, int minPromptRun)
 {
     QStringList said;
     for (const QString &word : words(hypothesis)) {
@@ -86,13 +109,13 @@ bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary
     if (onlyTerms && QSet<QString>(said.cbegin(), said.cend()).size() < said.size()) {
         return true;
     }
-    // 8 palabras o mas, todas seguidas y en orden dentro de la frase de contexto.
+    // minPromptRun palabras o mas, todas seguidas y en orden dentro de la frase de contexto.
     QStringList context;
     for (const QString &word : words(prompt)) {
         const QString normalized = normalizedWord(word);
         if (!normalized.isEmpty()) context << normalized;
     }
-    if (said.size() < 8 || said.size() > context.size()) {
+    if (said.size() < minPromptRun || said.size() > context.size()) {
         return false;
     }
     for (qsizetype start = 0; start + said.size() <= context.size(); ++start) {

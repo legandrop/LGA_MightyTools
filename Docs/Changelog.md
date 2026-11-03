@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation, segunda revisión: un click o un golpe sin voz todavía inventaban texto («Fijate si el roto anda bien.», «¡Gracias!») porque el piso miraba solo el tramo más fuerte y un pico de 30 ms lo pasaba. Ahora hacen falta 6 tramos de 30 ms sobre −45 dBFS (180 ms de voz), en la pasada final y en vivo; con menos de ~1 s de voz se descarta un final que es un pedazo de 4 palabras de la frase de contexto, y uno sin letras ni dígitos («.») no se escribe. Antes de transcribir se recorta el silencio de antes y de después, con 300 ms de margen: 8 s de silencio delante daban basura. El motor se verifica contra la tabla fija de tamaño y SHA-256 del paquete 0.4.1, no contra el marcador. Cada Esc se retira con su propio flag.
+
+[ Dictation - Voz por duracion y no por pico, silencio recortado y motor verificado contra la tabla del paquete ]
+
 Dictation, correcciones de la auditoría: con silencio o ruido de fondo Whisper inventaba frases («Gracias por ver el video.») que se habrían escrito. El proceso del motor ya no transcribe audio cuyo tramo de 30 ms más fuerte queda bajo −45 dBFS (las grabaciones reales dan de −23 a −19), descarta los tramos con `no_speech_prob` ≥ 0,6 y los finales que solo repiten el contexto. Manteniendo Win+H, Esc llegaba como Win+Esc y no cancelaba: se registra también con los modificadores del atajo, y Esc corta además la escritura («Stopped»). Los archivos del motor se verifican por tamaño y SHA-256 antes de cargarlo. Sin GPU, el tope del final crece con lo grabado y las pasadas en vivo se espacian. El motor ya no se carga al arrancar la app: al prenderla o con el primer dictado. Página: acciones contra el borde, títulos parejos y solo rutas completas.
 
 [ Dictation - Correcciones de la auditoria: silencio sin texto, Esc con Win apretado, motor verificado y pagina alineada ]

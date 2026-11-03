@@ -208,9 +208,10 @@ void DictationFlow::final(const QString &text)
         return;
     }
     const QString result = DictationText::applyReplacements(text.trimmed(), m_replacements).trimmed();
-    if (result.isEmpty()) {
-        // No se entendio nada (silencio, ruido): no se escribe nada.
-        qInfo() << "[Dictado] Final vacio: no se escribe nada";
+    if (!DictationText::hasWords(result)) {
+        // No se entendio nada (silencio, ruido) o es solo puntuacion ("."): no se escribe nada.
+        qInfo().noquote() << "[Dictado] Final sin palabras:" << (result.isEmpty() ? QStringLiteral("(vacio)") : result)
+                          << "- no se escribe nada";
         m_io.setActive(false);
         setPhase(Phase::Idle);
         m_io.hideOverlay(0);

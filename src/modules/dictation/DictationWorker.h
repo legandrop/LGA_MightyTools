@@ -10,12 +10,13 @@
 // primera pasada de un proceso compila los shaders de Vulkan (7,3 s la primera vez en una RTX 4090, 1,3 s
 // con la cache del driver) y asi no la paga el primer dictado. Despues manda Ready.
 //
-// En vivo: desde 1 s de audio, mientras dura la sesion vuelve a transcribir TODO el audio acumulado cada
-// 500 ms (o apenas termina la pasada anterior, si tardo mas) y manda Partial. Las pasadas en vivo van con
-// el vocabulario pero sin la frase de contexto ni los reintentos de Whisper a otra temperatura, y no
-// mandan las que solo repiten el contexto (DictationText::echoesContext). Con End corta la pasada en vivo que este corriendo (callback de aborto del motor), hace
-// la pasada final con vocabulario y frase y manda Final. Si la app cierra el canal (sale o se cae), el
-// proceso termina solo.
+// En vivo: desde 1 s de audio con voz (DictationProtocol::measureVoice), mientras dura la sesion vuelve a
+// transcribir TODO el audio acumulado, sin el silencio de antes y de despues, cada 500 ms o el doble de lo
+// que tardo la ultima pasada, y manda Partial. Las pasadas en vivo van con el vocabulario pero sin la frase
+// de contexto ni los reintentos de Whisper a otra temperatura, y no mandan las que solo repiten el contexto
+// (DictationText::echoesContext). Con End corta la pasada en vivo que este corriendo (callback de aborto del
+// motor), hace la pasada final con vocabulario y frase y manda Final (vacio si no hubo voz suficiente). Si
+// la app cierra el canal (sale o se cae), el proceso termina solo.
 //
 // Mas de 30 s: Whisper no tiene limite (transcribe.cpp corta en ventanas de 30 s y las une, docs/
 // input-limits.md), asi que el tope es de la app: DictationProtocol::kMaxSeconds. Lo que llega despues no

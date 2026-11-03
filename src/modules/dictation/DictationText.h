@@ -31,14 +31,19 @@ QString normalizedWord(const QString &word);
 // Una pasada en vivo con poco audio suele devolver el contexto que se le dio y no lo que se dijo: el
 // motor le pasa el vocabulario a Whisper como "Glossary: Nuke Studio, ...", y salen "Glossary" o
 // "Glossary, Nuke, Nuke, Nuke". True si todas las palabras de `hypothesis` estan en ese contexto (o si
-// no tiene ninguna). Solo para las pasadas en vivo: un final de verdad puede ser "Nuke Studio" o "el roto
-// anda bien" (todas palabras de la frase de contexto).
+// no tiene ninguna); la ultima puede venir cortada ("... Nuke... Nu"). Solo para las pasadas en vivo: un
+// final de verdad puede ser "Nuke Studio" o "el roto anda bien" (todas palabras de la frase de contexto).
 bool echoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt);
 
 // La version para la pasada final, mas estricta: el contexto repetido y no algo que se pudo decir. True si
 // dice "Glossary", si son solo terminos del vocabulario con alguno repetido ("Nuke, Nuke, Nuke"), o si son
-// 8 palabras o mas seguidas de la frase de contexto (Whisper la copia entera sobre audio sin voz).
-bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt);
+// `minPromptRun` palabras o mas seguidas de la frase de contexto (Whisper la copia sobre audio sin voz: 8
+// con voz de sobra; 4 cuando hubo menos de ~1 s de voz, porque "Fijate si el roto anda bien." sale de un
+// click).
+bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt, int minPromptRun = 8);
+
+// Tiene alguna letra o algun digito: un final que es solo "." o "¡!" no se escribe.
+bool hasWords(const QString &text);
 
 // Tabla de reemplazos (pares "si escribe X, poner Y"), en orden, sobre palabras o frases completas y sin
 // distinguir mayusculas: {"Jairo", "Hiero"} cambia "jairo" pero no "Jairos". Y se pone tal cual.

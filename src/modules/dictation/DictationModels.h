@@ -29,10 +29,11 @@ class QProcess;
 // .part, y recien con el tamano y el SHA-256 correctos pasa a su lugar (el motor se desempaqueta con
 // el tar.exe de Windows a una carpeta temporal dentro de la raiz y despues se renombra). Lista = el
 // archivo con su marcador "<archivo>.verified" (tamano, fecha y SHA-256), o la carpeta del motor con
-// ".verified" adentro (el SHA-256 del paquete y el tamano y SHA-256 de cada archivo desempaquetado): asi
+// ".verified" adentro (el SHA-256 del paquete y el tamano y la fecha de cada archivo desempaquetado): asi
 // no se vuelven a leer 886 MB en cada arranque. Un archivo que ya estaba (el modelo copiado a mano) se
 // verifica una vez, en otro hilo. Los archivos del motor se vuelven a verificar cada vez que se carga
-// (checkEngineFiles), porque son codigo que se ejecuta.
+// (checkEngineFiles) contra la tabla fija del paquete (Piece::files), no contra el marcador: son codigo
+// que se ejecuta, y el marcador es un archivo que cualquiera puede reescribir.
 //
 // En una corrida automatizada no se baja nada ni se abre la red: solo se aceptan URL file:// (el
 // self-test con archivos chicos), y borrar lo que ya estaba solo actua dentro de la carpeta de pruebas
@@ -45,6 +46,14 @@ public:
     enum class State { Missing, Downloading, Verifying, Ready, Error };
     Q_ENUM(State)
 
+    // Un archivo que trae el paquete del motor: ruta relativa con "/", tamano y SHA-256 (hex en minusculas).
+    struct File
+    {
+        QString relative;
+        qint64 size = 0;
+        QByteArray sha256;
+    };
+
     struct Piece
     {
         QString id;            ///< kEngine, kModel
@@ -56,12 +65,15 @@ public:
         QString relativePath;  ///< dentro de la raiz: el archivo, o la carpeta si es un .tar.gz
         QString archiveFolder; ///< .tar.gz: la carpeta de adentro que pasa a ser relativePath
         QString requiredFile;  ///< .tar.gz: lo que tiene que estar en esa carpeta
+        QList<File> files;     ///< .tar.gz: todo lo que trae el paquete (el paquete esta fijado por SHA-256)
     };
 
     static inline const QString kEngine = QStringLiteral("engine");
     static inline const QString kModel = QStringLiteral("model");
     // transcribe.cpp 0.4.1 (CPU + Vulkan) y Whisper large-v3 turbo Q8_0, los dos MIT.
     static QList<Piece> defaultPieces();
+    // Los archivos del paquete del motor 0.4.1, con su tamano y SHA-256 (la tabla de defaultPieces()).
+    static QList<File> engineFiles041();
     static QString defaultRoot();
 
     explicit DictationModels(const QString &root, const QList<Piece> &pieces = defaultPieces(), QObject *parent = nullptr);
@@ -90,11 +102,11 @@ public:
     // El motor no paso la verificacion de sus archivos al cargarse: queda en error hasta bajarlo de nuevo.
     void markDamaged(const QString &id, const QString &why);
 
-    // Los archivos de la carpeta del motor contra su ".verified" (tamano y SHA-256 de cada uno, escritos
-    // al desempaquetarlo). False, con el archivo en `problem`, si falta o cambio alguno o si hay una DLL
-    // que no estaba (el motor carga las DLL de su carpeta). Lee todo (56 MB): la llama el proceso del
-    // motor antes de cargar nada, no la app.
-    static bool checkEngineFiles(const QString &engineDir, QString *problem);
+    // Los archivos de la carpeta del motor contra la tabla fija del paquete (tamano y SHA-256 de cada uno).
+    // False, con el archivo en `problem`, si falta o cambio alguno o si hay una DLL que no viene en el
+    // paquete (el motor carga las DLL de su carpeta). Lee todo (56 MB): la llama el proceso del motor
+    // antes de cargar nada, no la app.
+    static bool checkEngineFiles(const QString &engineDir, const QList<File> &files, QString *problem);
 
 signals:
     void changed(const QString &id);

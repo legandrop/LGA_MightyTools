@@ -63,19 +63,35 @@ bool known(quint8 type)
 
 namespace DictationProtocol {
 
-float loudestFrameDb(const float *pcm, size_t count)
+Voice measureVoice(const float *pcm, size_t count)
 {
-    constexpr size_t kFrame = kSampleRate * 30 / 1000;
+    const double floor = std::pow(10.0, double(kVoiceFloorDb) / 10.0); // en potencia (RMS al cuadrado)
+    Voice voice;
     double loudest = 0.0;
-    for (size_t start = 0; start < count; start += kFrame) {
-        const size_t end = qMin(count, start + kFrame);
+    bool any = false;
+    size_t first = 0;
+    size_t last = 0;
+    for (size_t start = 0; start < count; start += kFrameSamples) {
+        const size_t end = qMin(count, start + size_t(kFrameSamples));
         double sum = 0.0;
         for (size_t i = start; i < end; ++i) {
             sum += double(pcm[i]) * double(pcm[i]);
         }
-        loudest = qMax(loudest, sum / double(end - start));
+        const double power = sum / double(end - start);
+        loudest = qMax(loudest, power);
+        if (power >= floor) {
+            ++voice.frames;
+            if (!any) first = start;
+            last = end;
+            any = true;
+        }
     }
-    return loudest > 1e-12 ? float(10.0 * std::log10(loudest)) : -120.0f;
+    voice.loudestDb = loudest > 1e-12 ? float(10.0 * std::log10(loudest)) : -120.0f;
+    if (any) {
+        voice.from = first > size_t(kTrimMarginSamples) ? first - size_t(kTrimMarginSamples) : 0;
+        voice.to = qMin(count, last + size_t(kTrimMarginSamples));
+    }
+    return voice;
 }
 
 } // namespace DictationProtocol
