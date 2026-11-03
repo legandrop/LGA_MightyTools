@@ -12,6 +12,7 @@ shortcuts, no system hooks.
 | **Folder Switch** | Open and Save dialogs jump to the folder you have open in Explorer or XYplorer (Finder on macOS). | Windows, macOS |
 | **Link Redirector** | Opens each link in the right browser: links with your keywords go to an alternative browser. | Windows, macOS |
 | **Window Layouts** | Move or minimize the active window with a shortcut. Combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds. | Windows, macOS |
+| **Desktop Icons** | Saves where your desktop icons are, once a day and whenever you want, and puts them back when Windows mixes them up, with undo. | Windows |
 
 Nothing is on after you install it. Open the window from the tray icon (the menu bar on macOS), pick
 a tool on the left and turn it on.

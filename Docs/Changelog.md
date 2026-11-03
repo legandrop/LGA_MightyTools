@@ -2,6 +2,10 @@
 
 v1.53:
 
+Desktop Icons (Windows), herramienta nueva: Windows desordena los íconos del escritorio al arrancar con una resolución chica, al cambiar de cable o al reiniciar el Explorador, y volver al orden era a mano. Guarda snapshots manuales con nombre y uno automático por día, con la PC despierta hace una hora y el usuario presente; quedan los últimos 5, el igual al anterior solo actualiza la fecha, y con otra resolución se saltea (tres días seguidos la vuelven habitual). Restaurar guarda antes un «antes de restaurar» (quedan 3, con Undo), mueve todos los íconos en una sola llamada a `SelectAndPositionItems` y relee cada posición para contar solo los que quedaron exactos; los que ya no existen se saltean. Lee la vista con `IFolderView2` por la ruta de cada ícono, sin reiniciar el Explorador. Un JSON por snapshot en `desktop_icons\`. D-66.
+
+[ Desktop Icons - Herramienta nueva: guardar y restaurar el orden de los iconos del escritorio ]
+
 UI: el switch saltaba de un lado al otro sin transición. Lega eligió la animación «Suave» del mockup (D-64): con un click la perilla desliza 160 ms con la curva `cubic-bezier(.2,.8,.2,1)` y el fondo, el borde y la perilla funden su color linealmente en el mismo tiempo. `ToggleSwitch` anima al volver de `nextCheckState()` (con el mouse Qt no llama a `checkStateSet()`, como en `QCheckBox`); un `setChecked()` del código salta al final, salvo que repita el destino de la animación en marcha. Los atajos de Window Layouts aplican el cambio a los 180 ms, después de deslizar. Nueva `--ui-probe switch-anim` con clicks de mouse simulados.
 
 [ UI - Animacion suave del switch ]

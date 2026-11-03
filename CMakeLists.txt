@@ -341,8 +341,17 @@ if(WIN32)
         src/modules/folderswitch/UiaSwitcher.cpp
         src/modules/folderswitch/UiaTimeouts.cpp
         src/modules/folderswitch/WindowUtils.cpp
+        # Modulo Desktop Icons: solo Windows (la vista del escritorio del Explorador).
+        src/modules/desktopicons/DesktopIconsModule.cpp
+        src/modules/desktopicons/DesktopIconsPanel.cpp
+        src/modules/desktopicons/DesktopSnapshots.cpp
+        src/platform/win/DesktopIconViewWin.cpp
     )
     list(APPEND HEADERS
+        src/modules/desktopicons/DesktopIconsModule.h
+        src/modules/desktopicons/DesktopIconsPanel.h
+        src/modules/desktopicons/DesktopSnapshots.h
+        src/platform/DesktopIconView.h
         src/platform/AdminWindowHelper.h
         src/modules/openinnukex/win/OldClientMigration.h
         src/modules/openinnukex/win/WinFileAssociation.h

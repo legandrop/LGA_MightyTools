@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new][win] Desktop Icons guarda dónde están los íconos del escritorio, una vez por día o cuando quieras con un nombre, y los vuelve a su lugar con un clic cuando Windows los desordena, con «Undo» para deshacer.
 - [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.
 - [improved] La barra de scroll es más finita y General ya no tiene la sección «About».
 - [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas, y el switch se desliza suave al tocarlo.

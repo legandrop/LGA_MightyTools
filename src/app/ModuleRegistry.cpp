@@ -9,6 +9,7 @@
 #include <QtGlobal>
 
 #if defined(Q_OS_WIN)
+#include "modules/desktopicons/DesktopIconsModule.h" // solo Windows
 #include "modules/folderswitch/FolderSwitchModule.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
@@ -31,6 +32,9 @@ QList<ModuleDescriptor> all()
 #endif
     list << linkRedirectorDescriptor();
     list << windowLayoutsDescriptor();
+#if defined(Q_OS_WIN)
+    list << desktopIconsDescriptor();
+#endif
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
@@ -57,6 +61,9 @@ QHash<QString, HelpProvider> helpProviders()
 #endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
+#if defined(Q_OS_WIN)
+    providers.insert(QStringLiteral("desktopIcons"), &desktopIconsHelp);
+#endif
     return providers;
 }
 

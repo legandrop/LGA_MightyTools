@@ -15,9 +15,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       medio, simula Espacio + clic izquierdo (mover la imagen con el botón del medio). Reglas «app → botón →
       teclas y clic mientras está apretado», con un gancho de mouse de bajo nivel que solo existe mientras
       una app con regla está al frente.
-   3. **Desktop Icons** (Windows). Guarda y restaura la posición de los íconos del escritorio: snapshots
-      manuales y uno automático por día con la PC despierta hace al menos una hora; quedan los últimos 5
-      automáticos más los manuales. Diseño y decisiones en `Docs/Roadmap_Desktop_Icons.md`.
+   3. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
+      prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
+      «Organizar automáticamente» prendido, y Undo.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que quedaron afuera
    (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o
