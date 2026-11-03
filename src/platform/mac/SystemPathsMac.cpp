@@ -168,6 +168,11 @@ QStringList protectedTrees()
     return list;
 }
 
+QStringList protectedTreeExceptions()
+{
+    return {};
+}
+
 QStringList cloudFolders()
 {
     QStringList list;

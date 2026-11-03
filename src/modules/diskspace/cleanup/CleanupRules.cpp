@@ -2,6 +2,7 @@
 
 #include "core/I18n.h"
 #include "modules/diskspace/DiskSpace.h"
+#include "modules/diskspace/cleanup/AppCacheRules.h"
 #include "modules/diskspace/cleanup/CleanupJob.h"
 #include "modules/diskspace/cleanup/DeleteGuard.h"
 #include "modules/diskspace/cleanup/ScanEngine.h"
@@ -212,6 +213,8 @@ bool hasCacheTagSignature(const QString &dir)
 QList<Cleanup::Category> build(const Context &context)
 {
     QList<Cleanup::Category> categories = systemCategories(context);
+    // Las caches de los programas de video, audio y VFX, donde las puso el usuario.
+    AppCacheRules::add(categories, context);
     // La misma carpeta puede aparecer por dos rutas (una app empaquetada la muestra tambien en
     // AppData\Roaming): se queda la primera.
     QList<FileSystemOps::Identity> seen;
@@ -300,6 +303,9 @@ QList<Cleanup::Category> refresh(const Context &context, ScanEngine &engine, con
             categories.append(category);
         }
 
+        // ---- Programas de video cuyas preferencias no se leen: se reconocen por la forma de sus carpetas.
+        AppCacheRules::addScanned(categories, tree, context);
+
         // ---- Carpetas que su programa marco como cache (CACHEDIR.TAG).
         QStringList taggedPaths;
         for (const ScanTree::Index index : tagged) {
@@ -377,6 +383,8 @@ QList<Cleanup::Category> refresh(const Context &context, ScanEngine &engine, con
                 category.caption += QLatin1Char(' ') + I18n::tr("%1 newer or in use are left alone.").arg(DiskSpace::formatSize(first.keptBytes));
             }
         }
+        // ---- Lo que la regla de temporales ya se lleva entero no se cuenta dos veces.
+        dropInsideSwept(categories, tree, now);
     }
 
     // ---- Programas que bloquean, lo tildado y el orden.
@@ -425,7 +433,7 @@ QList<Cleanup::Category> refresh(const Context &context, ScanEngine &engine, con
             }
             item.blocked = false;
             for (const QString &blocker : item.blockers) {
-                if (programs.contains(blocker)) {
+                if (Cleanup::blockerRunning(programs, blocker)) {
                     item.blocked = true;
                     break;
                 }
@@ -442,6 +450,57 @@ QList<Cleanup::Category> refresh(const Context &context, ScanEngine &engine, con
         }
     }
     return result;
+}
+
+void dropInsideSwept(QList<Cleanup::Category> &categories, const ScanTree &tree, qint64 nowSecs)
+{
+    QList<Cleanup::Target> sweeps;
+    for (const Cleanup::Category &category : categories) {
+        for (const Cleanup::Item &item : category.items) {
+            for (const Cleanup::Target &target : item.targets) {
+                if (target.action == Cleanup::Action::OldChildren) {
+                    sweeps.append(target);
+                }
+            }
+        }
+    }
+    if (sweeps.isEmpty()) {
+        return;
+    }
+    // La ruta esta dentro de una hija de una carpeta barrida, y esa hija no se toco en los dias de la regla.
+    const auto swept = [&](const QString &path) {
+        for (const Cleanup::Target &sweep : sweeps) {
+            if (!DeleteGuard::isInside(path, sweep.path)) {
+                continue;
+            }
+            QString rest = path.mid(sweep.path.size());
+            while (rest.startsWith(QDir::separator())) {
+                rest.remove(0, 1);
+            }
+            const ScanTree::Index child = tree.find(join(sweep.path, rest.section(QDir::separator(), 0, 0)));
+            if (child == ScanTree::kNone || !tree.isAlive(child)) {
+                return false;
+            }
+            return nowSecs - tree.node(child).newest >= qint64(sweep.minAgeDays) * 86400;
+        }
+        return false;
+    };
+    for (Cleanup::Category &category : categories) {
+        QList<Cleanup::Item> kept;
+        for (const Cleanup::Item &item : category.items) {
+            bool all = !item.targets.isEmpty();
+            for (const Cleanup::Target &target : item.targets) {
+                if (target.action == Cleanup::Action::OldChildren || target.action == Cleanup::Action::RecycleBin || !swept(target.path)) {
+                    all = false;
+                    break;
+                }
+            }
+            if (!all) {
+                kept.append(item);
+            }
+        }
+        category.items = kept;
+    }
 }
 
 qint64 selectedBytes(const QList<Cleanup::Category> &categories)

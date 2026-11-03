@@ -14,6 +14,9 @@ namespace CleanupQa {
 void selfTest(const std::function<void(bool ok, const QString &what)> &check);
 // La parte que BORRA, sobre una carpeta de pruebas propia (CleanupSelfTest.cpp). La llama selfTest.
 void selfTestSandbox(const std::function<void(bool ok, const QString &what)> &check);
+// Las caches de programas de video, audio y VFX (AppCacheRules), con sus preferencias armadas en otra
+// carpeta de pruebas propia (AppCacheSelfTest.cpp). La llama selfTest.
+void selfTestAppCaches(const std::function<void(bool ok, const QString &what)> &check);
 
 // --simulate-action diskSpace:<accion> [args]. Devuelve 2 si no conoce la accion.
 //   scan <raiz>          escanea el volumen e imprime tiempos, totales y lo mas pesado

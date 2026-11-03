@@ -125,6 +125,8 @@ set(SOURCES
     src/modules/diskspace/cleanup/ScanSnapshot.cpp
     src/modules/diskspace/cleanup/SizeListView.cpp
     src/modules/diskspace/cleanup/CleanupRules.cpp
+    src/modules/diskspace/cleanup/AppCacheRules.cpp
+    src/modules/diskspace/cleanup/AppCacheSelfTest.cpp
     src/modules/diskspace/cleanup/DeleteGuard.cpp
     src/modules/diskspace/cleanup/CleanupQa.cpp
     src/modules/diskspace/cleanup/CleanupSelfTest.cpp
@@ -226,6 +228,7 @@ set(HEADERS
     src/modules/diskspace/cleanup/SizeListView.h
     src/modules/diskspace/cleanup/CleanupModel.h
     src/modules/diskspace/cleanup/CleanupRules.h
+    src/modules/diskspace/cleanup/AppCacheRules.h
     src/modules/diskspace/cleanup/DeleteGuard.h
     src/modules/diskspace/cleanup/CleanupQa.h
     src/modules/diskspace/cleanup/ScanEngine.h
@@ -272,6 +275,7 @@ set(HEADERS
     src/platform/RecycleBin.h
     src/platform/ScreenInfo.h
     src/platform/SystemPaths.h
+    src/platform/AppPreferences.h
     src/platform/ForegroundWatcher.h
     src/platform/HotkeyService.h
     src/platform/InputInjector.h
@@ -321,6 +325,7 @@ if(WIN32)
         src/platform/win/RecycleBinWin.cpp
         src/platform/win/ScreenInfoWin.cpp
         src/platform/win/SystemPathsWin.cpp
+        src/platform/win/AppPreferencesWin.cpp
         src/modules/diskspace/cleanup/win/CleanupRulesWin.cpp
         src/platform/win/ForegroundWatcherWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
@@ -409,6 +414,7 @@ elseif(APPLE)
         src/platform/mac/RecycleBinMac.cpp
         src/platform/mac/ScreenInfoMac.mm
         src/platform/mac/SystemPathsMac.cpp
+        src/platform/mac/AppPreferencesMac.cpp
         # Ultimo paso del updater en macOS: el script que reemplaza el bundle instalado.
         src/platform/mac/UpdateInstallerMac.cpp
         src/modules/diskspace/cleanup/mac/CleanupRulesMac.cpp

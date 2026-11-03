@@ -43,6 +43,9 @@ QStringList protectedFolders();
 // Arboles en los que no se borra NADA desde la ventana: Windows, Program Files, ProgramData, la carpeta
 // desde la que corre la app y la de sus ajustes.
 QStringList protectedTrees();
+// Las unicas carpetas de cache dentro de esos arboles que si se pueden vaciar (DeleteGuard::allowedTrees):
+// en Windows, los modelos que Topaz Video baja a ProgramData. Rutas exactas; en mac, ninguna.
+QStringList protectedTreeExceptions();
 // Carpetas sincronizadas con la nube (OneDrive): borrar ahi borra en todos los dispositivos.
 QStringList cloudFolders();
 

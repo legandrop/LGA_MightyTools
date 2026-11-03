@@ -37,6 +37,10 @@ struct DeleteGuard
     QStringList protectedFolders;
     QStringList protectedTrees;
     QStringList cloudFolders;
+    // Carpetas de cache conocidas DENTRO de un arbol protegido que si se pueden vaciar (los modelos que
+    // Topaz Video baja a ProgramData). Solo su contenido y lo de adentro: la carpeta misma y lo de
+    // arriba siguen protegidos. Rutas exactas (SystemPaths::protectedTreeExceptions).
+    QStringList allowedTrees;
 
     // Arma las guardas del volumen con lo que dice el sistema (SystemPaths).
     static DeleteGuard forVolume(const QString &volumeRoot);

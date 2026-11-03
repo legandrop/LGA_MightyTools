@@ -2,6 +2,7 @@
 #define MIGHTYTOOLS_CLEANUPMODEL_H
 
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
@@ -36,7 +37,8 @@ struct Item
     QString name; ///< "uv cache", "Brave"
     QString path; ///< la ruta que se muestra
     QList<Target> targets;
-    // Programas (en minusculas, sin ".exe") que no pueden estar corriendo mientras se limpia.
+    // Programas (en minusculas, sin ".exe") que no pueden estar corriendo mientras se limpia. Uno que
+    // termina en '*' es un prefijo: "nuke1*" son Nuke10.0 a Nuke19.x (un exe por version).
     QStringList blockers;
     QString blockerLabel; ///< como se nombra en "Brave is open"
     // Arranca destildado aunque su grupo sea el seguro: una cache reconocida por su forma en un lugar
@@ -66,6 +68,25 @@ struct Category
     QString reviewPath;      ///< info con "Review": la carpeta que se abre en Folders
     QList<Item> items;
 };
+
+// Uno de los programas que corren (SystemPaths::runningPrograms) es ese bloqueo: igual, o con su prefijo
+// si el bloqueo termina en '*'.
+inline bool blockerRunning(const QSet<QString> &programs, const QString &blocker)
+{
+    if (!blocker.endsWith(QLatin1Char('*'))) {
+        return programs.contains(blocker);
+    }
+    const QString prefix = blocker.chopped(1);
+    if (prefix.isEmpty()) {
+        return false;
+    }
+    for (const QString &program : programs) {
+        if (program.startsWith(prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // Carpetas que el usuario declaro descartables ("Add a folder rule...").
 struct FolderRule

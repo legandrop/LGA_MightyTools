@@ -110,6 +110,25 @@ QStringList protectedTrees()
     return list;
 }
 
+QStringList protectedTreeExceptions()
+{
+    // Los modelos de IA que Topaz Video baja por su cuenta (con el usuario como dueno) a
+    // ProgramData\Topaz Labs LLC\<app>\models\models. Al lado, en ...\models, quedan sus definiciones y
+    // `auth.tpz`: eso sigue protegido.
+    QStringList list;
+    const QString programData = known(FOLDERID_ProgramData);
+    if (programData.isEmpty()) {
+        return list;
+    }
+    for (const char *app : {"Topaz Video", "Topaz Video AI"}) {
+        const QString models = QDir(programData).filePath(QStringLiteral("Topaz Labs LLC/%1/models/models").arg(QLatin1String(app)));
+        if (QFileInfo(models).isDir()) {
+            add(list, models);
+        }
+    }
+    return list;
+}
+
 QStringList cloudFolders()
 {
     QStringList list;

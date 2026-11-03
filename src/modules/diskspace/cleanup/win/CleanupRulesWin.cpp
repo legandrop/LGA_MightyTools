@@ -18,6 +18,15 @@
 //    Windows (la tiene abierta el Explorador), `C:\Windows\Installer`, WinSxS y Package Cache.
 //  - Con costo, por eso en "Yours to decide": la cache de Adobe Bridge (purgarla puede perder
 //    etiquetas y puntajes de archivos sin XMP) y las imagenes de maquina virtual de apps de escritorio.
+//  - Programas de video, audio y VFX (2026-11-03), en AppCacheRules.cpp con sus fuentes: Nuke (todos
+//    los `preferences*.nk`, `FC_DISK_CACHE`, `NUKE_DISK_CACHE`, `NUKE_TEMP_DIR`), la Media Cache de
+//    Adobe movida (`HKCU\Software\Adobe\Common <N>.0\Media Cache`), el Disk Cache de After Effects, Ableton
+//    Live, Topaz Video (registro), REAPER, Unreal Engine (DDC clasica), Redshift, Photoshop, CUDA
+//    (`%APPDATA%\NVIDIA\ComputeCache` y `NukeComputeCache`) y, por escaneo, Resolve, las previews de
+//    Premiere Pro y los proxies de Blender. Solo subcarpetas conocidas, cada una con su marca.
+//    Afuera: `localCachePath` de Nuke (sin marca conocida), Houdini (su temporal guarda la recuperacion
+//    de escenas), las preferencias de Resolve y Redshift (formato sin confirmar), el Zen de Unreal 5.4+,
+//    Final Cut Pro, Mocha, Fusion, Maya y Avid.
 
 namespace {
 

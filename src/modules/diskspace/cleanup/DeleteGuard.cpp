@@ -63,6 +63,7 @@ DeleteGuard DeleteGuard::forVolume(const QString &volumeRoot)
     guard.protectedFolders = SystemPaths::protectedFolders();
     guard.protectedTrees = SystemPaths::protectedTrees();
     guard.cloudFolders = SystemPaths::cloudFolders();
+    guard.allowedTrees = SystemPaths::protectedTreeExceptions();
     // Lo que el escaneo no lee (macOS sin acceso total al disco, D-43) tampoco se borra ni se exporta desde
     // la ventana: se ve como "sin acceso" y nada mas.
     guard.protectedTrees.append(SystemPaths::scanExclusions());
@@ -104,8 +105,20 @@ DeleteGuard::Verdict DeleteGuard::check(const QString &path, Scope scope, bool t
     if (!isInside(target, volumeRoot)) {
         return Verdict::OutsideVolume;
     }
+    // Una excepcion dentro de un arbol protegido: se vacia (Contents) o se borra algo de adentro, nunca
+    // la carpeta misma ni lo de arriba.
+    bool allowed = false;
+    for (const QString &exception : allowedTrees) {
+        if ((samePath(target, exception) && scope == Scope::Contents) || isInside(target, exception)) {
+            allowed = true;
+            break;
+        }
+    }
     for (const QString &tree : protectedTrees) {
         if (samePath(target, tree) || isInside(target, tree)) {
+            if (allowed && !samePath(target, tree)) {
+                continue;
+            }
             return Verdict::ProtectedTree;
         }
         if (isInside(tree, target)) {

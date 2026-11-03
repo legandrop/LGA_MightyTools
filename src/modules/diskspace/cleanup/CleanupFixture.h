@@ -38,7 +38,8 @@ struct Data
     QStringList selectedPaths;
 };
 
-// cleanup, cleanup-pick, cleanup-result, folders, folders-selected, files, changes, scanning.
+// cleanup, cleanup-pick, cleanup-result, cleanup-apps, cleanup-apps-nuke, cleanup-apps-yours (caches de
+// programas de video, audio y VFX), folders, folders-selected, files, changes, scanning.
 QStringList states();
 // Arma el arbol de mentira adentro de `engine` y devuelve el resto.
 Data build(const QString &state, ScanEngine &engine);

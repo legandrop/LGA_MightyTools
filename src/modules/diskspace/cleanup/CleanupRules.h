@@ -6,8 +6,12 @@
 
 #include <QList>
 #include <QString>
+#include <QVariantMap>
+
+#include <functional>
 
 class ScanEngine;
+class ScanTree;
 
 // Las reglas de limpieza: que carpetas de cache conoce la app, donde estan en ESTA maquina y cuanto
 // pesan. Solo lectura: no borra nada (eso es CleanupJob).
@@ -21,13 +25,27 @@ class ScanEngine;
 //    usuario, va en "Yours to decide" y arranca destildado.
 //  - Las reglas no nombran apps de escritorio una por una: reconocen la forma de sus carpetas
 //    (Chromium: "Code Cache", "GPUCache"...) y le ponen al item el nombre de la carpeta que encuentran.
+//    La excepcion son los programas de video, audio y VFX (AppCacheRules.h): su cache se busca donde la
+//    configuro el usuario, leyendo sus preferencias, y solo se ofrecen sus subcarpetas conocidas.
 namespace CleanupRules {
+
+// De donde leen las reglas las preferencias de otros programas. Una funcion vacia usa la del sistema
+// (variables de entorno del proceso y platform/AppPreferences.h, todo solo lectura); el self-test las
+// alimenta con datos armados para no leer nada de esta maquina.
+struct Sources
+{
+    std::function<QString(const QString &name)> env;
+    std::function<QString(const QString &key, const QString &value)> registry; ///< HKCU, valor de texto
+    std::function<QStringList(const QString &key)> registryKeys;               ///< subclaves de HKCU\key
+    std::function<QVariantMap(const QString &path)> plist;
+};
 
 struct Context
 {
     SystemPaths::CleanupBases bases;
     QString volumeRoot; ///< real ("C:\")
     QList<Cleanup::FolderRule> folderRules;
+    Sources sources;
 };
 
 // Las categorias con sus items, sin medir: lo que no depende del escaneo. Lee el disco (existencia y
@@ -50,6 +68,10 @@ Cleanup::Item makeItem(const QString &name, const QString &shownPath, const QStr
                        const Context &context);
 // La carpeta tiene la marca del estandar (los primeros bytes de su CACHEDIR.TAG son la firma).
 bool hasCacheTagSignature(const QString &dir);
+// Saca los items cuyos destinos caen todos dentro de una hija que ya se lleva entera una regla de "mas
+// viejos que N dias" (la carpeta temporal): Nuke y After Effects guardan su cache en la temporal si el
+// usuario no la movio, y sin esto se contaria dos veces. La edad sale del arbol del escaneo.
+void dropInsideSwept(QList<Cleanup::Category> &categories, const ScanTree &tree, qint64 nowSecs);
 
 // Total tildado (lo que borraria "Clean up").
 qint64 selectedBytes(const QList<Cleanup::Category> &categories);

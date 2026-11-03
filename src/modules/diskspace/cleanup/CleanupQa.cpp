@@ -367,6 +367,7 @@ void selfTest(const std::function<void(bool ok, const QString &what)> &check)
 
     selfTestExport(check);
     selfTestSandbox(check);
+    selfTestAppCaches(check);
 }
 
 int simulate(const QString &action, const QStringList &args)

@@ -291,7 +291,7 @@ void CleanupJob::Shared::execute(const Request &request, Outcome &outcome, const
                                  std::vector<char> &scratch)
 {
     for (const QString &blocker : request.blockers) {
-        if (programs.contains(blocker)) {
+        if (Cleanup::blockerRunning(programs, blocker)) {
             outcome.blockedBy = request.blockerLabel.isEmpty() ? blocker : request.blockerLabel;
             return;
         }
