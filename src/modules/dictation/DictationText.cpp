@@ -81,9 +81,22 @@ Split stabilize(const QString &confirmed, const QString &previous, const QString
     for (int i = int(kept.size()); i < common; ++i) {
         out << now.at(i);
     }
+    QStringList rest = now.mid(out.size());
+    // Un dictado empieza con mayuscula: las pasadas en vivo (vocabulario sin frase de contexto) a veces
+    // arrancan en minuscula, y lo confirmado despues ya no se corrige.
+    QStringList &first = out.isEmpty() ? rest : out;
+    if (kept.isEmpty() && !first.isEmpty()) {
+        QString &word = first[0];
+        for (qsizetype i = 0; i < word.size(); ++i) {
+            if (word.at(i).isLetter()) {
+                word[i] = word.at(i).toUpper();
+                break;
+            }
+        }
+    }
     Split split;
     split.confirmed = out.join(QLatin1Char(' '));
-    split.provisional = now.mid(out.size()).join(QLatin1Char(' '));
+    split.provisional = rest.join(QLatin1Char(' '));
     return split;
 }
 

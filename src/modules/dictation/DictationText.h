@@ -22,7 +22,7 @@ struct Split
 // `confirmed` del Split anterior; vacio al empezar): esas palabras quedan tal cual aunque la pasada
 // nueva las escriba con otra mayuscula u otro punto, y las nuevas confirmadas se toman de `next`.
 // Entre pasadas Whisper cambia mayusculas, puntos y "..." finales con las mismas palabras: asi la
-// ventanita no parpadea.
+// ventanita no parpadea. La primera palabra del dictado va siempre con mayuscula.
 Split stabilize(const QString &confirmed, const QString &previous, const QString &next);
 
 // Una palabra para comparar: minusculas, sin puntuacion ni signos ("¿Qué?" -> "qué").

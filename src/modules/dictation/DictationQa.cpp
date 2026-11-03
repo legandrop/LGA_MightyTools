@@ -172,6 +172,12 @@ void testText(const Check &check)
           QStringLiteral("texto: lo confirmado no cambia de mayuscula ni de punto aunque la pasada si (%1 | %2)")
               .arg(s.confirmed, s.provisional));
 
+    s = stabilize(QString(), QStringLiteral("parece que anda"), QStringLiteral("parece que anda bastante"));
+    const DictationText::Split onlyProvisional = stabilize(QString(), QString(), QStringLiteral("¿yo probaría?"));
+    check(s.confirmed == QStringLiteral("Parece que anda") && onlyProvisional.provisional == QStringLiteral("¿Yo probaría?"),
+          QStringLiteral("texto: el dictado empieza con mayuscula aunque la pasada en vivo no (%1 | %2)")
+              .arg(s.confirmed, onlyProvisional.provisional));
+
     s = stabilize(QStringLiteral("uno dos tres"), QStringLiteral("uno dos tres cuatro"), QStringLiteral("uno dos"));
     check(s.confirmed == QStringLiteral("uno dos tres") && s.provisional.isEmpty(),
           QStringLiteral("texto: una pasada mas corta no retira palabras confirmadas"));
