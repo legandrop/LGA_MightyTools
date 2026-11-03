@@ -40,6 +40,8 @@ public:
 
     // Ruta absoluta a un .exe (Windows) o a un .app (mac). No mira el disco.
     static bool validPath(const QString &path);
+    // Sin espacios ni comillas en los extremos: «Copiar como ruta» de Windows 11 la pega entre comillas.
+    static QString cleanPath(const QString &text);
     static bool valid(const AppEntry &entry);
     static QList<AppEntry> fromJson(const QString &text);
     static QString toJson(const QList<AppEntry> &apps);

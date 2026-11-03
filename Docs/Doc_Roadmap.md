@@ -3,21 +3,19 @@
 Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, sección 6.
 
 1. **Herramientas nuevas (Lega, 2026-11-02), en este orden:**
-   1. **App Toggle** (Windows y macOS). Un atajo por app con tres casos: si la app no está abierta, la
-      abre; si está abierta sin foco, la trae al frente (y la restaura si estaba minimizada); si ya tiene
-      el foco, la minimiza. Sin opción de maximizar. Guarda exe, argumentos y directorio de trabajo, no un
-      `.lnk` (el instalador de OBS 33 le cambió el nombre al acceso y el AHK dejó de abrirlo). Entradas de
-      Lega: XYplorer (Win+E, hoy en `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`, que se saca de ahí para que no se
-      pisen), OBS y UAD Console (hoy botones «Abrir» de Stream Deck que lanzan `ahk-open_OBS.ahk` y
-      `ahk-open_UAD.ahk`; pasan a botones de tipo atajo con la combinación de App Toggle).
+   1. **App Toggle** (Windows y macOS): hecha en la v1.53 (D-67). Falta la prueba real de Lega (Win+E con
+      XYplorer; OBS y UAD Console desde el Stream Deck con botones de tipo atajo) y compilarla y probarla
+      en la Mac. Pendientes posibles: con una ventana de administrador al frente el atajo no llega
+      (sumar App Toggle al ayudante elevado de D-61); una app viva sin ventana (solo en la bandeja, como
+      UAD Console a veces) no se muestra, igual que el AHK (opción: volver a ejecutar el exe).
    2. **Mouse Buttons** (Windows). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo
       único que Lega usaba era un perfil para `photoshop.exe`: mientras se mantiene apretado el botón del
       medio, simula Espacio + clic izquierdo (mover la imagen con el botón del medio). Reglas «app → botón →
       teclas y clic mientras está apretado», con un gancho de mouse de bajo nivel que solo existe mientras
       una app con regla está al frente.
-   3. **Desktop Icons** (Windows). Guarda y restaura la posición de los íconos del escritorio: snapshots
-      manuales y uno automático por día con la PC despierta hace al menos una hora; quedan los últimos 5
-      automáticos más los manuales. Diseño y decisiones en `Docs/Roadmap_Desktop_Icons.md`.
+   3. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
+      prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
+      «Organizar automáticamente» prendido, y Undo.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que quedaron afuera
    (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o

@@ -5,6 +5,18 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-67 · App Toggle** (2026-11-02, Lega). Un atajo por app: la abre si no está abierta, la trae al
+  frente si está abierta sin foco y la minimiza si ya tiene el foco, como los AutoHotkey que reemplaza.
+  Sin opción de maximizar. Windows y macOS. En macOS la oculta (como Cmd+H) en lugar de minimizarla:
+  no pide el permiso de Accesibilidad y vuelve con todas sus ventanas (decidido de noche, Lega puede
+  cambiarlo). Win + una letra o número reemplaza a propósito el atajo de Windows: no se marca como
+  compartido.
+- **D-66 · Desktop Icons** (2026-11-02, Lega; detalle en `Docs/Roadmap_Desktop_Icons.md`). Solo
+  Windows. Si el escritorio está igual al del automático anterior, solo se actualiza su fecha; con una
+  resolución distinta de la habitual se saltea el automático; restaurar es solo a pedido; «Organizar
+  automáticamente» y «Alinear a la cuadrícula» vuelven como estaban en el snapshot.
+- **D-65 · Sin herramienta de imagen de disco** (2026-11-02, Lega). La herramienta «Disk Image» que
+  estaba en el roadmap queda descartada del todo.
 - **D-64 · Animación «Suave» del switch** (2026-10-31, Lega eligió la B entre seis del mockup). La
   perilla desliza 160 ms y frena al llegar; el color se funde en el mismo tiempo; sin rebote ni
   cambios con el mouse encima. Solo anima un click del usuario.

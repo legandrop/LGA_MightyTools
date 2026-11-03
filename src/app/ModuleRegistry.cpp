@@ -10,6 +10,7 @@
 #include <QtGlobal>
 
 #if defined(Q_OS_WIN)
+#include "modules/desktopicons/DesktopIconsModule.h" // solo Windows
 #include "modules/folderswitch/FolderSwitchModule.h"
 #include "modules/mousebuttons/MouseButtonsModule.h"
 #elif defined(Q_OS_MACOS)
@@ -36,6 +37,7 @@ QList<ModuleDescriptor> all()
     list << appToggleDescriptor();
 #if defined(Q_OS_WIN)
     list << mouseButtonsDescriptor();
+    list << desktopIconsDescriptor();
 #endif
 
 #if defined(Q_OS_WIN)
@@ -66,6 +68,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
 #if defined(Q_OS_WIN)
     providers.insert(QStringLiteral("mouseButtons"), &mouseButtonsHelp);
+    providers.insert(QStringLiteral("desktopIcons"), &desktopIconsHelp);
 #endif
     return providers;
 }

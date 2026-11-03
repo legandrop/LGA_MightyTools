@@ -120,6 +120,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_captionRow->setSpacing(5);
     m_captionRow->addWidget(m_caption, 1);
     column->addLayout(m_captionRow);
+    m_windowsNote = Ui::caption(I18n::tr("Replaces the Windows shortcut for this key."), this);
+    // El objectName "caption" es el que le da el gris de las descripciones: la marca va aparte.
+    m_windowsNote->setProperty("windowsShortcutNote", true);
+    m_windowsNote->hide();
+    column->addWidget(m_windowsNote);
 
     connect(m_editButton, &QPushButton::clicked, this, [this]() {
         if (m_editHandler) {
@@ -163,6 +168,12 @@ void ShortcutRow::setKeyLabels(const QStringList &labels)
     rebuildKeys();
 }
 
+void ShortcutRow::showWindowsShortcutNote(bool enabled)
+{
+    m_windowsNoteEnabled = enabled;
+    m_windowsNote->setVisible(m_windowsNoteEnabled && !m_holdKeys && m_shortcut.replacesWindowsShortcut());
+}
+
 void ShortcutRow::rebuildKeys()
 {
     while (QLayoutItem *item = m_keysLayout->takeAt(0)) {
@@ -178,6 +189,7 @@ void ShortcutRow::rebuildKeys()
     if (m_keysLayout->isEmpty()) {
         m_keysLayout->addWidget(Ui::caption(I18n::tr("Not set"), m_keys), 0, Qt::AlignVCenter);
     }
+    m_windowsNote->setVisible(m_windowsNoteEnabled && !m_holdKeys && m_shortcut.replacesWindowsShortcut());
 }
 
 QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers) const
@@ -241,6 +253,11 @@ void ShortcutRow::cancelRecording()
 
 bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
 {
+    // Pasar a otra app cancela: la grabacion nunca toma teclas que el usuario le escribe a otra ventana.
+    if (m_recording && event->type() == QEvent::ApplicationDeactivate) {
+        cancelRecording();
+        return QWidget::eventFilter(watched, event);
+    }
     if (m_recording && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
         auto *target = static_cast<QWidget *>(watched);
         // El lapiz tiene su propio click (alterna): el resto de la fila y todo lo de afuera cancela.
@@ -249,6 +266,13 @@ bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void ShortcutRow::hideEvent(QHideEvent *event)
+{
+    // Otra pagina, otra herramienta o la ventana a la bandeja: la fila oculta deja de grabar.
+    cancelRecording();
+    QWidget::hideEvent(event);
 }
 
 void ShortcutRow::finishRecording()
@@ -315,6 +339,8 @@ void ShortcutRow::acceptCandidate(const Shortcut &candidate)
 #else
         error = I18n::tr("Add Ctrl, Alt or Win so it doesn't take a plain key.");
 #endif
+    } else if (candidate.isLockShortcut()) {
+        error = I18n::tr("Windows keeps Win+L to lock the session.");
     } else if (candidate == previous) {
         setError(QString());
         return;
@@ -323,7 +349,8 @@ void ShortcutRow::acceptCandidate(const Shortcut &candidate)
     }
     if (!error.isEmpty()) {
         qInfo() << "[ShortcutRow] Rechazado" << candidate.toPortableString() << "->" << error;
-        setError(I18n::tr("%1 Kept %2.").arg(error, previous.displayText()));
+        // Una entrada nueva no tenia atajo: no hay nada que "se conserve".
+        setError(previous.isValid() ? I18n::tr("%1 Kept %2.").arg(error, previous.displayText()) : error);
         return;
     }
     qInfo() << "[ShortcutRow] Nuevo atajo para" << m_name->accessibleName() << ":" << candidate.toPortableString();

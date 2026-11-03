@@ -4,6 +4,7 @@
 #include "core/I18n.h"
 #include "platform/WindowActivation.h"
 
+#include <QDebug>
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
@@ -14,6 +15,7 @@
 #include <windows.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <shobjidl.h>
 #include <tlhelp32.h>
 
 namespace {
@@ -69,6 +71,51 @@ BOOL CALLBACK collectWindow(HWND hwnd, LPARAM parameter)
 void fail(QString *error, const QString &message)
 {
     if (error) *error = message;
+}
+
+// El bitmap del shell (IShellItemImageFactory) a QImage. QImage::fromHBITMAP lo da vuelta y pierde el
+// alfa: se pide con GetDIBits de arriba hacia abajo, que es alfa premultiplicado. Un icono viejo sin canal
+// alfa llega con alfa 0 en todo: ese se toma opaco.
+QImage imageFromShellBitmap(HBITMAP bitmap)
+{
+    BITMAP info{};
+    if (!GetObjectW(bitmap, sizeof(info), &info) || info.bmWidth <= 0 || info.bmHeight == 0) {
+        return {};
+    }
+    const int width = info.bmWidth;
+    const int height = qAbs(info.bmHeight);
+    QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
+    BITMAPINFO header{};
+    header.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    header.bmiHeader.biWidth = width;
+    header.bmiHeader.biHeight = -height;
+    header.bmiHeader.biPlanes = 1;
+    header.bmiHeader.biBitCount = 32;
+    header.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    const int lines = GetDIBits(screen, bitmap, 0, UINT(height), image.bits(), &header, DIB_RGB_COLORS);
+    ReleaseDC(nullptr, screen);
+    if (lines != height) {
+        return {};
+    }
+    // Premultiplicado, ningun canal pasa al alfa. Si alguno pasa, el alfa viene comun (sin premultiplicar):
+    // tomarlo como premultiplicado deja puntos de color saturado en los bordes.
+    bool anyAlpha = false;
+    bool straight = false;
+    for (int y = 0; y < height; ++y) {
+        const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+        for (int x = 0; x < width; ++x) {
+            const int alpha = qAlpha(line[x]);
+            anyAlpha = anyAlpha || alpha != 0;
+            straight = straight || qRed(line[x]) > alpha || qGreen(line[x]) > alpha || qBlue(line[x]) > alpha;
+        }
+    }
+    if (!anyAlpha) {
+        image.reinterpretAsFormat(QImage::Format_RGB32);
+    } else if (straight) {
+        image.reinterpretAsFormat(QImage::Format_ARGB32);
+    }
+    return image;
 }
 
 bool launch(const AppToggleSystem::Target &target, QString *error)
@@ -164,6 +211,11 @@ Snapshot snapshot(const QString &appPath)
 bool run(const Decision &decision, const Target &target, QString *error)
 {
     if (error) error->clear();
+    // Segunda barrera (la primera es el modulo): una corrida automatizada nunca abre, activa ni minimiza.
+    if (AutomatedRun::active()) {
+        qInfo().noquote() << "[appToggle] Corrida automatizada, no se ejecuta:" << describe(decision);
+        return true;
+    }
     if (decision.action == Action::Launch) {
         return launch(target, error);
     }
@@ -182,7 +234,8 @@ bool run(const Decision &decision, const Target &target, QString *error)
     }
     if (decision.action == Action::Minimize) {
         ShowWindow(window, SW_MINIMIZE);
-        if (!IsIconic(window)) {
+        // Las apps que al minimizarse se van a la bandeja (OBS con esa opcion) esconden la ventana: tambien vale.
+        if (!IsIconic(window) && IsWindowVisible(window)) {
             fail(error, I18n::tr("Could not minimize the app."));
             return false;
         }
@@ -202,6 +255,23 @@ QIcon icon(const QString &appPath)
     }
     const std::wstring file = QDir::toNativeSeparators(appPath).toStdWString();
     QIcon result;
+    // Cada tamano pedido al shell, que elige el cuadro del .ico que mejor le queda: la baldosa (20 px) sale
+    // nitida al 100, 150, 200 y 300 % sin estirar un icono de 32. COM ya esta iniciado en main.
+    IShellItemImageFactory *factory = nullptr;
+    if (SUCCEEDED(SHCreateItemFromParsingName(file.c_str(), nullptr, IID_PPV_ARGS(&factory)))) {
+        for (const int size : {16, 20, 24, 30, 32, 40, 48, 60, 64, 80, 96, 128}) {
+            HBITMAP bitmap = nullptr;
+            if (SUCCEEDED(factory->GetImage(SIZE{size, size}, SIIGBF_ICONONLY, &bitmap)) && bitmap) {
+                const QImage image = imageFromShellBitmap(bitmap);
+                DeleteObject(bitmap);
+                if (!image.isNull()) result.addPixmap(QPixmap::fromImage(image));
+            }
+        }
+        factory->Release();
+    }
+    if (!result.isNull()) {
+        return result;
+    }
     for (const UINT size : {UINT(SHGFI_LARGEICON), UINT(SHGFI_SMALLICON)}) {
         SHFILEINFOW info{};
         if (SHGetFileInfoW(file.c_str(), 0, &info, sizeof(info), SHGFI_ICON | size) && info.hIcon) {

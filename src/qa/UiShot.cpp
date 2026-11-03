@@ -119,7 +119,7 @@ QString canvasState(const QString &id)
 bool canvasOff(const QString &id)
 {
     return id == QLatin1String("linkRedirector") || id == QLatin1String("windowLayouts")
-        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons");
+        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons") || id == QLatin1String("desktopIcons");
 }
 
 // Prende para captura una herramienta con su estado (vacio = el primero que declara).
@@ -1692,6 +1692,21 @@ int runHoldKeysProbe()
     hold->startRecording();
     press(Qt::Key_Escape, Qt::NoModifier);
     check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: Esc cancela sin grabar"));
+#ifdef Q_OS_WIN
+    // Mantener Win+L no sirve (bloquearia la sesion) y la nota de "reemplaza el atajo de Windows" no es de este grabador.
+    hold->startRecording();
+    press(Qt::Key_L, Qt::MetaModifier, QStringLiteral("l"));
+    check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: Win+L se rechaza"));
+    hold->showWindowsShortcutNote(true);
+    hold->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
+    QLabel *note = nullptr;
+    for (QLabel *label : hold->findChildren<QLabel *>(QStringLiteral("caption"))) {
+        if (label->property("windowsShortcutNote").toBool()) note = label;
+    }
+    check(note && !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
+    hold->showWindowsShortcutNote(false);
+    hold->setShortcut({Qt::NoModifier, Qt::Key_Space});
+#endif
     plain->startRecording();
     press(Qt::Key_Space, Qt::ControlModifier, QStringLiteral(" "));
     plain->startRecording();
@@ -1702,6 +1717,85 @@ int runHoldKeysProbe()
           QStringLiteral("atajos (control): Ctrl+Espacio y A sola se rechazan; Ctrl+Alt+K se graba"));
     fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "hold-keys ok" : "hold-keys FALLO", failures);
     return failures == 0 ? 0 : 1;
+}
+
+// El grabador de atajos (ShortcutRow, todas las herramientas): nunca sigue grabando con otra app al
+// frente ni con la fila oculta, y sus motivos de rechazo. Teclas mandadas como eventos de Qt a la fila,
+// sin entrada real; en una corrida automatizada el grabador no instala el gancho de teclado.
+int runRecorderGuardProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        failures += ok ? 0 : 1;
+    };
+    QWidget window;
+    window.setAttribute(Qt::WA_DontShowOnScreen, true);
+    auto *column = new QVBoxLayout(&window);
+    auto *row = new ShortcutRow(QStringLiteral("Probe"), QStringLiteral("Probe description."), &window);
+    column->addWidget(row);
+    row->setValidator([](const Shortcut &shortcut) {
+        return shortcut.key == Qt::Key_K ? QStringLiteral("Already used by Window Layouts.") : QString();
+    });
+    window.show();
+    settle(window);
+    QLabel *caption = nullptr;
+    QLabel *note = nullptr;
+    for (QLabel *label : row->findChildren<QLabel *>(QStringLiteral("caption"))) {
+        if (label->property("windowsShortcutNote").toBool()) note = label;
+        else if (!caption && label->parentWidget() == row) caption = label;
+    }
+    const auto press = [row](int key, Qt::KeyboardModifiers modifiers, quint32 vk) {
+        QKeyEvent event(QEvent::KeyPress, key, modifiers, 0, vk, 0);
+        QCoreApplication::sendEvent(row, &event);
+    };
+
+    row->startRecording();
+    check(row->isRecording(), QStringLiteral("el lapiz arranca la grabacion"));
+    QEvent deactivate(QEvent::ApplicationDeactivate);
+    QCoreApplication::sendEvent(qApp, &deactivate);
+    check(!row->isRecording(), QStringLiteral("pasar a otra app (ApplicationDeactivate) cancela la grabacion"));
+    row->startRecording();
+    window.hide();
+    check(!row->isRecording(), QStringLiteral("ocultar la ventana cancela la grabacion"));
+    window.show();
+    settle(window);
+
+    row->startRecording();
+    press(Qt::Key_K, Qt::ControlModifier | Qt::AltModifier, 'K');
+    check(!row->isRecording() && !row->shortcut().isValid() && caption
+              && caption->text() == QLatin1String("Already used by Window Layouts."),
+          QStringLiteral("sin atajo anterior, el rechazo muestra solo el motivo (sin \"Kept .\"): %1")
+              .arg(caption ? caption->text() : QString()));
+    row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+J")));
+    row->startRecording();
+    press(Qt::Key_K, Qt::ControlModifier | Qt::AltModifier, 'K');
+    check(caption && caption->text().endsWith(QStringLiteral("Kept Ctrl+Alt+J.")),
+          QStringLiteral("con atajo anterior, el rechazo dice cual se conserva: %1").arg(caption ? caption->text() : QString()));
+#ifdef Q_OS_WIN
+    row->startRecording();
+    press(Qt::Key_L, Qt::MetaModifier, 'L');
+    check(caption && caption->text().startsWith(QStringLiteral("Windows keeps Win+L")),
+          QStringLiteral("Win+L se rechaza: Windows bloquea la sesion antes que nadie"));
+
+    row->showWindowsShortcutNote(true);
+    row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
+    check(note && note->isVisibleTo(&window), QStringLiteral("Win+E: nota neutra de que reemplaza el atajo de Windows"));
+    row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Meta+E")));
+    check(note && !note->isVisibleTo(&window), QStringLiteral("Ctrl+Win+E: sin nota (no es Win + una tecla sola)"));
+    row->showWindowsShortcutNote(false);
+    row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
+    check(note && !note->isVisibleTo(&window), QStringLiteral("sin la opcion (Nuke Shortcuts, Folder Switch) nunca hay nota"));
+    check(Shortcut::fromPortableString(QStringLiteral("Meta+7")).replacesWindowsShortcut()
+              && !Shortcut::fromPortableString(QStringLiteral("Meta+F5")).replacesWindowsShortcut()
+              && !Shortcut::fromPortableString(QStringLiteral("Shift+Meta+E")).replacesWindowsShortcut(),
+          QStringLiteral("regla: Win + letra o numero solos reemplaza; Win+F5 y Shift+Win+E no"));
+#else
+    check(!Shortcut::fromPortableString(QStringLiteral("Meta+E")).replacesWindowsShortcut(),
+          QStringLiteral("mac: ningun atajo cuenta como de Windows"));
+#endif
+    fprintf(stdout, "recorder-guard %s: %d fallas\n", failures ? "FAIL" : "ok", failures);
+    return failures ? 1 : 0;
 }
 
 // Animacion del switch (D-64): un click la anima y termina en su lugar; setChecked() del codigo salta
@@ -1867,6 +1961,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("hold-keys")) {
         return runHoldKeysProbe();
+    }
+    if (probe == QLatin1String("recorder-guard")) {
+        return runRecorderGuardProbe();
     }
     if (probe == QLatin1String("page-fit")) {
         return runPageFitProbe();

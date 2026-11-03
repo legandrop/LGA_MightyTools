@@ -244,6 +244,7 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
 private:
+    void paintIcon(QPainter &painter, const QRect &target) const;
     QIcon m_icon;
 };
 

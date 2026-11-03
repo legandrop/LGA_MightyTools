@@ -48,7 +48,8 @@ Source: "tools\close_by_path.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 ; Inno solo desinstala los archivos que copio el; lo que la app escribe por su cuenta se borra
 ; aca para no dejar basura:
 ;  - {app}\debug.log (se prende con log=true en config\debug_flags.txt).
-;  - La configuracion: %APPDATA%\LGA\LGA_MightyTools\settings.ini (src/core/AppSettings.cpp) y
+;  - La configuracion: %APPDATA%\LGA\LGA_MightyTools\settings.ini (src/core/AppSettings.cpp), los
+;    snapshots de Desktop Icons en la misma carpeta (desktop_icons\, src/modules/desktopicons) y
 ;    el registro compartido de apps LGA de esta app (LgaRegistry). La carpeta LGA solo se borra si
 ;    queda vacia (la usan otras apps LGA).
 ;  - Los instaladores bajados por el auto-update, en %TEMP%\LGA_MightyTools_updates.

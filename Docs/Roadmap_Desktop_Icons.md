@@ -31,7 +31,8 @@ cualquiera de ellas con un click.
    cantidad de íconos y resolución de pantalla de ese momento. El usuario elige uno y lo restaura.
    - Cada ícono se busca por la ruta de su archivo, no por su nombre visible. Los que ya no existen se informan
      y se saltean.
-   - Antes de restaurar, se guarda solo un snapshot «antes de restaurar», para poder deshacer.
+   - Antes de restaurar, se guarda un snapshot «antes de restaurar», para poder deshacer (ver abajo cuántos
+     quedan y cuándo no hace falta uno nuevo).
 
 ## Cómo (Windows)
 
@@ -42,10 +43,13 @@ cualquiera de ellas con un click.
 - **Qué guarda cada snapshot** (un JSON por snapshot en la carpeta de configuración de la app): por ícono, el
   nombre visible, la ruta y la posición; y de la pantalla, la resolución, el escalado (DPI), el espaciado de
   íconos y si están activos «Organizar automáticamente» y «Alinear a la cuadrícula».
-- **Tiempo despierta:** se toma el más reciente entre el momento del arranque y el de la última vuelta de
-  suspensión. Para la vuelta de suspensión: `WM_POWERBROADCAST` / `PBT_APMRESUMEAUTOMATIC` mientras la app
-  corre, y si la app arrancó después, el evento de reanudación del registro de sistema. Para el arranque:
-  ahora menos `GetTickCount64`, que también cuenta el tiempo suspendido, por eso no alcanza solo.
+- **Tiempo despierta (como quedó implementado):** «despierta desde» arranca cuando se prende la herramienta (o
+  el interruptor «Daily snapshot»): si la app se reinicia a mitad del día, esperar una hora más no hace daño. Un
+  timer cada 15 minutos compara cuánto avanzó el reloj de pared con cuánto avanzó `QueryUnbiasedInterruptTime`
+  (que no cuenta el tiempo suspendido ni hibernado): si el de pared avanzó más de 2 minutos de más, hubo una
+  suspensión y «despierta desde» vuelve a empezar. Así no hace falta una ventana para `WM_POWERBROADCAST` ni
+  leer el registro de eventos. Límite conocido: adelantar el reloj a mano también cuenta como suspensión (solo
+  atrasa el automático una hora).
 - **No reiniciar el Explorador** para aplicar nada: en la PC de Lega dejó una vez la pantalla gris sin barra de
   tareas. El orden restaurado lo graba el propio Explorador al cerrar sesión o reiniciar.
 
@@ -60,3 +64,25 @@ cualquiera de ellas con un click.
 - **«Organizar automáticamente» y «Alinear a la cuadrícula»** se dejan como estaban en el snapshot al
   restaurar: si no, Windows reacomoda los íconos encima de lo restaurado.
 - Solo Windows: macOS queda fuera de la primera versión.
+
+## Cómo quedó la primera versión (2026-11-02)
+
+- **Dónde:** un JSON por snapshot en `%APPDATA%\LGA\LGA_MightyTools\desktop_icons\`. El desinstalador borra esa
+  carpeta junto con `settings.ini`. Un archivo ilegible se ignora y queda donde está.
+- **Resolución:** la de la pantalla virtual (todos los monitores) en píxeles físicos, que es el área de la vista
+  del escritorio. **Habitual** es la que más se repite entre los manuales y automáticos guardados; los «antes de
+  restaurar» no cuentan. Sin snapshots, o con un empate en el primer lugar, cuenta como habitual. Si la misma
+  resolución salteada aparece **3 días seguidos**, pasa a ser la habitual (es una pantalla nueva, no un arranque
+  fallido). El día salteado se avisa en la tarjeta del diario: «Skipped today: the screen is … (usually …)».
+- **Usuario presente:** el automático se intenta solo si hubo teclado o mouse en los últimos 10 minutos
+  (`GetLastInputInfo`): evita la foto con el monitor dormido o desconectado. Si no, sigue intentando en el día.
+- **Deshacer sin perder el orden original:** si el escritorio de ahora ya es igual a un snapshot guardado, no se
+  crea un «antes de restaurar» y «Undo» apunta a ese; si ya está como el snapshot que se restaura (doble click),
+  «Undo» sigue donde estaba. Se conservan los últimos **3** «antes de restaurar», y se podan recién después de
+  una restauración que salió bien (nunca el destino de «Undo»).
+- **Restaurar en una sola llamada** a `SelectAndPositionItems` con todos los íconos (como la herramienta que
+  recuperó el escritorio de Lega en septiembre) y después releer cada posición con `GetItemPosition`: cuenta como
+  restaurados solo los que quedaron exacto. El resultado dice «Restored 80 icons · 26 not found · 3 not placed».
+- Borrar el automático de hoy saltea el día (no se vuelve a sacar a los 15 minutos).
+- **Íconos nuevos** que no estaban en el snapshot quedan donde están.
+- Las filas de un snapshot con otra resolución que la actual lo avisan antes de restaurar.

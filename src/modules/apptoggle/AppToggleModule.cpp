@@ -55,7 +55,9 @@ public:
     void unregisterHotkey(int id) override { registered.remove(id); }
     void unregisterAll() override { registered.clear(); }
     bool isRegistered(int id) const override { return registered.contains(id); }
-    bool probe(const Shortcut &) override { return true; }
+    // El sistema rechaza todo (como Win+E, reservada por el Explorador) con `systemBusy`.
+    bool systemBusy = false;
+    bool probe(const Shortcut &) override { return !systemBusy; }
     void passThrough(const Shortcut &) override {}
     QString declare(int, const Shortcut &) override { return {}; }
     QString declaredByOtherModule(const Shortcut &shortcut) const override
@@ -174,6 +176,26 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     front = decide(app, inFront);
     check(front.action == Action::Minimize && front.window == 23,
           QStringLiteral("decision: con su ventana al frente (raiz del dueno) la minimiza"));
+
+    // Al frente esta un menu de la bandeja de la app (ventana de herramientas): no se minimiza el menu, se
+    // trae su ultima ventana normal.
+    Snapshot trayMenu = background;
+    AppToggleSystem::Window menu = window(24, app);
+    menu.toolWindow = true;
+    trayMenu.windows.prepend(menu);
+    trayMenu.foreground = 24;
+    trayMenu.foregroundPath = app;
+    front = decide(app, trayMenu);
+    check(front.action == Action::Activate && front.window == 22,
+          QStringLiteral("decision: con un menu de la app al frente (no elegible) trae su ventana, no minimiza"));
+    Snapshot frontIconic = background;
+    frontIconic.windows = {icon};
+    frontIconic.windows.first().visible = true;
+    frontIconic.foreground = 30;
+    frontIconic.foregroundPath = app;
+    front = decide(app, frontIconic);
+    check(front.action == Action::Activate && front.window == 30 && front.restore,
+          QStringLiteral("decision: con su ventana al frente pero minimizada la restaura, no la minimiza"));
 
     // XYplorer (VB6): la ventana principal tiene un dueno oculto de herramientas y WS_EX_APPWINDOW.
     Snapshot vb6;
@@ -300,8 +322,19 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     clash.workingDir.clear();
 #endif
     clash.name.clear();
-    check(module.saveApp(clash, &error) && !module.appsState().apps().last().name.isEmpty(),
-          QStringLiteral("modulo: sin nombre toma el de la app"));
+    // «Copiar como ruta» de Windows 11 la pega entre comillas.
+    clash.path = QStringLiteral(" \"%1\" ").arg(QDir::toNativeSeparators(existingAppPath()));
+    clash.workingDir = QStringLiteral("\"%1\"").arg(QDir::toNativeSeparators(QFileInfo(existingAppPath()).absolutePath()));
+    check(module.saveApp(clash, &error) && !module.appsState().apps().last().name.isEmpty()
+              && module.appsState().apps().last().path == QDir::toNativeSeparators(existingAppPath())
+              && !module.appsState().apps().last().workingDir.contains(QLatin1Char('"')),
+          QStringLiteral("modulo: sin nombre toma el de la app; la ruta y la carpeta pegadas con comillas se guardan sin ellas (%1)")
+              .arg(error));
+    clash.workingDir.clear();
+    check(AppToggleState::cleanPath(QStringLiteral("\"C:\\A b\\x.exe\"")) == QLatin1String("C:\\A b\\x.exe")
+              && AppToggleState::cleanPath(QStringLiteral("\"")) == QLatin1String("\"")
+              && AppToggleState::cleanPath(QStringLiteral("C:\\x.exe")) == QLatin1String("C:\\x.exe"),
+          QStringLiteral("estado: solo se sacan las comillas de los dos extremos"));
     const int clashId = module.appsState().apps().last().id;
     context.fake.accept = false;
     AppEntry rejected = real;
@@ -319,6 +352,24 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     context.fake.accept = true;
     check(module.setAppEnabled(clashId, true) && module.registrationFailureCount() == 0,
           QStringLiteral("modulo: al aceptar el sistema, los fallos se van"));
+    // El sistema tiene las dos combinaciones ocupadas: Win+E la reemplaza a proposito (sin amarillo), otra
+    // cualquiera queda marcada como compartida.
+    context.fake.systemBusy = true;
+    AppEntry explorer = real;
+    explorer.id = 0;
+    explorer.name = QStringLiteral("Files");
+    explorer.shortcut = Shortcut::fromPortableString(QStringLiteral("Meta+E"));
+    const bool savedExplorer = module.saveApp(explorer, &error);
+    const int explorerId = module.appsState().apps().last().id;
+#ifdef Q_OS_WIN
+    check(savedExplorer && !module.hasExternalConflict(explorerId) && module.hasExternalConflict(clashId),
+          QStringLiteral("modulo: Win+E reemplaza el atajo de Windows (sin amarillo); Ctrl+Alt+M ocupada si se marca"));
+#else
+    check(savedExplorer && module.hasExternalConflict(explorerId),
+          QStringLiteral("modulo: en mac una combinacion ocupada siempre se marca"));
+#endif
+    context.fake.systemBusy = false;
+    module.removeApp(explorerId);
     // Una entrada que no existe en disco: si el modulo llegara a ejecutar la accion, fallaria y dejaria
     // el error. En una corrida automatizada solo se loguea.
     context.setValue(QStringLiteral("apps"),
@@ -433,8 +484,9 @@ void AppToggleModule::registerApps()
             continue;
         }
         m_declaredIds.insert(entry.id);
-        // Win+E y las demas que reserva Windows salen ocupadas: igual responden por la prioridad.
-        const bool shared = !m_hotkeys->probe(entry.shortcut);
+        // Win+E y las demas Win + letra que reserva Windows salen ocupadas, pero el gancho con prioridad les
+        // gana siempre: las reemplaza a proposito y no se marcan como compartidas.
+        const bool shared = !m_hotkeys->probe(entry.shortcut) && !entry.shortcut.replacesWindowsShortcut();
         if (shared) m_externalConflicts.insert(entry.id);
 #ifdef Q_OS_WIN
         const bool registered = m_hotkeys->registerPriorityHotkey(entry.id, entry.shortcut);
@@ -506,13 +558,25 @@ QWidget *AppToggleModule::createPanel(QWidget *parent)
     connect(this, &AppToggleModule::appsChanged, panel, &AppTogglePanel::refresh);
     if (m_captureState == QLatin1String("editor-new")) panel->showEditorForCapture(0);
     if (m_captureState == QLatin1String("editor")) panel->showEditorForCapture(2);
+    // Win+E: la nota neutra de que reemplaza el atajo de Windows.
+    if (m_captureState == QLatin1String("editor-winkey")) panel->showEditorForCapture(1);
+    if (m_captureState == QLatin1String("editor-error")) {
+        panel->showEditorForCapture(2, I18n::tr("Already used by %1.").arg(QStringLiteral("Window Layouts")));
+    }
+#ifdef Q_OS_MACOS
+    if (m_captureState == QLatin1String("recording")) panel->showEditorForCapture(2, QString(), QStringLiteral("⌃⌥ ..."));
+#else
+    if (m_captureState == QLatin1String("recording")) panel->showEditorForCapture(2, QString(), QStringLiteral("Ctrl + Alt + ..."));
+#endif
     return panel;
 }
 
 QStringList AppToggleModule::captureStates() const
 {
-    return {QStringLiteral("list"), QStringLiteral("empty"), QStringLiteral("editor-new"), QStringLiteral("editor"),
-            QStringLiteral("conflicts"), QStringLiteral("long-name")};
+    return {QStringLiteral("list"),          QStringLiteral("empty"),        QStringLiteral("editor-new"),
+            QStringLiteral("editor"),        QStringLiteral("editor-winkey"), QStringLiteral("editor-error"),
+            QStringLiteral("recording"),     QStringLiteral("conflicts"),    QStringLiteral("run-error"),
+            QStringLiteral("long-name")};
 }
 
 bool AppToggleModule::applyCaptureState(const QString &state)
@@ -523,6 +587,7 @@ bool AppToggleModule::applyCaptureState(const QString &state)
     m_captureState = state;
     m_registrationErrors.clear();
     m_externalConflicts.clear();
+    m_lastError.clear();
     if (state == QLatin1String("empty")) {
         m_state.setCaptureApps({});
         return true;
@@ -549,8 +614,13 @@ bool AppToggleModule::applyCaptureState(const QString &state)
     }
     if (state == QLatin1String("conflicts")) {
         c.enabled = true;
-        m_externalConflicts.insert(a.id);
+        // Win+E no: reemplaza el atajo de Windows a proposito y no se marca.
+        m_externalConflicts.insert(b.id);
         m_registrationErrors.insert(c.id, I18n::tr("Could not activate %1 with priority.").arg(c.shortcut.displayText()));
+    }
+    // El atajo se apreto y la app no se pudo abrir (la desinstalaron): el estado pide atencion.
+    if (state == QLatin1String("run-error")) {
+        m_lastError = I18n::tr("The app was not found: %1").arg(QDir::toNativeSeparators(recorder));
     }
     m_state.setCaptureApps({a, b, c});
     return true;
@@ -608,6 +678,8 @@ QString AppToggleModule::validateEntry(const AppEntry &entry) const
 
 bool AppToggleModule::saveApp(AppEntry entry, QString *error)
 {
+    entry.path = AppToggleState::cleanPath(entry.path);
+    entry.workingDir = AppToggleState::cleanPath(entry.workingDir);
     if (entry.name.trimmed().isEmpty() && AppToggleState::validPath(entry.path)) {
         entry.name = AppToggleSystem::productName(entry.path);
         if (entry.name.isEmpty()) entry.name = QFileInfo(entry.path.trimmed()).completeBaseName();
@@ -703,9 +775,9 @@ HelpSection appToggleHelp(const SettingsReader &)
     help.note = I18n::tr("Hiding works like ⌘H: the app comes back with all its windows.");
 #else
     help.steps = {I18n::tr("Add an app and choose its program file. Arguments and the start folder are optional."),
-                  I18n::tr("Record a shortcut for it."),
+                  I18n::tr("Record a shortcut for it. Win plus a letter or number, like Win+E, replaces that Windows shortcut."),
                   I18n::tr("Press it to open the app or bring it to the front. If it's already in front, it minimizes.")};
-    help.note = I18n::tr("An app that is running only in the notification area is left as is.");
+    help.note = I18n::tr("With an administrator window in front the shortcut doesn't arrive, so Windows handles it (Win+E opens File Explorer). An app that is running only in the notification area is left as is.");
 #endif
     return help;
 }

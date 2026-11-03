@@ -139,6 +139,7 @@ QWidget *AppTogglePanel::createEditorPage()
 #else
     m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Opens the app, brings it to the front or minimizes it."), card);
 #endif
+    m_shortcut->showWindowsShortcutNote(true);
     form->addWidget(m_shortcut);
     m_editorError = Ui::caption(QString(), card);
     m_editorError->setWordWrap(true);
@@ -161,6 +162,14 @@ QWidget *AppTogglePanel::createEditorPage()
     if (m_interactive) {
         connect(browse, &QPushButton::clicked, this, &AppTogglePanel::browse);
         connect(m_path, &QLineEdit::textChanged, this, &AppTogglePanel::updateFolderPlaceholder);
+        // Una ruta pegada con «Copiar como ruta» llega entre comillas: se le sacan a la vista.
+        for (QLineEdit *edit : {m_path, m_folder}) {
+            if (!edit) continue;
+            connect(edit, &QLineEdit::editingFinished, this, [edit]() {
+                const QString clean = AppToggleState::cleanPath(edit->text());
+                if (clean != edit->text()) edit->setText(clean);
+            });
+        }
         connect(m_shortcut, &ShortcutRow::shortcutRecorded, this, [this](const Shortcut &shortcut) {
             m_draft.shortcut = shortcut;
             m_shortcut->setShortcut(shortcut);
@@ -364,7 +373,7 @@ void AppTogglePanel::updateEditor()
 void AppTogglePanel::updateFolderPlaceholder()
 {
     if (!m_folder) return;
-    const QString path = m_path->text().trimmed();
+    const QString path = AppToggleState::cleanPath(m_path->text());
     // Vacio = la carpeta de la app: se muestra cual es.
     m_folder->setPlaceholderText(AppToggleState::validPath(path)
                                      ? QDir::toNativeSeparators(QFileInfo(QDir::fromNativeSeparators(path)).absolutePath())
@@ -373,7 +382,7 @@ void AppTogglePanel::updateFolderPlaceholder()
 
 void AppTogglePanel::browse()
 {
-    const QString current = QDir::fromNativeSeparators(m_path->text().trimmed());
+    const QString current = QDir::fromNativeSeparators(AppToggleState::cleanPath(m_path->text()));
 #ifdef Q_OS_MACOS
     const QString start = AppToggleState::validPath(current) ? QFileInfo(current).absolutePath() : QStringLiteral("/Applications");
     const QString filter = I18n::tr("Applications (*.app);;All files (*)");
@@ -397,9 +406,11 @@ void AppTogglePanel::browse()
 void AppTogglePanel::saveEditor()
 {
     m_draft.name = m_name->text().trimmed();
-    m_draft.path = m_path->text().trimmed();
+    m_draft.path = AppToggleState::cleanPath(m_path->text());
     m_draft.arguments = m_arguments->text().trimmed();
-    m_draft.workingDir = m_folder ? m_folder->text().trimmed() : QString();
+    m_draft.workingDir = m_folder ? AppToggleState::cleanPath(m_folder->text()) : QString();
+    m_path->setText(m_draft.path);
+    if (m_folder) m_folder->setText(m_draft.workingDir);
     QString error;
     if (!m_module->saveApp(m_draft, &error)) {
         m_editorError->setText(error);
@@ -410,7 +421,12 @@ void AppTogglePanel::saveEditor()
     m_pages->setCurrentWidget(m_listPage);
 }
 
-void AppTogglePanel::showEditorForCapture(int id)
+void AppTogglePanel::showEditorForCapture(int id, const QString &error, const QString &recording)
 {
     editApp(id);
+    if (!error.isEmpty()) {
+        m_editorError->setText(error);
+        m_editorError->show();
+    }
+    if (!recording.isEmpty()) m_shortcut->showRecordingFixture(recording);
 }
