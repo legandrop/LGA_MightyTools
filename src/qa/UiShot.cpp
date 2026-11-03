@@ -1640,8 +1640,6 @@ int runPageFitProbe()
     return failures ? 1 : 0;
 }
 
-// Animacion del switch (D-64): un click la anima y termina en su lugar; setChecked() del codigo salta
-// sin animar (reflejar un estado, capturas). El switch se muestra fuera de pantalla.
 // El grabador de atajos (ShortcutRow, todas las herramientas): nunca sigue grabando con otra app al
 // frente ni con la fila oculta, y sus motivos de rechazo. Teclas mandadas como eventos de Qt a la fila,
 // sin entrada real; en una corrida automatizada el grabador no instala el gancho de teclado.
@@ -1721,6 +1719,8 @@ int runRecorderGuardProbe()
     return failures ? 1 : 0;
 }
 
+// Animacion del switch (D-64): un click la anima y termina en su lugar; setChecked() del codigo salta
+// sin animar (reflejar un estado, capturas). El switch se muestra fuera de pantalla.
 int runSwitchAnimProbe()
 {
     int failures = 0;

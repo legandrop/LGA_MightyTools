@@ -775,7 +775,7 @@ HelpSection appToggleHelp(const SettingsReader &)
     help.note = I18n::tr("Hiding works like ⌘H: the app comes back with all its windows.");
 #else
     help.steps = {I18n::tr("Add an app and choose its program file. Arguments and the start folder are optional."),
-                  I18n::tr("Record a shortcut for it. Win plus a letter, like Win+E, replaces that Windows shortcut."),
+                  I18n::tr("Record a shortcut for it. Win plus a letter or number, like Win+E, replaces that Windows shortcut."),
                   I18n::tr("Press it to open the app or bring it to the front. If it's already in front, it minimizes.")};
     help.note = I18n::tr("With an administrator window in front the shortcut doesn't arrive, so Windows handles it (Win+E opens File Explorer). An app that is running only in the notification area is left as is.");
 #endif
