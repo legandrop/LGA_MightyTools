@@ -24,7 +24,11 @@ constexpr int kTickMs = 15 * 60 * 1000;
 constexpr qint64 kMaxFileBytes = 8 * 1024 * 1024;
 
 const char *const kDailyKey = "daily";
-const char *const kSkippedDayKey = "skippedDay";
+const char *const kSkippedDayKey = "skippedDay";       // hoy ya no se intenta el automatico
+const char *const kScreenSkipDayKey = "screenSkipDay"; // el dia que se salteo por la resolucion (se muestra)
+const char *const kSkipScreenKey = "skipScreen";       // racha: la resolucion salteada
+const char *const kSkipDaysKey = "skipDays";           // racha: cuantos dias seguidos
+const char *const kUsualScreenKey = "usualScreen";     // habitual fijada por una racha
 
 // Monitor con su pie y cuatro iconos arriba a la izquierda, en la caja de 16 de los demas iconos.
 void paintDesktopIcon(QPainter &painter, const QRectF &rect, const QColor &color)
@@ -47,14 +51,15 @@ void paintDesktopIcon(QPainter &painter, const QRectF &rect, const QColor &color
     painter.restore();
 }
 
-QString idPrefix(SnapshotKind kind)
+QSize sizeFrom(const QVariant &value)
 {
-    switch (kind) {
-    case SnapshotKind::Automatic: return QStringLiteral("auto");
-    case SnapshotKind::BeforeRestore: return QStringLiteral("before");
-    case SnapshotKind::Manual: break;
-    }
-    return QStringLiteral("manual");
+    const QStringList parts = value.toString().split(QLatin1Char('x'));
+    return parts.size() == 2 ? QSize(parts.at(0).toInt(), parts.at(1).toInt()) : QSize();
+}
+
+QString sizeKey(const QSize &size)
+{
+    return size.isValid() ? QStringLiteral("%1x%2").arg(size.width()).arg(size.height()) : QString();
 }
 
 // ---- Datos de prueba (capturas y self-test): nunca un escritorio real.
@@ -136,16 +141,18 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     QList<DesktopSnapshot> stored;
     for (int i = 0; i < 7; ++i) stored << fixture(QStringLiteral("a%1").arg(i), automatic, now.addDays(-i), 3);
     stored << fixture(QStringLiteral("m1"), manual, now.addDays(-40), 3) << fixture(QStringLiteral("m2"), manual, now.addDays(-90), 3);
-    stored << fixture(QStringLiteral("b0"), before, now.addDays(-2), 3) << fixture(QStringLiteral("b1"), before, now.addSecs(-60), 3);
-    check(asSet(toPrune(stored)) == QSet<QString>({QStringLiteral("a5"), QStringLiteral("a6"), QStringLiteral("b0")}),
-          QStringLiteral("retencion: quedan los 5 automaticos mas nuevos; los manuales, aunque viejos, quedan"));
-    QList<DesktopSnapshot> shuffled = {stored.at(6), stored.at(1), stored.at(9), stored.at(4), stored.at(0), stored.at(10),
-                                       stored.at(5), stored.at(2), stored.at(7), stored.at(3), stored.at(8)};
+    for (int i = 0; i < 4; ++i) stored << fixture(QStringLiteral("b%1").arg(i), before, now.addDays(-i).addSecs(-60), 3);
+    check(asSet(toPrune(stored)) == QSet<QString>({QStringLiteral("a5"), QStringLiteral("a6"), QStringLiteral("b3")}),
+          QStringLiteral("retencion: quedan los 5 automaticos y los 3 antes de restaurar mas nuevos; los manuales, aunque viejos, quedan"));
+    QList<DesktopSnapshot> shuffled(stored.crbegin(), stored.crend());
+    std::rotate(shuffled.begin(), shuffled.begin() + 4, shuffled.end());
     check(asSet(toPrune(shuffled)) == asSet(toPrune(stored)), QStringLiteral("retencion: no depende del orden de la lista"));
     check(toPrune(stored.mid(0, 5) + stored.mid(7, 2)).isEmpty(),
           QStringLiteral("retencion: con 5 automaticos y manuales no se borra nada"));
-    check(toPrune({stored.at(9), stored.at(10)}) == QStringList{QStringLiteral("b0")},
-          QStringLiteral("antes de restaurar: queda solo el mas nuevo"));
+    check(toPrune(stored.mid(9)) == QStringList{QStringLiteral("b3")},
+          QStringLiteral("antes de restaurar: quedan los 3 mas nuevos"));
+    check(asSet(toPrune(stored, QStringLiteral("b3"))) == QSet<QString>({QStringLiteral("a5"), QStringLiteral("a6")}),
+          QStringLiteral("retencion: el destino de Undo nunca se poda"));
 
     // Igual al anterior.
     const DesktopIconView::Layout a = layoutOf({{QStringLiteral("C:/D/a.lnk"), {10, 10}}, {QStringLiteral("C:/D/b.lnk"), {10, 110}}});
@@ -176,20 +183,29 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
                                               fixture(QStringLiteral("u2"), before, now, 1, {}, small),
                                               fixture(QStringLiteral("u3"), before, now, 1, {}, small)};
     check(!isUsualScreen(undoNoise, small), QStringLiteral("habitual: los antes de restaurar no cuentan"));
+    const QList<DesktopSnapshot> tieNewestSmall = {fixture(QStringLiteral("n1"), automatic, now.addDays(-2), 1),
+                                                   fixture(QStringLiteral("n2"), automatic, now.addDays(-1), 1, {}, small)};
+    check(usualScreen(mostlyBig) == big && usualScreen(tieNewestSmall) == small && !usualScreen({}).isValid(),
+          QStringLiteral("habitual para mostrar: la que mas se repite; en un empate, la del mas nuevo"));
 
     // Cuando toca el automatico.
+    const qint64 present = 60 * 1000;
     const QList<DesktopSnapshot> older = {fixture(QStringLiteral("y"), automatic, now.addDays(-1), 3)};
-    check(!needsAutomatic(older, now, now.addSecs(-59 * 60), QDate()), QStringLiteral("despierta: 59 min no alcanza"));
-    check(needsAutomatic(older, now, now.addSecs(-61 * 60), QDate()), QStringLiteral("despierta: 61 min alcanza"));
+    check(!needsAutomatic(older, now, now.addSecs(-59 * 60), QDate(), present), QStringLiteral("despierta: 59 min no alcanza"));
+    check(needsAutomatic(older, now, now.addSecs(-61 * 60), QDate(), present), QStringLiteral("despierta: 61 min alcanza"));
     check(!needsAutomatic(older + QList<DesktopSnapshot>{fixture(QStringLiteral("t"), automatic, now.addSecs(-3600), 3)}, now,
-                          now.addDays(-1), QDate()),
+                          now.addDays(-1), QDate(), present),
           QStringLiteral("despierta: con un automatico de hoy no hace falta otro"));
     check(needsAutomatic(older + QList<DesktopSnapshot>{fixture(QStringLiteral("t"), manual, now.addSecs(-3600), 3)}, now,
-                         now.addDays(-1), QDate()),
+                         now.addDays(-1), QDate(), present),
           QStringLiteral("despierta: un manual de hoy no reemplaza al automatico"));
-    check(!needsAutomatic(older, now, now.addDays(-1), now.date()) && needsAutomatic(older, now, now.addDays(-1), now.date().addDays(-1)),
+    check(!needsAutomatic(older, now, now.addDays(-1), now.date(), present)
+              && needsAutomatic(older, now, now.addDays(-1), now.date().addDays(-1), present),
           QStringLiteral("despierta: el dia salteado no guarda; el dia siguiente si"));
-    check(!needsAutomatic(older, now, QDateTime(), QDate()), QStringLiteral("despierta: sin hora de arranque no guarda"));
+    check(!needsAutomatic(older, now, QDateTime(), QDate(), present), QStringLiteral("despierta: sin hora de arranque no guarda"));
+    check(!needsAutomatic(older, now, now.addDays(-1), QDate(), 11 * 60 * 1000)
+              && needsAutomatic(older, now, now.addDays(-1), QDate(), 9 * 60 * 1000),
+          QStringLiteral("presente: sin teclado ni mouse hace mas de 10 min no se intenta; con uso reciente si"));
 
     // Suspension: el reloj despierto no cuenta el tiempo dormido.
     const qint64 wall0 = now.toMSecsSinceEpoch();
@@ -209,14 +225,100 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     history[0].layout = moved;
     history[1].layout = a;
     QString sameId;
-    check(automaticStep(history, reordered, &sameId) == AutomaticStep::Update && sameId == QLatin1String("new"),
+    ScreenStreak streak;
+    check(automaticStep(history, reordered, &streak, &sameId) == AutomaticStep::Update && sameId == QLatin1String("new"),
           QStringLiteral("automatico: igual al anterior actualiza la fecha de ese"));
-    check(automaticStep(history, moved, nullptr) == AutomaticStep::Save,
+    check(automaticStep(history, moved, &streak, nullptr) == AutomaticStep::Save,
           QStringLiteral("automatico: igual a uno mas viejo pero no al anterior guarda uno nuevo"));
-    check(automaticStep(history, layoutOf({{QStringLiteral("C:/D/a.lnk"), {5, 5}}}, small), nullptr) == AutomaticStep::SkipScreen,
-          QStringLiteral("automatico: otra resolucion que la habitual saltea el dia"));
-    check(automaticStep(history, DesktopIconView::Layout{}, nullptr) == AutomaticStep::Wait,
+    check(automaticStep(history, DesktopIconView::Layout{}, &streak, nullptr) == AutomaticStep::Wait,
           QStringLiteral("automatico: un escritorio vacio espera al proximo turno"));
+    // Racha de resolucion: dos dias se saltea, el tercero seguido pasa a ser la habitual.
+    const DesktopIconView::Layout smallDesk = layoutOf({{QStringLiteral("C:/D/a.lnk"), {5, 5}}}, small);
+    const DesktopIconView::Layout bigDesk = layoutOf({{QStringLiteral("C:/D/a.lnk"), {7, 7}}});
+    streak = ScreenStreak();
+    const AutomaticStep day1 = automaticStep(history, smallDesk, &streak, nullptr);
+    const AutomaticStep day2 = automaticStep(history, smallDesk, &streak, nullptr);
+    check(day1 == AutomaticStep::SkipScreen && day2 == AutomaticStep::SkipScreen && streak.days == 2 && streak.screen == small,
+          QStringLiteral("racha: otra resolucion que la habitual saltea el dia y se cuenta"));
+    check(automaticStep(history, smallDesk, &streak, nullptr) == AutomaticStep::Save && streak.usual == small && streak.days == 0,
+          QStringLiteral("racha: al tercer dia seguido la resolucion pasa a ser la habitual y se guarda"));
+    check(automaticStep(history, bigDesk, &streak, nullptr) == AutomaticStep::SkipScreen && streak.days == 1,
+          QStringLiteral("racha: con la habitual fijada, la vieja ahora es la salteada"));
+    ScreenStreak broken;
+    automaticStep(history, smallDesk, &broken, nullptr);
+    automaticStep(history, bigDesk, &broken, nullptr);
+    const AutomaticStep afterBreak = automaticStep(history, smallDesk, &broken, nullptr);
+    automaticStep(history, layoutOf({{QStringLiteral("C:/D/a.lnk"), {5, 5}}}, QSize(2560, 1440)), &broken, nullptr);
+    check(afterBreak == AutomaticStep::SkipScreen && broken.days == 1 && broken.screen == QSize(2560, 1440) && !broken.usual.isValid(),
+          QStringLiteral("racha: un dia con la habitual o con otra resolucion la vuelve a empezar"));
+    ScreenStreak stale;
+    stale.usual = small;
+    const QList<DesktopSnapshot> onlyBefore = {fixture(QStringLiteral("ob"), before, now.addDays(-1), 1)};
+    check(automaticStep(onlyBefore, bigDesk, &stale, nullptr) == AutomaticStep::Save && !stale.usual.isValid(),
+          QStringLiteral("racha: sin manuales ni automaticos guardados, la habitual fijada se olvida y se guarda"));
+
+    // Restaurar sin perder nunca el orden original: A, C, Undo, Undo, y doble click.
+    QList<DesktopSnapshot> store = {fixture(QStringLiteral("A"), manual, now.addDays(-5), 0),
+                                    fixture(QStringLiteral("C"), automatic, now.addDays(-4), 0)};
+    store[0].layout = a;
+    store[1].layout = moved;
+    const DesktopIconView::Layout startDesk = layoutOf({{QStringLiteral("C:/D/a.lnk"), {300, 300}}, {QStringLiteral("C:/D/b.lnk"), {400, 400}}});
+    DesktopIconView::Layout desk = startDesk;
+    int serial = 0;
+    bool failApply = false;
+    const auto newId = [&serial]() { return QStringLiteral("before%1").arg(++serial); };
+    const auto fakeApply = [&desk, &failApply](const DesktopSnapshot &target, const RestorePlan &) {
+        if (failApply) return false;
+        desk = target.layout;
+        return true;
+    };
+    QDateTime clock = now;
+    const auto run = [&](const QString &id, const QString &previousUndo) {
+        clock = clock.addSecs(60);
+        return restoreInto(&store, id, desk, clock, previousUndo, newId, fakeApply);
+    };
+    const auto keepsOriginal = [&store, &startDesk]() {
+        return std::any_of(store.cbegin(), store.cend(), [&startDesk](const DesktopSnapshot &s) {
+            return s.kind == SnapshotKind::BeforeRestore && sameArrangement(s.layout, startDesk);
+        });
+    };
+    const RestoreRun toA = run(QStringLiteral("A"), QString());
+    check(toA.ok && toA.created == QStringList{QStringLiteral("before1")} && toA.undoId == QLatin1String("before1")
+              && sameArrangement(desk, a) && keepsOriginal(),
+          QStringLiteral("restaurar A: el orden de antes se guarda y Undo apunta a el"));
+    const RestoreRun again = run(QStringLiteral("A"), toA.undoId);
+    check(again.ok && again.created.isEmpty() && again.pruned.isEmpty() && again.undoId == toA.undoId && keepsOriginal(),
+          QStringLiteral("doble click en Restore: no crea otro antes ni pierde el Undo"));
+    const RestoreRun toC = run(QStringLiteral("C"), again.undoId);
+    check(toC.ok && toC.created.isEmpty() && toC.undoId == QLatin1String("A") && sameArrangement(desk, moved) && keepsOriginal(),
+          QStringLiteral("restaurar C: el escritorio ya era A (guardado), no se crea otro antes y Undo va a A"));
+    const RestoreRun undo1 = run(toC.undoId, toC.undoId);
+    const RestoreRun undo2 = run(undo1.undoId, undo1.undoId);
+    check(undo1.ok && undo1.created.isEmpty() && undo1.undoId == QLatin1String("C") && undo2.ok && undo2.created.isEmpty()
+              && undo2.undoId == QLatin1String("A") && sameArrangement(desk, moved) && keepsOriginal(),
+          QStringLiteral("Undo, Undo: alterna entre A y C sin crear antes; el original sigue guardado"));
+    const RestoreRun back = run(toA.undoId, undo2.undoId);
+    check(back.ok && sameArrangement(desk, startDesk) && keepsOriginal(),
+          QStringLiteral("el antes de restaurar original se puede restaurar al final"));
+    // Restaurar con apply fallido: el antes nuevo queda y no se poda ninguno.
+    for (int i = 0; i < kKeepBeforeRestore; ++i) {
+        store << fixture(QStringLiteral("old%1").arg(i), before, now.addDays(-20 - i), 0);
+        store.last().layout = layoutOf({{QStringLiteral("C:/D/a.lnk"), {20 + i, 20}}});
+    }
+    desk = layoutOf({{QStringLiteral("C:/D/a.lnk"), {999, 999}}, {QStringLiteral("C:/D/b.lnk"), {999, 888}}});
+    const int countBefore = int(store.size());
+    failApply = true;
+    const RestoreRun failed = run(QStringLiteral("A"), QString());
+    check(failed.found && !failed.ok && failed.created.size() == 1 && failed.pruned.isEmpty() && store.size() == countBefore + 1,
+          QStringLiteral("apply fallido: se guarda el antes y no se borra ningun antes"));
+    failApply = false;
+    const RestoreRun recovered = run(QStringLiteral("A"), failed.undoId);
+    int befores = 0;
+    for (const DesktopSnapshot &s : std::as_const(store)) befores += s.kind == SnapshotKind::BeforeRestore;
+    const bool undoKept = std::any_of(store.cbegin(), store.cend(), [&recovered](const DesktopSnapshot &s) { return s.id == recovered.undoId; });
+    check(recovered.ok && !recovered.pruned.isEmpty() && befores == kKeepBeforeRestore && undoKept,
+          QStringLiteral("despues de un apply exitoso se poda hasta 3 antes, sin tocar el destino de Undo"));
+    check(!run(QStringLiteral("no-such"), QString()).found, QStringLiteral("restaurar uno que ya no existe no hace nada"));
 
     // Plan de restauracion.
     DesktopIconView::Layout target = layoutOf({{QStringLiteral("C:/D/a.lnk"), {10, 10}},
@@ -277,9 +379,10 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               && whenText(QDateTime(QDate(2026, 10, 28), QTime(9, 5)), now) == QLatin1String("2026-10-28 09:05"),
           QStringLiteral("fecha: hoy y ayer en palabras y con mayuscula, el resto con la fecha (%1 / %2)").arg(today, yesterday));
 
-    // Una corrida automatizada nunca mueve iconos ni cambia flags, aunque se pida de verdad.
+    // Una corrida automatizada nunca mueve iconos ni cambia flags, aunque se pida de verdad. autoArrange en
+    // false: si la guarda se rompiera, que no reacomode el escritorio de Lega.
     DesktopIconView::ApplyResult applied;
-    check(AutomatedRun::active() && DesktopIconView::apply(true, true, a.icons, false, &applied, &error) && applied.dryRun
+    check(AutomatedRun::active() && DesktopIconView::apply(false, true, a.icons, false, &applied, &error) && applied.dryRun
               && applied.moved == 2,
           QStringLiteral("restaurar: en corrida automatizada solo loguea, sin tocar el escritorio"));
 }
@@ -427,7 +530,8 @@ void DesktopIconsModule::tick()
     }
     const QDateTime now = QDateTime::currentDateTime();
     const QDate skipped = QDate::fromString(context().value(QLatin1String(kSkippedDayKey)).toString(), Qt::ISODate);
-    if (!DesktopSnapshots::needsAutomatic(m_snapshots, now, m_awakeSince, skipped)) {
+    // Sin teclado ni mouse hace rato (monitor dormido o desconectado) no se intenta: sigue en el proximo turno.
+    if (!DesktopSnapshots::needsAutomatic(m_snapshots, now, m_awakeSince, skipped, DesktopIconView::idleMs())) {
         return;
     }
     DesktopIconView::Layout current;
@@ -435,13 +539,26 @@ void DesktopIconsModule::tick()
     if (!DesktopIconView::read(&current, &error)) {
         return; // se reintenta en el proximo turno
     }
+    DesktopSnapshots::ScreenStreak streak;
+    streak.screen = sizeFrom(context().value(QLatin1String(kSkipScreenKey)));
+    streak.days = context().value(QLatin1String(kSkipDaysKey), 0).toInt();
+    streak.usual = sizeFrom(context().value(QLatin1String(kUsualScreenKey)));
     QString sameId;
-    switch (DesktopSnapshots::automaticStep(m_snapshots, current, &sameId)) {
+    const DesktopSnapshots::AutomaticStep step = DesktopSnapshots::automaticStep(m_snapshots, current, &streak, &sameId);
+    if (step != DesktopSnapshots::AutomaticStep::Wait) {
+        context().setValue(QLatin1String(kSkipScreenKey), sizeKey(streak.screen));
+        context().setValue(QLatin1String(kSkipDaysKey), streak.days);
+        context().setValue(QLatin1String(kUsualScreenKey), sizeKey(streak.usual));
+    }
+    switch (step) {
     case DesktopSnapshots::AutomaticStep::Wait:
         return;
     case DesktopSnapshots::AutomaticStep::SkipScreen:
-        qInfo() << "[desktopIcons] resolucion distinta de la habitual" << current.screen << ": hoy no hay automatico";
+        qInfo() << "[desktopIcons] resolucion distinta de la habitual" << current.screen << ": hoy no hay automatico, dia"
+                << streak.days << "de" << DesktopSnapshots::kStreakDays;
         context().setValue(QLatin1String(kSkippedDayKey), now.date().toString(Qt::ISODate));
+        context().setValue(QLatin1String(kScreenSkipDayKey), now.date().toString(Qt::ISODate));
+        announce();
         return;
     case DesktopSnapshots::AutomaticStep::Update:
         for (DesktopSnapshot &snapshot : m_snapshots) {
@@ -484,16 +601,18 @@ void DesktopIconsModule::loadFromDisk()
     }
 }
 
-void DesktopIconsModule::persist(const DesktopSnapshot &snapshot)
+bool DesktopIconsModule::persist(const DesktopSnapshot &snapshot)
 {
     if (m_folder.isEmpty() || AutomatedRun::active()) {
-        return;
+        return true;
     }
     QDir().mkpath(m_folder);
     QSaveFile file(QDir(m_folder).filePath(snapshot.id + QStringLiteral(".json")));
     if (!file.open(QIODevice::WriteOnly) || file.write(DesktopSnapshots::toJson(snapshot)) < 0 || !file.commit()) {
         qWarning() << "[desktopIcons] no se pudo guardar el snapshot" << snapshot.id << file.errorString();
+        return false;
     }
+    return true;
 }
 
 void DesktopIconsModule::erase(const QString &id)
@@ -506,12 +625,26 @@ void DesktopIconsModule::erase(const QString &id)
 
 void DesktopIconsModule::prune()
 {
-    const QStringList ids = DesktopSnapshots::toPrune(m_snapshots);
+    // Nunca el destino del Undo que esta a la vista.
+    const QStringList ids = DesktopSnapshots::toPrune(m_snapshots, m_result.undoId);
     for (const QString &id : ids) {
         erase(id);
         m_snapshots.erase(std::remove_if(m_snapshots.begin(), m_snapshots.end(),
                                          [&id](const DesktopSnapshot &s) { return s.id == id; }),
                           m_snapshots.end());
+    }
+}
+
+QString DesktopIconsModule::newId(SnapshotKind kind, const QDateTime &when) const
+{
+    // El archivo dice cuando y de que tipo es ("20261102-104200-automatic"), con la misma clave que el JSON.
+    const QString base =
+        QStringLiteral("%1-%2").arg(when.toString(QStringLiteral("yyyyMMdd-HHmmss")), DesktopSnapshots::kindKey(kind));
+    QString id = base;
+    for (int n = 2;; ++n) {
+        const bool taken = std::any_of(m_snapshots.cbegin(), m_snapshots.cend(), [&id](const DesktopSnapshot &s) { return s.id == id; });
+        if (!taken) return id;
+        id = QStringLiteral("%1-%2").arg(base).arg(n);
     }
 }
 
@@ -522,14 +655,7 @@ DesktopSnapshot DesktopIconsModule::makeSnapshot(SnapshotKind kind, const QStrin
     snapshot.name = name.trimmed();
     snapshot.when = QDateTime::currentDateTime();
     snapshot.layout = layout;
-    const QString base = QStringLiteral("%1-%2").arg(snapshot.when.toString(QStringLiteral("yyyyMMdd-HHmmss")), idPrefix(kind));
-    snapshot.id = base;
-    for (int n = 2;; ++n) {
-        const bool taken = std::any_of(m_snapshots.cbegin(), m_snapshots.cend(),
-                                       [&snapshot](const DesktopSnapshot &s) { return s.id == snapshot.id; });
-        if (!taken) break;
-        snapshot.id = QStringLiteral("%1-%2").arg(base).arg(n);
-    }
+    snapshot.id = newId(kind, snapshot.when);
     return snapshot;
 }
 
@@ -565,58 +691,64 @@ void DesktopIconsModule::setDailyEnabled(bool enabled)
 
 bool DesktopIconsModule::saveManual(const QString &name)
 {
+    // No toca el resultado de la ultima restauracion: su Undo sigue a mano.
     DesktopIconView::Layout current;
     QString error;
-    m_result = Result();
-    if (!DesktopIconView::read(&current, &error) || current.icons.isEmpty()) {
-        m_result.visible = true;
-        m_result.error = error.isEmpty() ? I18n::tr("No desktop icons were found.") : I18n::tr("Could not read the desktop icons.");
-        announce();
-        return false;
+    m_saveError.clear();
+    if (!DesktopIconView::read(&current, &error)) {
+        m_saveError = I18n::tr("Could not read the desktop icons.") + QLatin1Char(' ') + I18n::tr("Check that Explorer is running and try again.");
+    } else if (current.icons.isEmpty()) {
+        m_saveError = I18n::tr("No desktop icons were found.");
+    } else {
+        m_snapshots.append(makeSnapshot(SnapshotKind::Manual, name, current));
+        if (!persist(m_snapshots.last())) {
+            m_snapshots.removeLast();
+            m_saveError = I18n::tr("Could not write the snapshot file.");
+        }
     }
-    m_snapshots.append(makeSnapshot(SnapshotKind::Manual, name, current));
-    persist(m_snapshots.last());
     announce();
-    return true;
+    return m_saveError.isEmpty();
 }
 
 bool DesktopIconsModule::restore(const QString &id)
 {
-    DesktopSnapshot target;
-    for (const DesktopSnapshot &snapshot : std::as_const(m_snapshots)) {
-        if (snapshot.id == id) target = snapshot;
-    }
-    if (target.id.isEmpty()) {
+    if (std::none_of(m_snapshots.cbegin(), m_snapshots.cend(), [&id](const DesktopSnapshot &s) { return s.id == id; })) {
         return false;
     }
+    const QString previousUndo = m_result.undoId;
     m_result = Result();
     m_result.visible = true;
+    m_result.undoId = previousUndo; // si no se puede leer el escritorio, el Undo de antes sigue
+    const QString explorer = I18n::tr("Check that Explorer is running and try again.");
     DesktopIconView::Layout current;
     QString error;
     if (!DesktopIconView::read(&current, &error)) {
-        m_result.error = I18n::tr("Could not read the desktop icons.");
+        m_result.error = I18n::tr("Could not read the desktop icons.") + QLatin1Char(' ') + explorer;
         announce();
         return false;
     }
-    // Primero el "antes de restaurar" (deshacer); el anterior, aunque sea el que se esta restaurando,
-    // ya esta copiado en `target`.
-    const DesktopSnapshot before = makeSnapshot(SnapshotKind::BeforeRestore, QString(), current);
-    m_snapshots.append(before);
-    persist(before);
-    prune();
-    const DesktopSnapshots::RestorePlan restorePlan = DesktopSnapshots::plan(target.layout, current);
+    const QDateTime now = QDateTime::currentDateTime();
     DesktopIconView::ApplyResult applied;
-    if (!DesktopIconView::apply(target.layout.autoArrange, target.layout.snapToGrid, restorePlan.moves,
-                                context().automatedRun(), &applied, &error)) {
-        m_result.error = I18n::tr("Could not move the desktop icons.");
-        m_result.undoId = before.id;
+    const DesktopSnapshots::RestoreRun run = DesktopSnapshots::restoreInto(
+        &m_snapshots, id, current, now, previousUndo, [this, &now]() { return newId(SnapshotKind::BeforeRestore, now); },
+        [this, &applied, &error](const DesktopSnapshot &target, const DesktopSnapshots::RestorePlan &plan) {
+            return DesktopIconView::apply(target.layout.autoArrange, target.layout.snapToGrid, plan.moves,
+                                          context().automatedRun(), &applied, &error);
+        });
+    for (const DesktopSnapshot &snapshot : std::as_const(m_snapshots)) {
+        if (run.created.contains(snapshot.id)) persist(snapshot);
+    }
+    for (const QString &gone : run.pruned) erase(gone);
+    m_result.undoId = run.undoId;
+    if (!run.ok) {
+        m_result.error = I18n::tr("Could not move the desktop icons.") + QLatin1Char(' ') + explorer;
         announce();
         return false;
     }
     m_result.ok = true;
     m_result.restored = applied.moved;
-    m_result.missing = restorePlan.missing;
-    m_result.undoId = before.id;
+    m_result.notPlaced = applied.notPlaced;
+    m_result.missing = run.plan.missing;
     announce();
     return true;
 }
@@ -627,6 +759,10 @@ bool DesktopIconsModule::remove(const QString &id)
     if (it == m_snapshots.end()) {
         return false;
     }
+    // Borrar el automatico de hoy no lo vuelve a sacar en 15 minutos: hoy queda salteado.
+    if (it->kind == SnapshotKind::Automatic && it->when.date() == QDate::currentDate()) {
+        context().setValue(QLatin1String(kSkippedDayKey), QDate::currentDate().toString(Qt::ISODate));
+    }
     m_snapshots.erase(it);
     erase(id);
     if (m_result.undoId == id) {
@@ -634,6 +770,22 @@ bool DesktopIconsModule::remove(const QString &id)
     }
     announce();
     return true;
+}
+
+QString DesktopIconsModule::skipNotice() const
+{
+    if (!dailyEnabled()
+        || context().value(QLatin1String(kScreenSkipDayKey)).toString() != QDate::currentDate().toString(Qt::ISODate)) {
+        return QString();
+    }
+    const QSize skipped = sizeFrom(context().value(QLatin1String(kSkipScreenKey)));
+    QSize usual = sizeFrom(context().value(QLatin1String(kUsualScreenKey)));
+    if (!usual.isValid()) usual = DesktopSnapshots::usualScreen(m_snapshots);
+    if (!skipped.isValid() || !usual.isValid()) {
+        return QString();
+    }
+    return I18n::tr("Skipped today: the screen is %1 (usually %2).")
+        .arg(DesktopSnapshots::screenText(skipped), DesktopSnapshots::screenText(usual));
 }
 
 ModuleStatus DesktopIconsModule::status() const
@@ -661,8 +813,10 @@ QWidget *DesktopIconsModule::createPanel(QWidget *parent)
 
 QStringList DesktopIconsModule::captureStates() const
 {
-    return {QStringLiteral("list"), QStringLiteral("empty"), QStringLiteral("restored"), QStringLiteral("resolution"),
-            QStringLiteral("long-name"), QStringLiteral("confirm-delete"), QStringLiteral("daily-off"), QStringLiteral("error")};
+    return {QStringLiteral("list"),       QStringLiteral("empty"),          QStringLiteral("restored"),
+            QStringLiteral("resolution"), QStringLiteral("long-name"),      QStringLiteral("confirm-delete"),
+            QStringLiteral("daily-off"),  QStringLiteral("error"),          QStringLiteral("skipped"),
+            QStringLiteral("save-error")};
 }
 
 bool DesktopIconsModule::applyCaptureState(const QString &state)
@@ -671,10 +825,18 @@ bool DesktopIconsModule::applyCaptureState(const QString &state)
         return false;
     }
     m_captureState = state;
-    m_captureScreen = state == QLatin1String("resolution") ? QSize(1024, 768) : QSize(1920, 1080);
+    const bool skippedToday = state == QLatin1String("skipped");
+    m_captureScreen = state == QLatin1String("resolution") || skippedToday ? QSize(1024, 768) : QSize(1920, 1080);
     m_result = Result();
+    m_saveError.clear();
     m_snapshots.clear();
     context().setValue(QLatin1String(kDailyKey), state != QLatin1String("daily-off"));
+    context().setValue(QLatin1String(kScreenSkipDayKey), skippedToday ? QDate::currentDate().toString(Qt::ISODate) : QString());
+    context().setValue(QLatin1String(kSkipScreenKey), skippedToday ? QStringLiteral("1024x768") : QString());
+    context().setValue(QLatin1String(kUsualScreenKey), QString());
+    if (state == QLatin1String("save-error")) {
+        m_saveError = I18n::tr("No desktop icons were found.");
+    }
     if (state == QLatin1String("empty")) {
         return true;
     }
@@ -693,7 +855,8 @@ bool DesktopIconsModule::applyCaptureState(const QString &state)
     if (state == QLatin1String("restored")) {
         m_result.visible = true;
         m_result.ok = true;
-        m_result.restored = 86;
+        m_result.restored = 80;
+        m_result.notPlaced = 3;
         for (const char *name : {"Blender 3.6", "Photoshop 2023", "DaVinci Resolve 18", "Steam", "Unreal Engine 5.2"}) {
             m_result.missing.append(QString::fromLatin1(name));
         }
@@ -701,7 +864,8 @@ bool DesktopIconsModule::applyCaptureState(const QString &state)
         m_result.undoId = QStringLiteral("b1");
     } else if (state == QLatin1String("error")) {
         m_result.visible = true;
-        m_result.error = I18n::tr("Could not read the desktop icons.");
+        m_result.error = I18n::tr("Could not read the desktop icons.") + QLatin1Char(' ')
+            + I18n::tr("Check that Explorer is running and try again.");
     }
     return true;
 }
@@ -735,6 +899,7 @@ HelpSection desktopIconsHelp(const SettingsReader &)
                       .arg(HelpSection::strong(I18n::tr("Restore"))),
                   I18n::tr("%1 puts the icons back where they were before restoring.").arg(HelpSection::strong(I18n::tr("Undo")))};
     help.note = I18n::tr("Icons are matched by their file, not their name; the ones that no longer exist are skipped. "
-                         "The daily snapshot waits until the computer has been awake for an hour and skips days with an unusual screen resolution.");
+                         "The daily snapshot waits until the computer has been awake for an hour and you are using it. "
+                         "A day with an unusual screen resolution is skipped; after 3 days in a row, that resolution becomes the usual one.");
     return help;
 }

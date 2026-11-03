@@ -122,7 +122,7 @@ QFrame#card { background-color: @card; border: 1px solid transparent; border-rad
 QLabel#cardTitle { color: @textStrong; font-size: @fs14; font-weight: 600; }
 QLabel#caption { color: @textFaint; font-size: @fs13; }
 QLabel#caption[tone="err"] { color: @error; }
-QLabel#optionLabel { color: @text; font-size: @fs13_5; }
+QLabel#optionLabel, ElidedLabel#optionLabel { color: @text; font-size: @fs13_5; }
 QLabel#meta { color: @textFaint; font-size: @fs12; }
 QFrame#divider { background-color: @divider; border: none; min-height: 1px; max-height: 1px; }
 

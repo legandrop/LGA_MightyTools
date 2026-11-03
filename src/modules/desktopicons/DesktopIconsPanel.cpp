@@ -17,6 +17,7 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QStackedLayout>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -56,33 +57,7 @@ private:
     DesktopIconView::Layout m_layout;
 };
 
-// Titulo de una fila con "..." si no entra (un nombre largo deja a la vista el tipo y los botones).
-class ElidedTitle : public QLabel
-{
-public:
-    ElidedTitle(const QString &text, QWidget *parent) : QLabel(text, parent), m_full(text)
-    {
-        setObjectName(QStringLiteral("optionLabel"));
-        setTextFormat(Qt::PlainText);
-        setAccessibleName(text);
-        setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
-    }
-
-protected:
-    void resizeEvent(QResizeEvent *event) override
-    {
-        QLabel::resizeEvent(event);
-        setText(fontMetrics().elidedText(m_full, Qt::ElideRight, width()));
-    }
-
-private:
-    QString m_full;
-};
-
-QString screenText(const QSize &size)
-{
-    return QStringLiteral("%1 × %2").arg(size.width()).arg(size.height());
-}
+using DesktopSnapshots::screenText;
 
 QString iconsText(int count)
 {
@@ -113,12 +88,19 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
     auto *dailyCard = Ui::card(this);
     auto *dailyColumn = new QVBoxLayout(dailyCard);
     dailyColumn->setContentsMargins(14, 12, 14, 12);
-    dailyColumn->setSpacing(0);
+    dailyColumn->setSpacing(8); // solo cuenta con el aviso a la vista: un widget oculto no suma espacio
     m_daily = new SwitchRow(I18n::tr("Daily snapshot"),
                             I18n::tr("Once a day, after the computer has been awake for an hour. The last 5 are kept."),
                             dailyCard);
     m_daily->setObjectName(QStringLiteral("dailySnapshotRow"));
     dailyColumn->addWidget(m_daily);
+    // Hoy no hubo automatico por la resolucion: que se vea (si no, el diario se apagaria en silencio).
+    // Sin objectName propio: el color del tono sale de QLabel#caption.
+    m_skipNotice = Ui::caption(QString(), dailyCard);
+    Ui::setStyleProperty(m_skipNotice, "tone", QStringLiteral("warn"));
+    m_skipNotice->setWordWrap(true);
+    m_skipNotice->hide();
+    dailyColumn->addWidget(m_skipNotice);
     column->addWidget(dailyCard);
 
     // Resultado de la ultima restauracion (o el error de la ultima accion), con "Undo".
@@ -152,6 +134,12 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
     save->setFocusPolicy(Qt::NoFocus);
     saveRow->addWidget(save);
     saveColumn->addLayout(saveRow);
+    // El error de guardar va aca, al lado de lo que se apreto: la tarjeta de arriba (con su Undo) no se toca.
+    m_saveError = Ui::caption(QString(), saveCard);
+    Ui::setStyleProperty(m_saveError, "tone", QStringLiteral("err"));
+    m_saveError->setWordWrap(true);
+    m_saveError->hide();
+    saveColumn->addWidget(m_saveError);
     column->addWidget(saveCard);
 
     auto *listCard = Ui::card(this);
@@ -192,30 +180,40 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
 void DesktopIconsPanel::refresh()
 {
     m_daily->setChecked(m_module->dailyEnabled());
+    const QString notice = m_module->skipNotice();
+    m_skipNotice->setText(notice);
+    m_skipNotice->setVisible(!notice.isEmpty());
+    const QString saveError = m_module->saveError();
+    m_saveError->setText(saveError.isEmpty() ? QString() : I18n::tr("The snapshot was not saved.") + QLatin1Char(' ') + saveError);
+    m_saveError->setVisible(!saveError.isEmpty());
     const DesktopIconsModule::Result &result = m_module->lastResult();
     m_result->setVisible(result.visible);
     if (result.visible) {
         const QString undo = result.undoId.isEmpty() ? QString() : I18n::tr("Undo");
         if (!result.ok) {
-            m_result->set(QStringLiteral("error"), I18n::tr("The desktop icons were not changed"),
-                          result.error + QLatin1Char(' ') + I18n::tr("Check that Explorer is running and try again."), undo,
-                          QString(), QStringLiteral("err"), QStringLiteral("sm"));
-        } else if (result.missing.isEmpty()) {
-            m_result->set(QStringLiteral("on"), result.restored == 1 ? I18n::tr("Restored 1 icon")
-                                                                    : I18n::tr("Restored %1 icons").arg(result.restored),
-                          I18n::tr("Undo puts them back where they were before restoring."), undo, QString(), QString(),
-                          QStringLiteral("sm"));
+            m_result->set(QStringLiteral("error"), I18n::tr("The desktop icons were not changed"), result.error, undo, QString(),
+                          QStringLiteral("err"), QStringLiteral("sm"));
         } else {
-            const int missing = result.missing.size();
-            const QString title = I18n::tr("Restored %1 · %2 not found")
-                                      .arg(result.restored == 1 ? I18n::tr("1 icon") : I18n::tr("%1 icons").arg(result.restored))
-                                      .arg(missing);
-            const QStringList shown = result.missing.mid(0, 3);
-            const QString names = missing > shown.size()
-                ? I18n::tr("%1 and %2 more").arg(shown.join(QStringLiteral(", "))).arg(missing - shown.size())
-                : shown.join(QStringLiteral(", "));
-            m_result->set(QStringLiteral("warn"), title, I18n::tr("Skipped, no longer on the desktop: %1.").arg(names), undo,
-                          QString(), QString(), QStringLiteral("sm"));
+            // "Restored 80 icons · 26 not found · 3 not placed": solo cuenta lo que quedo exacto, releido.
+            QString title = result.restored == 1 ? I18n::tr("Restored 1 icon") : I18n::tr("Restored %1 icons").arg(result.restored);
+            QStringList details;
+            const int missing = int(result.missing.size());
+            if (missing > 0) {
+                title += QStringLiteral(" · ") + I18n::tr("%1 not found").arg(missing);
+                const QStringList shown = result.missing.mid(0, 3);
+                const QString names = missing > shown.size()
+                    ? I18n::tr("%1 and %2 more").arg(shown.join(QStringLiteral(", "))).arg(missing - shown.size())
+                    : shown.join(QStringLiteral(", "));
+                details << I18n::tr("Skipped, no longer on the desktop: %1.").arg(names);
+            }
+            if (result.notPlaced > 0) {
+                title += QStringLiteral(" · ") + I18n::tr("%1 not placed").arg(result.notPlaced);
+                details << I18n::tr("Windows left %1 in another spot, for example with Auto arrange icons on.")
+                               .arg(iconsText(result.notPlaced));
+            }
+            if (details.isEmpty()) details << I18n::tr("Undo puts them back where they were before restoring.");
+            m_result->set(missing > 0 || result.notPlaced > 0 ? QStringLiteral("warn") : QStringLiteral("on"), title,
+                          details.join(QLatin1Char(' ')), undo, QString(), QString(), QStringLiteral("sm"));
         }
     }
     rebuildList();
@@ -228,7 +226,7 @@ void DesktopIconsPanel::rebuildList()
         delete item->widget();
         delete item;
     }
-    m_deleteButtons.clear();
+    m_deleteSlots.clear();
     const QList<DesktopSnapshot> list = m_module->snapshots();
     m_firstId = list.isEmpty() ? QString() : list.first().id;
     m_listHint->setVisible(!list.isEmpty());
@@ -259,29 +257,51 @@ void DesktopIconsPanel::rebuildList()
         head->setContentsMargins(0, 0, 0, 0);
         head->setSpacing(5);
         const QString when = DesktopSnapshots::whenText(snapshot.when, now);
-        head->addWidget(new ElidedTitle(snapshot.name.isEmpty() ? when : snapshot.name, row), 1);
+        // Un nombre largo se corta con "..." (deja a la vista el tipo y los botones) y entero en el tooltip.
+        auto *title = new ElidedLabel(row);
+        title->setObjectName(QStringLiteral("optionLabel"));
+        title->setText(snapshot.name.isEmpty() ? when : snapshot.name);
+        title->setAccessibleName(title->text());
+        head->addWidget(title, 1, Qt::AlignVCenter);
+        // Los tres tipos con el mismo chip de contorno: ninguno parece "activo".
         auto *kind = new Chip(row);
-        kind->set(snapshot.kind == SnapshotKind::Manual ? QString() : QStringLiteral("src"), kindText(snapshot.kind));
+        kind->set(QStringLiteral("src"), kindText(snapshot.kind));
         head->addWidget(kind, 0, Qt::AlignVCenter);
         head->addSpacing(5);
-        auto *restore = Ui::button(I18n::tr("Restore"), QString(), QStringLiteral("sm"), row);
+
+        // "Restore" + tacho, y en su mismo lugar "Confirm delete" mientras se confirma: la fila no salta.
+        auto *actions = new QWidget(row);
+        auto *slot = new QStackedLayout(actions);
+        slot->setContentsMargins(0, 0, 0, 0);
+        auto *normal = new QWidget(actions);
+        auto *normalLine = new QHBoxLayout(normal);
+        normalLine->setContentsMargins(0, 0, 0, 0);
+        normalLine->setSpacing(5);
+        normalLine->addStretch(1);
+        auto *restore = Ui::button(I18n::tr("Restore"), QString(), QStringLiteral("sm"), normal);
         restore->setObjectName(QStringLiteral("restoreSnapshot"));
         restore->setFocusPolicy(Qt::NoFocus);
         CustomTooltip::instance()->setToolTip(restore, I18n::tr("The current arrangement is saved first, so you can undo."));
-        head->addWidget(restore, 0, Qt::AlignVCenter);
-        auto *remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), row);
+        normalLine->addWidget(restore, 0, Qt::AlignVCenter);
+        auto *remove = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), normal);
         remove->setObjectName(QStringLiteral("deleteSnapshot"));
         remove->setFocusPolicy(Qt::NoFocus);
         Ui::setIcon(remove, Icon::Trash, Theme::color(Theme::kIcon), 14);
         remove->setAccessibleName(I18n::tr("Delete snapshot"));
         CustomTooltip::instance()->setToolTip(remove, I18n::tr("Delete this snapshot. Click again to confirm."));
-        head->addWidget(remove, 0, Qt::AlignVCenter);
-        auto *confirm = Ui::button(I18n::tr("Confirm delete"), QStringLiteral("danger"), QStringLiteral("sm"), row);
+        normalLine->addWidget(remove, 0, Qt::AlignVCenter);
+        auto *armed = new QWidget(actions);
+        auto *armedLine = new QHBoxLayout(armed);
+        armedLine->setContentsMargins(0, 0, 0, 0);
+        auto *confirm = Ui::button(I18n::tr("Confirm delete"), QStringLiteral("danger"), QStringLiteral("sm"), armed);
         confirm->setObjectName(QStringLiteral("confirmDeleteSnapshot"));
         confirm->setFocusPolicy(Qt::NoFocus);
-        confirm->hide();
-        head->addWidget(confirm, 0, Qt::AlignVCenter);
-        m_deleteButtons.insert(snapshot.id, {remove, confirm});
+        confirm->setSizePolicy(QSizePolicy::Expanding, confirm->sizePolicy().verticalPolicy());
+        armedLine->addWidget(confirm, 1, Qt::AlignVCenter);
+        slot->addWidget(normal);
+        slot->addWidget(armed);
+        head->addWidget(actions, 0, Qt::AlignVCenter);
+        m_deleteSlots.insert(snapshot.id, slot);
         texts->addLayout(head);
 
         QStringList parts;
@@ -323,9 +343,8 @@ void DesktopIconsPanel::rebuildList()
 
 void DesktopIconsPanel::armDelete(const QString &id)
 {
-    for (auto it = m_deleteButtons.cbegin(); it != m_deleteButtons.cend(); ++it) {
-        it.value().first->setVisible(it.key() != id);
-        it.value().second->setVisible(it.key() == id);
+    for (auto it = m_deleteSlots.cbegin(); it != m_deleteSlots.cend(); ++it) {
+        it.value()->setCurrentIndex(it.key() == id ? 1 : 0);
     }
 }
 

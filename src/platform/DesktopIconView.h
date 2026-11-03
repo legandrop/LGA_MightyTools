@@ -39,15 +39,20 @@ QSize screenSize();
 // suspendido o hibernado (a diferencia del reloj de pared).
 qint64 awakeClockMs();
 
+// Milisegundos desde la ultima tecla o movimiento del mouse del usuario (GetLastInputInfo).
+qint64 idleMs();
+
 struct ApplyResult
 {
-    int moved = 0;     ///< iconos que se movieron (o se moverian, en solo loguear)
+    int moved = 0;     ///< iconos que quedaron EXACTO en su posicion, releida despues (o los que se moverian)
     int notFound = 0;  ///< pedidos que ya no estan en el escritorio
+    int notPlaced = 0; ///< se pidieron pero quedaron en otro lado (Organizar automaticamente, por ejemplo)
     bool dryRun = false;
 };
 
-// Deja "Organizar automaticamente" y "Alinear a la cuadricula" como se pide y mueve cada icono a su
-// posicion. Nunca reinicia el Explorador. Con dryRun, o en una corrida automatizada
+// Deja "Organizar automaticamente" y "Alinear a la cuadricula" como se pide y mueve todos los iconos en UNA
+// llamada a SelectAndPositionItems (como la herramienta que recupero el escritorio de Lega); despues relee
+// cada posicion. Nunca reinicia el Explorador. Con dryRun, o en una corrida automatizada
 // (AutomatedRun::active()), no toca el escritorio: solo loguea y devuelve lo que haria.
 bool apply(bool autoArrange, bool snapToGrid, const QList<Icon> &moves, bool dryRun, ApplyResult *result,
            QString *error);

@@ -976,9 +976,11 @@ const QHash<QString, QString> &spanishTable()
         E("%1 puts the icons back where they were before restoring.",
           "%1 devuelve los íconos a donde estaban antes de restaurar."),
         E("Icons are matched by their file, not their name; the ones that no longer exist are skipped. "
-          "The daily snapshot waits until the computer has been awake for an hour and skips days with an unusual screen resolution.",
+          "The daily snapshot waits until the computer has been awake for an hour and you are using it. "
+          "A day with an unusual screen resolution is skipped; after 3 days in a row, that resolution becomes the usual one.",
           "Los íconos se buscan por su archivo, no por su nombre; los que ya no existen se saltean. "
-          "El snapshot diario espera a que la computadora lleve una hora despierta y saltea los días con una resolución de pantalla fuera de lo habitual."),
+          "El snapshot diario espera a que la computadora lleve una hora despierta y esté en uso. "
+          "Un día con una resolución de pantalla fuera de lo habitual se saltea; después de 3 días seguidos, esa resolución pasa a ser la habitual."),
         E("Daily snapshot", "Snapshot diario"),
         E("Once a day, after the computer has been awake for an hour. The last 5 are kept.",
           "Una vez por día, cuando la computadora lleva una hora despierta. Quedan los últimos 5."),
@@ -1012,10 +1014,16 @@ const QHash<QString, QString> &spanishTable()
         E("No desktop icons were found.", "No se encontraron íconos en el escritorio."),
         E("Restored 1 icon", "1 ícono restaurado"),
         E("Restored %1 icons", "%1 íconos restaurados"),
-        E("Restored %1 · %2 not found", "Restaurados: %1 · %2 sin encontrar"),
+        E("%1 not found", "%1 sin encontrar"),
+        E("%1 not placed", "%1 fuera de lugar"),
+        E("Windows left %1 in another spot, for example with Auto arrange icons on.",
+          "Windows dejó %1 en otro lugar, por ejemplo con Organizar iconos automáticamente activado."),
         E("Undo puts them back where they were before restoring.", "Deshacer los devuelve a donde estaban antes de restaurar."),
         E("%1 and %2 more", "%1 y %2 más"),
         E("Skipped, no longer on the desktop: %1.", "Salteados, ya no están en el escritorio: %1."),
+        E("Skipped today: the screen is %1 (usually %2).", "Hoy se salteó: la pantalla es de %1 (suele ser de %2)."),
+        E("The snapshot was not saved.", "El snapshot no se guardó."),
+        E("Could not write the snapshot file.", "No se pudo escribir el archivo del snapshot."),
 
     };
     return table;

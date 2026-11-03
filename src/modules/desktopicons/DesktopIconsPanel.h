@@ -2,14 +2,14 @@
 #define MIGHTYTOOLS_DESKTOPICONSPANEL_H
 
 #include <QHash>
-#include <QPair>
 #include <QWidget>
 
 #include <functional>
 
 class DesktopIconsModule;
+class QLabel;
 class QLineEdit;
-class QPushButton;
+class QStackedLayout;
 class StatusCard;
 class SwitchRow;
 
@@ -37,12 +37,14 @@ private:
     bool m_interactive = false;
     SwitchRow *m_daily = nullptr;
     StatusCard *m_result = nullptr;
+    QLabel *m_skipNotice = nullptr;
     QLineEdit *m_name = nullptr;
+    QLabel *m_saveError = nullptr;
     QWidget *m_rows = nullptr;
     QWidget *m_listHint = nullptr;
     QString m_firstId;
-    // Por fila: el tacho y su confirmacion (borrar en dos clicks).
-    QHash<QString, QPair<QPushButton *, QPushButton *>> m_deleteButtons;
+    // Por fila: "Restore" + tacho (0) o "Confirm delete" (1) en el mismo lugar (borrar en dos clicks).
+    QHash<QString, QStackedLayout *> m_deleteSlots;
 };
 
 #endif // MIGHTYTOOLS_DESKTOPICONSPANEL_H

@@ -4,6 +4,7 @@
 
 #include <QFileInfo>
 #include <QHash>
+#include <QSet>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -14,20 +15,10 @@ namespace {
 
 constexpr int kFormatVersion = 1;
 
-QString kindKey(SnapshotKind kind)
-{
-    switch (kind) {
-    case SnapshotKind::Automatic: return QStringLiteral("automatic");
-    case SnapshotKind::BeforeRestore: return QStringLiteral("beforeRestore");
-    case SnapshotKind::Manual: break;
-    }
-    return QStringLiteral("manual");
-}
-
 bool kindFromKey(const QString &key, SnapshotKind *kind)
 {
     for (const SnapshotKind candidate : {SnapshotKind::Manual, SnapshotKind::Automatic, SnapshotKind::BeforeRestore}) {
-        if (kindKey(candidate) == key) {
+        if (DesktopSnapshots::kindKey(candidate) == key) {
             *kind = candidate;
             return true;
         }
@@ -69,6 +60,16 @@ QList<const DesktopSnapshot *> newestFirst(const QList<DesktopSnapshot> &stored,
 } // namespace
 
 namespace DesktopSnapshots {
+
+QString kindKey(SnapshotKind kind)
+{
+    switch (kind) {
+    case SnapshotKind::Automatic: return QStringLiteral("automatic");
+    case SnapshotKind::BeforeRestore: return QStringLiteral("beforeRestore");
+    case SnapshotKind::Manual: break;
+    }
+    return QStringLiteral("manual");
+}
 
 QByteArray toJson(const DesktopSnapshot &snapshot)
 {
@@ -168,20 +169,37 @@ bool isUsualScreen(const QList<DesktopSnapshot> &stored, const QSize &screen)
     return most == 0 || counts.value(screenKey(screen)) == most;
 }
 
-QStringList toPrune(const QList<DesktopSnapshot> &stored)
+QSize usualScreen(const QList<DesktopSnapshot> &stored)
+{
+    QSize best;
+    QDateTime bestWhen;
+    for (const DesktopSnapshot &snapshot : stored) {
+        if (snapshot.kind == SnapshotKind::BeforeRestore || !isUsualScreen(stored, snapshot.layout.screen)) continue;
+        if (!best.isValid() || snapshot.when > bestWhen) {
+            best = snapshot.layout.screen;
+            bestWhen = snapshot.when;
+        }
+    }
+    return best;
+}
+
+QStringList toPrune(const QList<DesktopSnapshot> &stored, const QString &keep)
 {
     QStringList ids;
-    const QList<const DesktopSnapshot *> automatic = newestFirst(stored, SnapshotKind::Automatic);
-    for (int i = kKeepAutomatic; i < automatic.size(); ++i) ids.append(automatic.at(i)->id);
-    const QList<const DesktopSnapshot *> before = newestFirst(stored, SnapshotKind::BeforeRestore);
-    for (int i = 1; i < before.size(); ++i) ids.append(before.at(i)->id);
+    for (const auto &[kind, limit] : {std::pair{SnapshotKind::Automatic, kKeepAutomatic},
+                                      std::pair{SnapshotKind::BeforeRestore, kKeepBeforeRestore}}) {
+        const QList<const DesktopSnapshot *> list = newestFirst(stored, kind);
+        for (int i = limit; i < list.size(); ++i) {
+            if (list.at(i)->id != keep) ids.append(list.at(i)->id);
+        }
+    }
     return ids;
 }
 
 bool needsAutomatic(const QList<DesktopSnapshot> &stored, const QDateTime &now, const QDateTime &awakeSince,
-                    const QDate &skippedDay)
+                    const QDate &skippedDay, qint64 idleMs)
 {
-    if (skippedDay == now.date()) return false;
+    if (skippedDay == now.date() || idleMs > qint64(kIdleMinutes) * 60 * 1000) return false;
     for (const DesktopSnapshot &snapshot : stored) {
         if (snapshot.kind == SnapshotKind::Automatic && snapshot.when.date() == now.date()) return false;
     }
@@ -189,10 +207,23 @@ bool needsAutomatic(const QList<DesktopSnapshot> &stored, const QDateTime &now, 
 }
 
 AutomaticStep automaticStep(const QList<DesktopSnapshot> &stored, const DesktopIconView::Layout &current,
-                            QString *sameId)
+                            ScreenStreak *streak, QString *sameId)
 {
     if (current.icons.isEmpty()) return AutomaticStep::Wait;
-    if (!isUsualScreen(stored, current.screen)) return AutomaticStep::SkipScreen;
+    // Sin manuales ni automaticos guardados (todos borrados) no hay habitual: la fijada por una racha se olvida.
+    if (std::all_of(stored.cbegin(), stored.cend(), [](const DesktopSnapshot &s) { return s.kind == SnapshotKind::BeforeRestore; })) {
+        streak->usual = QSize();
+    }
+    const bool usual = streak->usual.isValid() ? streak->usual == current.screen : isUsualScreen(stored, current.screen);
+    if (!usual) {
+        streak->days = streak->screen == current.screen ? streak->days + 1 : 1;
+        streak->screen = current.screen;
+        if (streak->days < kStreakDays) return AutomaticStep::SkipScreen;
+        // Tantos dias seguidos con la misma: es la pantalla nueva, no un arranque fallido.
+        streak->usual = current.screen;
+    }
+    streak->screen = QSize();
+    streak->days = 0;
     const QList<const DesktopSnapshot *> automatic = newestFirst(stored, SnapshotKind::Automatic);
     if (!automatic.isEmpty() && sameArrangement(automatic.first()->layout, current)) {
         if (sameId) *sameId = automatic.first()->id;
@@ -213,8 +244,8 @@ bool suspendedBetween(qint64 wallBeforeMs, qint64 awakeBeforeMs, qint64 wallNowM
 
 RestorePlan plan(const DesktopIconView::Layout &target, const DesktopIconView::Layout &current)
 {
-    QHash<QString, bool> present;
-    for (const DesktopIconView::Icon &icon : current.icons) present.insert(icon.path, true);
+    QSet<QString> present;
+    for (const DesktopIconView::Icon &icon : current.icons) present.insert(icon.path);
     RestorePlan result;
     for (const DesktopIconView::Icon &icon : target.icons) {
         if (present.contains(icon.path)) {
@@ -224,6 +255,60 @@ RestorePlan plan(const DesktopIconView::Layout &target, const DesktopIconView::L
         }
     }
     return result;
+}
+
+RestoreRun restoreInto(QList<DesktopSnapshot> *stored, const QString &targetId, const DesktopIconView::Layout &current,
+                       const QDateTime &now, const QString &previousUndo, const std::function<QString()> &newId,
+                       const std::function<bool(const DesktopSnapshot &target, const RestorePlan &plan)> &apply)
+{
+    RestoreRun run;
+    const auto exists = [stored](const QString &id) {
+        return !id.isEmpty() && std::any_of(stored->cbegin(), stored->cend(), [&id](const DesktopSnapshot &s) { return s.id == id; });
+    };
+    const auto target = std::find_if(stored->cbegin(), stored->cend(), [&targetId](const DesktopSnapshot &s) {
+        return s.id == targetId;
+    });
+    if (target == stored->cend()) return run;
+    run.found = true;
+    const DesktopSnapshot wanted = *target; // copia: la lista cambia abajo
+    run.plan = plan(wanted.layout, current);
+    // Ya esta restaurado (doble click en Restore): todos los iconos del plan en su lugar y los mismos flags.
+    QHash<QString, QPoint> at;
+    for (const DesktopIconView::Icon &icon : current.icons) at.insert(icon.path, icon.position);
+    const bool alreadyThere = current.autoArrange == wanted.layout.autoArrange && current.snapToGrid == wanted.layout.snapToGrid
+        && std::all_of(run.plan.moves.cbegin(), run.plan.moves.cend(),
+                       [&at](const DesktopIconView::Icon &icon) { return at.value(icon.path) == icon.position; });
+    // El escritorio de ahora ya esta guardado: no hace falta otro "antes" (y no se empuja afuera el original).
+    QString match;
+    QDateTime matchWhen;
+    for (const DesktopSnapshot &snapshot : std::as_const(*stored)) {
+        if ((match.isEmpty() || snapshot.when > matchWhen) && sameArrangement(snapshot.layout, current)) {
+            match = snapshot.id;
+            matchWhen = snapshot.when;
+        }
+    }
+    if (alreadyThere) {
+        run.undoId = exists(previousUndo) ? previousUndo : QString();
+    } else if (match.isEmpty()) {
+        DesktopSnapshot before;
+        before.id = newId();
+        before.kind = SnapshotKind::BeforeRestore;
+        before.when = now;
+        before.layout = current;
+        stored->append(before);
+        run.created << before.id;
+        run.undoId = before.id;
+    } else {
+        run.undoId = match;
+    }
+    run.ok = apply(wanted, run.plan);
+    if (run.ok) {
+        run.pruned = toPrune(*stored, run.undoId);
+        stored->erase(std::remove_if(stored->begin(), stored->end(),
+                                     [&run](const DesktopSnapshot &s) { return run.pruned.contains(s.id); }),
+                      stored->end());
+    }
+    return run;
 }
 
 QString whenText(const QDateTime &when, const QDateTime &now)
@@ -236,6 +321,11 @@ QString whenText(const QDateTime &when, const QDateTime &now)
                                : when.toString(QStringLiteral("yyyy-MM-dd HH:mm"));
     text[0] = text.at(0).toUpper();
     return text;
+}
+
+QString screenText(const QSize &size)
+{
+    return QStringLiteral("%1 × %2").arg(size.width()).arg(size.height());
 }
 
 } // namespace DesktopSnapshots

@@ -17,15 +17,16 @@ class DesktopIconsModule : public Module
     Q_OBJECT
 
 public:
-    // Resultado de la ultima accion del panel (restaurar, deshacer, guardar con error).
+    // Resultado de la ultima restauracion (o deshacer). Guardar un snapshot no lo toca: su error va aparte.
     struct Result
     {
         bool visible = false;
         bool ok = false;
-        int restored = 0;
+        int restored = 0;  ///< los que quedaron exacto en su lugar (releidos despues de mover)
+        int notPlaced = 0; ///< los que el Explorador dejo en otro lado
         QStringList missing;
         QString error;
-        QString undoId; ///< el "antes de restaurar" que deshace esta restauracion
+        QString undoId; ///< el snapshot que deshace esta restauracion
     };
 
     explicit DesktopIconsModule(ModuleContext &context);
@@ -43,6 +44,10 @@ public:
     // Pantalla de ahora, para avisar en las filas de otra resolucion.
     QSize currentScreen() const;
     const Result &lastResult() const { return m_result; }
+    // El error del ultimo "Save snapshot" (vacio si salio bien).
+    QString saveError() const { return m_saveError; }
+    // "Skipped today: the screen is ... (usually ...)" si hoy el automatico se salteo por la resolucion.
+    QString skipNotice() const;
     QString captureState() const { return m_captureState; }
 
     bool dailyEnabled() const;
@@ -61,9 +66,10 @@ private:
     void tick();
     void startDailyTimer();
     void loadFromDisk();
-    void persist(const DesktopSnapshot &snapshot);
+    bool persist(const DesktopSnapshot &snapshot);
     void erase(const QString &id);
     void prune();
+    QString newId(SnapshotKind kind, const QDateTime &when) const;
     DesktopSnapshot makeSnapshot(SnapshotKind kind, const QString &name, const DesktopIconView::Layout &layout) const;
     void announce();
 
@@ -75,6 +81,7 @@ private:
     qint64 m_lastWallMs = 0;
     qint64 m_lastAwakeMs = 0;
     Result m_result;
+    QString m_saveError;
     QString m_captureState;
     QSize m_captureScreen;
 };

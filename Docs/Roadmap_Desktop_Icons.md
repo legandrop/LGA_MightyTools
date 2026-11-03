@@ -31,7 +31,8 @@ cualquiera de ellas con un click.
    cantidad de íconos y resolución de pantalla de ese momento. El usuario elige uno y lo restaura.
    - Cada ícono se busca por la ruta de su archivo, no por su nombre visible. Los que ya no existen se informan
      y se saltean.
-   - Antes de restaurar, se guarda solo un snapshot «antes de restaurar», para poder deshacer.
+   - Antes de restaurar, se guarda un snapshot «antes de restaurar», para poder deshacer (ver abajo cuántos
+     quedan y cuándo no hace falta uno nuevo).
 
 ## Cómo (Windows)
 
@@ -70,8 +71,18 @@ cualquiera de ellas con un click.
   carpeta junto con `settings.ini`. Un archivo ilegible se ignora y queda donde está.
 - **Resolución:** la de la pantalla virtual (todos los monitores) en píxeles físicos, que es el área de la vista
   del escritorio. **Habitual** es la que más se repite entre los manuales y automáticos guardados; los «antes de
-  restaurar» no cuentan. Sin snapshots, o con un empate en el primer lugar, cuenta como habitual.
-- **Deshacer:** «Undo» restaura el «antes de restaurar», y como toda restauración guarda antes uno nuevo, apretar
-  «Undo» otra vez vuelve a lo restaurado.
+  restaurar» no cuentan. Sin snapshots, o con un empate en el primer lugar, cuenta como habitual. Si la misma
+  resolución salteada aparece **3 días seguidos**, pasa a ser la habitual (es una pantalla nueva, no un arranque
+  fallido). El día salteado se avisa en la tarjeta del diario: «Skipped today: the screen is … (usually …)».
+- **Usuario presente:** el automático se intenta solo si hubo teclado o mouse en los últimos 10 minutos
+  (`GetLastInputInfo`): evita la foto con el monitor dormido o desconectado. Si no, sigue intentando en el día.
+- **Deshacer sin perder el orden original:** si el escritorio de ahora ya es igual a un snapshot guardado, no se
+  crea un «antes de restaurar» y «Undo» apunta a ese; si ya está como el snapshot que se restaura (doble click),
+  «Undo» sigue donde estaba. Se conservan los últimos **3** «antes de restaurar», y se podan recién después de
+  una restauración que salió bien (nunca el destino de «Undo»).
+- **Restaurar en una sola llamada** a `SelectAndPositionItems` con todos los íconos (como la herramienta que
+  recuperó el escritorio de Lega en septiembre) y después releer cada posición con `GetItemPosition`: cuenta como
+  restaurados solo los que quedaron exacto. El resultado dice «Restored 80 icons · 26 not found · 3 not placed».
+- Borrar el automático de hoy saltea el día (no se vuelve a sacar a los 15 minutos).
 - **Íconos nuevos** que no estaban en el snapshot quedan donde están.
 - Las filas de un snapshot con otra resolución que la actual lo avisan antes de restaurar.

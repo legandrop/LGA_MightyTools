@@ -12,6 +12,8 @@
 #include <shobjidl.h>
 #include <wrl/client.h>
 
+#include <vector>
+
 using Microsoft::WRL::ComPtr;
 
 // La tecnica del Explorador: la ventana del escritorio es una "shell window" mas (SWC_DESKTOP); su
@@ -166,6 +168,14 @@ qint64 awakeClockMs()
     return qint64(hundredNs / 10000);
 }
 
+qint64 idleMs()
+{
+    LASTINPUTINFO info{};
+    info.cbSize = sizeof(info);
+    if (!GetLastInputInfo(&info)) return 0;
+    return qint64(DWORD(GetTickCount() - info.dwTime)); // DWORD: sobrevive a la vuelta de GetTickCount
+}
+
 bool read(Layout *layout, QString *error)
 {
     QString detail;
@@ -211,7 +221,6 @@ bool apply(bool autoArrange, bool snapToGrid, const QList<Icon> &moves, bool dry
         return true;
     }
     QString detail;
-    const PhysicalPixels physical;
     ComPtr<IFolderView2> view;
     QList<Item> items;
     if (!desktopView(&view, nullptr, &detail) || !enumerate(view.Get(), &items, &detail)) {
@@ -219,27 +228,51 @@ bool apply(bool autoArrange, bool snapToGrid, const QList<Icon> &moves, bool dry
         qWarning() << "[desktopIcons] no se pudo abrir el escritorio para restaurar:" << detail;
         return false;
     }
-    // Primero los flags: con "Organizar automaticamente" prendido el Explorador reacomodaria encima.
-    HRESULT hr = view->SetCurrentFolderFlags(FWF_AUTOARRANGE | FWF_SNAPTOGRID,
-                                             (autoArrange ? FWF_AUTOARRANGE : 0) | (snapToGrid ? FWF_SNAPTOGRID : 0));
-    if (FAILED(hr)) qWarning().noquote() << "[desktopIcons]" << hrText("SetCurrentFolderFlags", hr);
     QHash<QString, PITEMID_CHILD> byPath;
     for (const Item &item : std::as_const(items)) byPath.insert(item.icon.path, item.id);
+    std::vector<PCUITEMID_CHILD> ids;
+    std::vector<POINT> points;
     for (const Icon &icon : moves) {
         PITEMID_CHILD child = byPath.value(icon.path);
         if (!child) {
             ++outcome.notFound;
             continue;
         }
-        POINT point{icon.position.x(), icon.position.y()};
-        PCUITEMID_CHILD ids[] = {child};
-        if (SUCCEEDED(view->SelectAndPositionItems(1, ids, &point, SVSI_POSITIONITEM))) ++outcome.moved;
-        else ++outcome.notFound;
+        ids.push_back(child);
+        points.push_back(POINT{icon.position.x(), icon.position.y()});
+    }
+    // Primero los flags: con "Organizar automaticamente" prendido el Explorador reacomodaria encima.
+    HRESULT hr = view->SetCurrentFolderFlags(FWF_AUTOARRANGE | FWF_SNAPTOGRID,
+                                             (autoArrange ? FWF_AUTOARRANGE : 0) | (snapToGrid ? FWF_SNAPTOGRID : 0));
+    if (FAILED(hr)) qWarning().noquote() << "[desktopIcons]" << hrText("SetCurrentFolderFlags", hr);
+    bool ok = true;
+    if (!ids.empty()) {
+        // Una sola llamada con todos: moverlos de a uno deja que el Explorador reacomode entre llamada y llamada.
+        hr = view->SelectAndPositionItems(UINT(ids.size()), ids.data(), points.data(), SVSI_POSITIONITEM);
+        if (FAILED(hr)) {
+            detail = hrText("SelectAndPositionItems", hr);
+            ok = false;
+        }
+        // Se cuenta como restaurado solo lo que quedo exacto, releido despues.
+        for (size_t i = 0; ok && i < ids.size(); ++i) {
+            POINT now{};
+            if (SUCCEEDED(view->GetItemPosition(ids[i], &now)) && now.x == points[i].x && now.y == points[i].y) {
+                ++outcome.moved;
+            } else {
+                ++outcome.notPlaced;
+            }
+        }
     }
     release(items);
-    qInfo().noquote() << QStringLiteral("[desktopIcons] restaurado: %1 movidos, %2 sin encontrar")
+    if (!ok) {
+        if (error) *error = detail;
+        qWarning() << "[desktopIcons] no se pudieron mover los iconos:" << detail;
+        return false;
+    }
+    qInfo().noquote() << QStringLiteral("[desktopIcons] restaurado: %1 en su lugar, %2 sin encontrar, %3 en otro lugar")
                              .arg(outcome.moved)
-                             .arg(outcome.notFound);
+                             .arg(outcome.notFound)
+                             .arg(outcome.notPlaced);
     if (result) *result = outcome;
     return true;
 }
