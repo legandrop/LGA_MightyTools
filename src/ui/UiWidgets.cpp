@@ -793,6 +793,69 @@ void SwitchRow::mouseReleaseEvent(QMouseEvent *event)
     QWidget::mouseReleaseEvent(event);
 }
 
+// ------------------------------------------------------------------ AppIconTile
+
+AppIconTile::AppIconTile(QWidget *parent)
+    : QWidget(parent)
+{
+    setFixedSize(31, 31);
+}
+
+void AppIconTile::setIcon(const QIcon &icon)
+{
+    m_icon = icon;
+    update();
+}
+
+void AppIconTile::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Theme::color(Theme::kBorderStrong));
+    painter.setBrush(Theme::color(Theme::kWindow));
+    painter.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 3, 3);
+    const QRectF box(QRectF(rect()).center() - QPointF(10, 10), QSizeF(20, 20));
+    if (!m_icon.isNull()) {
+        paintIcon(painter, box.toRect());
+        return;
+    }
+    painter.setPen(QPen(Theme::color(Theme::kTextMuted), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
+    const QRectF frame = box.adjusted(2.5, 3.5, -2.5, -3.5);
+    painter.drawRoundedRect(frame, 1.5, 1.5);
+    painter.drawLine(QPointF(frame.left(), frame.top() + 3.2), QPointF(frame.right(), frame.top() + 3.2));
+}
+
+// QIcon elige el cuadro por el tamano logico (20) y despues lo estira a la densidad de la pantalla: a 200 o
+// 300 % el icono salia borroso. Aca se elige por pixeles reales (el cuadro mas chico que alcanza) y se achica
+// suave. Sin tamanos a la vista (el icono de mac lo dibuja el sistema), QIcon como siempre.
+void AppIconTile::paintIcon(QPainter &painter, const QRect &target) const
+{
+    const QList<QSize> sizes = m_icon.availableSizes();
+    if (sizes.isEmpty()) {
+        m_icon.paint(&painter, target);
+        return;
+    }
+    // La escala real de lo que se pinta: la de la pantalla en la app, la del pixmap en una captura a --dpr 3
+    // (ahi el widget sigue creyendo que su pantalla es de 1).
+    const qreal dpr = qMax<qreal>(1.0, painter.deviceTransform().m11());
+    const int device = qRound(target.width() * dpr);
+    QSize pick;
+    for (const QSize &size : sizes) {
+        const bool fits = size.width() >= device;
+        if (!pick.isValid() || (fits && (pick.width() < device || size.width() < pick.width()))
+            || (!fits && pick.width() < device && size.width() > pick.width())) {
+            pick = size;
+        }
+    }
+    QPixmap pixmap = m_icon.pixmap(pick, 1.0);
+    if (pixmap.width() != device) {
+        pixmap = pixmap.scaled(device, device, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
+    pixmap.setDevicePixelRatio(dpr);
+    painter.drawPixmap(target.topLeft(), pixmap);
+}
+
 // ------------------------------------------------------------------ StatusDot
 
 StatusDot::StatusDot(int diameter, QWidget *parent)

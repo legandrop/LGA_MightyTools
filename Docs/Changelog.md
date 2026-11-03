@@ -2,6 +2,10 @@
 
 v1.53:
 
+Mouse Buttons (Windows), herramienta nueva: X-Mouse Button Control no se reinstaló al formatear y su único uso era mover la imagen de Photoshop con el botón del medio (Espacio + clic izquierdo mientras se mantiene). Reglas «exe → botón (medio, atrás, adelante) → teclas y botón izquierdo»; el exe se compara por nombre, así sobrevive a las carpetas por versión. Un gancho `WH_MOUSE_LL` en su propio hilo de prioridad crítica existe solo mientras la app de una regla está al frente, y actúa solo con el puntero sobre ella. Lo inyectado lleva la marca propia; un reloj de 200 ms suelta todo si cambia el frente, si el gancho fue retirado o si soltar falló (pantalla de bloqueo, UAC), y reintenta hasta que entre. Apps elevadas quedan fuera. D-68.
+
+[ Mouse Buttons - Herramienta nueva: mantener teclas y el boton izquierdo con un boton del mouse, por app ]
+
 App Toggle (Windows y macOS), herramienta nueva: reemplaza los AutoHotkey que abrían, traían al frente o minimizaban una app con un atajo. Cada entrada guarda exe, argumentos y carpeta de inicio, no un `.lnk` (el instalador de OBS 33 renombró el suyo y el AHK dejó de abrirlo). Sin proceso, abre con `ShellExecuteEx` sin elevar; con su ventana al frente, la minimiza; si no, la restaura y la trae, con una entrada de mouse vacía para ganar el permiso de primer plano desde el gancho. En macOS oculta (Cmd+H) en lugar de minimizar. Usa el `HotkeyService` de Window Layouts: Win + una letra cuenta como reemplazo de un atajo de Windows, sin aviso de compartido, y el grabador toma Win+E con un gancho que solo vive mientras graba con la app al frente. Al soltar Win después de un atajo con prioridad ya no se abre Inicio. D-67.
 
 [ App Toggle - Herramienta nueva: abrir, traer al frente o minimizar una app con un atajo ]

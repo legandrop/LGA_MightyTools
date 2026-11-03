@@ -119,7 +119,7 @@ QString canvasState(const QString &id)
 bool canvasOff(const QString &id)
 {
     return id == QLatin1String("linkRedirector") || id == QLatin1String("windowLayouts")
-        || id == QLatin1String("appToggle") || id == QLatin1String("desktopIcons");
+        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons") || id == QLatin1String("desktopIcons");
 }
 
 // Prende para captura una herramienta con su estado (vacio = el primero que declara).
@@ -1640,6 +1640,85 @@ int runPageFitProbe()
     return failures ? 1 : 0;
 }
 
+// Mouse Buttons: el grabador de "Keys to hold" acepta una tecla sola (Espacio) y el de atajos sigue pidiendo
+// Ctrl, Alt o Win. Teclas por el sistema de ventanas (el camino de una tecla de verdad), ventana offscreen.
+int runHoldKeysProbe()
+{
+    int failures = 0;
+    const auto check = [&failures](bool ok, const QString &what) {
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        failures += ok ? 0 : 1;
+    };
+    QWidget host;
+    auto *column = new QVBoxLayout(&host);
+    auto *hold = new ShortcutRow(QStringLiteral("Keys to hold"), QString(), &host);
+    hold->setHoldKeys(true);
+    hold->setShortcut({Qt::NoModifier, Qt::Key_A});
+    auto *plain = new ShortcutRow(QStringLiteral("Shortcut"), QString(), &host);
+    column->addWidget(hold);
+    column->addWidget(plain);
+    host.show();
+    settle(host);
+    QList<Shortcut> held;
+    QList<Shortcut> shortcuts;
+    // Como el panel: lo grabado pasa a ser el valor de la fila (grabar lo mismo otra vez no avisa nada).
+    QObject::connect(hold, &ShortcutRow::shortcutRecorded, [&held, hold](const Shortcut &s) {
+        held << s;
+        hold->setShortcut(s);
+    });
+    QObject::connect(plain, &ShortcutRow::shortcutRecorded, [&shortcuts](const Shortcut &s) { shortcuts << s; });
+    const auto press = [&host](int key, Qt::KeyboardModifiers modifiers, const QString &text = QString()) {
+        QWindowSystemInterface::handleKeyEvent(host.windowHandle(), QEvent::KeyPress, key, modifiers, text);
+        QWindowSystemInterface::handleKeyEvent(host.windowHandle(), QEvent::KeyRelease, key, modifiers, text);
+        QWindowSystemInterface::flushWindowSystemEvents();
+        QCoreApplication::processEvents();
+    };
+    hold->startRecording();
+    press(Qt::Key_Shift, Qt::ShiftModifier);
+    press(Qt::Key_Space, Qt::ShiftModifier, QStringLiteral(" "));
+    check(held.size() == 1 && held.last() == Shortcut{Qt::ShiftModifier, Qt::Key_Space} && !hold->isRecording(),
+          QStringLiteral("teclas para mantener: Shift+Espacio se graba"));
+    hold->startRecording();
+    press(Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "));
+    check(held.size() == 2 && held.last() == Shortcut{Qt::NoModifier, Qt::Key_Space}
+              && hold->shortcut() == Shortcut{Qt::NoModifier, Qt::Key_Space},
+          QStringLiteral("teclas para mantener: Espacio solo, sin modificadores, se graba"));
+    hold->startRecording();
+    press(Qt::Key_Space, Qt::NoModifier, QStringLiteral(" "));
+    check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: grabar lo mismo no cambia nada"));
+    hold->startRecording();
+    press(Qt::Key_Tab, Qt::NoModifier);
+    check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: Tab se rechaza con su motivo"));
+    hold->startRecording();
+    press(Qt::Key_Escape, Qt::NoModifier);
+    check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: Esc cancela sin grabar"));
+#ifdef Q_OS_WIN
+    // Mantener Win+L no sirve (bloquearia la sesion) y la nota de "reemplaza el atajo de Windows" no es de este grabador.
+    hold->startRecording();
+    press(Qt::Key_L, Qt::MetaModifier, QStringLiteral("l"));
+    check(held.size() == 2 && !hold->isRecording(), QStringLiteral("teclas para mantener: Win+L se rechaza"));
+    hold->showWindowsShortcutNote(true);
+    hold->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
+    QLabel *note = nullptr;
+    for (QLabel *label : hold->findChildren<QLabel *>(QStringLiteral("caption"))) {
+        if (label->property("windowsShortcutNote").toBool()) note = label;
+    }
+    check(note && !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
+    hold->showWindowsShortcutNote(false);
+    hold->setShortcut({Qt::NoModifier, Qt::Key_Space});
+#endif
+    plain->startRecording();
+    press(Qt::Key_Space, Qt::ControlModifier, QStringLiteral(" "));
+    plain->startRecording();
+    press(Qt::Key_A, Qt::NoModifier, QStringLiteral("a"));
+    plain->startRecording();
+    press(Qt::Key_K, Qt::ControlModifier | Qt::AltModifier);
+    check(shortcuts.size() == 1 && shortcuts.last() == Shortcut{Qt::ControlModifier | Qt::AltModifier, Qt::Key_K},
+          QStringLiteral("atajos (control): Ctrl+Espacio y A sola se rechazan; Ctrl+Alt+K se graba"));
+    fprintf(stdout, "%s: %d fallas\n", failures == 0 ? "hold-keys ok" : "hold-keys FALLO", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 // El grabador de atajos (ShortcutRow, todas las herramientas): nunca sigue grabando con otra app al
 // frente ni con la fila oculta, y sus motivos de rechazo. Teclas mandadas como eventos de Qt a la fila,
 // sin entrada real; en una corrida automatizada el grabador no instala el gancho de teclado.
@@ -1879,6 +1958,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("switch-anim")) {
         return runSwitchAnimProbe();
+    }
+    if (probe == QLatin1String("hold-keys")) {
+        return runHoldKeysProbe();
     }
     if (probe == QLatin1String("recorder-guard")) {
         return runRecorderGuardProbe();

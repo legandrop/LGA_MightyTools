@@ -233,6 +233,21 @@ private:
     QString m_tone = QStringLiteral("ok");
 };
 
+// La miniatura de una app en las filas de App Toggle y Mouse Buttons: su icono real en una baldosa con los
+// materiales de la de Window Layouts. Sin icono (la app no esta en el disco), una ventana dibujada.
+class AppIconTile : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit AppIconTile(QWidget *parent = nullptr);
+    void setIcon(const QIcon &icon);
+protected:
+    void paintEvent(QPaintEvent *event) override;
+private:
+    void paintIcon(QPainter &painter, const QRect &target) const;
+    QIcon m_icon;
+};
+
 // Tarjeta de estado con punto, titulo, texto y boton (`.card.status` del canvas): la de Nuke
 // Shortcuts y el aviso del panel de apagado.
 class StatusCard : public QFrame

@@ -5,6 +5,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-68 · Mouse Buttons** (2026-11-02, Lega). Reemplaza X-Mouse Button Control con la forma mínima:
+  reglas «app → botón → teclas y botón izquierdo mientras está apretado». Solo Windows por ahora. La
+  regla se guarda por el nombre del exe y actúa solo con la app al frente y bajo el puntero.
 - **D-67 · App Toggle** (2026-11-02, Lega). Un atajo por app: la abre si no está abierta, la trae al
   frente si está abierta sin foco y la minimiza si ya tiene el foco, como los AutoHotkey que reemplaza.
   Sin opción de maximizar. Windows y macOS. En macOS la oculta (como Cmd+H) en lugar de minimizarla:

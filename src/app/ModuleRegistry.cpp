@@ -12,6 +12,7 @@
 #if defined(Q_OS_WIN)
 #include "modules/desktopicons/DesktopIconsModule.h" // solo Windows
 #include "modules/folderswitch/FolderSwitchModule.h"
+#include "modules/mousebuttons/MouseButtonsModule.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
 #endif
@@ -35,6 +36,7 @@ QList<ModuleDescriptor> all()
     list << windowLayoutsDescriptor();
     list << appToggleDescriptor();
 #if defined(Q_OS_WIN)
+    list << mouseButtonsDescriptor();
     list << desktopIconsDescriptor();
 #endif
 
@@ -65,6 +67,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
 #if defined(Q_OS_WIN)
+    providers.insert(QStringLiteral("mouseButtons"), &mouseButtonsHelp);
     providers.insert(QStringLiteral("desktopIcons"), &desktopIconsHelp);
 #endif
     return providers;

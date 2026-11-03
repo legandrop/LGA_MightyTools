@@ -33,6 +33,10 @@ public:
 
     void setShortcut(const Shortcut &shortcut);
     Shortcut shortcut() const { return m_shortcut; }
+    // Cajas con textos propios en lugar de un atajo (Mouse Buttons: el boton del mouse que dispara la regla).
+    void setKeyLabels(const QStringList &labels);
+    // Teclas para mantener apretadas (Mouse Buttons): acepta una tecla sin modificadores y tambien Espacio.
+    void setHoldKeys(bool hold) { m_holdKeys = hold; }
     void setValidator(Validator validator) { m_validator = std::move(validator); }
     void setEditHandler(std::function<void()> handler) { m_editHandler = std::move(handler); }
     void setTrailingWidget(QWidget *widget);
@@ -72,9 +76,11 @@ private:
     void finishRecording();
     // La combinacion grabada: de la ventana o del gancho que atrapa las que reserva el sistema (Win+E).
     void acceptCandidate(const Shortcut &candidate);
-    static QString partialText(Qt::KeyboardModifiers modifiers);
+    QString partialText(Qt::KeyboardModifiers modifiers) const;
 
     Shortcut m_shortcut;
+    QStringList m_keyLabels;
+    bool m_holdKeys = false;
     QString m_description;
     Validator m_validator;
     std::function<void()> m_editHandler;

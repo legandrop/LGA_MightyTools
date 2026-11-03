@@ -13,6 +13,7 @@ shortcuts, no system hooks.
 | **Link Redirector** | Opens each link in the right browser: links with your keywords go to an alternative browser. | Windows, macOS |
 | **Window Layouts** | Move or minimize the active window with a shortcut. Combine horizontal and vertical halves, thirds or quarters, draw an area, or copy an open window's bounds. | Windows, macOS |
 | **App Toggle** | One shortcut per app: opens it if it isn't running, brings it to the front, or minimizes it when it's already in front (on macOS it hides). | Windows, macOS |
+| **Mouse Buttons** | Hold a mouse button to hold keys and the left button, only in the apps you choose. For example, the middle button pans in Photoshop like Space + drag. | Windows |
 | **Desktop Icons** | Saves where your desktop icons are, once a day and whenever you want, and puts them back when Windows mixes them up, with undo. | Windows |
 
 Nothing is on after you install it. Open the window from the tray icon (the menu bar on macOS), pick

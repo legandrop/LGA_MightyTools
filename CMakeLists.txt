@@ -350,6 +350,12 @@ if(WIN32)
         src/modules/folderswitch/UiaSwitcher.cpp
         src/modules/folderswitch/UiaTimeouts.cpp
         src/modules/folderswitch/WindowUtils.cpp
+        # Modulo Mouse Buttons: solo Windows (gancho WH_MOUSE_LL y SendInput).
+        src/modules/mousebuttons/MouseButtonsModule.cpp
+        src/modules/mousebuttons/MouseButtonsPanel.cpp
+        src/modules/mousebuttons/MouseButtonsState.cpp
+        src/platform/MouseButtonsSystemCommon.cpp
+        src/platform/win/MouseButtonsSystemWin.cpp
         # Modulo Desktop Icons: solo Windows (la vista del escritorio del Explorador).
         src/modules/desktopicons/DesktopIconsModule.cpp
         src/modules/desktopicons/DesktopIconsPanel.cpp
@@ -376,6 +382,10 @@ if(WIN32)
         src/modules/folderswitch/UiaSwitcher.h
         src/modules/folderswitch/UiaTimeouts.h
         src/modules/folderswitch/WindowUtils.h
+        src/modules/mousebuttons/MouseButtonsModule.h
+        src/modules/mousebuttons/MouseButtonsPanel.h
+        src/modules/mousebuttons/MouseButtonsState.h
+        src/platform/MouseButtonsSystem.h
     )
 elseif(APPLE)
     list(APPEND SOURCES

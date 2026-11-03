@@ -8,11 +8,10 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       en la Mac. Pendientes posibles: con una ventana de administrador al frente el atajo no llega
       (sumar App Toggle al ayudante elevado de D-61); una app viva sin ventana (solo en la bandeja, como
       UAD Console a veces) no se muestra, igual que el AHK (opción: volver a ejecutar el exe).
-   2. **Mouse Buttons** (Windows). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo
-      único que Lega usaba era un perfil para `photoshop.exe`: mientras se mantiene apretado el botón del
-      medio, simula Espacio + clic izquierdo (mover la imagen con el botón del medio). Reglas «app → botón →
-      teclas y clic mientras está apretado», con un gancho de mouse de bajo nivel que solo existe mientras
-      una app con regla está al frente.
+   2. **Mouse Buttons** (Windows): hecha en la v1.53 (D-68). Falta la prueba real de Lega con Photoshop
+      (mover la imagen con el botón del medio; en otra app el botón del medio hace lo de siempre).
+      Pendientes posibles: macOS; dos reglas que comparten una tecla y se aprietan a la vez (soltar una
+      suelta la tecla de las dos).
    3. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
       prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
       «Organizar automáticamente» prendido, y Undo.
