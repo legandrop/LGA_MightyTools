@@ -16,7 +16,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
       «Organizar automáticamente» prendido, y Undo.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
-   memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que quedaron afuera
+   memoria) con elevación (D-27); probar de verdad los instaladores huérfanos (D-69: el UAC, el paso
+   elevado y la Papelera; en la PC de Lega hoy no aparece ninguno porque las 6 copias sueltas son de
+   programas instalados); reglas que quedaron afuera
    (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o
    corregir los desvíos del diseño (D-31).
    - **Observaciones de la auditoría (no frenan):** un programa extraído en la carpeta temporal hace más de

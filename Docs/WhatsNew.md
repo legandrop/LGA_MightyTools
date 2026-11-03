@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new][win] La limpieza de Disk Space encuentra copias de instaladores que Windows guarda de programas que ya no están instalados y las manda a la Papelera con permiso de administrador; las de programas instalados nunca aparecen.
 - [new][win] Mouse Buttons hace que un botón del mouse mantenga teclas y el botón izquierdo solo en las apps que elijas: por ejemplo, mover la imagen de Photoshop con el botón del medio.
 - [new] App Toggle abre una app con un atajo, la trae al frente si ya está abierta o la minimiza si ya la estás usando (en Mac la oculta).
 - [improved][win] Al soltar Win después de un atajo de Window Layouts o App Toggle ya no se abre el menú Inicio, y Win más una letra (como Win+E) se puede grabar para reemplazar el atajo de Windows.
