@@ -1978,11 +1978,11 @@ void CleanupWindow::runCleanup()
         qint64 bytes = 0;
     };
     QList<Line> lines;
+    QList<Line> binLines; ///< lo que va a la Papelera: las copias de instaladores huerfanos
     QList<CleanupJob::Request> requests;
     QStringList installerNames;
     QHash<QString, QString> installerLabels;
     QString installerDir;
-    int binLines = 0;
     qint64 total = 0;
     for (const Cleanup::Category &category : m_categories) {
         if (category.info) {
@@ -1992,11 +1992,11 @@ void CleanupWindow::runCleanup()
             if (!item.checked || item.blocked) {
                 continue;
             }
-            lines.append(Line{category.single ? category.title : item.name, item.bytes});
             total += item.bytes;
             if (CleanupRules::goesToRecycleBin(item)) {
-                // Un instalador huerfano: lo mueve el paso elevado, que recibe solo su nombre.
-                ++binLines;
+                // Un instalador huerfano: lo mueve el paso elevado, que recibe solo su nombre. En el
+                // cartel se dice que es la copia del instalador, no el programa.
+                binLines.append(Line{I18n::tr("Installer copy · %1").arg(item.name), item.bytes});
                 for (const Cleanup::Target &target : item.targets) {
                     const QFileInfo file(target.path);
                     if (target.action == Cleanup::Action::InstallerPackage && !installerLabels.contains(file.fileName().toCaseFolded())) {
@@ -2007,6 +2007,7 @@ void CleanupWindow::runCleanup()
                 }
                 continue;
             }
+            lines.append(Line{category.single ? category.title : item.name, item.bytes});
             for (const Cleanup::Target &target : item.targets) {
                 CleanupJob::Request request;
                 request.id = int(requests.size());
@@ -2038,14 +2039,25 @@ void CleanupWindow::runCleanup()
             moreBytes += lines.at(i).bytes;
         }
     }
+    std::stable_sort(binLines.begin(), binLines.end(), [](const Line &a, const Line &b) { return a.bytes > b.bytes; });
+    CleanupDialogs::BinList bin;
+    qint64 binMoreBytes = 0;
+    for (int i = 0; i < binLines.size(); ++i) {
+        // Cuatro a la vista; si hay una sola mas, se muestra en lugar de "1 more".
+        if (i < 4 || binLines.size() == 5) {
+            bin.lines.append({binLines.at(i).name, DiskSpace::formatSize(binLines.at(i).bytes)});
+        } else {
+            ++bin.moreCount;
+            binMoreBytes += binLines.at(i).bytes;
+        }
+    }
+    bin.moreSize = DiskSpace::formatSize(binMoreBytes);
     const QPointer<CleanupWindow> self(this);
     const QString rootBefore = m_root;
-    const CleanupDialogs::BinPart binPart = binLines == 0 ? CleanupDialogs::BinPart::None
-                                                          : (binLines == lines.size() ? CleanupDialogs::BinPart::All : CleanupDialogs::BinPart::Some);
     const qint64 freed = CleanupRules::freedBytes(m_categories);
     QDialog *dialog = CleanupDialogs::confirmCleanup(this, m_drive.label, DiskSpace::formatSize(total), shown, rest, int(rest.size()),
                                                      DiskSpace::formatSize(moreBytes), DiskSpace::formatSize(m_drive.freeBytes),
-                                                     DiskSpace::formatSize(m_drive.freeBytes + freed), binPart);
+                                                     DiskSpace::formatSize(m_drive.freeBytes + freed), bin);
     const int choice = dialog->exec();
     delete dialog;
     if (!self || choice != QDialog::Accepted || busy() || m_root != rootBefore || m_scanState != ScanState::Complete) {
@@ -2175,6 +2187,12 @@ void CleanupWindow::onJobFinished()
             case InstallerOrphans::Result::Claimed:
                 why = I18n::tr("Used by an installed program");
                 break;
+            case InstallerOrphans::Result::Installed:
+                why = I18n::tr("Its program is installed");
+                break;
+            case InstallerOrphans::Result::Unverifiable:
+                why = I18n::tr("Could not check its program");
+                break;
             case InstallerOrphans::Result::TooNew:
                 why = I18n::tr("Changed in the last 24 hours");
                 break;
@@ -2191,14 +2209,15 @@ void CleanupWindow::onJobFinished()
                 why = I18n::tr("Could not be moved to the Recycle Bin");
                 break;
             }
+            // Ninguno de estos motivos es un programa abierto: la tarjeta lo dice con otro texto.
             if (!why.isEmpty()) {
-                skippedLines.append({label, why});
+                skippedLines.append({label, why, false});
             }
         }
         if (result.denied) {
-            skippedLines.append({title, I18n::tr("Administrator permission was not given")});
+            skippedLines.append({title, I18n::tr("Administrator permission was not given"), false});
         } else if (!result.finished && answered < m_installerNames.size()) {
-            skippedLines.append({title, I18n::tr("The administrator step did not finish")});
+            skippedLines.append({title, I18n::tr("The administrator step did not finish"), false});
         }
         // La carpeta de instaladores se vuelve a leer: ahi falta lo que se movio.
         if (installersMoved > 0 && !m_installerDir.isEmpty()) {

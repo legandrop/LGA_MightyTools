@@ -29,20 +29,23 @@ constexpr const char *kSystemSid = "S-1-5-18";
 
 enum class Status {
     Ok,          ///< la consulta esta completa: la lista de huerfanos vale
-    NeedsAdmin,  ///< no se pudo saber todo lo reclamado sin administrador (o fallo una lectura)
-    Busy,        ///< hay una instalacion corriendo
+    NeedsAdmin,  ///< otro usuario tiene instalaciones propias: solo la consulta de todos (administrador) las ve
+    Unverified,  ///< fallo una lectura (la API, UserData, los enlaces de origen) o no aparecio nada en uso
+    Busy,        ///< hay una instalacion corriendo o a medio terminar
     Unavailable, ///< no hay una carpeta de instaladores usable
 };
 
 // Que pasa con un archivo.
 enum class Reason {
-    Ok,         ///< huerfano: se puede ofrecer (y, en el paso elevado, mandar a la Papelera)
-    NotAllowed, ///< no es un .msi/.msp suelto de primer nivel de la carpeta, es un enlace o tiene otro nombre
-    Missing,    ///< ya no esta
-    Claimed,    ///< lo usa un producto o un parche instalado
-    TooNew,     ///< cambio hace menos de 24 h
-    Busy,       ///< hay una instalacion corriendo
-    Incomplete, ///< no se pudo verificar todo lo reclamado
+    Ok,           ///< huerfano: se puede ofrecer (y, en el paso elevado, mandar a la Papelera)
+    NotAllowed,   ///< no es un .msi/.msp suelto de primer nivel de la carpeta, es un enlace o tiene otro nombre
+    Missing,      ///< ya no esta
+    Claimed,      ///< lo usa un producto o un parche instalado
+    Installed,    ///< nadie lo usa, pero su programa (en alguna version) sigue instalado: no se ofrece
+    Unverifiable, ///< no se pudo leer que producto es, o si sigue instalado: no se ofrece
+    TooNew,       ///< cambio hace menos de 24 h
+    Busy,         ///< hay una instalacion corriendo
+    Incomplete,   ///< no se pudo verificar todo lo reclamado
 };
 
 struct Verdict
@@ -61,6 +64,9 @@ bool isTopLevel(const QString &path, const QString &dir);
 bool hasForeignSids(const QStringList &sids, const QString &currentSid);
 
 Status status(const Survey &survey);
+// El programa del paquete (en cualquier version) sigue instalado: Installed; no se pudo saber:
+// Unverifiable; si no, Ok. Solo para un paquete que nadie reclama.
+Reason packageReason(const FileFacts &file, const Survey &survey);
 // Un archivo de la lista, con la consulta ya completa (no mira status()).
 Reason classify(const FileFacts &file, const Survey &survey, qint64 nowSecs);
 // Los huerfanos, si la consulta esta completa; si no, ninguno.
@@ -77,7 +83,7 @@ struct Check
 // Lo pedido contra una consulta de TODOS los usuarios: sin ella, nada pasa (Incomplete).
 QList<Check> reverify(const Survey &survey, const QStringList &names, qint64 nowSecs);
 
-enum class Result { Trashed, Claimed, TooNew, Busy, Incomplete, NotAllowed, Missing, TrashFailed };
+enum class Result { Trashed, Claimed, Installed, Unverifiable, TooNew, Busy, Incomplete, NotAllowed, Missing, TrashFailed };
 struct FileResult
 {
     QString name;

@@ -10,6 +10,8 @@
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QLabel>
+
+#include <algorithm>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
@@ -254,7 +256,10 @@ void CleanupPane::rebuild()
         head->addWidget(chip, 0, Qt::AlignVCenter);
         layout->addLayout(head);
         layout->addSpacing(8);
-        layout->addWidget(Ui::caption(I18n::tr("In use by a running program, or not allowed. They can go next time, once that program is closed."), card));
+        const bool allPrograms = std::all_of(m_skipped.cbegin(), m_skipped.cend(), [](const SkippedLine &line) { return line.program; });
+        layout->addWidget(Ui::caption(allPrograms ? I18n::tr("In use by a running program, or not allowed. They can go next time, once that program is closed.")
+                                                  : I18n::tr("Left as they were. Each line says why."),
+                                      card));
         Ui::addDivider(layout, card);
         for (const SkippedLine &line : m_skipped) {
             auto *row = new QHBoxLayout();

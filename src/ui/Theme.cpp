@@ -339,7 +339,7 @@ QFrame#okBanner { background-color: @okBg; border: 1px solid @okBorder; border-r
 QFrame#accessStrip { background-color: #2d2614; border: none; border-bottom: 1px solid #4d4020; }
 QLabel#accessText { color: @warn; font-size: @fs12_5; }
 QLabel#bannerText { color: @ok; font-size: @fs13; font-weight: 500; }
-QLabel#dialogLine { color: @text; font-size: @fs13; }
+QLabel#dialogLine, ElidedLabel#dialogLine { color: @text; font-size: @fs13; }
 QLabel#dialogValue { color: @text; font-size: @fs13; }
 ElidedLabel#dialogPath { color: @textStrong; font-family: "JetBrains Mono", Consolas, monospace; font-size: @fs12; }
 QScrollArea#dialogScroll, QScrollArea#dialogScroll > QWidget > QWidget { background: transparent; border: none; }

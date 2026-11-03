@@ -362,7 +362,9 @@ int InstallerCleanup::runHelper(int argc, char *argv[])
     const InstallerPackages::Survey survey = InstallerPackages::survey(InstallerPackages::Scope::AllUsers);
     const QList<InstallerOrphans::Check> checks = InstallerOrphans::reverify(survey, names, QDateTime::currentSecsSinceEpoch());
     for (const InstallerOrphans::Check &check : checks) {
-        // La app se fue o pidio parar: lo que falta no se toca.
+        // La app se fue o pidio parar (Stop corta el pipe): lo que falta no se toca. El pipe se mira
+        // de nuevo antes de cada archivo, para no mover uno mas que la app ya no va a contar.
+        socket.waitForReadyRead(0);
         if (socket.state() != QLocalSocket::ConnectedState) {
             return 6;
         }
@@ -371,16 +373,17 @@ int InstallerCleanup::runHelper(int argc, char *argv[])
         result.result = InstallerOrphans::resultFor(check.reason);
         if (check.reason == InstallerOrphans::Reason::Ok) {
             const QString path = check.file.path;
-            // Lo ultimo antes de moverlo: ninguna instalacion empezo, y el archivo es el mismo que se
-            // verifico (un archivo comun, no un enlace, con la misma identidad).
-            if (InstallerPackages::installInProgress()) {
+            // Lo ultimo antes de moverlo: ninguna instalacion empezo ni quedo a medias, y el archivo es
+            // el mismo que se verifico (un archivo comun, no un enlace, con la misma identidad).
+            if (InstallerPackages::installBusy(survey.installerDir)) {
                 result.result = InstallerOrphans::Result::Busy;
             } else if (FileSystemOps::kind(path) != FileSystemOps::Kind::File || !(FileSystemOps::identity(path) == check.file.id)) {
                 result.result = InstallerOrphans::Result::NotAllowed;
             } else {
                 QString error;
-                // Si la Papelera no lo acepta, se queda: nunca se pasa a un borrado definitivo.
-                if (RecycleBin::moveToTrash(path, &error)) {
+                // Si la Papelera no lo acepta, se queda: nunca se pasa a un borrado definitivo. Y si dice
+                // que si pero el archivo sigue ahi (la operacion se aborto), tampoco cuenta como movido.
+                if (RecycleBin::moveToTrash(path, &error) && FileSystemOps::kind(path) == FileSystemOps::Kind::Missing) {
                     result.result = InstallerOrphans::Result::Trashed;
                     result.bytes = check.file.bytes;
                 } else {

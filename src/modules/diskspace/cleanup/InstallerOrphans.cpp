@@ -17,6 +17,7 @@ struct ResultName
 
 const ResultName kResultNames[] = {
     {InstallerOrphans::Result::Trashed, "trashed"},       {InstallerOrphans::Result::Claimed, "claimed"},
+    {InstallerOrphans::Result::Installed, "installed"},   {InstallerOrphans::Result::Unverifiable, "unverifiable"},
     {InstallerOrphans::Result::TooNew, "too-new"},        {InstallerOrphans::Result::Busy, "busy"},
     {InstallerOrphans::Result::Incomplete, "incomplete"}, {InstallerOrphans::Result::NotAllowed, "not-allowed"},
     {InstallerOrphans::Result::Missing, "missing"},       {InstallerOrphans::Result::TrashFailed, "trash-failed"},
@@ -33,18 +34,7 @@ namespace InstallerOrphans {
 
 bool acceptedName(const QString &name)
 {
-    if (name.size() < 5 || name.size() > 255) {
-        return false;
-    }
-    for (const QChar c : name) {
-        if (c == QLatin1Char('\\') || c == QLatin1Char('/') || c == QLatin1Char(':') || c.unicode() < 0x20) {
-            return false;
-        }
-    }
-    if (name == QLatin1String("..") || name.startsWith(QLatin1Char('.'))) {
-        return false;
-    }
-    return name.endsWith(QLatin1String(".msi"), Qt::CaseInsensitive) || name.endsWith(QLatin1String(".msp"), Qt::CaseInsensitive);
+    return InstallerPackages::isPackageName(name);
 }
 
 bool isTopLevel(const QString &path, const QString &dir)
@@ -80,20 +70,41 @@ Status status(const Survey &survey)
     if (survey.busy) {
         return Status::Busy;
     }
-    // Una enumeracion que fallo, o UserData sin leer: lo reclamado esta incompleto.
-    if (!survey.enumerated || !survey.userDataRead) {
-        return Status::NeedsAdmin;
+    // Una enumeracion que fallo, o UserData sin leer: lo reclamado esta incompleto. Nada en uso con una
+    // carpeta llena es mas probable una lectura rota que una maquina sin ningun programa de Windows
+    // Installer: tampoco se le cree. Ser administrador no lo arregla necesariamente.
+    if (!survey.enumerated || !survey.userDataRead || survey.claims.isEmpty()) {
+        return Status::Unverified;
     }
-    // Otro usuario tiene instalaciones propias y la consulta fue solo la de este: no se las ve.
+    // Otro usuario tiene instalaciones propias y la consulta fue solo la de este: no se las ve. Esto si
+    // lo resuelve la consulta de todos los usuarios, que pide administrador.
     if (!survey.allUsers && hasForeignSids(survey.userDataSids, survey.currentSid)) {
         return Status::NeedsAdmin;
     }
-    // Nada en uso con una carpeta llena es mas probable una lectura rota que una maquina sin ningun
-    // programa de Windows Installer: no se le cree.
-    if (survey.claims.isEmpty()) {
-        return Status::NeedsAdmin;
-    }
     return Status::Ok;
+}
+
+Reason packageReason(const FileFacts &file, const Survey &survey)
+{
+    const InstallerPackages::PackageFacts &package = file.package;
+    // Sin saber que producto es, no se ofrece.
+    if (!package.read || package.lookupFailed) {
+        return Reason::Unverifiable;
+    }
+    if (!package.installed.isEmpty()) {
+        return Reason::Installed;
+    }
+    // Lo que dio la enumeracion (con administrador, tambien lo de los demas usuarios).
+    const QStringList own = package.patch ? package.targets : QStringList{package.productCode};
+    for (const QString &code : own) {
+        if (survey.installedProducts.contains(InstallerPackages::codeKey(code))) {
+            return Reason::Installed;
+        }
+    }
+    if (own.isEmpty() || (!package.patch && package.productCode.trimmed().isEmpty())) {
+        return Reason::Unverifiable;
+    }
+    return Reason::Ok;
 }
 
 Reason classify(const FileFacts &file, const Survey &survey, qint64 nowSecs)
@@ -107,6 +118,11 @@ Reason classify(const FileFacts &file, const Survey &survey, qint64 nowSecs)
     // En uso por la ruta o por la identidad (la misma copia con otro nombre).
     if (survey.claims.paths.contains(pathKey(file.path)) || survey.claims.ids.contains(file.id)) {
         return Reason::Claimed;
+    }
+    // Nadie la usa, pero es de un programa que sigue instalado (en cualquier version): no se ofrece.
+    const Reason package = packageReason(file, survey);
+    if (package != Reason::Ok) {
+        return package;
     }
     // Lo mas nuevo entre creacion y modificacion; una fecha del futuro tambien cuenta como nueva.
     if (nowSecs - qMax(file.created, file.modified) < kMinAgeSecs) {
@@ -179,6 +195,10 @@ Result resultFor(Reason reason)
         return Result::Missing;
     case Reason::Claimed:
         return Result::Claimed;
+    case Reason::Installed:
+        return Result::Installed;
+    case Reason::Unverifiable:
+        return Result::Unverifiable;
     case Reason::TooNew:
         return Result::TooNew;
     case Reason::Busy:

@@ -247,9 +247,9 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
 }
 
 #else
-// Las copias huerfanas de %WINDIR%\Installer, como las da la consulta (los seis medidos el 2026-11-03,
-// con su autor y asunto reales), armadas con la misma funcion que usan las reglas. `skip`: las que ya
-// se movieron.
+// Las copias huerfanas de %WINDIR%\Installer, armadas con la misma funcion que usan las reglas. Datos de
+// mentira: paquetes de programas que ya NO estan instalados (los de un programa instalado, en cualquier
+// version, nunca se listan). `skip`: las que ya se movieron.
 Cleanup::Category orphanedInstallers(qint64 now, InstallerOrphans::Status status, int skip = 0)
 {
     const QString dir = QStringLiteral("C:\\Windows\\Installer");
@@ -262,12 +262,12 @@ Cleanup::Category orphanedInstallers(qint64 now, InstallerOrphans::Status status
         int days;
     };
     const Orphan orphans[] = {
-        {"a199bd5.msi", "Boris FX, Inc.", "Boris FX Mocha Plug-ins 2026.5 for OFX", 1.335, 2},
-        {"3cb7e83.msi", "Topaz Labs LLC", "Topaz Video Installer", 0.3138, 3},
-        {"14dac72.msi", "Microsoft Corporation", "Visual C++ 2022 X64 Minimum Runtime", 0.000198, 511},
-        {"14dac92.msi", "Microsoft Corporation", "Visual C++ 2022 X64 Additional Runtime", 0.000198, 511},
-        {"14dac31.msi", "Microsoft Corporation", "Visual C++ 2022 X86 Minimum Runtime", 0.000191, 511},
-        {"14dac50.msi", "Microsoft Corporation", "Visual C++ 2022 X86 Additional Runtime", 0.000191, 511},
+        {"5be0d12.msi", "Maxon Computer GmbH", "Red Giant Universe 2023.2", 1.12, 412},
+        {"77c13a8.msi", "Autodesk", "Autodesk Desktop Connector 16.4", 0.312, 290},
+        {"a4f21c9.msi", "Blackmagic Design", "Blackmagic RAW 3.6", 0.208, 520},
+        {"2e19b40.msp", "Microsoft Corporation", "Update for Office 2016 (KB4484103)", 0.0442, 830},
+        {"14d9e02.msi", "Microsoft Corporation", "Visual C++ 2019 X64 Minimum Runtime", 0.000196, 905},
+        {"14d9e21.msi", "Microsoft Corporation", "Visual C++ 2019 X64 Additional Runtime", 0.000196, 905},
     };
     InstallerOrphans::Verdict verdict;
     verdict.status = status;
@@ -321,7 +321,16 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
                              I18n::tr("%1 folders named %2 in %3.").arg(2).arg(QStringLiteral("build"), portable),
                              {item(QStringLiteral("LGA_PipeSync_2"), portable + QStringLiteral("\\LGA_PipeSync_2\\build"), 5.46, 0, false, now),
                               item(QStringLiteral("LGA_FrameRev"), portable + QStringLiteral("\\LGA_FrameRev\\build"), 0.75, 0, false, now)}));
+        // La de administrador y la de una lectura que fallo: las dos lineas sin casilla.
         list.append(orphanedInstallers(now, InstallerOrphans::Status::NeedsAdmin));
+        return list;
+    }
+    if (state == QLatin1String("cleanup-installers-unverified")) {
+        list.append(category(QStringLiteral("rule:0"), Cleanup::Group::Yours, I18n::tr("Folders named %1").arg(QStringLiteral("build")),
+                             I18n::tr("%1 folders named %2 in %3.").arg(2).arg(QStringLiteral("build"), portable),
+                             {item(QStringLiteral("LGA_PipeSync_2"), portable + QStringLiteral("\\LGA_PipeSync_2\\build"), 5.46, 0, false, now),
+                              item(QStringLiteral("LGA_FrameRev"), portable + QStringLiteral("\\LGA_FrameRev\\build"), 0.75, 0, false, now)}));
+        list.append(orphanedInstallers(now, InstallerOrphans::Status::Unverified));
         return list;
     }
 
@@ -416,8 +425,8 @@ QStringList states()
 #ifndef Q_OS_MACOS
     // Instaladores huerfanos (solo Windows): la lista, la consulta que pide administrador, el resultado de
     // una limpieza y el pedido de administrador cancelado.
-    list << QStringLiteral("cleanup-installers") << QStringLiteral("cleanup-installers-admin") << QStringLiteral("cleanup-installers-result")
-         << QStringLiteral("cleanup-installers-denied");
+    list << QStringLiteral("cleanup-installers") << QStringLiteral("cleanup-installers-admin") << QStringLiteral("cleanup-installers-unverified")
+         << QStringLiteral("cleanup-installers-result") << QStringLiteral("cleanup-installers-denied");
 #endif
     return list;
 }
@@ -542,13 +551,13 @@ Data build(const QString &state, ScanEngine &engine)
         data.openCategories = {QStringLiteral("installers")};
         const QString title = I18n::tr("Orphaned installer files");
         if (state == QLatin1String("cleanup-installers-result")) {
-            // Se eligieron Boris FX, Topaz y uno de Microsoft; ese ultimo se salteo en la re-verificacion.
-            data.banner = I18n::tr("%1 installer files went to the Recycle Bin (%2).").arg(2).arg(QStringLiteral("1.65 GB"));
+            // Se eligieron los dos primeros y Blackmagic RAW; ese ultimo se salteo en la re-verificacion.
+            data.banner = I18n::tr("%1 installer files went to the Recycle Bin (%2).").arg(2).arg(QStringLiteral("1.43 GB"));
             data.skippedSummary = I18n::tr("1 item");
-            data.skipped = {{title + QStringLiteral(" · Visual C++ 2022 X64 Minimum Runtime"), I18n::tr("An installation is running")}};
+            data.skipped = {{title + QStringLiteral(" · Blackmagic RAW 3.6"), I18n::tr("An installation is running"), false}};
         } else if (state == QLatin1String("cleanup-installers-denied")) {
             data.skippedSummary = I18n::tr("1 item");
-            data.skipped = {{title, I18n::tr("Administrator permission was not given")}};
+            data.skipped = {{title, I18n::tr("Administrator permission was not given"), false}};
         }
     } else if (state == QLatin1String("cleanup-pick")) {
         data.openCategories = {QStringLiteral("rule:0")};

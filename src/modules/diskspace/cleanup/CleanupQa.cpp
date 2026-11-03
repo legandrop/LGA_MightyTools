@@ -202,6 +202,8 @@ const char *statusName(InstallerOrphans::Status status)
         return "ok";
     case InstallerOrphans::Status::NeedsAdmin:
         return "needs-admin";
+    case InstallerOrphans::Status::Unverified:
+        return "unverified";
     case InstallerOrphans::Status::Busy:
         return "busy";
     case InstallerOrphans::Status::Unavailable:
@@ -235,21 +237,42 @@ int simulateInstallerOrphans(const QStringList &)
             ++foreign;
         }
     }
-    std::printf("installer-orphans dir=%s listed=%d packages=%d busy=%d scope=%s elevated=%d\n", qPrintable(survey.installerDir),
-                survey.listed, int(survey.files.size()), survey.busy, survey.allUsers ? "all-users" : "machine+current-user", elevated);
-    std::printf("api enumerated=%d products=%d patches=%d without-package=%d error=%s\n", survey.enumerated, survey.products,
-                survey.patches, survey.withoutPackage, survey.enumerationError.isEmpty() ? "-" : qPrintable(survey.enumerationError));
+    std::printf("installer-orphans dir=%s listed=%d packages=%d busy=%d%s scope=%s elevated=%d\n", qPrintable(survey.installerDir),
+                survey.listed, int(survey.files.size()), survey.busy,
+                survey.busyReason.isEmpty() ? "" : qPrintable(QStringLiteral(" (%1)").arg(survey.busyReason)),
+                survey.allUsers ? "all-users" : "machine+current-user", elevated);
+    std::printf("api enumerated=%d products=%d patches=%d without-package=%d source-links=%d error=%s\n", survey.enumerated, survey.products,
+                survey.patches, survey.withoutPackage, survey.sourceLinks,
+                survey.enumerationError.isEmpty() ? "-" : qPrintable(survey.enumerationError));
     std::printf("userdata read=%d sids-with-items=%d (system=%d current-user=%d other=%d) current-sid-known=%d\n", survey.userDataRead,
                 int(survey.userDataSids.size()), system, current, foreign, !survey.currentSid.isEmpty());
     std::printf("claims paths=%d ids=%d\n", int(survey.claims.paths.size()), int(survey.claims.ids.size()));
     int claimed = 0;
+    int hidden = 0;
     int tooNew = 0;
     int notAllowed = 0;
     for (const InstallerPackages::FileFacts &file : survey.files) {
-        switch (InstallerOrphans::classify(file, survey, now)) {
+        const InstallerOrphans::Reason reason = InstallerOrphans::classify(file, survey, now);
+        switch (reason) {
         case InstallerOrphans::Reason::Claimed:
             ++claimed;
             break;
+        case InstallerOrphans::Reason::Installed:
+        case InstallerOrphans::Reason::Unverifiable: {
+            ++hidden;
+            const InstallerPackages::PackageFacts &package = file.package;
+            const QString why = reason == InstallerOrphans::Reason::Installed
+                                    ? QStringLiteral("%1 esta instalado").arg(package.installedName)
+                                    : QStringLiteral("no se pudo saber que programa es o si sigue instalado (leido=%1 consulta-fallo=%2)")
+                                          .arg(package.read)
+                                          .arg(package.lookupFailed);
+            std::printf("  oculto: %s  %s  [%s%s]\n", qPrintable(file.name), qPrintable(why),
+                        qPrintable(package.patch ? QStringLiteral("parche de %1").arg(package.targets.join(QLatin1Char(',')))
+                                                 : QStringLiteral("%1 %2").arg(package.productName, package.productCode)),
+                        package.installed.isEmpty() ? ""
+                                                    : qPrintable(QStringLiteral("; instalado: %1").arg(package.installed.join(QLatin1Char(',')))));
+            break;
+        }
         case InstallerOrphans::Reason::TooNew:
             ++tooNew;
             std::printf("  too-new  %s\n", qPrintable(file.name));
@@ -263,7 +286,7 @@ int simulateInstallerOrphans(const QStringList &)
             break;
         }
     }
-    std::printf("classified claimed=%d too-new=%d not-allowed=%d\n", claimed, tooNew, notAllowed);
+    std::printf("classified claimed=%d hidden=%d too-new=%d not-allowed=%d\n", claimed, hidden, tooNew, notAllowed);
     timer.restart();
     for (InstallerPackages::FileFacts &file : verdict.orphans) {
         InstallerPackages::summary(file.path, &file.author, &file.subject);
@@ -321,6 +344,15 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
         f.bytes = 1000 * qint64(index);
         f.created = now - ageDays * day;
         f.modified = now - ageDays * day;
+        // Un paquete legible de un programa que ya no esta instalado.
+        f.package.read = true;
+        f.package.patch = name.endsWith(QLatin1String(".msp"), Qt::CaseInsensitive);
+        const QString code = QStringLiteral("{00000000-0000-0000-0000-%1}").arg(index, 12, 10, QLatin1Char('0'));
+        if (f.package.patch) {
+            f.package.targets = {code};
+        } else {
+            f.package.productCode = code;
+        }
         return f;
     };
     Survey survey;
@@ -377,6 +409,43 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
               && classify(noId, survey, now) == Reason::NotAllowed && classify(survey.files.at(6), survey, now) == Reason::NotAllowed,
           QStringLiteral("instaladores: cada regla deja afuera lo suyo (reclamado, nuevo, enlace, carpeta, subcarpeta, otro nombre, sin identidad)"));
 
+    // Una copia que nadie usa pero cuyo programa sigue instalado (lo medido en la PC de Lega: copias
+    // identicas del paquete registrado) no se ofrece; tampoco una que no se pudo leer.
+    {
+        const auto hidden = [&](const std::function<void(FileFacts &)> &change, Survey base) {
+            FileFacts f = file(QStringLiteral("copy.msi"), 90, 30);
+            change(f);
+            base.files = {f};
+            return std::make_pair(classify(f, base, now), evaluate(base, now).orphans.isEmpty());
+        };
+        const auto installedBy = hidden([](FileFacts &f) { f.package.installed = {f.package.productCode}; }, survey);
+        Survey enumerated = survey;
+        // Lo enumerado se guarda con codeKey (mayusculas): el codigo del paquete puede venir en minusculas.
+        enumerated.installedProducts.insert(InstallerPackages::codeKey(QStringLiteral("{00000000-0000-0000-0000-000000000030}").toLower()));
+        const auto inEnumeration = hidden([](FileFacts &) {}, enumerated);
+        const auto otherVersion = hidden([](FileFacts &f) { f.package.installed = {QStringLiteral("{11111111-0000-0000-0000-000000000001}")}; },
+                                         survey);
+        const auto unreadable = hidden([](FileFacts &f) { f.package = InstallerPackages::PackageFacts(); }, survey);
+        const auto lookupFailed = hidden([](FileFacts &f) { f.package.lookupFailed = true; }, survey);
+        const auto noProductCode = hidden([](FileFacts &f) { f.package.productCode.clear(); }, survey);
+        check(installedBy.first == Reason::Installed && installedBy.second && inEnumeration.first == Reason::Installed && inEnumeration.second
+                  && otherVersion.first == Reason::Installed && otherVersion.second,
+              QStringLiteral("instaladores: el paquete de un programa instalado (mismo ProductCode, UpgradeCode o lo enumerado) no se lista"));
+        check(unreadable.first == Reason::Unverifiable && unreadable.second && lookupFailed.first == Reason::Unverifiable && lookupFailed.second
+                  && noProductCode.first == Reason::Unverifiable && noProductCode.second,
+              QStringLiteral("instaladores: un paquete que no se pudo leer, o cuya consulta fallo, no se lista"));
+        FileFacts patch = file(QStringLiteral("p.msp"), 90, 31);
+        Survey withPatch = survey;
+        withPatch.installedProducts.insert(InstallerPackages::codeKey(patch.package.targets.first()));
+        FileFacts noTargets = file(QStringLiteral("q.msp"), 90, 32);
+        noTargets.package.targets.clear();
+        FileFacts youngInstalled = file(QStringLiteral("y.msi"), 0, 33);
+        youngInstalled.package.installed = {youngInstalled.package.productCode};
+        check(classify(patch, withPatch, now) == Reason::Installed && classify(patch, survey, now) == Reason::Ok
+                  && classify(noTargets, survey, now) == Reason::Unverifiable && classify(youngInstalled, survey, now) == Reason::Installed,
+              QStringLiteral("instaladores: un parche de un producto instalado no se lista; sin destinos, tampoco; instalado gana a nuevo"));
+    }
+
     // Completa o nada.
     const auto statusWith = [&](const std::function<void(Survey &)> &change) {
         Survey copy = survey;
@@ -384,9 +453,9 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
         const Verdict verdict = evaluate(copy, now);
         return verdict.orphans.isEmpty() ? verdict.status : Status::Ok;
     };
-    check(statusWith([](Survey &s) { s.enumerated = false; }) == Status::NeedsAdmin
-              && statusWith([](Survey &s) { s.userDataRead = false; }) == Status::NeedsAdmin
-              && statusWith([](Survey &s) { s.claims = InstallerPackages::Claims(); }) == Status::NeedsAdmin,
+    check(statusWith([](Survey &s) { s.enumerated = false; }) == Status::Unverified
+              && statusWith([](Survey &s) { s.userDataRead = false; }) == Status::Unverified
+              && statusWith([](Survey &s) { s.claims = InstallerPackages::Claims(); }) == Status::Unverified,
           QStringLiteral("instaladores: una enumeracion que fallo, UserData sin leer o nada reclamado no listan ningun archivo"));
     check(statusWith([](Survey &s) {
               // La trampa medida en la PC de Lega: la consulta de todos falla sin administrador y no hay
@@ -394,17 +463,28 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
               s.allUsers = true;
               s.enumerated = false;
               s.claims = InstallerPackages::Claims();
-          }) == Status::NeedsAdmin,
+          }) == Status::Unverified,
           QStringLiteral("instaladores: una consulta de todos los usuarios que falla nunca se toma como nada reclamado"));
     check(statusWith([&](Survey &s) { s.userDataSids.append(QStringLiteral("S-1-5-21-9-9-9-1002")); }) == Status::NeedsAdmin
               && statusWith([&](Survey &s) {
                      s.userDataSids.append(QStringLiteral("S-1-5-21-9-9-9-1002"));
                      s.allUsers = true;
-                 }) == Status::Ok,
-          QStringLiteral("instaladores: otro usuario con instalaciones pide la consulta de todos (con ella, se lista)"));
+                 }) == Status::Ok
+              && statusWith([&](Survey &s) {
+                     // Si ademas fallo una lectura, el administrador no alcanza: no se dice que lo pide.
+                     s.userDataSids.append(QStringLiteral("S-1-5-21-9-9-9-1002"));
+                     s.enumerated = false;
+                 }) == Status::Unverified,
+          QStringLiteral("instaladores: solo otro usuario con instalaciones pide administrador (con la consulta de todos, se lista)"));
     check(statusWith([](Survey &s) { s.busy = true; }) == Status::Busy && statusWith([](Survey &s) { s.installerDir.clear(); }) == Status::Unavailable
               && statusWith([](Survey &s) { s.listed = false; }) == Status::Unavailable,
           QStringLiteral("instaladores: con una instalacion corriendo o sin la carpeta entera, nada"));
+    using InstallerPackages::renameTouches;
+    check(renameTouches(QStringLiteral("\\??\\C:\\WINDOWS\\Installer\\a199bd5.msi"), dir) && renameTouches(QStringLiteral("!\\??\\c:\\windows\\installer\\x.tmp"), dir)
+              && renameTouches(QStringLiteral("\\??\\C:\\Windows\\Installer"), dir) && !renameTouches(QStringLiteral("\\??\\C:\\Windows\\Installer2\\a.msi"), dir)
+              && !renameTouches(QStringLiteral("\\??\\C:\\Program Files\\Foo\\Installer\\a.msi"), dir) && !renameTouches(QString(), dir)
+              && !renameTouches(QStringLiteral("\\??\\C:\\Windows\\Installer\\a.msi"), QString()),
+          QStringLiteral("instaladores: un reemplazo pendiente dentro de la carpeta de instaladores cuenta como instalacion a medias"));
 
     // El paso elevado: solo con la consulta de todos, y vuelve a mirar cada nombre.
     const QStringList asked = {QStringLiteral("orphan1.msi"), QStringLiteral("ORPHAN1.MSI"), QStringLiteral("claimed.msi"),
@@ -420,6 +500,20 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
               && checks.at(1).reason == Reason::Claimed && checks.at(2).reason == Reason::Missing && checks.at(3).reason == Reason::TooNew
               && checks.at(4).reason == Reason::NotAllowed,
           QStringLiteral("instaladores: re-verificacion por nombre (huerfano, reclamado, ya no esta, nuevo, nombre invalido; repetido una vez)"));
+    {
+        // Entre la ventana y el paso elevado se reinstalo el programa: el paso elevado tampoco lo mueve.
+        Survey reinstalled = all;
+        FileFacts copy = file(QStringLiteral("reinstalled.msi"), 90, 40);
+        copy.package.installed = {copy.package.productCode};
+        FileFacts unreadable = file(QStringLiteral("unreadable.msi"), 90, 41);
+        unreadable.package.read = false;
+        reinstalled.files.append(copy);
+        reinstalled.files.append(unreadable);
+        const QList<Check> again = reverify(reinstalled, {QStringLiteral("reinstalled.msi"), QStringLiteral("unreadable.msi")}, now);
+        check(again.size() == 2 && again.at(0).reason == Reason::Installed && again.at(1).reason == Reason::Unverifiable
+                  && resultFor(again.at(0).reason) == Result::Installed && resultFor(again.at(1).reason) == Result::Unverifiable,
+              QStringLiteral("instaladores: el paso elevado tampoco mueve la copia de un programa instalado ni una ilegible"));
+    }
     all.busy = true;
     checks = reverify(all, {QStringLiteral("orphan1.msi")}, now);
     check(checks.size() == 1 && checks.first().reason == Reason::Busy, QStringLiteral("instaladores: con una instalacion corriendo, el paso elevado no mueve nada"));
@@ -438,7 +532,7 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
     }
     check(!decodeRequest(encodeRequest(many), nullptr), QStringLiteral("instaladores: un pedido con mas de %1 archivos se rechaza").arg(kMaxRequest));
     bool roundTrip = true;
-    for (const Result result : {Result::Trashed, Result::Claimed, Result::TooNew, Result::Busy, Result::Incomplete, Result::NotAllowed, Result::Missing,
+    for (const Result result : {Result::Trashed, Result::Claimed, Result::Installed, Result::Unverifiable, Result::TooNew, Result::Busy, Result::Incomplete, Result::NotAllowed, Result::Missing,
                                 Result::TrashFailed}) {
         FileResult in;
         in.name = QStringLiteral("x.msi");
@@ -475,6 +569,12 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
     check(info.info && info.single && !info.measurable && info.items.size() == 1 && info.items.first().targets.isEmpty()
               && CleanupRules::installerCategory(none, dir).id.isEmpty() && CleanupRules::installerCategory(Verdict(), dir).id.isEmpty(),
           QStringLiteral("instaladores: sin la consulta completa, una linea sin casilla ni archivos; sin huerfanos, nada"));
+    Verdict unverified;
+    unverified.status = Status::Unverified;
+    const Cleanup::Category failed = CleanupRules::installerCategory(unverified, dir);
+    check(failed.info && failed.items.size() == 1 && failed.caption == I18n::tr("Could not check which installers are in use.")
+              && info.caption == I18n::tr("Checking which ones no installed program uses needs administrator permission."),
+          QStringLiteral("instaladores: \"pide administrador\" solo cuando el administrador lo resolveria; si fallo una lectura, otra linea"));
 
     // Lo que libera espacio y lo que va a la Papelera.
     Cleanup::Category mixed = category;

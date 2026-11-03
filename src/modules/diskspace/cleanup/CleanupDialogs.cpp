@@ -32,15 +32,18 @@ QVBoxLayout *dialogLayout(QDialog *dialog, const QString &title, int width)
     return layout;
 }
 
-// Una linea "nombre ........ peso".
-void addLine(QVBoxLayout *layout, QWidget *parent, const QString &name, const QString &size, bool path)
+enum class LineKind { Plain, Path, Elided };
+
+// Una linea "nombre ........ peso". Elided: un nombre que viene de afuera (el producto de un instalador)
+// y puede no entrar; se recorta al final, con el texto entero en su tooltip.
+void addLine(QVBoxLayout *layout, QWidget *parent, const QString &name, const QString &size, LineKind kind)
 {
     auto *row = new QHBoxLayout();
     row->setSpacing(12);
-    if (path) {
+    if (kind != LineKind::Plain) {
         auto *label = new ElidedLabel(parent);
-        label->setObjectName(QStringLiteral("dialogPath"));
-        label->setElideMode(Qt::ElideMiddle);
+        label->setObjectName(kind == LineKind::Path ? QStringLiteral("dialogPath") : QStringLiteral("dialogLine"));
+        label->setElideMode(kind == LineKind::Path ? Qt::ElideMiddle : Qt::ElideRight);
         label->setText(name);
         row->addWidget(label, 1);
     } else {
@@ -58,24 +61,26 @@ namespace CleanupDialogs {
 
 QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QString &total, const QList<QPair<QString, QString>> &lines,
                         const QList<QPair<QString, QString>> &rest, int moreCount, const QString &moreSize, const QString &freeBefore,
-                        const QString &freeAfter, BinPart binPart)
+                        const QString &freeAfter, const BinList &bin)
 {
     auto *dialog = new QDialog(parent);
     dialog->setWindowTitle(I18n::tr("Clean up"));
     QVBoxLayout *layout = dialogLayout(dialog, I18n::tr("Clean up %1 on %2?").arg(total, driveLabel), 440);
+    // Dos listas: lo que se borra para siempre y lo que va a la Papelera. Si hay una sola, solo esa (una
+    // lista vacia no ocupa lugar en el layout).
+    const bool deletes = !lines.isEmpty() || moreCount > 0;
 #ifdef Q_OS_MACOS
     QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Trash:"), "dialogLine", dialog);
 #else
-    QLabel *intro = Ui::label(binPart == BinPart::All ? I18n::tr("These go to the Recycle Bin, with administrator permission:")
-                                                      : I18n::tr("These are deleted for good, not moved to the Recycle Bin:"),
-                              "dialogLine", dialog);
+    QLabel *intro = Ui::label(I18n::tr("These are deleted for good, not moved to the Recycle Bin:"), "dialogLine", dialog);
 #endif
     intro->setWordWrap(true);
+    intro->setVisible(deletes);
     layout->addWidget(intro);
     auto *list = new QVBoxLayout();
     list->setSpacing(4);
     for (const auto &line : lines) {
-        addLine(list, dialog, line.first, line.second, false);
+        addLine(list, dialog, line.first, line.second, LineKind::Plain);
     }
     if (moreCount > 0) {
         // "27 more" es un link: despliega el resto de la lista en el mismo cartel.
@@ -108,7 +113,7 @@ QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QStrin
                 innerLayout->setContentsMargins(0, 0, scrolls ? 10 : 0, 0);
                 innerLayout->setSpacing(4);
                 for (const auto &line : rest) {
-                    addLine(innerLayout, inner, line.first, line.second, false);
+                    addLine(innerLayout, inner, line.first, line.second, LineKind::Plain);
                 }
                 area->setWidget(inner);
                 // Ocho renglones enteros a la vista; el resto, con la rueda.
@@ -120,14 +125,30 @@ QDialog *confirmCleanup(QWidget *parent, const QString &driveLabel, const QStrin
         }
     }
     layout->addLayout(list);
+    if (!bin.isEmpty()) {
+        // Las copias de instaladores huerfanos: van a la Papelera (con permiso de administrador), no se
+        // borran. Son pocas: sin link para desplegar, el resto se cuenta en una linea.
+        QLabel *binIntro = Ui::label(I18n::tr("These go to the Recycle Bin, with administrator permission:"), "dialogLine", dialog);
+        binIntro->setWordWrap(true);
+        layout->addWidget(binIntro);
+        auto *binList = new QVBoxLayout();
+        binList->setSpacing(4);
+        for (const auto &line : bin.lines) {
+            addLine(binList, dialog, line.first, line.second, LineKind::Elided);
+        }
+        if (bin.moreCount > 0) {
+            addLine(binList, dialog, bin.moreCount == 1 ? I18n::tr("1 more") : I18n::tr("%1 more").arg(bin.moreCount), bin.moreSize, LineKind::Plain);
+        }
+        layout->addLayout(binList);
+    }
     QString noteText;
-    if (binPart == BinPart::All) {
+    if (!deletes) {
         noteText = I18n::tr("Windows may ask for administrator permission once. The space is freed when the Recycle Bin is emptied.");
     } else {
         noteText = I18n::tr("Files in use are skipped. %1 goes from %2 to %3 free.").arg(driveLabel, freeBefore, freeAfter);
-        if (binPart == BinPart::Some) {
+        if (!bin.isEmpty()) {
             noteText += QLatin1Char(' ')
-                        + I18n::tr("Orphaned installer files go to the Recycle Bin instead; Windows may ask for administrator permission once.");
+                        + I18n::tr("The installer copies free their space when the Recycle Bin is emptied; Windows may ask for administrator permission once.");
         }
     }
     auto *note = new CaptionLabel(noteText, dialog);
@@ -169,10 +190,10 @@ QDialog *confirmDelete(QWidget *parent, const QList<QPair<QString, QString>> &pa
     auto *list = new QVBoxLayout();
     list->setSpacing(4);
     for (const auto &path : paths) {
-        addLine(list, dialog, path.first, path.second, true);
+        addLine(list, dialog, path.first, path.second, LineKind::Path);
     }
     if (moreCount > 0) {
-        addLine(list, dialog, moreCount == 1 ? I18n::tr("1 more") : I18n::tr("%1 more").arg(moreCount), QString(), false);
+        addLine(list, dialog, moreCount == 1 ? I18n::tr("1 more") : I18n::tr("%1 more").arg(moreCount), QString(), LineKind::Plain);
     }
     layout->addLayout(list);
     const QString files = fileCount == 1 ? I18n::tr("1 file.") : I18n::tr("%1 files.").arg(QLocale(QLocale::English).toString(fileCount));

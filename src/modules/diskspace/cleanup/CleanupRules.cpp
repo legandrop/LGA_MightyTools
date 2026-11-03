@@ -65,6 +65,11 @@ QString shortName(const QString &path)
 
 void measureItem(Cleanup::Item &item, const ScanTree &tree, const QString &volumeRoot, qint64 now)
 {
+    // Un instalador huerfano ya trae su peso y su fecha de la consulta que lo encontro: no se remide.
+    if (!item.targets.isEmpty() && item.targets.first().action == Cleanup::Action::InstallerPackage) {
+        item.measured = true;
+        return;
+    }
     item.bytes = 0;
     item.files = 0;
     item.newest = 0;
@@ -87,17 +92,8 @@ void measureItem(Cleanup::Item &item, const ScanTree &tree, const QString &volum
             item.newest = qMax(item.newest, measure.newest);
             break;
         }
-        case Cleanup::Action::InstallerPackage: {
-            // Un archivo suelto de la carpeta de instaladores: lo que pesa hoy, sin seguir un enlace.
-            const QFileInfo info(target.path);
-            if (info.isFile() && !info.isSymLink()) {
-                item.bytes += info.size();
-                item.files += 1;
-                const qint64 created = info.birthTime().isValid() ? info.birthTime().toSecsSinceEpoch() : 0;
-                item.newest = qMax(item.newest, qMax(created, info.lastModified().toSecsSinceEpoch()));
-            }
-            break;
-        }
+        case Cleanup::Action::InstallerPackage:
+            break; // no llega: se sale arriba
         case Cleanup::Action::Contents:
         case Cleanup::Action::Entire: {
             const ScanTree::Index node = tree.find(target.path);
@@ -235,9 +231,18 @@ Cleanup::Category installerCategory(const InstallerOrphans::Verdict &verdict, co
         category.single = true;
         category.info = true;
         category.measurable = false;
-        category.caption = verdict.status == InstallerOrphans::Status::Busy
-                               ? I18n::tr("An installation is running. Rescan when it finishes.")
-                               : I18n::tr("Checking which ones no installed program uses needs administrator permission.");
+        switch (verdict.status) {
+        case InstallerOrphans::Status::Busy:
+            category.caption = I18n::tr("An installation is running. Rescan when it finishes.");
+            break;
+        case InstallerOrphans::Status::NeedsAdmin:
+            // Solo cuando el administrador lo resolveria: otro usuario tiene instalaciones propias.
+            category.caption = I18n::tr("Checking which ones no installed program uses needs administrator permission.");
+            break;
+        default:
+            category.caption = I18n::tr("Could not check which installers are in use.");
+            break;
+        }
         Cleanup::Item item;
         item.name = category.title;
         item.path = installerDir;
