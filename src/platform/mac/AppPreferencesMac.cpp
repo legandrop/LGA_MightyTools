@@ -54,8 +54,8 @@ QVariant toVariant(CFTypeRef value, int depth)
     if (type == CFDictionaryGetTypeID()) {
         const auto dictionary = static_cast<CFDictionaryRef>(value);
         const CFIndex count = CFDictionaryGetCount(dictionary);
-        std::vector<const void *> keys(size_t(count));
-        std::vector<const void *> values(size_t(count));
+        std::vector<const void *> keys(static_cast<size_t>(count));
+        std::vector<const void *> values(static_cast<size_t>(count));
         if (count > 0) {
             CFDictionaryGetKeysAndValues(dictionary, keys.data(), values.data());
         }
