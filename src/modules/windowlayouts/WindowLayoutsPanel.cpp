@@ -224,36 +224,6 @@ private:
     QRectF m_area;
 };
 
-class CurrentPageStack : public QWidget
-{
-public:
-    explicit CurrentPageStack(QWidget *parent = nullptr) : QWidget(parent)
-    {
-        auto *column = new QVBoxLayout(this);
-        column->setContentsMargins(0, 0, 0, 0);
-    }
-
-    void addWidget(QWidget *page)
-    {
-        layout()->addWidget(page);
-        if (m_current) page->hide();
-        else m_current = page;
-    }
-
-    QWidget *currentWidget() const { return m_current; }
-    void setCurrentWidget(QWidget *page)
-    {
-        if (m_current == page) return;
-        m_current->hide();
-        m_current = page;
-        m_current->show();
-        layout()->invalidate();
-    }
-
-private:
-    QWidget *m_current = nullptr;
-};
-
 WindowLayoutsPanel::WindowLayoutsPanel(WindowLayoutsModule *module, bool interactive, QWidget *parent)
     : QWidget(parent), m_module(module), m_interactive(interactive)
 {

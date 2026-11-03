@@ -254,6 +254,20 @@ private:
     QPushButton *m_button = nullptr;
 };
 
+// Paginas apiladas que miden lo que mide la VISIBLE (QStackedWidget toma el alto de la mas alta y deja
+// el editor con el scroll de la lista): la lista y el editor de Window Layouts y App Toggle.
+class CurrentPageStack : public QWidget
+{
+public:
+    explicit CurrentPageStack(QWidget *parent = nullptr);
+    void addWidget(QWidget *page);
+    QWidget *currentWidget() const { return m_current; }
+    void setCurrentWidget(QWidget *page);
+
+private:
+    QWidget *m_current = nullptr;
+};
+
 // Ayudas para construir botones con las variantes de la hoja de estilo.
 namespace Ui {
 QPushButton *button(const QString &text, const QString &variant = QString(), const QString &size = QString(),

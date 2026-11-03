@@ -157,6 +157,10 @@ set(SOURCES
     src/modules/windowlayouts/WindowLayoutsModule.cpp
     src/modules/windowlayouts/WindowLayoutsPanel.cpp
     src/modules/windowlayouts/WindowLayoutsState.cpp
+    src/modules/apptoggle/AppToggleModule.cpp
+    src/modules/apptoggle/AppTogglePanel.cpp
+    src/modules/apptoggle/AppToggleState.cpp
+    src/platform/AppToggleSystemCommon.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
@@ -257,6 +261,10 @@ set(HEADERS
     src/modules/windowlayouts/WindowLayoutsModule.h
     src/modules/windowlayouts/WindowLayoutsPanel.h
     src/modules/windowlayouts/WindowLayoutsState.h
+    src/modules/apptoggle/AppToggleModule.h
+    src/modules/apptoggle/AppTogglePanel.h
+    src/modules/apptoggle/AppToggleState.h
+    src/platform/AppToggleSystem.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
     src/platform/DirEnumerator.h
@@ -305,6 +313,7 @@ if(WIN32)
         src/modules/openinnukex/win/WinFileAssociation.cpp
         # Ayudante elevado de Window Layouts para ventanas de administrador.
         src/platform/win/AdminWindowHelperWin.cpp
+        src/platform/win/AppToggleSystemWin.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
         src/platform/win/DirEnumeratorWin.cpp
@@ -373,6 +382,7 @@ elseif(APPLE)
         src/modules/folderswitch/RecentFoldersPopup.cpp
         src/modules/folderswitch/mac/FolderSwitchMacModule.cpp
         src/modules/folderswitch/mac/MacFileDialogs.mm
+        src/platform/mac/AppToggleSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/DirEnumeratorMac.cpp
@@ -434,6 +444,8 @@ if(WIN32)
         ole32
         oleaut32
         uuid
+        # App Toggle: nombre del producto del exe (GetFileVersionInfo).
+        version
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -448,6 +460,7 @@ elseif(APPLE)
     # Los .mm con ARC: sin retain/release a mano.
     set_source_files_properties(
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
+        src/platform/mac/AppToggleSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm

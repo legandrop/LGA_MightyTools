@@ -29,6 +29,16 @@ void allowAnyProcessToActivate()
     // En macOS no hace falta autorizar: la app residente se activa sola al mostrar su ventana.
 }
 
+void claimForegroundRight()
+{
+}
+
+bool bringToFront(quintptr)
+{
+    // App Toggle en mac activa la app entera con NSWorkspace (AppToggleSystemMac.mm).
+    return false;
+}
+
 void onReopenRequested(std::function<void()> handler)
 {
     static LgaReopenHandler *target = [[LgaReopenHandler alloc] init];

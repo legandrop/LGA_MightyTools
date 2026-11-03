@@ -1,4 +1,5 @@
 #include "ui/ShortcutRow.h"
+#include "platform/HotkeyService.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 #include "core/I18n.h"
@@ -204,6 +205,12 @@ void ShortcutRow::startRecording()
     setRecordingVisible(true, partialText(Qt::NoModifier));
     // grabKeyboard y no el foco: la app no da foco de teclado a nada (Theme::apply).
     grabKeyboard();
+    // Windows: Win+E y otras que reserva el sistema nunca llegan a la ventana; las atrapa un gancho que
+    // vive solo mientras se graba.
+    m_catcher = new ShortcutCatcher(this);
+    connect(m_catcher, &ShortcutCatcher::caught, this, [this](const Shortcut &shortcut) {
+        if (m_recording) acceptCandidate(shortcut);
+    });
     // Un click afuera (en otra fila, otra tarjeta, la barra lateral) cancela, como el umbral de un
     // disco lo confirma: la grabacion nunca queda colgada esperando teclas.
     qApp->installEventFilter(this);
@@ -234,6 +241,11 @@ bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
 void ShortcutRow::finishRecording()
 {
     m_recording = false;
+    if (m_catcher) {
+        disconnect(m_catcher, nullptr, this, nullptr);
+        m_catcher->retire();
+        m_catcher = nullptr;
+    }
     qApp->removeEventFilter(this);
     releaseKeyboard();
     setRecordingVisible(false, QString());
@@ -269,7 +281,12 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
     Shortcut candidate;
     candidate.modifiers = modifiers;
     candidate.key = keyFromEvent(event);
+    acceptCandidate(candidate);
+}
 
+void ShortcutRow::acceptCandidate(const Shortcut &candidate)
+{
+    const Qt::KeyboardModifiers modifiers = candidate.modifiers;
     const Shortcut previous = m_shortcut;
     finishRecording();
 

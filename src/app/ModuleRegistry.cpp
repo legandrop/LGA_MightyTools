@@ -3,6 +3,7 @@
 #include "modules/linkredirector/LinkRedirectorDescriptor.h"
 #include "modules/nukeshortcuts/NukeShortcutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
+#include "modules/apptoggle/AppToggleModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -31,6 +32,7 @@ QList<ModuleDescriptor> all()
 #endif
     list << linkRedirectorDescriptor();
     list << windowLayoutsDescriptor();
+    list << appToggleDescriptor();
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
@@ -57,6 +59,7 @@ QHash<QString, HelpProvider> helpProviders()
 #endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
+    providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
     return providers;
 }
 

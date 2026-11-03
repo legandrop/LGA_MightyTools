@@ -53,4 +53,28 @@ private:
     std::unique_ptr<Private> d;
 };
 
+// Mientras el grabador de atajos esta abierto (ShortcutRow): atrapa la combinacion antes que el sistema.
+// Windows reserva Win+E y otras para el Explorador con RegisterHotKey y esas teclas nunca le llegan a una
+// ventana. Solo Windows, con el mismo gancho de teclado de los atajos con prioridad; en mac y en una
+// corrida automatizada no instala nada y el grabador lee las teclas de su ventana como siempre.
+class ShortcutCatcher : public QObject
+{
+    Q_OBJECT
+
+public:
+    explicit ShortcutCatcher(QObject *parent = nullptr);
+    ~ShortcutCatcher() override;
+
+    // Deja de atrapar y se borra solo cuando se sueltan los modificadores: hasta ahi el gancho se come
+    // la liberacion de la tecla atrapada y evita que soltar Win abra el menu Inicio.
+    void retire();
+
+signals:
+    void caught(const Shortcut &shortcut);
+
+private:
+    struct Private;
+    std::unique_ptr<Private> d;
+};
+
 #endif // MIGHTYTOOLS_HOTKEYSERVICE_H

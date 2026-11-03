@@ -14,6 +14,15 @@ namespace WindowActivation {
 
 void allowAnyProcessToActivate();
 
+// Windows: los atajos con prioridad llegan por el gancho de teclado, que no da el permiso de pasar el
+// frente (WM_HOTKEY si lo da). Una entrada propia sin efecto (el mouse sin moverse ni apretar nada)
+// hace de este proceso el ultimo que mando una entrada, y Windows se lo da. macOS: nada.
+void claimForegroundRight();
+
+// Windows: trae al frente la ventana de nivel superior `window` de otra app, restaurandola si esta
+// minimizada, desde un atajo. True si quedo al frente. macOS: false (ahi se activa la app entera).
+bool bringToFront(quintptr window);
+
 // macOS: abrir la app desde Finder, el Launchpad o Spotlight con la copia ya corriendo NO lanza otra
 // copia (no llega a la instancia unica): el sistema le manda a la residente el evento "reabrir". El
 // handler se llama en el hilo de la interfaz. En Windows no hace nada: ahi la segunda copia arranca y

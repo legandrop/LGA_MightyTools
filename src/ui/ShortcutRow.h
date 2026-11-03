@@ -12,6 +12,7 @@ class QFrame;
 class QHBoxLayout;
 class QLabel;
 class QPushButton;
+class ShortcutCatcher;
 
 // Una fila de la tarjeta "Shortcuts": nombre de la accion, una caja por tecla, el lapiz para
 // cambiarla y la descripcion debajo.
@@ -64,6 +65,8 @@ private:
     void rebuildKeys();
     void setRecordingVisible(bool recording, const QString &partial);
     void finishRecording();
+    // La combinacion grabada: de la ventana o del gancho que atrapa las que reserva el sistema (Win+E).
+    void acceptCandidate(const Shortcut &candidate);
     static QString partialText(Qt::KeyboardModifiers modifiers);
 
     Shortcut m_shortcut;
@@ -71,6 +74,7 @@ private:
     Validator m_validator;
     std::function<void()> m_editHandler;
     bool m_recording = false;
+    ShortcutCatcher *m_catcher = nullptr;
 
     QLabel *m_name = nullptr;
     Chip *m_extraChip = nullptr;
