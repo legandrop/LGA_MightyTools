@@ -1507,6 +1507,9 @@ void testModule(const Check &check)
     check(DictationModule::vocabularyFrom(QStringLiteral(" Nuke,  Nuke Studio ,,nuke, Hiero "))
               == QStringList({QStringLiteral("Nuke"), QStringLiteral("Nuke Studio"), QStringLiteral("Hiero")}),
           QStringLiteral("modulo: las palabras propias se separan por coma, sin vacias ni repetidas"));
+    check(DictationModule::vocabularyFrom(QStringLiteral("Nuke\r\nDMP\ncomp, roto\n\n"))
+              == QStringList({QStringLiteral("Nuke"), QStringLiteral("DMP"), QStringLiteral("comp"), QStringLiteral("roto")}),
+          QStringLiteral("modulo: una lista pegada de a un termino por renglon tambien se separa"));
     const DictationText::Replacements pairs{{QStringLiteral("jairo"), QStringLiteral("Hiero")},
                                             {QStringLiteral("nuke estudio"), QStringLiteral("Nuke Studio")}};
     check(DictationModule::replacementsFromJson(DictationModule::replacementsToJson(pairs)) == pairs

@@ -13,6 +13,7 @@
 #include <QJsonDocument>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRegularExpression>
 #include <QTimer>
 #include <QWidget>
 
@@ -760,7 +761,8 @@ QString DictationModule::unloadText(int minutes)
 QStringList DictationModule::vocabularyFrom(const QString &words)
 {
     QStringList list;
-    for (const QString &word : words.split(QLatin1Char(','))) {
+    // Coma o renglón: una lista pegada de a un término por línea también vale.
+    for (const QString &word : words.split(QRegularExpression(QStringLiteral("[,\\r\\n]")))) {
         const QString clean = word.simplified();
         if (!clean.isEmpty() && !list.contains(clean, Qt::CaseInsensitive)) list << clean;
     }

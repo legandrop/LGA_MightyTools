@@ -13,6 +13,7 @@
 class DictationModule;
 class QLabel;
 class QLineEdit;
+class QPlainTextEdit;
 class QPushButton;
 class QStackedLayout;
 class QVBoxLayout;
@@ -67,7 +68,7 @@ private:
     ShortcutRow *m_shortcut = nullptr;
     QPushButton *m_language = nullptr;
     QPushButton *m_microphone = nullptr;
-    QLineEdit *m_words = nullptr;
+    QPlainTextEdit *m_words = nullptr;
     QWidget *m_replacementRows = nullptr;
     QLineEdit *m_from = nullptr;
     QLineEdit *m_to = nullptr;

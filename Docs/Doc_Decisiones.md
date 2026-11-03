@@ -13,13 +13,17 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   aparte, verifica sus archivos antes de cargarse, se carga al prender la herramienta o con el primer
   dictado (nunca al arrancar la app: el audio espera mientras carga, ~1 s) y se descarga tras N minutos
   sin uso (10 por defecto). El texto se ve en vivo en una ventanita sin foco y se escribe al terminar en
-  la ventana que estaba al frente, por `SendInput` Unicode, nunca por el portapapeles; sin voz no se
-  escribe nada, y si la ventana cambió no se escribe y queda en «Recent». Con una ventana de
+  la ventana que estaba al frente con el «pegado sin historial» (render diferido, marcas que lo sacan del
+  historial de Win+V y de la nube, Ctrl+V y lo copiado devuelto; tipear con `SendInput` Unicode se
+  descartó porque el Bloc de notas cambiaba letras); sin voz no se escribe nada, y si la ventana cambió no se escribe y queda en «Recent». Con una ventana de
   administrador al frente el atajo no llega (Windows no le pasa las teclas a una app sin administrador)
   y se abre el dictado de Windows. Win+H por defecto (reemplaza el dictado de Windows), tocar o mantener,
   Esc cancela (también mientras escribe). Palabras propias para el modelo y reemplazos «X → Y» después.
-  El historial vive solo en memoria. Solo Windows por ahora; vive en la rama `dictado` hasta que Lega la
-  apruebe.
+  El historial vive solo en memoria. Solo Windows por ahora. Lega la aprobó y está en main (2026-11-03).
+  Las palabras de fábrica (VFX y desarrollo: Nuke Studio, compo, DMP, comitear, pushear…) vienen puestas
+  para todos, en un campo de varias líneas. Descartado por Lega: Parakeet y Voxtral como modelos
+  opcionales, y dictar con una ventana de administrador al frente (sin ayudante elevado). macOS, más
+  adelante.
 - **D-71 · Ejemplos apagados en App Toggle y Mouse Buttons, y el Explorador como toggle** (2026-11-03,
   Lega: «debe venir con la app ya puesto… es como un setting que viene por defecto», «pero apagado»).
   La primera vez que se prende cada herramienta (sin la clave en settings) trae ejemplos apagados: App

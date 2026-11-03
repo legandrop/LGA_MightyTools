@@ -9,21 +9,28 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
+#include <QAbstractTextDocumentLayout>
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
 #include <QFileDialog>
+#include <QFocusEvent>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QStackedLayout>
+#include <QTextDocument>
 #include <QTimer>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 #include <iterator>
 
@@ -51,6 +58,46 @@ QLineEdit *field(const QString &placeholder, const QString &accessibleName, QWid
     edit->setAccessibleName(accessibleName);
     return edit;
 }
+
+// Las palabras propias: un campo de varias líneas que crece con el texto (de 2 a 8 renglones), con los
+// materiales de «ruleField». Enter guarda (las palabras se separan con comas, no con renglones).
+class WordsEdit : public QPlainTextEdit
+{
+public:
+    explicit WordsEdit(QWidget *parent)
+        : QPlainTextEdit(parent)
+    {
+        setObjectName(QStringLiteral("ruleArea"));
+        setFocusPolicy(Qt::ClickFocus);
+        setTabChangesFocus(true);
+        setLineWrapMode(QPlainTextEdit::WidgetWidth);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        document()->setDocumentMargin(2);
+        connect(document()->documentLayout(), &QAbstractTextDocumentLayout::documentSizeChanged, this,
+                [this]() { fitHeight(); });
+    }
+
+protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QPlainTextEdit::resizeEvent(event);
+        fitHeight();
+    }
+
+private:
+    void fitHeight()
+    {
+        // QPlainTextDocumentLayout mide el alto del documento en renglones visibles (con el ajuste de línea).
+        const int needed = int(std::ceil(document()->documentLayout()->documentSize().height()));
+        const int lines = qBound(2, needed, 8);
+        // La barra solo cuando el texto pasa de 8 renglones; si no, el alto alcanza para todo.
+        setVerticalScrollBarPolicy(needed > 8 ? Qt::ScrollBarAsNeeded : Qt::ScrollBarAlwaysOff);
+        const int chrome = height() - viewport()->height();
+        const int wanted = lines * fontMetrics().lineSpacing() + 2 * int(document()->documentMargin()) + chrome + 4;
+        if (wanted != height()) setFixedHeight(wanted);
+    }
+};
 
 // Una tarjeta con su título en negrita, como «Saved rules» y «Create a mouse rule» en Mouse Buttons.
 QFrame *titledCard(QWidget *parent, const QString &title, QVBoxLayout **column, int spacing = 6)
@@ -214,16 +261,14 @@ QWidget *DictationPanel::buildWordsCard()
 {
     QVBoxLayout *column = nullptr;
     QFrame *card = titledCard(this, I18n::tr("Custom words"), &column);
-    m_words = field(I18n::tr("Words separated by commas"), I18n::tr("Custom words"), card);
+    m_words = new WordsEdit(card);
+    m_words->setPlaceholderText(I18n::tr("Words separated by commas"));
+    m_words->setAccessibleName(I18n::tr("Custom words"));
     column->addWidget(m_words);
     auto *wordsHint = Ui::caption(I18n::tr("Names and terms it should spell right, separated by commas."), card);
     wordsHint->setWordWrap(true);
     column->addWidget(wordsHint);
-    if (m_interactive) {
-        connect(m_words, &QLineEdit::editingFinished, this, &DictationPanel::saveWords);
-        // Enter guarda y suelta el campo (regla de la app); editingFinished ya guardo.
-        connect(m_words, &QLineEdit::returnPressed, m_words, &QWidget::clearFocus);
-    }
+    // Guardar: al perder el foco (Enter, un click afuera o Tab), en eventFilter.
     return card;
 }
 
@@ -350,7 +395,7 @@ void DictationPanel::refresh()
     }
     m_language->setText(DictationModule::languageName(m_module->language()));
     m_microphone->setText(microphoneText());
-    if (!m_words->hasFocus()) m_words->setText(m_module->customWords());
+    if (!m_words->hasFocus() && m_words->toPlainText() != m_module->customWords()) m_words->setPlainText(m_module->customWords());
     if (!m_root->hasFocus()) {
         m_root->setText(QDir::toNativeSeparators(m_module->modelsRoot()));
         m_root->setCursorPosition(0); // el principio de la ruta a la vista
@@ -669,10 +714,11 @@ void DictationPanel::showMenu(QPushButton *button, const QList<QPair<QString, QS
 
 void DictationPanel::saveWords()
 {
-    if (m_words->text() != m_module->customWords()) {
-        m_module->setCustomWords(m_words->text());
+    const QString typed = DictationModule::vocabularyFrom(m_words->toPlainText()).join(QStringLiteral(", "));
+    if (typed != m_module->customWords()) {
+        m_module->setCustomWords(m_words->toPlainText());
     }
-    m_words->setText(m_module->customWords());
+    if (m_words->toPlainText() != m_module->customWords()) m_words->setPlainText(m_module->customWords());
 }
 
 void DictationPanel::saveRoot()
@@ -805,7 +851,7 @@ bool DictationPanel::eventFilter(QObject *watched, QEvent *event)
     // Escape en un campo descarta lo escrito y lo suelta (regla de la app).
     if (event->type() == QEvent::KeyPress && static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
         if (watched == m_words) {
-            m_words->setText(m_module->customWords());
+            m_words->setPlainText(m_module->customWords());
             m_words->clearFocus();
             return true;
         }
@@ -820,6 +866,19 @@ bool DictationPanel::eventFilter(QObject *watched, QEvent *event)
             static_cast<QWidget *>(watched)->clearFocus();
             return true;
         }
+    }
+    // Las palabras: Enter suelta el campo y al soltarlo se guardan (también con un click afuera o Tab).
+    if (watched == m_words && event->type() == QEvent::KeyPress) {
+        const int key = static_cast<QKeyEvent *>(event)->key();
+        if (key == Qt::Key_Return || key == Qt::Key_Enter) {
+            m_words->clearFocus();
+            return true;
+        }
+    }
+    // Un popup (el menú del click derecho del campo) también manda FocusOut, pero el foco no se va: no se guarda.
+    if (watched == m_words && event->type() == QEvent::FocusOut && m_interactive
+        && static_cast<QFocusEvent *>(event)->reason() != Qt::PopupFocusReason) {
+        saveWords();
     }
     if (event->type() == QEvent::MouseButtonPress) {
         // Un click fuera del campo que tiene el teclado lo suelta: las palabras y la carpeta se guardan

@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation: con la lista de fábrica nueva (32 términos), «Custom words» era un campo de una línea donde casi nada se veía y editarla era incómodo. Ahora es un campo de varias líneas que crece con el texto (de 2 a 8 renglones; la barra aparece solo si pasa de 8), con los mismos materiales de los demás campos. Sigue la regla de la app: Enter guarda y suelta el campo, Escape descarta, un click afuera guarda. Una lista pegada de a un término por renglón también se separa. Además, en el roadmap y en D-72 quedan descartados, por decisión de Lega, Parakeet y Voxtral como modelos opcionales y el ayudante elevado para dictar con una ventana de administrador al frente.
+
+[ Dictation - Custom words en varias lineas y roadmap del dictado ]
+
 Dictation: en un dictado de 37 s la vista en vivo decía «Nuke Studio» y el texto final «nook studio», sin mayúsculas ni puntos. Whisper trabaja en ventanas de 30 s y el vocabulario y la frase de contexto solo entran en la primera. Ponerlos en todas, arrastrando el texto anterior, hacía inventar frases al final («Huevo Huevo Huevo…», 3 de 3 corridas), así que se descartó. Ahora un audio de más de 29 s se transcribe en pedazos cortados en el tramo más silencioso de sus últimos 10 s, cada uno con todo el contexto; los pedazos sin voz se saltean. Además, la lista de palabras de fábrica suma términos de VFX y de desarrollo (compo, DMP, matte painting, comitear, pushear…); quien tenía la lista vieja sin tocar recibe la nueva. Probado con 11 grabaciones reales de Lega: todas correctas.
 
 [ Dictation - Audio largo en pedazos de 29 s y palabras de VFX y desarrollo ]

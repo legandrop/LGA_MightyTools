@@ -350,6 +350,12 @@ QLineEdit#ruleField {
 }
 QLineEdit#ruleField:focus { border-color: @accent; }
 QLineEdit#ruleField:disabled { color: @textPlaceholder; }
+QPlainTextEdit#ruleArea {
+    background-color: @field; border: 1px solid @fieldBorder; border-radius: 3px; color: @textStrong;
+    padding: 2px 6px; font-size: @fs13;
+    selection-background-color: #393455; selection-color: @textBright;
+}
+QPlainTextEdit#ruleArea:focus { border-color: @accent; }
 )QSS");
 
     const QList<QPair<const char *, QString>> tokens = {
