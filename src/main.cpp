@@ -14,6 +14,7 @@
 #include "core/UiScale.h"
 #ifdef Q_OS_WIN
 #include "modules/dictation/DictationQa.h"
+#include "modules/dictation/DictationWorker.h"
 #include "modules/diskspace/cleanup/InstallerCleanup.h"
 #include "modules/openinnukex/win/OldClientMigration.h"
 #include "platform/AdminWindowHelper.h"
@@ -229,6 +230,11 @@ int main(int argc, char *argv[])
     // verificar los instaladores huerfanos pedidos y los manda a la Papelera. Mismo modo corto.
     if (hasArg(argc, argv, "--installer-cleanup")) {
         return InstallerCleanup::runHelper(argc, argv);
+    }
+    // --dictation-worker (lo lanza el motor de dictado, sin elevar): carga el motor y el modelo en este
+    // proceso aparte y habla con la app por stdin/stdout. Mismo modo corto.
+    if (hasArg(argc, argv, "--dictation-worker")) {
+        return DictationWorker::run(argc, argv);
     }
 #endif
 

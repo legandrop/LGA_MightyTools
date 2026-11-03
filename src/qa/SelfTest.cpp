@@ -955,9 +955,6 @@ int run()
 #ifdef Q_OS_WIN
     testOperations(check);
     HotkeyPriorityTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[atajos Windows] ") + what); });
-    // Dictation todavia no tiene descriptor: sus pruebas de captura, atajo y escritura van directo. Cuando la
-    // herramienta las enchufe en ModuleDescriptor::selfTest, esta linea se va.
-    DictationQa::selfTest([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[dictation] ") + what); });
 #endif
 
     UpdateSelfTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[updates] ") + what); });
@@ -970,6 +967,10 @@ int run()
         const QString prefix = QStringLiteral("[%1] ").arg(d.id);
         d.selfTest([&check, prefix](bool ok, const QString &what) { check(ok, prefix + what); });
     }
+#ifdef Q_OS_WIN
+    // El motor de dictado todavia no tiene herramienta en la lista: su self-test va directo.
+    DictationQa::selfTest([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[dictation] ") + what); });
+#endif
 
 #ifdef Q_OS_WIN
     // Registro y --uninstall-cleanup sobre un hive privado (nunca el HKCU real).
