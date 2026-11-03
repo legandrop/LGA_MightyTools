@@ -290,6 +290,11 @@ void CleanupJob::Shared::deleteOldChildren(const NativeString &dir, int minAgeDa
 void CleanupJob::Shared::execute(const Request &request, Outcome &outcome, const QSet<QString> &programs,
                                  std::vector<char> &scratch)
 {
+    // Dentro de Windows y con permiso de administrador: solo el paso elevado, nunca este trabajo.
+    if (request.action == Cleanup::Action::InstallerPackage) {
+        outcome.refused = DeleteGuard::Verdict::ProtectedTree;
+        return;
+    }
     for (const QString &blocker : request.blockers) {
         if (Cleanup::blockerRunning(programs, blocker)) {
             outcome.blockedBy = request.blockerLabel.isEmpty() ? blocker : request.blockerLabel;

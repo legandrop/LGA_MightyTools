@@ -13,6 +13,7 @@
 #include "core/LgaRegistry.h"
 #include "core/UiScale.h"
 #ifdef Q_OS_WIN
+#include "modules/diskspace/cleanup/InstallerCleanup.h"
 #include "modules/openinnukex/win/OldClientMigration.h"
 #include "platform/AdminWindowHelper.h"
 #endif
@@ -212,6 +213,11 @@ int main(int argc, char *argv[])
     // ni registro LGA.
     if (hasArg(argc, argv, "--admin-window-helper")) {
         return AdminWindowHelper::runHelper(argc, argv);
+    }
+    // --installer-cleanup (lo lanza la limpieza de Disk Space, elevado, una vez por limpieza): vuelve a
+    // verificar los instaladores huerfanos pedidos y los manda a la Papelera. Mismo modo corto.
+    if (hasArg(argc, argv, "--installer-cleanup")) {
+        return InstallerCleanup::runHelper(argc, argv);
     }
 #endif
 

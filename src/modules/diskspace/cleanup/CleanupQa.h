@@ -23,6 +23,8 @@ void selfTestAppCaches(const std::function<void(bool ok, const QString &what)> &
 //   cleanup-plan <raiz>  imprime que limpiaria cada regla en ese volumen, con su peso (solo lectura)
 //   cleanup-export <raiz> <salida.md>  escribe en un archivo NUEVO lo que "Export for AI..." daria por lo
 //                        tildado en ese volumen (solo lee el disco; lo unico que escribe es esa salida)
+//   installer-orphans    que copias de %WINDIR%\Installer son huerfanas, con la consulta de la ventana
+//                        (solo Windows; solo lectura: no eleva ni borra)
 int simulate(const QString &action, const QStringList &args);
 
 } // namespace CleanupQa

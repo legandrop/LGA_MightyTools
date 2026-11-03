@@ -128,6 +128,7 @@ set(SOURCES
     src/modules/diskspace/cleanup/AppCacheRules.cpp
     src/modules/diskspace/cleanup/AppCacheSelfTest.cpp
     src/modules/diskspace/cleanup/DeleteGuard.cpp
+    src/modules/diskspace/cleanup/InstallerOrphans.cpp
     src/modules/diskspace/cleanup/CleanupQa.cpp
     src/modules/diskspace/cleanup/CleanupSelfTest.cpp
     src/modules/diskspace/cleanup/ScanEngine.cpp
@@ -230,6 +231,8 @@ set(HEADERS
     src/modules/diskspace/cleanup/CleanupRules.h
     src/modules/diskspace/cleanup/AppCacheRules.h
     src/modules/diskspace/cleanup/DeleteGuard.h
+    src/modules/diskspace/cleanup/InstallerOrphans.h
+    src/platform/InstallerPackages.h
     src/modules/diskspace/cleanup/CleanupQa.h
     src/modules/diskspace/cleanup/ScanEngine.h
     src/modules/diskspace/cleanup/ScanTree.h
@@ -327,6 +330,9 @@ if(WIN32)
         src/platform/win/SystemPathsWin.cpp
         src/platform/win/AppPreferencesWin.cpp
         src/modules/diskspace/cleanup/win/CleanupRulesWin.cpp
+        # Instaladores huerfanos de %WINDIR%\Installer: lectura (API de Windows Installer) y paso elevado.
+        src/platform/win/InstallerPackagesWin.cpp
+        src/modules/diskspace/cleanup/win/InstallerCleanupWin.cpp
         src/platform/win/ForegroundWatcherWin.cpp
         src/platform/win/HotkeyServiceWin.cpp
         src/platform/win/InputInjectorWin.cpp
@@ -373,6 +379,7 @@ if(WIN32)
         src/modules/desktopicons/DesktopSnapshots.h
         src/platform/DesktopIconView.h
         src/platform/AdminWindowHelper.h
+        src/modules/diskspace/cleanup/InstallerCleanup.h
         src/modules/openinnukex/win/OldClientMigration.h
         src/modules/openinnukex/win/WinFileAssociation.h
         src/platform/win/RegistryHelper.h
@@ -471,6 +478,8 @@ if(WIN32)
         uuid
         # App Toggle: nombre del producto del exe (GetFileVersionInfo).
         version
+        # Disk Space: que instaladores de %WINDIR%\Installer reclama Windows Installer (solo lectura).
+        msi
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE

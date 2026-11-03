@@ -43,6 +43,10 @@ public:
     {
         QString name;
         QString detail;
+        // El motivo es algo abierto o protegido (puede irse la proxima vez, con el programa cerrado).
+        // false: otro motivo (permiso no dado, instalacion en curso, cambiado hace poco...): la tarjeta
+        // usa entonces un texto que sirve para todos.
+        bool program = true;
     };
 
     explicit CleanupPane(QWidget *parent = nullptr);

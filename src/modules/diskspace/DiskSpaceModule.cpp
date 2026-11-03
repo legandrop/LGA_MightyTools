@@ -675,6 +675,11 @@ QStringList DiskSpaceModule::captureStates() const
     }
     states << QStringLiteral("cleanup-confirm") << QStringLiteral("cleanup-confirm-all") << QStringLiteral("cleanup-delete")
            << QStringLiteral("cleanup-rule") << QStringLiteral("cleanup-export");
+#ifdef Q_OS_WIN
+    // El cartel de Clean up con instaladores huerfanos (van a la Papelera, con permiso de administrador):
+    // con las dos listas, y con solo instaladores.
+    states << QStringLiteral("cleanup-confirm-installers") << QStringLiteral("cleanup-confirm-installers-only");
+#endif
     // La ventana al tamano minimo (con lo elegido: la barra de abajo mas cargada) y Folders ordenada por nombre.
     states << QStringLiteral("cleanup-min") << QStringLiteral("cleanup-sorted");
     states << QStringLiteral("reminder") << QStringLiteral("reminder-percent") << QStringLiteral("reminder-error");
@@ -763,6 +768,23 @@ QWidget *DiskSpaceModule::createCaptureWidget(const QString &state, QWidget *par
             }
         }
         return dialog;
+    }
+    if (state == QLatin1String("cleanup-confirm-installers") || state == QLatin1String("cleanup-confirm-installers-only")) {
+        // Las dos listas (lo que se borra y las copias de instaladores que van a la Papelera), o solo la
+        // de la Papelera cuando lo elegido son solo instaladores.
+        const bool only = state == QLatin1String("cleanup-confirm-installers-only");
+        CleanupDialogs::BinList bin;
+        bin.lines = {{I18n::tr("Installer copy · %1").arg(QStringLiteral("Red Giant Universe 2023.2")), QStringLiteral("1.12 GB")},
+                     {I18n::tr("Installer copy · %1").arg(QStringLiteral("Autodesk Desktop Connector 16.4")), QStringLiteral("319 MB")}};
+        if (only) {
+            bin.lines.append({I18n::tr("Installer copy · %1").arg(QStringLiteral("Blackmagic RAW 3.6")), QStringLiteral("213 MB")});
+            return CleanupDialogs::confirmCleanup(parent, QStringLiteral("C:"), QStringLiteral("1.64 GB"), {}, {}, 0, QString(),
+                                                  QStringLiteral("32.3 GB"), QStringLiteral("32.3 GB"), bin);
+        }
+        return CleanupDialogs::confirmCleanup(parent, QStringLiteral("C:"), QStringLiteral("33.3 GB"),
+                                              {{QStringLiteral("uv cache"), QStringLiteral("21.6 GB")},
+                                               {QStringLiteral("pip cache"), QStringLiteral("10.3 GB")}},
+                                              {}, 0, QString(), QStringLiteral("32.3 GB"), QStringLiteral("64.2 GB"), bin);
     }
     if (state == QLatin1String("cleanup-delete")) {
         return CleanupDialogs::confirmDelete(parent,

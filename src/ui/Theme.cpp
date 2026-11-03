@@ -330,8 +330,8 @@ QLabel#cleanSize { color: @textStrong; font-size: @fs13; font-weight: 500; }
 QLabel#cleanSize[dim="true"] { color: @textFaint; font-weight: 400; }
 QLabel#itemSize { color: @textStrong; font-size: @fs13; }
 QLabel#itemSize[dim="true"] { color: @textFaint; }
-QLabel#itemName { color: @text; font-size: @fs13; }
-QLabel#itemName[off="true"] { color: @textFaint; }
+QLabel#itemName, ElidedLabel#itemName { color: @text; font-size: @fs13; }
+QLabel#itemName[off="true"], ElidedLabel#itemName[off="true"] { color: @textFaint; }
 ElidedLabel#itemPath { color: @textFaint; font-size: @fs12; }
 QWidget#cleanItem { border-radius: 4px; background-color: transparent; }
 QWidget#cleanItem:hover { background-color: #1b1b1b; }
@@ -339,7 +339,7 @@ QFrame#okBanner { background-color: @okBg; border: 1px solid @okBorder; border-r
 QFrame#accessStrip { background-color: #2d2614; border: none; border-bottom: 1px solid #4d4020; }
 QLabel#accessText { color: @warn; font-size: @fs12_5; }
 QLabel#bannerText { color: @ok; font-size: @fs13; font-weight: 500; }
-QLabel#dialogLine { color: @text; font-size: @fs13; }
+QLabel#dialogLine, ElidedLabel#dialogLine { color: @text; font-size: @fs13; }
 QLabel#dialogValue { color: @text; font-size: @fs13; }
 ElidedLabel#dialogPath { color: @textStrong; font-family: "JetBrains Mono", Consolas, monospace; font-size: @fs12; }
 QScrollArea#dialogScroll, QScrollArea#dialogScroll > QWidget > QWidget { background: transparent; border: none; }

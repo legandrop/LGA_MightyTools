@@ -16,6 +16,7 @@
 
 class CleanupPane;
 class DiskState;
+class InstallerCleanup;
 class ElidedLabel;
 class ModuleContext;
 class QAbstractButton;
@@ -211,6 +212,12 @@ private:
     QString m_banner;
     JobKind m_jobKind = JobKind::None;
     QList<CleanupJob::Request> m_requests;
+    // Instaladores huerfanos de la limpieza en curso (Windows): los mueve un paso elevado aparte.
+    InstallerCleanup *m_installers = nullptr;
+    QStringList m_installerNames;          ///< nombres de archivo pedidos
+    QHash<QString, QString> m_installerLabels; ///< nombre (case-folded) -> como se lo nombra en "Skipped"
+    QString m_installerDir;                ///< su carpeta, para volver a leerla despues
+    bool installersRunning() const;
     QList<Picked> m_jobItems; ///< borrado a mano: lo elegido, en el orden de los pedidos
     qint64 m_freeBeforeJob = 0;
     QString m_notice; ///< resultado del ultimo borrado a mano, en la barra de abajo

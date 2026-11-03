@@ -5,6 +5,15 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-69 · Instaladores huérfanos: solo los de programas que ya no están, con administrador**
+  (2026-11-03, Lega: «Si están instaladas, no podemos borrarlos de ninguna manera. No deberían ni
+  aparecer si la app está instalada»). La ventana de limpieza lista un `.msi` o `.msp` de primer nivel de
+  `C:\Windows\Installer` solo si ningún producto ni parche lo reclama y el programa que instala (por
+  ProductCode o UpgradeCode, en cualquier versión) no está instalado; ante la duda, no aparece. La
+  consulta es completa o nada: si no cubre a todos los usuarios, no se lista ningún archivo. Va en
+  «Yours to decide», destildado; «Clean up» pide administrador una vez y un paso elevado vuelve a
+  verificar cada archivo con todos los usuarios antes de mandarlo a la Papelera. Es la primera excepción
+  a D-27. Las copias repetidas de paquetes de programas instalados no se muestran.
 - **D-68 · Mouse Buttons** (2026-11-02, Lega). Reemplaza X-Mouse Button Control con la forma mínima:
   reglas «app → botón → teclas y botón izquierdo mientras está apretado». Solo Windows por ahora. La
   regla se guarda por el nombre del exe y actúa solo con la app al frente y bajo el puntero.
@@ -169,7 +178,8 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-26 · Borrado a mano** (2026-09-30). En Folders y Largest files, lo elegido va a la Papelera por
   defecto; «Delete permanently» es un botón aparte. Si la Papelera no lo acepta, no se borra.
 - **D-27 · Lo que pide administrador, en una segunda etapa** (2026-09-30). Por ahora la ventana informa
-  cuánto pesa y ofrece abrir la limpieza de Windows; no eleva permisos.
+  cuánto pesa y ofrece abrir la limpieza de Windows; no eleva permisos. Excepción: los instaladores
+  huérfanos de `C:\Windows\Installer` (D-69).
 - **D-28 · Reglas de carpetas del usuario** (2026-09-30). «Add a folder rule» declara descartable una
   carpeta, o toda carpeta con cierto nombre dentro de otra (los `build` de `C:\Portable`). Aparecen en
   «Yours to decide», sin tildar.
@@ -295,8 +305,8 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   - Las imágenes de máquina virtual avisan que se pierde lo que las sesiones guardaron adentro.
   - Los temporales se limpian a los 7 días sin cambios y los volcados a los 30; un renglón cuyo
     programa está abierto queda bloqueado.
-  - Las leyendas de Codex, de los parches de Windows Installer y del volcado de memoria dicen lo que la
-    app hace hoy, no lo del diseño.
+  - Las leyendas de Codex y del volcado de memoria dicen lo que la app hace hoy, no lo del diseño. La
+    línea informativa de los parches de Windows Installer la reemplazó la categoría de D-69.
 
 - **D-02 · Numeración.** Versión continua de a centésimos desde 0.01, con 1.00 como primer release
   público. Mientras tanto: esa. Cuándo se sube: D-59.

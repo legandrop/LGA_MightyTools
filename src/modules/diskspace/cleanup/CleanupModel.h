@@ -22,6 +22,9 @@ enum class Action {
     Entire,      ///< la carpeta (o el archivo) entera
     OldChildren, ///< los hijos directos con `minAgeDays` o mas sin cambios y sin nada en uso
     RecycleBin,  ///< la Papelera del volumen, por su API
+    // Una copia huerfana de %WINDIR%\Installer (solo Windows). NUNCA la toca CleanupJob: la manda a la
+    // Papelera el paso elevado (InstallerCleanup), que antes la vuelve a verificar.
+    InstallerPackage,
 };
 
 // Un lugar concreto del disco que un item limpia.
@@ -36,6 +39,9 @@ struct Item
 {
     QString name; ///< "uv cache", "Brave"
     QString path; ///< la ruta que se muestra
+    // Lo que se muestra en lugar de la ruta, si no esta vacio ("Boris FX, Inc. · a199bd5.msi"). La ruta
+    // sigue siendo la clave del renglon.
+    QString detail;
     QList<Target> targets;
     // Programas (en minusculas, sin ".exe") que no pueden estar corriendo mientras se limpia. Uno que
     // termina en '*' es un prefijo: "nuke1*" son Nuke10.0 a Nuke19.x (un exe por version).

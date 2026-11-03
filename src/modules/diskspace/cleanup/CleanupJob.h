@@ -22,6 +22,8 @@
 //  - Lo que esta en uso, sin permiso o es de la nube sin bajar se saltea y se cuenta; nunca se fuerza
 //    ni se deja para el reinicio.
 //  - Si la Papelera falla, el pedido falla: nunca se pasa a un borrado definitivo.
+//  - Un instalador huerfano (Action::InstallerPackage) nunca pasa por aca: lo mueve el paso elevado
+//    (InstallerCleanup). Si llega igual, se rechaza sin tocarlo.
 class CleanupJob
 {
 public:

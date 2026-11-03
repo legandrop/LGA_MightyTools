@@ -1,6 +1,7 @@
 #include "modules/diskspace/cleanup/CleanupFixture.h"
 
 #include "core/I18n.h"
+#include "modules/diskspace/cleanup/CleanupRules.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -338,6 +339,55 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
 }
 
 #else
+// Las copias huerfanas de %WINDIR%\Installer, armadas con la misma funcion que usan las reglas. Datos de
+// mentira: paquetes de programas que ya NO estan instalados (los de un programa instalado, en cualquier
+// version, nunca se listan). `skip`: las que ya se movieron.
+Cleanup::Category orphanedInstallers(qint64 now, InstallerOrphans::Status status, int skip = 0)
+{
+    const QString dir = QStringLiteral("C:\\Windows\\Installer");
+    struct Orphan
+    {
+        const char *name;
+        const char *author;
+        const char *subject;
+        double gib;
+        int days;
+    };
+    const Orphan orphans[] = {
+        {"5be0d12.msi", "Maxon Computer GmbH", "Red Giant Universe 2023.2", 1.12, 412},
+        {"77c13a8.msi", "Autodesk", "Autodesk Desktop Connector 16.4", 0.312, 290},
+        {"a4f21c9.msi", "Blackmagic Design", "Blackmagic RAW 3.6", 0.208, 520},
+        {"2e19b40.msp", "Microsoft Corporation", "Update for Office 2016 (KB4484103)", 0.0442, 830},
+        {"14d9e02.msi", "Microsoft Corporation", "Visual C++ 2019 X64 Minimum Runtime", 0.000196, 905},
+        {"14d9e21.msi", "Microsoft Corporation", "Visual C++ 2019 X64 Additional Runtime", 0.000196, 905},
+    };
+    InstallerOrphans::Verdict verdict;
+    verdict.status = status;
+    if (status == InstallerOrphans::Status::Ok) {
+        int index = 0;
+        for (const Orphan &orphan : orphans) {
+            if (index++ < skip) {
+                continue;
+            }
+            InstallerPackages::FileFacts file;
+            file.name = QLatin1String(orphan.name);
+            file.path = dir + QLatin1Char('\\') + file.name;
+            file.author = QLatin1String(orphan.author);
+            file.subject = QLatin1String(orphan.subject);
+            file.bytes = gb(orphan.gib);
+            file.created = now - orphan.days * kDay;
+            file.modified = file.created;
+            verdict.orphans.append(file);
+            verdict.bytes += file.bytes;
+        }
+    }
+    Cleanup::Category category = CleanupRules::installerCategory(verdict, dir);
+    for (Cleanup::Item &item : category.items) {
+        item.measured = true;
+    }
+    return category;
+}
+
 QList<Cleanup::Category> categories(const QString &state, qint64 now)
 {
     if (state.startsWith(QLatin1String("cleanup-apps"))) {
@@ -348,6 +398,37 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
     QList<Cleanup::Category> list;
     const bool pick = state == QLatin1String("cleanup-pick");
     const bool result = state == QLatin1String("cleanup-result");
+
+    // Los estados de los instaladores huerfanos: solo "Yours to decide", para que la lista se vea entera.
+    if (state == QLatin1String("cleanup-installers") || state == QLatin1String("cleanup-installers-denied")) {
+        Cleanup::Category orphans = orphanedInstallers(now, InstallerOrphans::Status::Ok);
+        orphans.items[0].checked = true;
+        orphans.items[1].checked = true;
+        list.append(orphans);
+        return list;
+    }
+    if (state == QLatin1String("cleanup-installers-result")) {
+        list.append(orphanedInstallers(now, InstallerOrphans::Status::Ok, 2));
+        return list;
+    }
+    if (state == QLatin1String("cleanup-installers-admin")) {
+        list.append(category(QStringLiteral("rule:0"), Cleanup::Group::Yours, I18n::tr("Folders named %1").arg(QStringLiteral("build")),
+                             I18n::tr("%1 folders named %2 in %3.").arg(2).arg(QStringLiteral("build"), portable),
+                             {item(QStringLiteral("LGA_PipeSync_2"), portable + QStringLiteral("\\LGA_PipeSync_2\\build"), 5.46, 0, false, now),
+                              item(QStringLiteral("LGA_FrameRev"), portable + QStringLiteral("\\LGA_FrameRev\\build"), 0.75, 0, false, now)}));
+        // La de administrador y la de una lectura que fallo: las dos lineas sin casilla.
+        list.append(orphanedInstallers(now, InstallerOrphans::Status::NeedsAdmin));
+        return list;
+    }
+    if (state == QLatin1String("cleanup-installers-unverified") || state == QLatin1String("cleanup-installers-unfinished")) {
+        list.append(category(QStringLiteral("rule:0"), Cleanup::Group::Yours, I18n::tr("Folders named %1").arg(QStringLiteral("build")),
+                             I18n::tr("%1 folders named %2 in %3.").arg(2).arg(QStringLiteral("build"), portable),
+                             {item(QStringLiteral("LGA_PipeSync_2"), portable + QStringLiteral("\\LGA_PipeSync_2\\build"), 5.46, 0, false, now),
+                              item(QStringLiteral("LGA_FrameRev"), portable + QStringLiteral("\\LGA_FrameRev\\build"), 0.75, 0, false, now)}));
+        list.append(orphanedInstallers(now, state.endsWith(QLatin1String("unfinished")) ? InstallerOrphans::Status::Unfinished
+                                                                                         : InstallerOrphans::Status::Unverified));
+        return list;
+    }
 
     if (!pick && !result) {
         list.append(category(QStringLiteral("bin"), Cleanup::Group::Safe, I18n::tr("Recycle Bin"),
@@ -421,13 +502,7 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
                              I18n::tr("Old conversations kept by Codex."),
                              {item(I18n::tr("Codex archived sessions"), home + QStringLiteral("\\.codex\\archived_sessions"), 7.42, 0, false, now)},
                              true));
-        Cleanup::Category msi = category(QStringLiteral("msi"), Cleanup::Group::Yours, I18n::tr("Windows Installer patches"),
-                                         I18n::tr("Programs need most of them to update or uninstall. Not cleaned from here."),
-                                         {item(I18n::tr("Windows Installer patches"), QStringLiteral("C:\\Windows\\Installer"), 34.0, 4, false, now)},
-                                         true);
-        msi.info = true;
-        msi.reviewPath = QStringLiteral("C:\\Windows\\Installer");
-        list.append(msi);
+        list.append(orphanedInstallers(now, InstallerOrphans::Status::Ok));
     }
     return list;
 }
@@ -440,10 +515,17 @@ namespace CleanupFixture {
 
 QStringList states()
 {
-    return {QStringLiteral("cleanup"),      QStringLiteral("cleanup-pick"),       QStringLiteral("cleanup-result"),
-            QStringLiteral("cleanup-apps"), QStringLiteral("cleanup-apps-nuke"), QStringLiteral("cleanup-apps-yours"),
-            QStringLiteral("folders"),      QStringLiteral("folders-selected"),   QStringLiteral("files"),
-            QStringLiteral("changes"),      QStringLiteral("scanning")};
+    QStringList list = {QStringLiteral("cleanup"),      QStringLiteral("cleanup-pick"),      QStringLiteral("cleanup-result"),
+                        QStringLiteral("cleanup-apps"), QStringLiteral("cleanup-apps-nuke"), QStringLiteral("cleanup-apps-yours"),
+                        QStringLiteral("folders"),      QStringLiteral("folders-selected"),  QStringLiteral("files"),
+                        QStringLiteral("changes"),      QStringLiteral("scanning")};
+#ifndef Q_OS_MACOS
+    // Instaladores huerfanos (solo Windows): la lista, la consulta que pide administrador, el resultado de
+    // una limpieza y el pedido de administrador cancelado.
+    list << QStringLiteral("cleanup-installers") << QStringLiteral("cleanup-installers-admin") << QStringLiteral("cleanup-installers-unverified")
+         << QStringLiteral("cleanup-installers-unfinished") << QStringLiteral("cleanup-installers-result") << QStringLiteral("cleanup-installers-denied");
+#endif
+    return list;
 }
 
 Data build(const QString &state, ScanEngine &engine)
@@ -468,6 +550,7 @@ Data build(const QString &state, ScanEngine &engine)
     data.drive.label = QStringLiteral("C:");
     data.drive.name = QStringLiteral("Windows");
     data.drive.totalBytes = gb(930.5);
+    // Lo que va a la Papelera no libera nada: despues de mover instaladores, el disco queda igual.
     data.drive.freeBytes = state == QLatin1String("cleanup-result") ? gb(91.6) : gb(32.3);
 
     data.guard.volumeRoot = QStringLiteral("C:\\");
@@ -561,7 +644,19 @@ Data build(const QString &state, ScanEngine &engine)
     data.categories = categories(state, now);
     data.openCategories = {QStringLiteral("python")};
     data.tab = 0;
-    if (state == QLatin1String("cleanup-pick")) {
+    if (state.startsWith(QLatin1String("cleanup-installers"))) {
+        data.openCategories = {QStringLiteral("installers")};
+        const QString title = I18n::tr("Orphaned installer files");
+        if (state == QLatin1String("cleanup-installers-result")) {
+            // Se eligieron los dos primeros y Blackmagic RAW; ese ultimo se salteo en la re-verificacion.
+            data.banner = I18n::tr("%1 installer files went to the Recycle Bin (%2).").arg(2).arg(QStringLiteral("1.43 GB"));
+            data.skippedSummary = I18n::tr("1 item");
+            data.skipped = {{title + QStringLiteral(" · Blackmagic RAW 3.6"), I18n::tr("An installation is running"), false}};
+        } else if (state == QLatin1String("cleanup-installers-denied")) {
+            data.skippedSummary = I18n::tr("1 item");
+            data.skipped = {{title, I18n::tr("Administrator permission was not given"), false}};
+        }
+    } else if (state == QLatin1String("cleanup-pick")) {
         data.openCategories = {QStringLiteral("rule:0")};
     } else if (state == QLatin1String("cleanup-apps")) {
         data.openCategories = {QStringLiteral("media")};

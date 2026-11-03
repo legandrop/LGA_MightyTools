@@ -2,6 +2,10 @@
 
 v1.53:
 
+Disk Space (Windows): la limpieza dejaba afuera `C:\Windows\Installer` porque borrar la copia de un programa instalado rompe su reparación y su desinstalación. Ahora lista un `.msi`/`.msp` solo si ningún producto ni parche lo reclama (API de Windows Installer más `Installer\UserData`) y su programa no está instalado en ninguna versión (ProductCode y UpgradeCode leídos del paquete en solo lectura). La consulta es completa o nada: sin administrador, la de todos los usuarios falla, y tomarla como «nada reclamado» marcaba los 142 paquetes de la PC de prueba como huérfanos. Con una instalación corriendo, suspendida o esperando un reinicio no se lista nada. Borrar pide administrador una vez: un paso elevado re-verifica cada archivo y lo manda a la Papelera. D-69.
+
+[ Disk Space - Instaladores huerfanos de Windows Installer, solo los de programas que ya no estan ]
+
 Mouse Buttons (Windows), herramienta nueva: X-Mouse Button Control no se reinstaló al formatear y su único uso era mover la imagen de Photoshop con el botón del medio (Espacio + clic izquierdo mientras se mantiene). Reglas «exe → botón (medio, atrás, adelante) → teclas y botón izquierdo»; el exe se compara por nombre, así sobrevive a las carpetas por versión. Un gancho `WH_MOUSE_LL` en su propio hilo de prioridad crítica existe solo mientras la app de una regla está al frente, y actúa solo con el puntero sobre ella. Lo inyectado lleva la marca propia; un reloj de 200 ms suelta todo si cambia el frente, si el gancho fue retirado o si soltar falló (pantalla de bloqueo, UAC), y reintenta hasta que entre. Apps elevadas quedan fuera. D-68.
 
 [ Mouse Buttons - Herramienta nueva: mantener teclas y el boton izquierdo con un boton del mouse, por app ]
