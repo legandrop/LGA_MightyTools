@@ -42,7 +42,7 @@ public:
     quint32 hookPid() const { return m_hookPid; }
 
     static QString buttonText(MouseButtonsSystem::Button button);
-    // «Holds Space + left click»: lo que hace la regla, para su fila.
+    // «Holds Space and the left button»: lo que hace la regla, para su fila.
     static QString summary(const MouseRule &rule);
 
 signals:
