@@ -90,14 +90,14 @@ QStringList describeInputs(const QList<Step> &steps);
 int liveHooks();
 
 // El gancho de las reglas de UNA app (el proceso `pid`), en su propio hilo con su bucle de mensajes: si la
-// ventana de Mighty Tools se traba, el mouse del sistema sigue andando. Destruirlo suelta todo lo que
-// quedo apretado. Nunca se instala en una corrida automatizada (devuelve nullptr).
+// ventana de Mighty Tools se traba, el mouse del sistema sigue andando. Destruirlo retira el gancho y suelta
+// todo lo que quedo apretado (si el escritorio seguro no lo deja, el hilo sigue reintentando por su cuenta).
+// Nunca se instala en una corrida automatizada (devuelve nullptr).
 class Hook
 {
 public:
     static std::unique_ptr<Hook> install(const QList<Rule> &rules, quint32 pid, QString *error);
     ~Hook();
-    bool holding() const;
 
 private:
     Hook();

@@ -793,7 +793,7 @@ void SwitchRow::mouseReleaseEvent(QMouseEvent *event)
     QWidget::mouseReleaseEvent(event);
 }
 
-// ------------------------------------------------------------------ StatusDot
+// ------------------------------------------------------------------ AppIconTile
 
 AppIconTile::AppIconTile(QWidget *parent)
     : QWidget(parent)
@@ -855,6 +855,8 @@ void AppIconTile::paintIcon(QPainter &painter, const QRect &target) const
     pixmap.setDevicePixelRatio(dpr);
     painter.drawPixmap(target.topLeft(), pixmap);
 }
+
+// ------------------------------------------------------------------ StatusDot
 
 StatusDot::StatusDot(int diameter, QWidget *parent)
     : QWidget(parent)

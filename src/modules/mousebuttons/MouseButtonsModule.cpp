@@ -2,12 +2,12 @@
 
 #include "app/ModuleContext.h"
 #include "core/I18n.h"
+#include "modules/apptoggle/AppToggleState.h"
 #include "modules/mousebuttons/MouseButtonsPanel.h"
 #include "platform/ForegroundWatcher.h"
 
 #include <QDebug>
 #include <QDir>
-#include <QFileInfo>
 #include <QHash>
 #include <QPainter>
 #include <QWidget>
@@ -86,7 +86,7 @@ Event event(Button button, bool isDown, bool overTarget = true, bool ownInjected
 void selfTest(const std::function<void(bool, const QString &)> &check)
 {
     // ---- La maquina de estados, con secuencias de eventos armadas a mano.
-    const Rule photoshop; // boton del medio -> Espacio + clic izquierdo (la regla de fabrica)
+    const Rule photoshop; // boton del medio -> Espacio y el boton izquierdo (la regla de fabrica)
     Machine machine({photoshop});
     Result r = machine.handle(event(Button::Middle, true));
     check(r.swallow && r.steps == QList<Step>{down(Qt::Key_Space), kLeftDown} && machine.holding(),
@@ -237,11 +237,11 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         dup.app = QStringLiteral("example");
         check(!module.saveRule(dup, &error) && error == I18n::tr("Choose a program file (.exe)."),
               QStringLiteral("modulo: un nombre sin .exe se rechaza"));
-        dup.app = QStringLiteral("C:/Tools/other.exe");
-        dup.path = QStringLiteral("C:/Tools/other.exe");
+        dup.app = QStringLiteral(" \"C:\\Tools\\other.exe\" ");
+        dup.path.clear();
         check(module.saveRule(dup, &error) && module.rulesState().rules().last().app == QLatin1String("other.exe")
-                  && module.rulesState().rules().last().path == QLatin1String("C:/Tools/other.exe"),
-              QStringLiteral("modulo: de una ruta guarda el nombre del exe y la ruta para el icono"));
+                  && module.rulesState().rules().last().path == QLatin1String("C:\\Tools\\other.exe"),
+              QStringLiteral("modulo: de una ruta pegada con comillas guarda el nombre del exe y la ruta para el icono"));
         check(module.removeRule(module.rulesState().rules().last().id) && module.hookPid() == 4242,
               QStringLiteral("modulo: borrar otra regla no toca el gancho de la app al frente"));
         module.stop();
@@ -435,7 +435,7 @@ QString MouseButtonsModule::buttonText(Button button)
 QString MouseButtonsModule::summary(const MouseRule &rule)
 {
     const QString keys = rule.keys.displayText();
-    return rule.holdLeft ? I18n::tr("Holds %1 + left click").arg(keys) : I18n::tr("Holds %1").arg(keys);
+    return rule.holdLeft ? I18n::tr("Holds %1 and the left button").arg(keys) : I18n::tr("Holds %1").arg(keys);
 }
 
 QWidget *MouseButtonsModule::createPanel(QWidget *parent)
@@ -506,6 +506,11 @@ QString MouseButtonsModule::validateRule(const MouseRule &rule) const
 
 bool MouseButtonsModule::saveRule(MouseRule rule, QString *error)
 {
+    // Lo escrito o pegado, sin las comillas de "Copiar como ruta": una ruta completa tambien da el icono.
+    rule.app = AppToggleState::cleanPath(rule.app);
+    if (QDir::isAbsolutePath(QDir::fromNativeSeparators(rule.app))) {
+        rule.path = QDir::toNativeSeparators(rule.app);
+    }
     const QString invalid = validateRule(rule);
     if (!invalid.isEmpty()) {
         if (error) *error = invalid;

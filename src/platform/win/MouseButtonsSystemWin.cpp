@@ -134,20 +134,23 @@ public:
 
     bool begin()
     {
-        start();
+        // Por encima del resto de la app: Windows retira en silencio el gancho que tarda (LowLevelHooksTimeout).
+        start(QThread::TimeCriticalPriority);
         m_ready.acquire();
         if (!m_installed) wait();
         return m_installed;
     }
 
-    void stop()
+    // Retira el gancho y espera solo eso. False: el hilo sigue vivo reintentando soltar lo que el escritorio
+    // seguro (UAC, pantalla de bloqueo) no dejo entrar; termina solo cuando entra.
+    bool stop()
     {
         PostThreadMessageW(m_threadId, WM_QUIT, 0, 0);
-        wait();
+        m_unhooked.acquire();
+        return wait(100);
     }
 
     DWORD error() const { return m_error; }
-    bool holding() const { return m_holding; }
 
 protected:
     void run() override
@@ -156,50 +159,72 @@ protected:
         MSG msg;
         PeekMessageW(&msg, nullptr, WM_USER, WM_USER, PM_NOREMOVE); // crea la cola antes de recibir ordenes
         m_threadId = GetCurrentThreadId();
-        HHOOK hook = SetWindowsHookExW(WH_MOUSE_LL, &HookThread::onMouse, GetModuleHandleW(nullptr), 0);
-        m_installed = hook != nullptr;
+        m_installed = hook();
         m_error = m_installed ? 0 : GetLastError();
-        if (hook) ++g_liveHooks;
         m_ready.release();
-        if (hook) {
-            while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
-                if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == m_watchdog) {
-                    watchdog();
-                    continue;
-                }
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
+        if (!m_installed) {
+            s_current = nullptr;
+            return;
+        }
+        while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+            if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == m_watchdog) {
+                watchdog();
+                continue;
             }
-            UnhookWindowsHookEx(hook);
-            // Nunca queda nada apretado: lo que se inyecto se suelta al irse el gancho.
-            release();
-            --g_liveHooks;
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+        unhook();
+        release();
+        m_unhooked.release();
+        // Nunca queda nada apretado: si el escritorio seguro no deja soltar, se reintenta hasta que entra.
+        while (!m_pending.isEmpty()) {
+            Sleep(kWatchdogMs);
+            retryPending();
         }
         s_current = nullptr;
     }
 
 private:
-    // Rapido a proposito (Windows saca el gancho si tarda: LowLevelHooksTimeout): sin mensajes a otros
-    // procesos (WindowFromPoint solo consulta ventanas del propio hilo) y la inyeccion aca mismo. SendInput
-    // solo encola y vuelve; postearla para despues dejaria que la proxima soltada fisica, que llega como
-    // mensaje enviado y se atiende antes que los posteados, se procese antes que las teclas apretadas.
+    bool hook()
+    {
+        m_hook = SetWindowsHookExW(WH_MOUSE_LL, &HookThread::onMouse, GetModuleHandleW(nullptr), 0);
+        if (m_hook) ++g_liveHooks;
+        return m_hook != nullptr;
+    }
+
+    void unhook()
+    {
+        if (!m_hook) return;
+        UnhookWindowsHookEx(m_hook); // si Windows ya lo retiro, falla sin efecto
+        m_hook = nullptr;
+        --g_liveHooks;
+    }
+
+    // La inyeccion va aca mismo y no posteada para despues: si Windows no la toma (UIPI), el clic tiene que
+    // seguir intacto a la app, y eso se decide antes de devolver. SendInput no solo encola: pasa sincronico
+    // por los ganchos de bajo nivel de todos los procesos (el clic inyectado vuelve a entrar a este mismo
+    // gancho), asi que puede tardar. Por eso el hilo corre con prioridad maxima, el callback no hace nada
+    // mas (sin logs ni mensajes a otros procesos: WindowFromPoint solo manda WM_NCHITTEST a ventanas de
+    // este hilo, que no tiene) y el reloj de seguridad se da cuenta si Windows igual lo retiro.
     static LRESULT CALLBACK onMouse(int code, WPARAM message, LPARAM data)
     {
         HookThread *self = s_current;
         if (!self || code != HC_ACTION) return CallNextHookEx(nullptr, code, message, data);
+        ++self->m_calls; // tambien los movimientos: el reloj los usa para saber si el gancho sigue
         const auto *info = reinterpret_cast<const MSLLHOOKSTRUCT *>(data);
         Event event;
         if (!mouseButton(message, info->mouseData, &event.button, &event.down)) {
             return CallNextHookEx(nullptr, code, message, data);
         }
+        if (!self->m_pending.isEmpty()) self->retryPending(); // lo que no se pudo soltar va antes que lo nuevo
         event.ownInjected = (info->flags & LLMHF_INJECTED) && info->dwExtraInfo == kMightyToolsInputTag;
         if (event.down && !event.ownInjected) event.overTarget = self->overTarget(info->pt);
         const Result result = self->m_machine.handle(event);
         if (!result.steps.isEmpty()) {
             if (!sendInputs(result.steps) && event.down) {
                 // Windows no las tomo (UIPI, escritorio seguro): se suelta lo que haya entrado y el clic sigue.
-                sendInputs(self->m_machine.releaseAll());
-                self->syncWatchdog();
+                self->release();
                 return CallNextHookEx(nullptr, code, message, data);
             }
             self->syncWatchdog();
@@ -213,14 +238,14 @@ private:
         return processOf(GetForegroundWindow()) == m_pid && under && processOf(GetAncestor(under, GA_ROOT)) == m_pid;
     }
 
-    // Mientras hay algo apretado, un reloj del hilo mira la ventana del frente: si dejo de ser la app (otra
-    // app, la pantalla de bloqueo o un aviso de UAC, donde el gancho no ve la soltada), se suelta todo.
+    // El reloj de seguridad corre mientras hay algo apretado o pendiente de soltar.
     void syncWatchdog()
     {
-        m_holding = m_machine.holding();
-        if (m_holding && !m_watchdog) {
+        const bool needed = m_machine.holding() || !m_pending.isEmpty();
+        if (needed && !m_watchdog) {
             m_watchdog = SetTimer(nullptr, 0, kWatchdogMs, nullptr);
-        } else if (!m_holding && m_watchdog) {
+            m_watchSeen = false;
+        } else if (!needed && m_watchdog) {
             KillTimer(nullptr, m_watchdog);
             m_watchdog = 0;
         }
@@ -228,22 +253,61 @@ private:
 
     void watchdog()
     {
+        // Pendiente de soltar: se reintenta sin mirar el frente (en el escritorio seguro no se puede leer).
+        if (!m_pending.isEmpty()) {
+            retryPending();
+            return;
+        }
+        if (hookLost()) {
+            release();
+            unhook();
+            hook(); // de vuelta, para los clics que siguen
+            return;
+        }
+        // Otra app al frente, la pantalla de bloqueo o un aviso de UAC: el gancho no ve la soltada.
         if (processOf(GetForegroundWindow()) != m_pid) release();
     }
 
-    // Sin logs desde este hilo: el manejador de logs de la app escribe el archivo sin cerrojo.
+    // Windows retira en silencio un gancho que tardo y no avisa. GetAsyncKeyState del boton no sirve para
+    // notarlo: el boton que el gancho se traga nunca cambia ese estado. Pero mientras se mantiene un boton se
+    // mueve el mouse, y cada movimiento pasa por el gancho: si el puntero se movio entre dos ticks y el gancho
+    // no vio nada, ya no esta.
+    bool hookLost()
+    {
+        POINT now = {};
+        if (!GetCursorPos(&now)) return false;
+        const bool lost = m_watchSeen && m_watchCalls == m_calls && (now.x != m_watchPoint.x || now.y != m_watchPoint.y);
+        m_watchPoint = now;
+        m_watchCalls = m_calls;
+        m_watchSeen = true;
+        return lost;
+    }
+
+    // Suelta todo lo apretado. Sin logs desde este hilo: el manejador de logs de la app escribe sin cerrojo.
     void release()
     {
-        sendInputs(m_machine.releaseAll());
+        m_pending += m_machine.releaseAll();
+        retryPending();
+    }
+
+    void retryPending()
+    {
+        if (!m_pending.isEmpty() && sendInputs(m_pending)) m_pending.clear();
         syncWatchdog();
     }
 
     Machine m_machine;
     const quint32 m_pid;
+    HHOOK m_hook = nullptr;
     DWORD m_threadId = 0;
     UINT_PTR m_watchdog = 0;
-    std::atomic<bool> m_holding{false};
+    QList<Step> m_pending; ///< soltadas que Windows no tomo todavia
+    quint64 m_calls = 0;
+    quint64 m_watchCalls = 0;
+    POINT m_watchPoint = {};
+    bool m_watchSeen = false;
     QSemaphore m_ready;
+    QSemaphore m_unhooked;
     bool m_installed = false;
     DWORD m_error = 0;
     static thread_local HookThread *s_current;
@@ -305,15 +369,12 @@ Hook::Hook()
 
 Hook::~Hook()
 {
-    if (!d->thread) return;
-    const bool held = d->thread->holding();
-    d->thread->stop();
-    if (held) qInfo() << "[mouseButtons] Se solto lo que estaba apretado al retirar el gancho";
-}
-
-bool Hook::holding() const
-{
-    return d->thread && d->thread->holding();
+    if (!d->thread || d->thread->stop()) return;
+    // Sigue reintentando soltar (escritorio seguro): termina y se borra solo, sin que la ventana espere.
+    qInfo() << "[mouseButtons] Gancho retirado; soltar queda pendiente hasta que Windows lo deje";
+    HookThread *draining = d->thread.release();
+    QObject::connect(draining, &QThread::finished, draining, &QObject::deleteLater);
+    if (draining->isFinished()) draining->deleteLater();
 }
 
 std::unique_ptr<Hook> Hook::install(const QList<Rule> &rules, quint32 pid, QString *error)

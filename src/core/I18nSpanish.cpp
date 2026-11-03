@@ -918,9 +918,9 @@ const QHash<QString, QString> &spanishTable()
 
         // Mouse Buttons: descriptor, ayuda, panel, editor, grabador de teclas para mantener y errores.
         E("Hold a mouse button to hold keys and the left button, app by app.",
-          "Un botón del mouse mantiene teclas y el clic izquierdo, por app."),
+          "Un botón del mouse mantiene teclas y el botón izquierdo, por app."),
         E("Holds keys and the left button while you hold a mouse button",
-          "Mantiene teclas y el clic izquierdo con un botón del mouse apretado"),
+          "Mantiene teclas y el botón izquierdo con otro botón del mouse"),
         E("Acts only in the apps you choose, while they're in front", "Actúa solo en las apps elegidas, mientras están al frente"),
         E("Other buttons and other apps are left as is", "Los demás botones y las demás apps quedan como están"),
         E("Add a rule and choose the app's program file, or type its name, like Photoshop.exe.",
@@ -938,7 +938,7 @@ const QHash<QString, QString> &spanishTable()
         E("Middle button", "Botón del medio"),
         E("Back button", "Botón Atrás"),
         E("Forward button", "Botón Adelante"),
-        E("Holds %1 + left click", "Mantiene %1 + clic izquierdo"),
+        E("Holds %1 and the left button", "Mantiene %1 y el botón izquierdo"),
         E("Holds %1", "Mantiene %1"),
         E("Windows did not let Mouse Buttons watch the mouse (error %1).",
           "Windows no dejó que Mouse Buttons observara el mouse (error %1)."),

@@ -4,7 +4,6 @@
 #include "modules/apptoggle/AppToggleModule.h"
 #include "ui/CustomTooltip.h"
 #include "ui/ShortcutRow.h"
-#include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
 #include <QDir>
@@ -14,7 +13,6 @@
 #include <QHideEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPainter>
 #include <QPointer>
 #include <QPushButton>
 #include <QScrollArea>
