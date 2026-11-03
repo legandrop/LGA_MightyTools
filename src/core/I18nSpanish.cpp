@@ -734,6 +734,7 @@ const QHash<QString, QString> &spanishTable()
         E("Every tool stops until you open the app again.", "Todas las herramientas se detienen hasta volver a abrir la app."),
         E("Change shortcut", "Cambiar atajo"),
         E("Press a shortcut...", "Presionar atajo..."),
+        E("Not set", "Sin asignar"),
         E("Press the new combination. Esc cancels.", "Presionar la nueva combinación. Esc cancela."),
         E("Use a letter, a number, F1-F12 or an arrow key.", "Usar una letra, un número, F1-F12 o una flecha."),
         E("Add ⌘, ⌥ or ⌃ so it doesn't take a plain key.", "Agregar ⌘, ⌥ o ⌃ para que no ocupe una tecla sola."),

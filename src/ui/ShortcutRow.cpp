@@ -166,6 +166,10 @@ void ShortcutRow::rebuildKeys()
         chip->set(QStringLiteral("key"), key);
         m_keysLayout->addWidget(chip, 0, Qt::AlignVCenter);
     }
+    // Sin atajo (una entrada nueva de App Toggle): el lapiz solo, sin nada al lado, parece un hueco.
+    if (m_keysLayout->isEmpty()) {
+        m_keysLayout->addWidget(Ui::caption(I18n::tr("Not set"), m_keys), 0, Qt::AlignVCenter);
+    }
 }
 
 QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers)
