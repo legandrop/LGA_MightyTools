@@ -16,9 +16,35 @@ constexpr int kMaxText = 2048;
 AppToggleState::AppToggleState(ModuleContext *context)
     : m_context(context)
 {
-    if (context) {
-        m_apps = fromJson(context->value(kApps).toString());
+    if (!context) {
+        return;
     }
+    const QVariant stored = context->value(kApps);
+    // Una corrida automatizada o una captura nunca siembran: leen el disco ajeno y escribirian settings.
+    if (stored.isValid() || context->captureMode() || context->automatedRun()) {
+        m_apps = fromJson(stored.toString());
+        return;
+    }
+    m_apps = defaults(AppToggleSystem::suggestedApps());
+    save();
+}
+
+QList<AppEntry> AppToggleState::defaults(const QList<AppToggleSystem::Suggestion> &suggestions)
+{
+    QList<AppEntry> result;
+    QSet<QString> shortcuts;
+    for (const AppToggleSystem::Suggestion &suggestion : suggestions) {
+        AppEntry entry;
+        entry.id = int(result.size()) + 1;
+        entry.name = suggestion.name;
+        entry.path = suggestion.path;
+        entry.shortcut = Shortcut::fromPortableString(suggestion.shortcut);
+        entry.enabled = false;
+        if (!valid(entry) || shortcuts.contains(entry.shortcut.toPortableString())) continue;
+        shortcuts.insert(entry.shortcut.toPortableString());
+        result.append(entry);
+    }
+    return result;
 }
 
 bool AppToggleState::validPath(const QString &path)

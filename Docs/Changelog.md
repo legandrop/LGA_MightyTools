@@ -2,6 +2,10 @@
 
 v1.53:
 
+App Toggle y Mouse Buttons arrancaban vacíos: quien los prendía no veía cómo se usan, y Win+E del Explorador abría una ventana nueva cada vez. Ahora, la primera vez (sin la clave en settings), App Toggle trae ejemplos apagados: Win+E para XYplorer si está instalado (desinstalador o Program Files) o, si no, para el Explorador, y OBS con Ctrl+Alt+Shift+Win+1 (en mac solo OBS). Mouse Buttons trae la regla de Photoshop apagada. Borrar todo no los vuelve a sembrar, y una corrida automatizada o una captura nunca siembran. El Explorador es un caso propio: su proceso siempre corre, así que solo cuentan sus ventanas de carpetas (`CabinetWClass`) y, sin ninguna visible, se abre una. D-71.
+
+[ App Toggle y Mouse Buttons - Ejemplos apagados la primera vez y el Explorador como toggle ]
+
 Disk Space: las cachés de los programas de video, audio y VFX solo se buscaban en su carpeta por defecto (Media Cache de Adobe), y quien las movía a otro disco no veía nada (Nuke en `E:` en la PC de Lega). `AppCacheRules` lee las preferencias de cada programa (`preferences*.nk` de Nuke, registro y plist de Adobe, `Prefs.txt` de After Effects, `Preferences.cfg` de Ableton, Topaz, REAPER, Unreal, Redshift, CUDA) y reconoce por forma en el escaneo `CacheClip`/`OptimizedMedia`/`ProxyMedia` de Resolve, previews de Premiere y `BL_proxy`. Nunca se borra la carpeta que dice una preferencia: solo subcarpetas conocidas con su marca. Se rechazan raíces de volumen, carpetas del usuario o de datos, rutas de red y carpetas con proyectos. Cada fila muestra lo que se borra. D-70.
 
 [ Disk Space - Caches de programas de video, audio y VFX leyendo sus preferencias ]

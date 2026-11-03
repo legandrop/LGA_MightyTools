@@ -919,6 +919,7 @@ const QHash<QString, QString> &spanishTable()
         E("Minimizes it if it's already in front", "La minimiza si ya está al frente"),
         E("Hides it if it's already in front", "La oculta si ya está al frente"),
         E("No apps yet", "Todavía no hay apps"),
+        E("File Explorer", "Explorador de archivos"),
         E("All apps are off", "Todas las apps están desactivadas"),
         E("1 app ready", "1 app lista"),
         E("%1 apps ready", "%1 apps listas"),

@@ -5,6 +5,14 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-71 · Ejemplos apagados en App Toggle y Mouse Buttons, y el Explorador como toggle** (2026-11-03,
+  Lega: «debe venir con la app ya puesto… es como un setting que viene por defecto», «pero apagado»).
+  La primera vez que se prende cada herramienta (sin la clave en settings) trae ejemplos apagados: App
+  Toggle, Win+E para XYplorer si está instalado o, si no, para el Explorador, y OBS con
+  Ctrl+Alt+Shift+Win+1 aunque no esté instalado (en mac solo OBS); Mouse Buttons, la regla de Photoshop
+  (botón del medio = Espacio + botón izquierdo). Son datos, no texto de la interfaz: borrarlos no los
+  vuelve a traer. Con el Explorador, Win+E deja de abrir una ventana nueva cada vez: sin ventana de
+  carpetas abre una, con una la trae, al frente la minimiza.
 - **D-70 · Cachés de programas audiovisuales: leídas de sus preferencias, borradas solo por marca**
   (2026-11-03, Lega: «buscar dónde apuntan las cachés» en las preferencias de cada programa). La
   limpieza lee dónde configuró el usuario la caché de Nuke, Adobe, After Effects, Ableton, Topaz,

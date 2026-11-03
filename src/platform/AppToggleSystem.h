@@ -45,6 +45,9 @@ struct Snapshot
     quintptr foreground = 0;  ///< Windows: GA_ROOTOWNER de la ventana del frente
     QString foregroundPath;   ///< ruta del proceso (Windows) o del .app (mac) que esta al frente
     bool wholeApp = false;    ///< mac: se actua sobre la app, sin mirar ventanas
+    // Windows: la app es el Explorador. Su proceso siempre corre (es el escritorio y la barra de tareas):
+    // `windows` trae solo sus ventanas de carpetas y, sin ninguna, se abre una nueva.
+    bool shell = false;
 };
 
 enum class Action {
@@ -88,6 +91,24 @@ QString productName(const QString &appPath);
 // El icono de la app, el mismo que muestra el sistema. Nulo si no existe en el disco. En Windows se lee del
 // shell directamente: la captura de QA (plataforma offscreen) muestra el mismo que ve el usuario.
 QIcon icon(const QString &appPath);
+
+// Una entrada de ejemplo para la primera vez. `shortcut` en texto portable.
+struct Suggestion
+{
+    QString name;
+    QString path;
+    QString shortcut;
+};
+// Las entradas de ejemplo, en orden. Windows: Win+E para XYplorer si esta instalado (el atajo que su
+// AutoHotkey le daba), si no para el Explorador; despues OBS. mac: OBS. Lee el disco y el registro, nunca
+// escribe. OBS va aunque no este instalado: es el ejemplo.
+QList<Suggestion> suggestedApps();
+#ifdef Q_OS_WIN
+// %WINDIR%\explorer.exe
+QString explorerPath();
+// El Photoshop.exe instalado mas nuevo (Program Files\Adobe\Adobe Photoshop *), o vacio.
+QString photoshopPath();
+#endif
 
 } // namespace AppToggleSystem
 

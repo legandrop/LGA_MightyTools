@@ -69,6 +69,13 @@ Decision decide(const QString &appPath, const Snapshot &snapshot)
                                            : QStringLiteral("su ultima ventana esta detras");
         return decision;
     }
+    // El Explorador siempre corre (escritorio y barra de tareas): sin una ventana de carpetas se abre una,
+    // como Win+E; con una, el atajo la trajo arriba en lugar de abrir otra.
+    if (snapshot.shell) {
+        decision.action = Action::Launch;
+        decision.reason = QStringLiteral("el Explorador no tiene ventanas de carpetas abiertas");
+        return decision;
+    }
     decision.action = Action::Nothing;
     decision.reason = QStringLiteral("corre sin una ventana que se pueda mostrar (solo en la bandeja?)");
     return decision;

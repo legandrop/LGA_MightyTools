@@ -3,6 +3,7 @@
 #include "core/AutomatedRun.h"
 #include "core/I18n.h"
 #include "platform/WindowActivation.h"
+#include "platform/win/RegistryHelper.h"
 
 #include <QDebug>
 #include <QDir>
@@ -10,7 +11,10 @@
 #include <QHash>
 #include <QImage>
 #include <QPixmap>
+#include <QRegularExpression>
 #include <QVarLengthArray>
+
+#include <algorithm>
 
 #include <windows.h>
 #include <dwmapi.h>
@@ -39,7 +43,60 @@ struct Collected
 {
     QHash<DWORD, QString> processes;
     QList<Window> windows;
+    bool folderWindowsOnly = false; ///< el Explorador: ni el escritorio ni la barra de tareas
 };
+
+// Las ventanas de carpetas del Explorador (CabinetWClass; ExploreWClass en Windows viejos).
+bool folderWindowClass(const wchar_t *className)
+{
+    return wcscmp(className, L"CabinetWClass") == 0 || wcscmp(className, L"ExploreWClass") == 0;
+}
+
+// La primera ruta que existe.
+QString firstExisting(const QStringList &candidates)
+{
+    for (const QString &candidate : candidates) {
+        const QString clean = QDir::cleanPath(QDir::fromNativeSeparators(candidate));
+        if (!candidate.isEmpty() && QFileInfo(clean).isFile()) return QDir::toNativeSeparators(clean);
+    }
+    return {};
+}
+
+QString programFiles()
+{
+    return qEnvironmentVariable("ProgramW6432", qEnvironmentVariable("ProgramFiles", QStringLiteral("C:/Program Files")));
+}
+
+// XYplorer: su desinstalador anota la carpeta (XYplorer64 o XYplorer, en la maquina o en el usuario); si no,
+// las carpetas de siempre. Una copia portable en otro lado no se encuentra. Su instalador es de 32 bits: en la
+// maquina la clave queda bajo WOW6432Node, que esta app (64 bits) no ve sin pedirla.
+QString xyplorerPath()
+{
+    QStringList candidates;
+    const QString uninstall = QStringLiteral("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\");
+    const QString uninstall32 = QStringLiteral("SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\");
+    const QList<QPair<HKEY, QString>> places = {{HKEY_CURRENT_USER, uninstall}, {HKEY_LOCAL_MACHINE, uninstall},
+                                                {HKEY_LOCAL_MACHINE, uninstall32}};
+    for (const auto &place : places) {
+        for (const char *key : {"XYplorer64", "XYplorer"}) {
+            const QString folder = RegistryHelper::readString(place.first, place.second + QLatin1String(key),
+                                                              QStringLiteral("InstallLocation"));
+            if (!folder.isEmpty()) candidates << folder + QStringLiteral("/XYplorer.exe");
+        }
+    }
+    candidates << programFiles() + QStringLiteral("/XYplorer/XYplorer.exe")
+               << qEnvironmentVariable("ProgramFiles(x86)") + QStringLiteral("/XYplorer/XYplorer.exe");
+    return firstExisting(candidates);
+}
+
+// OBS anota su carpeta en HKLM\SOFTWARE\OBS Studio. Si no esta instalado, la ruta de siempre: es el ejemplo.
+QString obsPath()
+{
+    const QString folder = RegistryHelper::readString(HKEY_LOCAL_MACHINE, QStringLiteral("SOFTWARE\\OBS Studio"));
+    const QString standard = programFiles() + QStringLiteral("/obs-studio/bin/64bit/obs64.exe");
+    const QString found = firstExisting({folder.isEmpty() ? QString() : folder + QStringLiteral("/bin/64bit/obs64.exe"), standard});
+    return found.isEmpty() ? QDir::toNativeSeparators(standard) : found;
+}
 
 BOOL CALLBACK collectWindow(HWND hwnd, LPARAM parameter)
 {
@@ -54,6 +111,9 @@ BOOL CALLBACK collectWindow(HWND hwnd, LPARAM parameter)
     DWORD cloaked = 0;
     wchar_t className[128] = {};
     GetClassNameW(hwnd, className, 128);
+    if (collected->folderWindowsOnly && !folderWindowClass(className)) {
+        return TRUE;
+    }
     Window window;
     window.id = quintptr(hwnd);
     window.processPath = *process;
@@ -167,6 +227,8 @@ Snapshot snapshot(const QString &appPath)
     }
     // Primero por el nombre del exe (barato) y solo a esos se les pide la ruta completa.
     Collected collected;
+    snapshot.shell = samePath(appPath, explorerPath());
+    collected.folderWindowsOnly = snapshot.shell;
     HANDLE processes = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (processes != INVALID_HANDLE_VALUE) {
         PROCESSENTRY32W entry{};
@@ -324,6 +386,39 @@ QString productName(const QString &appPath)
         }
     }
     return {};
+}
+
+QString explorerPath()
+{
+    wchar_t folder[MAX_PATH] = {};
+    const UINT length = GetWindowsDirectoryW(folder, MAX_PATH);
+    const QString windows = length && length < MAX_PATH ? QString::fromWCharArray(folder, int(length)) : QStringLiteral("C:\\Windows");
+    return QDir::toNativeSeparators(windows + QStringLiteral("/explorer.exe"));
+}
+
+QString photoshopPath()
+{
+    // La del ano mas nuevo que tenga el exe: "Adobe Photoshop 2026" antes que "Adobe Photoshop CC 2019".
+    const QDir adobe(programFiles() + QStringLiteral("/Adobe"));
+    QStringList folders = adobe.entryList({QStringLiteral("Adobe Photoshop*")}, QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    const auto year = [](const QString &name) {
+        const QRegularExpressionMatch match = QRegularExpression(QStringLiteral("(\\d{4})")).match(name);
+        return match.hasMatch() ? match.captured(1).toInt() : 0;
+    };
+    std::stable_sort(folders.begin(), folders.end(), [&](const QString &a, const QString &b) { return year(a) > year(b); });
+    QStringList candidates;
+    for (const QString &folder : folders) candidates << adobe.filePath(folder + QStringLiteral("/Photoshop.exe"));
+    return firstExisting(candidates);
+}
+
+QList<Suggestion> suggestedApps()
+{
+    const QString xyplorer = xyplorerPath();
+    const QString winE = QStringLiteral("Meta+E");
+    // El nombre es un dato que el usuario puede cambiar: se siembra en el idioma que ya eligio.
+    return {xyplorer.isEmpty() ? Suggestion{I18n::tr("File Explorer"), explorerPath(), winE}
+                               : Suggestion{QStringLiteral("XYplorer"), xyplorer, winE},
+            Suggestion{QStringLiteral("OBS Studio"), obsPath(), QStringLiteral("Meta+Ctrl+Alt+Shift+1")}};
 }
 
 } // namespace AppToggleSystem

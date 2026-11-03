@@ -24,12 +24,15 @@ struct AppEntry
     AppToggleSystem::Target target() const { return {path, arguments, workingDir}; }
 };
 
-// La lista de [appToggle] apps= en settings.ini, en JSON como Window Layouts.
+// La lista de [appToggle] apps= en settings.ini, en JSON como Window Layouts. La primera vez (sin la clave)
+// arranca con las entradas de ejemplo, apagadas; borrarlas todas deja la lista vacia para siempre.
 class AppToggleState
 {
 public:
     static constexpr int kMaxApps = 99;
     explicit AppToggleState(ModuleContext *context = nullptr);
+    // Las entradas de ejemplo como entradas apagadas, con ids desde 1. Las invalidas no entran.
+    static QList<AppEntry> defaults(const QList<AppToggleSystem::Suggestion> &suggestions);
 
     const QList<AppEntry> &apps() const { return m_apps; }
     // Asigna el id a una entrada nueva (0). False si no es valida, si su atajo ya lo tiene otra o si no

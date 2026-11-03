@@ -1,6 +1,7 @@
 #include "modules/mousebuttons/MouseButtonsState.h"
 
 #include "app/ModuleContext.h"
+#include "platform/AppToggleSystem.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -43,9 +44,32 @@ bool buttonFromId(const QString &id, Button *button)
 MouseButtonsState::MouseButtonsState(ModuleContext *context)
     : m_context(context)
 {
-    if (context) {
-        m_rules = fromJson(context->value(kRules).toString());
+    if (!context) {
+        return;
     }
+    const QVariant stored = context->value(kRules);
+    // Una corrida automatizada o una captura nunca siembran: leen el disco ajeno y escribirian settings.
+    if (stored.isValid() || context->captureMode() || context->automatedRun()) {
+        m_rules = fromJson(stored.toString());
+        return;
+    }
+    m_rules = {defaultRule(AppToggleSystem::photoshopPath())};
+    save();
+}
+
+MouseRule MouseButtonsState::defaultRule(const QString &photoshopPath)
+{
+    // La que reemplaza al perfil de X-Mouse: el boton del medio mueve la imagen de Photoshop como
+    // Espacio + arrastrar.
+    MouseRule rule;
+    rule.id = 1;
+    rule.app = QStringLiteral("Photoshop.exe");
+    rule.path = photoshopPath;
+    rule.button = Button::Middle;
+    rule.keys = Shortcut{Qt::NoModifier, Qt::Key_Space};
+    rule.holdLeft = true;
+    rule.enabled = false;
+    return rule;
 }
 
 QString MouseButtonsState::appName(const QString &text)

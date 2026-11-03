@@ -223,6 +223,51 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     check(samePath(app + QStringLiteral("/"), app) && !samePath(QString(), QString()),
           QStringLiteral("decision: barra final ignorada y rutas vacias nunca coinciden"));
 
+    // El Explorador siempre corre: la foto trae solo sus ventanas de carpetas.
+    Snapshot shell;
+    shell.shell = true;
+    shell.processPaths << app;
+    shell.foreground = 50; // el escritorio o la barra de tareas: del mismo proceso, fuera de la lista
+    shell.foregroundPath = app;
+    front = decide(app, shell);
+    check(front.action == Action::Launch,
+          QStringLiteral("decision Explorador: sin ventanas de carpetas abre una aunque el proceso corra"));
+    shell.windows << window(51, app) << window(52, app);
+    front = decide(app, shell);
+    check(front.action == Action::Activate && front.window == 51,
+          QStringLiteral("decision Explorador: con el escritorio al frente trae la ultima carpeta, no abre otra"));
+    shell.foreground = 51;
+    check(decide(app, shell).action == Action::Minimize,
+          QStringLiteral("decision Explorador: con su carpeta al frente la minimiza"));
+    Snapshot notShell = shell;
+    notShell.shell = false;
+    notShell.windows.clear();
+    check(decide(app, notShell).action == Action::Nothing,
+          QStringLiteral("decision: otra app viva sin ventanas sigue sin hacer nada"));
+
+    // ---- Las entradas de ejemplo de la primera vez.
+    const QList<AppEntry> examples = AppToggleState::defaults(
+        {Suggestion{QStringLiteral("XYplorer"), app, QStringLiteral("Meta+E")},
+         Suggestion{QStringLiteral("Bad"), QStringLiteral("relative.exe"), QStringLiteral("Ctrl+Alt+B")},
+         Suggestion{QStringLiteral("Same key"), other, QStringLiteral("Meta+E")},
+         Suggestion{QStringLiteral("OBS Studio"), other, QStringLiteral("Meta+Ctrl+Alt+Shift+1")}});
+    check(examples.size() == 2 && examples.at(0).id == 1 && examples.at(1).id == 2 && !examples.at(0).enabled
+              && !examples.at(1).enabled && examples.at(1).name == QLatin1String("OBS Studio"),
+          QStringLiteral("ejemplos: entran apagados con ids 1 y 2; una ruta invalida o un atajo repetido no entran"));
+    const QList<Suggestion> suggested = suggestedApps();
+#ifdef Q_OS_WIN
+    const bool firstIsWinE = !suggested.isEmpty() && suggested.first().shortcut == QLatin1String("Meta+E")
+                             && QFileInfo(suggested.first().path).isFile()
+                             && (suggested.first().path.endsWith(QLatin1String("XYplorer.exe"), Qt::CaseInsensitive)
+                                 || samePath(suggested.first().path, explorerPath()));
+    check(suggested.size() == 2 && firstIsWinE && suggested.at(1).path.endsWith(QLatin1String("obs64.exe"))
+              && AppToggleState::defaults(suggested).size() == 2,
+          QStringLiteral("ejemplos: Win+E para %1 y OBS en %2").arg(suggested.value(0).path, suggested.value(1).path));
+#else
+    check(suggested.size() == 1 && AppToggleState::defaults(suggested).size() == 1,
+          QStringLiteral("ejemplos mac: OBS"));
+#endif
+
     Snapshot whole;
     whole.wholeApp = true;
     whole.processPaths << app;
@@ -285,6 +330,23 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     const QString twice = QStringLiteral("[%1,%1]").arg(AppToggleState::toJson({entry}).mid(1).chopped(1));
     check(AppToggleState::fromJson(twice).size() == 1, QStringLiteral("estado: un id repetido en el JSON entra una sola vez"));
     check(state.remove(1) && state.apps().size() == 1 && !state.remove(1), QStringLiteral("estado: borrar libera la entrada"));
+
+    // La siembra: solo sin la clave y nunca en una corrida automatizada ni en una captura.
+    class FirstRunContext : public FakeContext
+    {
+    public:
+        bool automatedRun() const override { return false; }
+    };
+    FirstRunContext firstRun;
+    const AppToggleState seeded(&firstRun);
+    check(!seeded.apps().isEmpty() && !seeded.apps().first().enabled
+              && !firstRun.value(QStringLiteral("apps")).toString().isEmpty(),
+          QStringLiteral("estado: la primera vez arranca con los ejemplos apagados y los guarda"));
+    firstRun.setValue(QStringLiteral("apps"), QStringLiteral("[]"));
+    check(AppToggleState(&firstRun).apps().isEmpty(), QStringLiteral("estado: con la lista vacia guardada no vuelve a sembrar"));
+    FakeContext automated;
+    check(AppToggleState(&automated).apps().isEmpty() && !automated.value(QStringLiteral("apps")).isValid(),
+          QStringLiteral("estado: una corrida automatizada sin la clave no siembra ni escribe"));
 
     // ---- El modulo: choques, errores por entrada y la accion en modo solo loguear.
     FakeContext context;

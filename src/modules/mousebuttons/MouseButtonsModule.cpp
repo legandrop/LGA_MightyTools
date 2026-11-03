@@ -208,6 +208,26 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               && MouseButtonsState::keysFromString(QStringLiteral("Meta+Ctrl+Space")).modifiers == (Qt::ControlModifier | Qt::MetaModifier),
           QStringLiteral("estado: las teclas para mantener aceptan Espacio solo y con modificadores"));
 
+    // ---- La regla de ejemplo: solo sin la clave y nunca en una corrida automatizada ni en una captura.
+    const MouseRule example = MouseButtonsState::defaultRule(QString());
+    check(MouseButtonsState::valid(example) && !example.enabled && example.button == MouseButtonsSystem::Button::Middle
+              && example.keys == Shortcut{Qt::NoModifier, Qt::Key_Space} && example.holdLeft
+              && MouseButtonsState::sameApp(example.app, QStringLiteral("PHOTOSHOP.EXE")),
+          QStringLiteral("ejemplo: Photoshop, boton del medio, Espacio y boton izquierdo, apagada"));
+    class FirstRunContext : public FakeContext
+    {
+    public:
+        bool automatedRun() const override { return false; }
+    };
+    FirstRunContext firstRun;
+    check(MouseButtonsState(&firstRun).rules().size() == 1 && !firstRun.value(QStringLiteral("rules")).toString().isEmpty(),
+          QStringLiteral("ejemplo: la primera vez arranca con la regla de Photoshop y la guarda"));
+    firstRun.setValue(QStringLiteral("rules"), QStringLiteral("[]"));
+    FakeContext automatedSeed;
+    check(MouseButtonsState(&firstRun).rules().isEmpty() && MouseButtonsState(&automatedSeed).rules().isEmpty()
+              && !automatedSeed.value(QStringLiteral("rules")).isValid(),
+          QStringLiteral("ejemplo: con la lista vacia guardada o en una corrida automatizada no se siembra"));
+
     // ---- El modulo: el gancho solo con la app de una regla activada al frente, y nunca en una corrida automatizada.
     FakeContext context;
     {

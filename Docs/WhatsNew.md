@@ -13,8 +13,8 @@ platforms: [win, mac]
 ## v1.53
 - [new] La limpieza de Disk Space encuentra las cachés de Nuke, DaVinci Resolve, After Effects, Premiere, Ableton, Topaz Video, REAPER, Unreal y otros programas de video y audio aunque las hayas movido a otro disco, y deja para que decidas lo que cuesta rehacer, como proxies, medios optimizados o modelos.
 - [new][win] La limpieza de Disk Space encuentra copias de instaladores que Windows guarda de programas que ya no están instalados y las manda a la Papelera con permiso de administrador; las de programas instalados nunca aparecen.
-- [new][win] Mouse Buttons hace que un botón del mouse mantenga teclas y el botón izquierdo solo en las apps que elijas: por ejemplo, mover la imagen de Photoshop con el botón del medio.
-- [new] App Toggle abre una app con un atajo, la trae al frente si ya está abierta o la minimiza si ya la estás usando (en Mac la oculta).
+- [new][win] Mouse Buttons hace que un botón del mouse mantenga teclas y el botón izquierdo solo en las apps que elijas, y trae de ejemplo, apagada, la regla que mueve la imagen de Photoshop con el botón del medio.
+- [new] App Toggle abre una app con un atajo, la trae al frente si ya está abierta o la minimiza si ya la estás usando (en Mac la oculta), y trae de ejemplo, apagado, OBS y, en Windows, Win+E para XYplorer o, si no lo tenés, para el Explorador sin abrir una ventana nueva cada vez.
 - [improved][win] Al soltar Win después de un atajo de Window Layouts o App Toggle ya no se abre el menú Inicio, y Win más una letra (como Win+E) se puede grabar para reemplazar el atajo de Windows.
 - [new][win] Desktop Icons guarda dónde están los íconos del escritorio, una vez por día o cuando quieras con un nombre, y los vuelve a su lugar con un clic cuando Windows los desordena, con «Undo» para deshacer.
 - [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.

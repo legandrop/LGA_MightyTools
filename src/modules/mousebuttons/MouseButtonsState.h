@@ -24,12 +24,15 @@ struct MouseRule
     MouseButtonsSystem::Rule rule() const { return {button, keys, holdLeft}; }
 };
 
-// La lista de [mouseButtons] rules= en settings.ini, en JSON como Window Layouts y App Toggle.
+// La lista de [mouseButtons] rules= en settings.ini, en JSON como Window Layouts y App Toggle. La primera vez
+// (sin la clave) arranca con la regla de Photoshop, apagada; borrarla deja la lista vacia para siempre.
 class MouseButtonsState
 {
 public:
     static constexpr int kMaxRules = 99;
     explicit MouseButtonsState(ModuleContext *context = nullptr);
+    // La regla de ejemplo, apagada. `photoshopPath` solo da el icono (vacio si no esta instalado).
+    static MouseRule defaultRule(const QString &photoshopPath);
 
     const QList<MouseRule> &rules() const { return m_rules; }
     // Asigna el id a una regla nueva (0). False si no es valida, si la app ya tiene una regla para ese boton

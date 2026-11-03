@@ -142,4 +142,9 @@ QString productName(const QString &appPath)
     return {};
 }
 
+QList<Suggestion> suggestedApps()
+{
+    return {Suggestion{QStringLiteral("OBS Studio"), QStringLiteral("/Applications/OBS.app"), QStringLiteral("Meta+Ctrl+Alt+Shift+1")}};
+}
+
 } // namespace AppToggleSystem
