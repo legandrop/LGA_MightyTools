@@ -11,6 +11,8 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new] App Toggle abre una app con un atajo, la trae al frente si ya está abierta o la minimiza si ya la estás usando (en Mac la oculta).
+- [improved][win] Al soltar Win después de un atajo de Window Layouts o App Toggle ya no se abre el menú Inicio, y Win más una letra (como Win+E) se puede grabar para reemplazar el atajo de Windows.
 - [new][win] Desktop Icons guarda dónde están los íconos del escritorio, una vez por día o cuando quieras con un nombre, y los vuelve a su lugar con un clic cuando Windows los desordena, con «Undo» para deshacer.
 - [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.
 - [improved] La barra de scroll es más finita y General ya no tiene la sección «About».

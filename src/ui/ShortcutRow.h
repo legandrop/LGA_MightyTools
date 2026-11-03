@@ -12,6 +12,7 @@ class QFrame;
 class QHBoxLayout;
 class QLabel;
 class QPushButton;
+class ShortcutCatcher;
 
 // Una fila de la tarjeta "Shortcuts": nombre de la accion, una caja por tecla, el lapiz para
 // cambiarla y la descripcion debajo.
@@ -40,6 +41,10 @@ public:
     // atajo). Tono vacio lo oculta. Aditivo: sin llamarlo, la fila se ve igual que antes.
     void setExtraChip(const QString &tone, const QString &text);
 
+    // Solo las herramientas con prioridad en Windows (Window Layouts, App Toggle): debajo de la
+    // descripcion, una nota neutra cuando el atajo reemplaza uno de Windows (Win+E).
+    void showWindowsShortcutNote(bool enabled);
+
     bool isRecording() const { return m_recording; }
     void startRecording();
     void cancelRecording();
@@ -59,11 +64,14 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
     void rebuildKeys();
     void setRecordingVisible(bool recording, const QString &partial);
     void finishRecording();
+    // La combinacion grabada: de la ventana o del gancho que atrapa las que reserva el sistema (Win+E).
+    void acceptCandidate(const Shortcut &candidate);
     static QString partialText(Qt::KeyboardModifiers modifiers);
 
     Shortcut m_shortcut;
@@ -71,6 +79,7 @@ private:
     Validator m_validator;
     std::function<void()> m_editHandler;
     bool m_recording = false;
+    ShortcutCatcher *m_catcher = nullptr;
 
     QLabel *m_name = nullptr;
     Chip *m_extraChip = nullptr;
@@ -81,6 +90,8 @@ private:
     QPushButton *m_editButton = nullptr;
     QLabel *m_caption = nullptr;
     QHBoxLayout *m_captionRow = nullptr;
+    QLabel *m_windowsNote = nullptr;
+    bool m_windowsNoteEnabled = false;
 };
 
 #endif // MIGHTYTOOLS_SHORTCUTROW_H

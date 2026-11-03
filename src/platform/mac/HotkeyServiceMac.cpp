@@ -185,3 +185,22 @@ bool HotkeyService::probe(const Shortcut &shortcut)
     UnregisterEventHotKey(ref);
     return true;
 }
+
+// En mac no se instala nada: un gancho de teclado global pediria el permiso de Accesibilidad. El grabador
+// lee las teclas de su ventana como siempre.
+struct ShortcutCatcher::Private
+{
+};
+
+ShortcutCatcher::ShortcutCatcher(QObject *parent)
+    : QObject(parent)
+    , d(std::make_unique<Private>())
+{
+}
+
+ShortcutCatcher::~ShortcutCatcher() = default;
+
+void ShortcutCatcher::retire()
+{
+    deleteLater();
+}

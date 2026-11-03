@@ -37,6 +37,13 @@ struct Shortcut
     // True si `key` es una tecla modificadora sola (Ctrl, Shift, Alt, Meta...).
     static bool isModifierKey(int key);
 
+    // Solo Windows: Win + una letra o un numero, sin otro modificador. Es un atajo propio de Windows
+    // (Win+E abre el Explorador) que las herramientas con prioridad reemplazan a proposito: el gancho le
+    // gana siempre, asi que no cuenta como compartido. En mac siempre false.
+    bool replacesWindowsShortcut() const;
+    // Solo Windows: Win+L bloquea la sesion antes de que ningun programa lo vea; no se puede usar.
+    bool isLockShortcut() const;
+
     // Los de fabrica: los mismos de la version AutoHotkey.
     static Shortcut defaultAddKeyframe();
     static Shortcut defaultFrameDopeSheet();

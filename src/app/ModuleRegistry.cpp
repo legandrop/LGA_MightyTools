@@ -3,6 +3,7 @@
 #include "modules/linkredirector/LinkRedirectorDescriptor.h"
 #include "modules/nukeshortcuts/NukeShortcutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
+#include "modules/apptoggle/AppToggleModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -32,6 +33,7 @@ QList<ModuleDescriptor> all()
 #endif
     list << linkRedirectorDescriptor();
     list << windowLayoutsDescriptor();
+    list << appToggleDescriptor();
 #if defined(Q_OS_WIN)
     list << desktopIconsDescriptor();
 #endif
@@ -61,6 +63,7 @@ QHash<QString, HelpProvider> helpProviders()
 #endif
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
+    providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
 #if defined(Q_OS_WIN)
     providers.insert(QStringLiteral("desktopIcons"), &desktopIconsHelp);
 #endif

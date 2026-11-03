@@ -1,4 +1,5 @@
 #include "platform/HotkeyService.h"
+#include "core/AutomatedRun.h"
 #include "platform/win/InputOrigin.h"
 #include "qa/HotkeyPriorityTest.h"
 
@@ -11,8 +12,11 @@
 #include <QSemaphore>
 #include <QSet>
 #include <QThread>
+#include <QTimer>
 
 #include <windows.h>
+
+#include <atomic>
 
 namespace {
 
@@ -20,6 +24,10 @@ namespace {
 constexpr int kIdOffset = 100;
 constexpr int kProbeId = 99;
 constexpr UINT kPriorityMessage = WM_APP + 0x143;
+constexpr UINT kCatchMessage = WM_APP + 0x144;
+// Tecla virtual sin asignar (la misma de InputInjectorWin): apretarla antes de soltar Win o Alt evita el
+// menu Inicio y la barra de menu de la ventana.
+constexpr WORD kMaskKey = 0xE8;
 
 UINT nativeModifiers(Qt::KeyboardModifiers modifiers)
 {
@@ -45,6 +53,18 @@ UINT nativeKey(int key)
     if (key == Qt::Key_Right) return VK_RIGHT;
     if (key == Qt::Key_Up) return VK_UP;
     if (key == Qt::Key_Down) return VK_DOWN;
+    return 0;
+}
+
+// La inversa de nativeKey: 0 si la tecla no se admite en un atajo.
+int qtKey(UINT vk)
+{
+    if ((vk >= 'A' && vk <= 'Z') || (vk >= '0' && vk <= '9')) return int(vk);
+    if (vk >= VK_F1 && vk <= VK_F12) return Qt::Key_F1 + int(vk - VK_F1);
+    if (vk == VK_LEFT) return Qt::Key_Left;
+    if (vk == VK_RIGHT) return Qt::Key_Right;
+    if (vk == VK_UP) return Qt::Key_Up;
+    if (vk == VK_DOWN) return Qt::Key_Down;
     return 0;
 }
 
@@ -81,9 +101,16 @@ public:
         quint64 generation;
     };
 
-    explicit PriorityHookThread(DWORD ownerThread) : m_ownerThread(ownerThread) {}
+    // `catchAll`: el modo del grabador (ShortcutCatcher), que atrapa cualquier combinacion admitida con
+    // Ctrl, Alt o Win y la manda con `message` (wParam = tecla virtual + kIdOffset, lParam = MOD_*).
+    explicit PriorityHookThread(DWORD ownerThread, UINT message = kPriorityMessage, bool catchAll = false)
+        : m_ownerThread(ownerThread), m_message(message), m_catchAll(catchAll)
+    {
+    }
 
     static void selfTest(const std::function<void(bool, const QString &)> &check);
+
+    void stopCatching() { m_catchAll = false; }
 
     bool begin()
     {
@@ -149,16 +176,35 @@ private:
         const bool refresh = !(key->flags & LLKHF_INJECTED) && !nativeModifier(*key);
         if (refresh) physicalModifiers = modifierSnapshot();
         if (self->consumeKey(message, *key, [self](int id, quint64 generation) {
-                return PostThreadMessageW(self->m_ownerThread, kPriorityMessage,
+                return PostThreadMessageW(self->m_ownerThread, self->m_message,
                                           static_cast<WPARAM>(id + kIdOffset),
                                           static_cast<LPARAM>(generation)) != 0;
-            }, refresh ? &physicalModifiers : nullptr)) return 1;
+            }, refresh ? &physicalModifiers : nullptr, &PriorityHookThread::sendMaskedRelease)) return 1;
         return CallNextHookEx(nullptr, code, message, data);
+    }
+
+    // La tecla muda y despues la liberacion de Win o Alt, con la marca propia (el gancho las deja pasar).
+    // Si Windows no las acepta, la liberacion original sigue su camino: nunca queda una tecla apretada.
+    static bool sendMaskedRelease(const KBDLLHOOKSTRUCT &released)
+    {
+        INPUT inputs[3] = {};
+        for (INPUT &input : inputs) {
+            input.type = INPUT_KEYBOARD;
+            input.ki.dwExtraInfo = kMightyToolsInputTag;
+        }
+        inputs[0].ki.wVk = kMaskKey;
+        inputs[1].ki.wVk = kMaskKey;
+        inputs[1].ki.dwFlags = KEYEVENTF_KEYUP;
+        inputs[2].ki.wVk = static_cast<WORD>(released.vkCode);
+        inputs[2].ki.wScan = static_cast<WORD>(released.scanCode);
+        inputs[2].ki.dwFlags = KEYEVENTF_KEYUP | ((released.flags & LLKHF_EXTENDED) ? KEYEVENTF_EXTENDEDKEY : 0);
+        return SendInput(3, inputs, sizeof(INPUT)) == 3;
     }
 
     bool consumeKey(WPARAM message, const KBDLLHOOKSTRUCT &key,
                     const std::function<bool(int, quint64)> &deliver,
-                    const QSet<DWORD> *physicalModifiers = nullptr)
+                    const QSet<DWORD> *physicalModifiers = nullptr,
+                    const std::function<bool(const KBDLLHOOKSTRUCT &)> &maskedRelease = {})
     {
         const bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
         const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
@@ -167,13 +213,26 @@ private:
 
         // El hook corre antes de actualizar GetAsyncKeyState: seguir la secuencia de la macro.
         const DWORD modifier = nativeModifier(key);
+        const bool winOrAlt = modifier == VK_LWIN || modifier == VK_RWIN || modifier == VK_LMENU || modifier == VK_RMENU;
         if (modifier) {
+            // Una pulsacion nueva de Win o Alt (no la repeticion de una que sigue apretada) es una tecla que
+            // Windows si ve: si la liberacion de la combinacion anterior se perdio, la tecla muda pendiente ya
+            // no hace falta y no tiene que tapar el menu Inicio de esta pulsacion.
+            if (down && winOrAlt && !m_modifiersDown.contains(modifier)) m_maskPending = false;
             if (down) m_modifiersDown.insert(modifier);
             else m_modifiersDown.remove(modifier);
         }
         // Seguir tambien nuestras liberaciones de modificadores, pero nunca activar por inyeccion propia.
         const bool injected = key.flags & LLKHF_INJECTED;
         if (injected && key.dwExtraInfo == kMightyToolsInputTag) return false;
+
+        // Soltar Win o Alt despues de una combinacion interceptada: Windows no vio la tecla del medio y
+        // abriria el menu Inicio (Win+E) o la barra de menu de la ventana (Alt). La liberacion se cambia por
+        // la tecla muda seguida de la liberacion, en orden, aunque una macro haya mandado todo junto.
+        if (up && m_maskPending && winOrAlt) {
+            m_maskPending = false;
+            return maskedRelease && maskedRelease(key);
+        }
 
         QMutexLocker lock(&m_mutex);
         const quint64 keyToken = key.vkCode | (quint64(injected) << 32);
@@ -186,11 +245,23 @@ private:
         if (m_modifiersDown.contains(VK_LMENU) || m_modifiersDown.contains(VK_RMENU)) modifiers |= MOD_ALT;
         if (m_modifiersDown.contains(VK_LSHIFT) || m_modifiersDown.contains(VK_RSHIFT)) modifiers |= MOD_SHIFT;
         if (m_modifiersDown.contains(VK_LWIN) || m_modifiersDown.contains(VK_RWIN)) modifiers |= MOD_WIN;
+        if (m_catchAll) {
+            // El filtro del grabador: solo con una ventana de esta app al frente. Con otra app al frente la
+            // combinacion es de esa app (Ctrl+S en el Bloc de notas), aunque el grabador siga abierto.
+            if (!(modifiers & (MOD_CONTROL | MOD_ALT | MOD_WIN)) || !qtKey(key.vkCode) || (m_filter && !m_filter())
+                || !deliver(static_cast<int>(key.vkCode), modifiers)) {
+                return false;
+            }
+            m_swallowed.insert(keyToken);
+            m_maskPending = (modifiers & (MOD_WIN | MOD_ALT)) != 0;
+            return true;
+        }
         for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it) {
             if (it->key != key.vkCode || it->modifiers != modifiers) continue;
             // Sin filtro o con filtro aceptado se come la combinacion; si no, sigue al proximo hook.
             if ((!m_filter || m_filter()) && deliver(it.key(), it->generation)) {
                 m_swallowed.insert(keyToken);
+                m_maskPending = (it->modifiers & (MOD_WIN | MOD_ALT)) != 0;
                 return true;
             }
             break;
@@ -199,6 +270,9 @@ private:
     }
 
     DWORD m_ownerThread;
+    UINT m_message;
+    std::atomic<bool> m_catchAll;
+    bool m_maskPending = false; // solo lo toca el hilo del gancho
     QMutex m_mutex;
     QHash<int, Entry> m_entries;
     std::function<bool()> m_filter;
@@ -320,6 +394,76 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
     filterAccepts = true;
     check(send('O', false, 0) && send('O', true, 0) && activations == 10,
           QStringLiteral("filtro: si acepta, la combinacion se intercepta y activa"));
+
+    // Win+E (App Toggle): el Explorador la reserva y se intercepta. Sin la tecla muda, soltar Win abriria
+    // el menu Inicio, porque Windows no vio la E.
+    PriorityHookThread explorer(0);
+    explorer.add(20, Shortcut::fromPortableString(QStringLiteral("Meta+E")), 1);
+    QList<DWORD> masked;
+    bool maskAccepted = true;
+    const auto mask = [&](const KBDLLHOOKSTRUCT &released) {
+        masked << released.vkCode;
+        return maskAccepted;
+    };
+    const auto press = [&](PriorityHookThread &hook, DWORD vk, bool up, DWORD flags,
+                           const std::function<bool(int, quint64)> &to) {
+        KBDLLHOOKSTRUCT event{};
+        event.vkCode = vk;
+        event.flags = flags | (up ? LLKHF_UP : 0);
+        return hook.consumeKey(up ? WM_KEYUP : WM_KEYDOWN, event, to, nullptr, mask);
+    };
+    const auto win = [&](DWORD vk, bool up, DWORD flags = 0) { return press(explorer, vk, up, flags, deliver); };
+    check(!win(VK_LWIN, false, LLKHF_EXTENDED) && win('E', false) && win('E', true) && win(VK_LWIN, true, LLKHF_EXTENDED)
+              && masked == QList<DWORD>{VK_LWIN} && activations == 11 && lastId == 20,
+          QStringLiteral("Win+E: se intercepta y soltar Win pasa a ser la tecla muda y su liberacion"));
+    check(!win(VK_LWIN, false, LLKHF_EXTENDED) && !win(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == 1,
+          QStringLiteral("Win sola: sin combinacion interceptada, su liberacion pasa (el menu Inicio sigue andando)"));
+    maskAccepted = false;
+    check(!win(VK_LWIN, false, LLKHF_EXTENDED) && win('E', false) && win('E', true)
+              && !win(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == 2 && activations == 12,
+          QStringLiteral("Win+E: si Windows rechaza la tecla muda, la liberacion original pasa y Win no queda apretada"));
+    maskAccepted = true;
+
+    // El grabador (ShortcutCatcher): atrapa cualquier combinacion admitida con Ctrl, Alt o Win.
+    PriorityHookThread recorder(0, kCatchMessage, true);
+    QList<QPair<int, quint64>> caught;
+    const auto collect = [&](int vk, quint64 mods) {
+        caught << qMakePair(vk, mods);
+        return true;
+    };
+    const auto rec = [&](DWORD vk, bool up, DWORD flags = 0) { return press(recorder, vk, up, flags, collect); };
+    check(!rec(VK_LWIN, false, LLKHF_EXTENDED) && rec('E', false) && rec('E', true) && rec(VK_LWIN, true, LLKHF_EXTENDED)
+              && caught.size() == 1 && caught.first().first == 'E' && caught.first().second == MOD_WIN && masked.size() == 3,
+          QStringLiteral("grabador: atrapa Win+E aunque el Explorador la reserve, y enmascara soltar Win"));
+    check(!rec(VK_LCONTROL, false) && !rec(VK_LMENU, false) && rec(VK_F5, false) && rec(VK_F5, true)
+              && !rec(VK_LCONTROL, true) && caught.size() == 2 && caught.last().second == (MOD_CONTROL | MOD_ALT)
+              && rec(VK_LMENU, true) && masked.size() == 4,
+          QStringLiteral("grabador: Ctrl+Alt+F5 se atrapa con sus dos modificadores"));
+    check(!rec(VK_LSHIFT, false) && !rec('A', false) && !rec('A', true) && !rec(VK_LSHIFT, true)
+              && !rec(VK_ESCAPE, false) && !rec(VK_ESCAPE, true) && !rec(VK_LCONTROL, false) && !rec(VK_HOME, false)
+              && !rec(VK_HOME, true) && !rec(VK_LCONTROL, true) && caught.size() == 2,
+          QStringLiteral("grabador: Shift+A, Esc y teclas no admitidas pasan a la ventana como siempre"));
+    // Con otra app al frente (el filtro del grabador dice que no) la combinacion es de esa app.
+    bool ownFront = false;
+    recorder.setFilter([&ownFront]() { return ownFront; });
+    check(!rec(VK_LCONTROL, false) && !rec('S', false) && !rec('S', true) && !rec(VK_LCONTROL, true)
+              && caught.size() == 2,
+          QStringLiteral("grabador: con otra app al frente Ctrl+S le llega a esa app (no se atrapa)"));
+    ownFront = true;
+    check(!rec(VK_LCONTROL, false) && rec('S', false) && rec('S', true) && !rec(VK_LCONTROL, true)
+              && caught.size() == 3,
+          QStringLiteral("grabador: con esta app al frente Ctrl+S se atrapa"));
+    recorder.stopCatching();
+    check(!rec(VK_LCONTROL, false) && !rec('K', false) && !rec('K', true) && !rec(VK_LCONTROL, true) && caught.size() == 3,
+          QStringLiteral("grabador retirado: ya no atrapa nada"));
+
+    // La liberacion de Win se perdio despues de Win+E: la proxima pulsacion de Win no hereda la tecla muda.
+    const int maskedBefore = masked.size();
+    check(!win(VK_LWIN, false, LLKHF_EXTENDED) && win('E', false) && win('E', true) && masked.size() == maskedBefore,
+          QStringLiteral("Win+E sin la liberacion de Win (perdida): queda la tecla muda pendiente"));
+    explorer.m_modifiersDown.remove(VK_LWIN); // la liberacion que nunca llego
+    check(!win(VK_LWIN, false, LLKHF_EXTENDED) && !win(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == maskedBefore,
+          QStringLiteral("una pulsacion nueva de Win descarta la tecla muda pendiente: Win sola abre el menu Inicio"));
 }
 
 void HotkeyPriorityTest::run(const std::function<void(bool, const QString &)> &check)
@@ -507,4 +651,84 @@ bool HotkeyService::probe(const Shortcut &shortcut)
     }
     UnregisterHotKey(nullptr, kProbeId + kIdOffset);
     return true;
+}
+
+struct ShortcutCatcher::Private : public QAbstractNativeEventFilter
+{
+    ShortcutCatcher *q = nullptr;
+    std::unique_ptr<PriorityHookThread> hook;
+    bool filtering = false;
+
+    bool nativeEventFilter(const QByteArray &eventType, void *message, qintptr * /*result*/) override
+    {
+        if (eventType != "windows_generic_MSG" && eventType != "windows_dispatcher_MSG") {
+            return false;
+        }
+        const MSG *msg = static_cast<const MSG *>(message);
+        if (msg->message != kCatchMessage) {
+            return false;
+        }
+        Shortcut shortcut;
+        shortcut.key = qtKey(static_cast<UINT>(msg->wParam - kIdOffset));
+        const UINT mods = static_cast<UINT>(msg->lParam);
+        if (mods & MOD_CONTROL) shortcut.modifiers |= Qt::ControlModifier;
+        if (mods & MOD_ALT) shortcut.modifiers |= Qt::AltModifier;
+        if (mods & MOD_SHIFT) shortcut.modifiers |= Qt::ShiftModifier;
+        if (mods & MOD_WIN) shortcut.modifiers |= Qt::MetaModifier;
+        if (shortcut.isValid()) {
+            qInfo() << "[ShortcutCatcher] Atrapado" << shortcut.toPortableString();
+            emit q->caught(shortcut);
+        }
+        return true;
+    }
+};
+
+ShortcutCatcher::ShortcutCatcher(QObject *parent)
+    : QObject(parent)
+    , d(std::make_unique<Private>())
+{
+    d->q = this;
+    // Una corrida automatizada nunca instala un gancho de teclado sobre el escritorio del usuario.
+    if (AutomatedRun::active()) {
+        return;
+    }
+    QCoreApplication::instance()->installNativeEventFilter(d.get());
+    d->filtering = true;
+    d->hook = std::make_unique<PriorityHookThread>(GetCurrentThreadId(), kCatchMessage, true);
+    d->hook->setFilter([]() {
+        DWORD pid = 0;
+        if (HWND front = GetForegroundWindow()) GetWindowThreadProcessId(front, &pid);
+        return pid == GetCurrentProcessId();
+    });
+    if (!d->hook->begin()) {
+        qWarning() << "[ShortcutCatcher] No se pudo instalar el gancho:" << d->hook->error();
+        d->hook.reset();
+    }
+}
+
+ShortcutCatcher::~ShortcutCatcher()
+{
+    if (d->hook) {
+        d->hook->stop();
+    }
+    if (d->filtering && QCoreApplication::instance()) {
+        QCoreApplication::instance()->removeNativeEventFilter(d.get());
+    }
+}
+
+void ShortcutCatcher::retire()
+{
+    if (!d->hook) {
+        deleteLater();
+        return;
+    }
+    d->hook->stopCatching();
+    auto *timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, [this, ticks = 0]() mutable {
+        // Tope de 5 s: un modificador que Windows da por apretado no deja el gancho para siempre.
+        if (modifierSnapshot().isEmpty() || ++ticks >= 50) {
+            deleteLater();
+        }
+    });
+    timer->start(100);
 }

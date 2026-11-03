@@ -274,7 +274,8 @@ void WindowLayoutsModule::registerLayouts()
             continue;
         }
         m_declaredIds.insert(layout.id);
-        const bool shared = !m_hotkeys->probe(layout.shortcut);
+        // Win + una letra o un numero reemplaza a proposito el atajo de Windows: el gancho le gana siempre.
+        const bool shared = !m_hotkeys->probe(layout.shortcut) && !layout.shortcut.replacesWindowsShortcut();
         if (shared) m_externalConflicts.insert(layout.id);
 #ifdef Q_OS_WIN
         const bool registered = m_hotkeys->registerPriorityHotkey(layout.id, layout.shortcut);

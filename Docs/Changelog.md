@@ -2,6 +2,10 @@
 
 v1.53:
 
+App Toggle (Windows y macOS), herramienta nueva: reemplaza los AutoHotkey que abrían, traían al frente o minimizaban una app con un atajo. Cada entrada guarda exe, argumentos y carpeta de inicio, no un `.lnk` (el instalador de OBS 33 renombró el suyo y el AHK dejó de abrirlo). Sin proceso, abre con `ShellExecuteEx` sin elevar; con su ventana al frente, la minimiza; si no, la restaura y la trae, con una entrada de mouse vacía para ganar el permiso de primer plano desde el gancho. En macOS oculta (Cmd+H) en lugar de minimizar. Usa el `HotkeyService` de Window Layouts: Win + una letra cuenta como reemplazo de un atajo de Windows, sin aviso de compartido, y el grabador toma Win+E con un gancho que solo vive mientras graba con la app al frente. Al soltar Win después de un atajo con prioridad ya no se abre Inicio. D-67.
+
+[ App Toggle - Herramienta nueva: abrir, traer al frente o minimizar una app con un atajo ]
+
 Desktop Icons (Windows), herramienta nueva: Windows desordena los íconos del escritorio al arrancar con una resolución chica, al cambiar de cable o al reiniciar el Explorador, y volver al orden era a mano. Guarda snapshots manuales con nombre y uno automático por día, con la PC despierta hace una hora y el usuario presente; quedan los últimos 5, el igual al anterior solo actualiza la fecha, y con otra resolución se saltea (tres días seguidos la vuelven habitual). Restaurar guarda antes un «antes de restaurar» (quedan 3, con Undo), mueve todos los íconos en una sola llamada a `SelectAndPositionItems` y relee cada posición para contar solo los que quedaron exactos; los que ya no existen se saltean. Lee la vista con `IFolderView2` por la ruta de cada ícono, sin reiniciar el Explorador. Un JSON por snapshot en `desktop_icons\`. D-66.
 
 [ Desktop Icons - Herramienta nueva: guardar y restaurar el orden de los iconos del escritorio ]

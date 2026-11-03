@@ -886,6 +886,28 @@ QString StatusCard::title() const
 
 // ------------------------------------------------------------------ Ui
 
+CurrentPageStack::CurrentPageStack(QWidget *parent) : QWidget(parent)
+{
+    auto *column = new QVBoxLayout(this);
+    column->setContentsMargins(0, 0, 0, 0);
+}
+
+void CurrentPageStack::addWidget(QWidget *page)
+{
+    layout()->addWidget(page);
+    if (m_current) page->hide();
+    else m_current = page;
+}
+
+void CurrentPageStack::setCurrentWidget(QWidget *page)
+{
+    if (m_current == page) return;
+    m_current->hide();
+    m_current = page;
+    m_current->show();
+    layout()->invalidate();
+}
+
 namespace Ui {
 
 QPushButton *button(const QString &text, const QString &variant, const QString &size, QWidget *parent)

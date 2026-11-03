@@ -1,4 +1,5 @@
 #include "ui/ShortcutRow.h"
+#include "platform/HotkeyService.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 #include "core/I18n.h"
@@ -119,6 +120,11 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_captionRow->setSpacing(5);
     m_captionRow->addWidget(m_caption, 1);
     column->addLayout(m_captionRow);
+    m_windowsNote = Ui::caption(I18n::tr("Replaces the Windows shortcut for this key."), this);
+    // El objectName "caption" es el que le da el gris de las descripciones: la marca va aparte.
+    m_windowsNote->setProperty("windowsShortcutNote", true);
+    m_windowsNote->hide();
+    column->addWidget(m_windowsNote);
 
     connect(m_editButton, &QPushButton::clicked, this, [this]() {
         if (m_editHandler) {
@@ -154,6 +160,12 @@ void ShortcutRow::setShortcut(const Shortcut &shortcut)
     rebuildKeys();
 }
 
+void ShortcutRow::showWindowsShortcutNote(bool enabled)
+{
+    m_windowsNoteEnabled = enabled;
+    m_windowsNote->setVisible(m_windowsNoteEnabled && m_shortcut.replacesWindowsShortcut());
+}
+
 void ShortcutRow::rebuildKeys()
 {
     while (QLayoutItem *item = m_keysLayout->takeAt(0)) {
@@ -165,6 +177,11 @@ void ShortcutRow::rebuildKeys()
         chip->set(QStringLiteral("key"), key);
         m_keysLayout->addWidget(chip, 0, Qt::AlignVCenter);
     }
+    // Sin atajo (una entrada nueva de App Toggle): el lapiz solo, sin nada al lado, parece un hueco.
+    if (m_keysLayout->isEmpty()) {
+        m_keysLayout->addWidget(Ui::caption(I18n::tr("Not set"), m_keys), 0, Qt::AlignVCenter);
+    }
+    m_windowsNote->setVisible(m_windowsNoteEnabled && m_shortcut.replacesWindowsShortcut());
 }
 
 QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers)
@@ -204,6 +221,12 @@ void ShortcutRow::startRecording()
     setRecordingVisible(true, partialText(Qt::NoModifier));
     // grabKeyboard y no el foco: la app no da foco de teclado a nada (Theme::apply).
     grabKeyboard();
+    // Windows: Win+E y otras que reserva el sistema nunca llegan a la ventana; las atrapa un gancho que
+    // vive solo mientras se graba.
+    m_catcher = new ShortcutCatcher(this);
+    connect(m_catcher, &ShortcutCatcher::caught, this, [this](const Shortcut &shortcut) {
+        if (m_recording) acceptCandidate(shortcut);
+    });
     // Un click afuera (en otra fila, otra tarjeta, la barra lateral) cancela, como el umbral de un
     // disco lo confirma: la grabacion nunca queda colgada esperando teclas.
     qApp->installEventFilter(this);
@@ -221,6 +244,11 @@ void ShortcutRow::cancelRecording()
 
 bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
 {
+    // Pasar a otra app cancela: la grabacion nunca toma teclas que el usuario le escribe a otra ventana.
+    if (m_recording && event->type() == QEvent::ApplicationDeactivate) {
+        cancelRecording();
+        return QWidget::eventFilter(watched, event);
+    }
     if (m_recording && event->type() == QEvent::MouseButtonPress && watched->isWidgetType()) {
         auto *target = static_cast<QWidget *>(watched);
         // El lapiz tiene su propio click (alterna): el resto de la fila y todo lo de afuera cancela.
@@ -231,9 +259,21 @@ bool ShortcutRow::eventFilter(QObject *watched, QEvent *event)
     return QWidget::eventFilter(watched, event);
 }
 
+void ShortcutRow::hideEvent(QHideEvent *event)
+{
+    // Otra pagina, otra herramienta o la ventana a la bandeja: la fila oculta deja de grabar.
+    cancelRecording();
+    QWidget::hideEvent(event);
+}
+
 void ShortcutRow::finishRecording()
 {
     m_recording = false;
+    if (m_catcher) {
+        disconnect(m_catcher, nullptr, this, nullptr);
+        m_catcher->retire();
+        m_catcher = nullptr;
+    }
     qApp->removeEventFilter(this);
     releaseKeyboard();
     setRecordingVisible(false, QString());
@@ -269,7 +309,12 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
     Shortcut candidate;
     candidate.modifiers = modifiers;
     candidate.key = keyFromEvent(event);
+    acceptCandidate(candidate);
+}
 
+void ShortcutRow::acceptCandidate(const Shortcut &candidate)
+{
+    const Qt::KeyboardModifiers modifiers = candidate.modifiers;
     const Shortcut previous = m_shortcut;
     finishRecording();
 
@@ -282,6 +327,8 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
 #else
         error = I18n::tr("Add Ctrl, Alt or Win so it doesn't take a plain key.");
 #endif
+    } else if (candidate.isLockShortcut()) {
+        error = I18n::tr("Windows keeps Win+L to lock the session.");
     } else if (candidate == previous) {
         setError(QString());
         return;
@@ -290,7 +337,8 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
     }
     if (!error.isEmpty()) {
         qInfo() << "[ShortcutRow] Rechazado" << candidate.toPortableString() << "->" << error;
-        setError(I18n::tr("%1 Kept %2.").arg(error, previous.displayText()));
+        // Una entrada nueva no tenia atajo: no hay nada que "se conserve".
+        setError(previous.isValid() ? I18n::tr("%1 Kept %2.").arg(error, previous.displayText()) : error);
         return;
     }
     qInfo() << "[ShortcutRow] Nuevo atajo para" << m_name->accessibleName() << ":" << candidate.toPortableString();
