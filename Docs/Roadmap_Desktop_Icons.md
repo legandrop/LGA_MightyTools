@@ -1,7 +1,6 @@
 # Desktop Icons: guardar y restaurar la posición de los íconos del escritorio
 
-Herramienta futura de Mighty Tools. **Todavía no se implementa**: queda anotada para hacerla más adelante.
-Está en `Docs/Doc_Roadmap.md`.
+Herramienta de Mighty Tools, en desarrollo desde el 2026-11-02 (`Docs/Doc_Roadmap.md`, ítem 1.3).
 
 ## Para qué
 
@@ -50,11 +49,14 @@ cualquiera de ellas con un click.
 - **No reiniciar el Explorador** para aplicar nada: en la PC de Lega dejó una vez la pantalla gris sin barra de
   tareas. El orden restaurado lo graba el propio Explorador al cerrar sesión o reiniciar.
 
-## Preguntas abiertas (las decide Lega al implementarla)
+## Decisiones de Lega (2026-11-02)
 
-- Si el escritorio de hoy está casi igual al del snapshot anterior, ¿se guarda igual o se saltea?
-- ¿Saltear también el automático si la resolución actual no es la de siempre (señal de que el escritorio arrancó
-  mal)?
-- ¿Ofrecer restaurar solo al detectar un desorden grande (muchos íconos movidos de golpe), o solo a pedido?
-- macOS: las posiciones del escritorio del Finder se pueden leer y escribir, pero queda fuera de la primera
-  versión.
+- **Escritorio igual al del snapshot automático anterior** (mismos íconos en las mismas posiciones): no se
+  gasta un lugar; se actualiza la fecha de ese snapshot. Así los 5 automáticos son 5 órdenes distintos.
+- **Resolución distinta de la habitual** (la que más se repite en los snapshots guardados): ese día se
+  saltea el automático. Es la señal de un escritorio que arrancó mal.
+- **Restaurar solo a pedido** en la primera versión. Más adelante, un aviso cuando cambia la pantalla o se
+  reinicia el Explorador.
+- **«Organizar automáticamente» y «Alinear a la cuadrícula»** se dejan como estaban en el snapshot al
+  restaurar: si no, Windows reacomoda los íconos encima de lo restaurado.
+- Solo Windows: macOS queda fuera de la primera versión.

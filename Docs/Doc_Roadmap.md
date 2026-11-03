@@ -2,173 +2,79 @@
 
 Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, sección 6.
 
-1. **Prueba de Lega de las fases 2 a 6** en su máquina (atajos, calibrador, discos, cambio de carpeta en
-   diálogos reales, links, doble click en `.nk`, Apply de la asociación, instalación del Nuke Bridge),
-   con las apps viejas cerradas y fuera del inicio con Windows.
-   - **Window Layouts (v1.43):** Lega prueba el alta, edición y borrado de una disposición, dos ejes
-     combinados (tercio por cuarto), arrastre, selección de ventana y atajos reales. Probar taskbar en
-     los bordes disponibles y autooculta; en la Mac instalada, Dock a izquierda, derecha y abajo,
-     visible y autooculto, más permiso de Accesibilidad y Grabación de pantalla. Verificar monitor
-     secundario, DPI mixto, los presets migrados, minimizar y una ventana con tamaño mínimo o permisos
-     de administrador. Probar la prioridad de Alt+Win+Abajo y Ctrl+Alt+Shift+Win+O con
-     el AHK elevado todavía activo; verificar los puntos de conflicto y que el interruptor individual,
-     el apagado del módulo y la edición liberen la combinación correspondiente.
-     Si se abre un diálogo modal nativo de la propia app en el instante del atajo, comprobar si
-     Windows entrega la activación al hilo principal o si se pierde con la cola de mensajes.
-     La QA
-     automatizada solo valida geometría, registro simulado y capturas: no mueve ventanas reales.
-   - **Ventana de limpieza de Disk Space (v1.04):** el borrado real, la Papelera, el botón «Free up
-     space» del aviso y el escaneo de un disco externo los prueba Lega; las pruebas automatizadas solo
-     borran dentro de una carpeta propia. Empezar por una regla de carpeta chica y por «Move to Recycle
-     Bin».
-   - **Ventana estirable (v1.11), en macOS:** estirarla desde los bordes está sin hacer
-     (`platform/mac/WindowFrameMac.cpp`). En Windows, probada y aprobada por Lega.
-   - **Limpieza, lo que sigue:** lo que pide administrador (restos de Windows
-     Update, volcado de memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que
-     quedaron afuera (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco
-     frío; macOS (el borrado está deshabilitado hasta probarlo en una Mac); aceptar o corregir los
-     desvíos del diseño (D-31).
-   - **Limpieza, observaciones de la auditoría (no frenan):** un programa extraído en la carpeta
-     temporal hace más de 7 días y todavía corriendo puede perder sus archivos de datos (la sonda de «en
-     uso» no ve un exe cargado): saltear todo hijo que contenga la imagen de un proceso vivo. Al terminar
-     el escaneo, el resumen y la medición corren en el hilo de la ventana (del orden de 1 s). El listado
-     de carpetas no abre con «no seguir enlaces», así que un programa que cambie una carpeta por un
-     enlace justo durante el borrado podría desviarlo. El self-test no cubre nombres cortos, archivos de
-     solo lectura, cancelar a mitad ni los flujos de la ventana.
-   - **Tooltips propios (v1.05) y «Export for AI...» (v1.06), para probar Lega:** que el tooltip aparezca
-     y se oculte bien con el mouse de verdad (también con las dos ventanas abiertas y en el borde de una
-     fila), y copiar y guardar una exportación desde las tres pestañas.
-   - **Tooltips, observaciones de la auditoría:** una ruta muy larga puede dar un tooltip más ancho que
-     la ventana (el tope de ancho es el de la Base, 1800 px); en macOS el reemplazo de atajos también toca
-     rutas y URLs; `check_tooltips.ps1` se corre a mano, nada lo llama solo.
-   - **Tamaño de la interfaz (v1.07), para probar Lega:** que arranque en 1 sin nada guardado, elegir 0 y 2 desde General (la app se reinicia
-     sola y la ventana vuelve a su lugar, más grande), que NukeX abierto desde la app NO salga agrandado,
-     y mirar los bordes finos en el tamaño 1 (a 110 % una línea de 1 px puede salir de 1 o de 2 px).
-     Ícono de .nk en macOS (v1.10): compilar en una Mac, «Apply» y mirar los .nk en Finder (si queda el
-     ícono viejo, `killall Finder`); confirmar que no se queda con los .nk sin «Apply».
-     Límite por pantalla (v1.08): en macOS falta probar que `NSScreen` responda antes de la app (si no,
-     no limita al arrancar; la página General igual apaga lo que no entra). Visto en las capturas, de antes: en español la fila «Buscar actualizaciones al iniciar» llena justo
-     la tarjeta App y deja las tarjetas 5 px más anchas que en inglés (margen derecho de 11 px, no 16).
-   - **Sitio (D-32):** el día del primer release, dar de alta el repo en `LGA_Updates` y regenerar el
-     sitio para que la tarjeta pase de «Pronto» a la descarga.
-2. **Observaciones abiertas, antes del release:**
+1. **Herramientas nuevas (Lega, 2026-11-02), en este orden:**
+   1. **App Toggle** (Windows y macOS). Un atajo por app con tres casos: si la app no está abierta, la
+      abre; si está abierta sin foco, la trae al frente (y la restaura si estaba minimizada); si ya tiene
+      el foco, la minimiza. Sin opción de maximizar. Guarda exe, argumentos y directorio de trabajo, no un
+      `.lnk` (el instalador de OBS 33 le cambió el nombre al acceso y el AHK dejó de abrirlo). Entradas de
+      Lega: XYplorer (Win+E, hoy en `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`, que se saca de ahí para que no se
+      pisen), OBS y UAD Console (hoy botones «Abrir» de Stream Deck que lanzan `ahk-open_OBS.ahk` y
+      `ahk-open_UAD.ahk`; pasan a botones de tipo atajo con la combinación de App Toggle).
+   2. **Mouse Buttons** (Windows). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo
+      único que Lega usaba era un perfil para `photoshop.exe`: mientras se mantiene apretado el botón del
+      medio, simula Espacio + clic izquierdo (mover la imagen con el botón del medio). Reglas «app → botón →
+      teclas y clic mientras está apretado», con un gancho de mouse de bajo nivel que solo existe mientras
+      una app con regla está al frente.
+   3. **Desktop Icons** (Windows). Guarda y restaura la posición de los íconos del escritorio: snapshots
+      manuales y uno automático por día con la PC despierta hace al menos una hora; quedan los últimos 5
+      automáticos más los manuales. Diseño y decisiones en `Docs/Roadmap_Desktop_Icons.md`.
+2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
+   memoria) con elevación (D-27); huérfanos de `C:\Windows\Installer`; reglas que quedaron afuera
+   (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o
+   corregir los desvíos del diseño (D-31).
+   - **Observaciones de la auditoría (no frenan):** un programa extraído en la carpeta temporal hace más de
+     7 días y todavía corriendo puede perder sus archivos de datos (la sonda de «en uso» no ve un exe
+     cargado): saltear todo hijo que contenga la imagen de un proceso vivo. Al terminar el escaneo, el
+     resumen y la medición corren en el hilo de la ventana (del orden de 1 s). El listado de carpetas no
+     abre con «no seguir enlaces», así que un programa que cambie una carpeta por un enlace justo durante
+     el borrado podría desviarlo. El self-test no cubre nombres cortos, archivos de solo lectura, cancelar
+     a mitad ni los flujos de la ventana.
+3. **Observaciones abiertas:**
    - Textos 4-8 % más anchos que el diseño en los tamaños fraccionarios (11,5 y 12,5 px): Qt redondea el
      tamaño de letra a píxel entero y aplica hinting. Medido con `--measure-fonts`; toca la tipografía de
      toda la app.
-   - Avisos con AUMID propio (v0.09): falta la prueba de Lega del desplegable «Remind me again in», del
-     click con la app cerrada y desde el Centro de notificaciones. Si Lega tiene la copia de `build\` y la
-     instalada a la vez, el click de un aviso lo atiende la copia a la que apunta la anotación.
+   - Tooltips: una ruta muy larga puede dar un tooltip más ancho que la ventana (el tope de ancho es el de
+     la Base, 1800 px); en macOS el reemplazo de atajos también toca rutas y URLs; `check_tooltips.ps1` se
+     corre a mano, nada lo llama solo.
    - No hay captura de QA del disco desenchufado (el keycap punteado se verificó por código).
    - `--uninstall-cleanup` y el desinstalador no se probaron de punta a punta (solo sobre el hive
-     privado): probarlos en Windows Sandbox antes del release.
-3. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9). El lado de Mighty Tools está
-   hecho (migración en la instalación, casilla y botón para quitar el cliente viejo). PipeSync ya muestra
-   la tarjeta de Mighty Tools sola cuando el manifiesto de LGA_Updates la publica.
-   - **Probado en Windows Sandbox (2026-09-30), con el instalador v0.07 y el cliente viejo 1.83:** con la
-     casilla marcada, y con la casilla desmarcada más «Uninstall old app», el viejo se desinstala, sus
-     restos se borran, Open in NukeX queda prendido sin inicio con Windows y el doble click en un `.nk`
-     llama a NukeX. El `assoc .nk=` del desinstalador viejo no toca la asociación de HKCU.
-   - **Pendiente:** cancelar el permiso de Windows (UAC) del desinstalador viejo. Windows Sandbox trae el
-     control de cuentas apagado, así que va en una máquina real o virtual con UAC activo.
+     privado): probarlos en Windows Sandbox.
+   - En español la fila «Buscar actualizaciones al iniciar» llena justo la tarjeta App y deja las tarjetas
+     5 px más anchas que en inglés (margen derecho de 11 px, no 16).
+4. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9): hecha y probada.
    - **Mejora posible:** la migración desde una copia instalada no retoma un ProgID que apunta a otra
      copia de Mighty Tools (por ejemplo la de `build\`), ni aunque ese exe ya no exista: el panel queda
      «Not associated» hasta un Apply. Chequear primero si el exe falta y retomarlo en ese caso.
    - **Hueco aceptado:** si el UserChoice de `.nk` apunta a `Applications\LGA_OpenInNukeX.exe` (el
      usuario lo eligió con «Abrir con» buscando el exe), la migración no lo toca porque no es nuestro
      ProgID; al quitar el viejo, el `.nk` queda sin abrir hasta que el usuario aprieta Apply.
-4. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
+5. **Medir en uso real** los tiempos de COM y UI Automation de Folder Switch (`log=true`) y la latencia de
    los links contra Link Redirector.
-5. **Fase 7:** instalador, updater, alta en LGA_Updates y en el sitio; release 1.00 de Windows.
-6. **Fase 8: macOS (desde la Mac de Lega, 2026-10-02).** Hecho y probado por Lega en la Mac: la app
-   compila y se instala con `deploy.sh` (v1.15, D-38); andan Nuke Shortcuts (con el Nuke Bridge), Disk
-   Space (vigilancia y avisos), Open in NukeX, Link Redirector y Folder Switch (v1.16, D-40). Lo viejo de
-   la Mac ya se retiró (2026-10-02, a la Papelera): `LGA Link Redirector.app` con su LaunchAgent,
-   `LGA OpenInNukeX.app`, su configuración vieja y los clones `~/.nuke/LGA_OpenInNukeX` y
-   `~/Desktop/Codin/LGA_LinkRedirector`; links, `.html` y `.nk` los atiende Mighty Tools. Falta, en
-   este orden:
-   1. **Disk Space completo en mac: HECHO (v1.23 escaneo, v1.24 limpieza), falta la prueba de Lega**: el
-      borrado real, la Papelera (medirla y vaciarla), «Show in Finder», estirar la ventana desde los bordes
-      y la franja de acceso total al disco (que no salga NINGÚN cartel de privacidad sin ese permiso; la
-      sesión que lo hizo tenía el permiso y no pudo comprobarlo). Observaciones de las auditorías que
-      quedan: normalizar Unicode (NFC) en `DeleteGuard::clean`; excluir cualquier `*.photoslibrary` (hoy
-      solo la de Imágenes); la Papelera de iCloud Drive no se vacía (el Finder sí); «otro volumen» se mira
-      por `st_dev` solo en las reglas, no en cada `DeleteGuard::check`; en los temporales, una librería
-      mapeada sin fd abierto (un `_MEI*` de PyInstaller) no cuenta como «en uso»; mandar a la Papelera no
-      mira si algo está abierto (el Finder se niega); el encabezado de «Other app caches» tilda todo de un
-      click; hay una carrera (un proceso del usuario que cambie una carpeta ya listada por un enlace).
-   2. **Avisos nativos.** Hoy van por `osascript` (`platform/mac/SystemNotifierMac.cpp`): sin ícono propio,
+6. **macOS, lo que falta:**
+   1. **Ventana de limpieza estirable:** estirarla desde los bordes está sin hacer
+      (`platform/mac/WindowFrameMac.mm`).
+   2. **Disk Space, observaciones de las auditorías:** normalizar Unicode (NFC) en `DeleteGuard::clean`;
+      excluir cualquier `*.photoslibrary` (hoy solo la de Imágenes); la Papelera de iCloud Drive no se
+      vacía (el Finder sí); «otro volumen» se mira por `st_dev` solo en las reglas, no en cada
+      `DeleteGuard::check`; en los temporales, una librería mapeada sin fd abierto (un `_MEI*` de
+      PyInstaller) no cuenta como «en uso»; mandar a la Papelera no mira si algo está abierto (el Finder se
+      niega); el encabezado de «Other app caches» tilda todo de un click; hay una carrera (un proceso del
+      usuario que cambie una carpeta ya listada por un enlace).
+   3. **Avisos nativos.** Hoy van por `osascript` (`platform/mac/SystemNotifierMac.cpp`): sin ícono propio,
       sin click que vuelva a la app (`ToastActivationMac.cpp` es un stub) y sin el desplegable «Remind me
       again in» de Disk Space. Pasar a `UNUserNotificationCenter` con acciones (macOS las agrupa en
       «Options») y pedir el permiso de notificaciones.
-   3. **Release de mac: lo que queda.** El paquete, el actualizador y la publicación están hechos (v1.30
-      y v1.31, D-47 y D-49): `./deploy.sh --zip --dmg` arma el ZIP y el DMG universales; `./deploy.sh
-      --publish` (Mac) e `instalador.bat` (Windows) publican en el mismo release en cualquier orden
-      (`--publish --dry-run` ensaya sin escribir nada). En Mac publica `tools/macos/publish_release.sh`,
-      la pieza común de la Base (copia idéntica; lo propio, en `tools/macos/release.conf`; contrato en
-      `../LGA_Base_QT_C_Py/docs/Doc_Deploy_macOS.md` §5). Después de publicar: `git pull` (las notas dejan
-      un commit en `main` con `WHATS_NEW.md`, hecho por la API). Falta:
-      - **`instalador.bat` publicando de verdad** (Lega, en Windows): en un runner de GitHub ya corrió
-        entero en modo local (compila, analiza el tag y el release, genera el instalador; build «Build
-        Windows», que además instala en silencio, corre el self-test de la copia instalada y
-        desinstala). Lo que nunca se ejecutó es la subida: en la primera corrida real, leer el estado
-        del release que muestra el menú de publicación antes de apretar `1`, porque después no hay otra
-        pregunta: compila y publica. Las Windows instaladas hasta la 1.21 no pueden actualizarse
-        solas: hay que instalar una vez a mano.
+   4. **Release de mac:** el paquete, el actualizador y la publicación están hechos (D-47, D-49, D-59). Queda:
       - Observación del runner: el `--self-test` falló una vez de ocho en la copia recién instalada
         (`[diskSpace] motor`: el escaneo de la carpeta de pruebas no terminó en los 5 s de `waitScan`,
         con el antivirus del runner encima); las siete restantes, 0 fallas.
-      - **La primera actualización real contra GitHub** se prueba con el segundo release de mac (el
-        primero no tiene desde dónde actualizarse); contra un servidor local ya está probada
-        (`updateManifestUrl` y `updateDownloadBase` de `config/debug_flags.txt`).
       - **Respaldar el certificado «LGA Code Signing»** (el `.p12` del llavero de la Mac de Lega): si se
         pierde, la versión siguiente sale con otra identidad, el actualizador la rechaza y hay que
         reinstalar a mano y volver a dar los permisos.
-      - **Probar a mano en la Mac** (GUI, Lega): que el cartel «Update available» que sale solo con la
-        ventana cerrada se vea al frente (se comprobó que abre y que la app pasa a primer plano, con la
-        pantalla bloqueada), y una actualización en una cuenta de macOS limpia, sin acceso total al disco
-        (permiso «App Management» de macOS 13+).
       - `LGA_OpenInNukeX` puede archivarse y pasar a privado cuando Lega quiera (D-10): en mac no hay
         mudanza que esperar (D-50) y PipeSync ya ofrece Mighty Tools en las dos plataformas.
       - La app no está notarizada: la primera apertura pide el `xattr -dr com.apple.quarantine` del
         `README.txt` del DMG.
-   Pendientes chicos de mac: Folder Switch sin probar con el Guardar como hoja ni el popup con click
-   afuera; Lega apaga Default Folder X y usa Folder Switch en el día a día; el ícono, las viñetas y los
-   atajos del descriptor de Folder Switch están copiados entre `FolderSwitchModule.cpp` y
-   `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez que se compile en Windows); el CI de mac
-   (`.github/workflows/build-macos.yml`) no se corrió después del cambio de orden de sus pasos.
-7. **Herramienta nueva, para más adelante: Desktop Icons.** Guarda y restaura la posición de los íconos del
-   escritorio: snapshots manuales y uno automático por día, sólo con la PC despierta hace al menos una hora;
-   quedan los últimos 5 automáticos más los manuales. Diseño en `Docs/Roadmap_Desktop_Icons.md`.
-8. **Herramienta nueva, para más adelante: App Toggle.** Un atajo por app con tres casos: si la app no
-   está abierta, la abre; si está abierta sin foco, la trae al frente (y la restaura si estaba
-   minimizada); si ya tiene el foco, la minimiza. Reemplaza el Win+E de XYplorer de
-   `C:\Leg_AHKs\ahk_lega_shortcuts.ahk`. Falta definir si además puede maximizar, como opción por app.
-   - **Segunda app: OBS** (Lega, 2026-10-30). Hoy lo hace `C:\Leg_AHKs\ahk-open_OBS.ahk`: si `obs64.exe`
-     no corre, abre `C:\ProgramData\Microsoft\Windows\Start Menu\Programs\OBS Studio\OBS Studio (64bit).lnk`
-     (`obs64.exe --disable-shutdown-check`, con `bin\64bit` como directorio de trabajo); si corre, minimiza
-     o trae al frente la ventana «OBS». La herramienta tiene que guardar exe, argumentos y directorio de
-     trabajo, no un `.lnk`: el instalador de OBS 33 le cambió el nombre al acceso y el AHK dejó de abrirlo.
-   - **La misma tanda que crea la sección deja configuradas estas dos entradas, XYplorer y OBS,** en la PC
-     de Lega, con los mismos atajos con que hoy se disparan esos AHK, y dice qué AHK quedan para apagar.
-9. **Herramienta nueva, para más adelante: Disk Image** (nombre provisorio; sólo Windows). Imagen del
-   disco de sistema con un pendrive WinPE propio y DISM, en lugar de un programa de terceros. La sección
-   muestra cuándo fue la última imagen (fecha, tamaño, dónde está) y las instrucciones paso a paso para
-   capturar y restaurar, y tiene un botón para armar el pendrive. El motor ya existe y anda como scripts
-   aparte (`ImagenDisco_Win`: instalar el ADK, armar el pendrive, capturar, restaurar, verificar); la
-   captura y la restauración corren en el pendrive, con Windows apagado, así que la app sólo prepara,
-   informa y verifica. A resolver al diseñarla:
-   - El armado BORRA el pendrive y pide administrador: elevar sólo esa acción (la app sigue sin
-     administrador), elegir el disco por número de serie en la UI (no por letra ni con un archivo editado
-     a mano), aceptar sólo USB de 8-256 GB y confirmar escribiendo el final de la serie.
-   - El ADK (~4 GB) no viaja con la app: detectarlo y ofrecer instalarlo.
-   - En una prueba automatizada nada borra ni instala: como la limpieza de Disk Space, sólo simula.
-   - Avisar cuando la última imagen tiene más de N días, como el recordatorio de Disk Space.
-10. **Herramienta nueva, para más adelante: botones del mouse por app** (nombre provisorio; Lega,
-    2026-10-30). Reemplaza X-Mouse Button Control, que no se reinstaló al formatear. Lo único que Lega
-    usaba (`XMBCSettings.xml` del backup) era un perfil para `photoshop.exe`: mientras se mantiene apretado
-    el botón del medio, simula Espacio + clic izquierdo, o sea, mover la imagen con el botón del medio.
-    El resto de los botones, en todas las apps, quedaba sin tocar. Forma mínima: reglas «proceso → botón →
-    teclas/clics mientras está apretado», con un gancho de mouse de bajo nivel que sólo actúa con esa app
-    al frente. X-Mouse corría como administrador; ver si hace falta para Photoshop o si alcanza sin.
-11. **Otros repos, con pedido de Lega:** PipeSync (la tarjeta de LGA Mighty Tools en lugar de la de
-   LGA OpenInNukeX, sin la app ni el plugin viejos en el catálogo; D-21), LGA_Updates y el sitio.
+   5. **Pendientes chicos:** el ícono, las viñetas y los atajos del descriptor de Folder Switch están
+      copiados entre `FolderSwitchModule.cpp` y `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez
+      que se compile en Windows).
