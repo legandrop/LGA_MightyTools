@@ -2,6 +2,10 @@
 
 v1.53:
 
+App Toggle y Window Layouts: el botón de OBS del Stream Deck (Ctrl+Alt+Shift+Win+1) abría OBS y además la app de Office/Copilot. Ctrl+Alt+Shift+Win es la «tecla Office»: si Windows no ve otra tecla con las cuatro apretadas, al soltarlas abre esa app. El gancho mandaba la tecla muda antes de soltar Win o Alt, pero el Stream Deck suelta Ctrl primero y la combinación ya estaba rota. Ahora la tecla muda va antes de la PRIMERA liberación de cualquier modificador, después de una combinación interceptada con Win o Alt. Self-test con la secuencia del Stream Deck.
+
+[ Atajos - La tecla muda va antes de la primera liberacion: el Stream Deck ya no abre la app de Office ]
+
 General: «Interface size» con 0, 1 y 2 no decía qué hacía (Lega: «es medio raro»). Pasa a llamarse «Zoom» y cada segmento muestra el factor que aplica (100 %, 110 % y 120 %, de `UiScale::factor`); el texto de abajo y el aviso de pantalla nombran porcentajes. Se sigue guardando el nivel 0/1/2, así que ningún settings cambia. Solo Windows (en mac no hay zoom, D-45).
 
 [ General - Interface size pasa a Zoom con 100, 110 y 120 % ]

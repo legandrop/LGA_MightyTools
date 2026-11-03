@@ -226,10 +226,13 @@ private:
         const bool injected = key.flags & LLKHF_INJECTED;
         if (injected && key.dwExtraInfo == kMightyToolsInputTag) return false;
 
-        // Soltar Win o Alt despues de una combinacion interceptada: Windows no vio la tecla del medio y
-        // abriria el menu Inicio (Win+E) o la barra de menu de la ventana (Alt). La liberacion se cambia por
-        // la tecla muda seguida de la liberacion, en orden, aunque una macro haya mandado todo junto.
-        if (up && m_maskPending && winOrAlt) {
+        // Soltar un modificador despues de una combinacion interceptada con Win o Alt: Windows no vio la tecla
+        // del medio y abriria el menu Inicio (Win+E), la barra de menu de la ventana (Alt) o la app de Office
+        // (Ctrl+Alt+Shift+Win, la «tecla Office» que manda el Stream Deck). La PRIMERA liberacion, sea cual
+        // sea, se cambia por la tecla muda seguida de la liberacion: asi la tecla muda cae con todos los
+        // modificadores todavia apretados. Si el Stream Deck suelta Ctrl antes que Win, esperar a Win dejaba
+        // la tecla Office «sola» y Windows abria Copilot. En orden, aunque una macro haya mandado todo junto.
+        if (up && m_maskPending && modifier) {
             m_maskPending = false;
             return maskedRelease && maskedRelease(key);
         }
@@ -424,8 +427,20 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
           QStringLiteral("Win+E: si Windows rechaza la tecla muda, la liberacion original pasa y Win no queda apretada"));
     maskAccepted = true;
 
+    // El Stream Deck: Ctrl+Alt+Shift+Win+1 (la «tecla Office» mas una tecla) y suelta Ctrl primero. La tecla
+    // muda va antes de esa primera liberacion, con los cuatro todavia apretados: si esperara a Win, Windows
+    // veria la tecla Office sola y abriria la app de Office (Copilot).
+    explorer.add(21, Shortcut::fromPortableString(QStringLiteral("Meta+Ctrl+Alt+Shift+1")), 1);
+    const int officeMasked = masked.size();
+    check(!win(VK_LCONTROL, false) && !win(VK_LMENU, false) && !win(VK_LSHIFT, false)
+              && !win(VK_LWIN, false, LLKHF_EXTENDED) && win('1', false) && win('1', true) && lastId == 21
+              && win(VK_LCONTROL, true) && !win(VK_LMENU, true) && !win(VK_LSHIFT, true)
+              && !win(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == officeMasked + 1 && masked.last() == VK_LCONTROL,
+          QStringLiteral("tecla Office + 1 (Stream Deck): la tecla muda va antes de soltar Ctrl, el primero que suelta"));
+
     // El grabador (ShortcutCatcher): atrapa cualquier combinacion admitida con Ctrl, Alt o Win.
     PriorityHookThread recorder(0, kCatchMessage, true);
+    const int recorderMasked = masked.size();
     QList<QPair<int, quint64>> caught;
     const auto collect = [&](int vk, quint64 mods) {
         caught << qMakePair(vk, mods);
@@ -433,12 +448,14 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
     };
     const auto rec = [&](DWORD vk, bool up, DWORD flags = 0) { return press(recorder, vk, up, flags, collect); };
     check(!rec(VK_LWIN, false, LLKHF_EXTENDED) && rec('E', false) && rec('E', true) && rec(VK_LWIN, true, LLKHF_EXTENDED)
-              && caught.size() == 1 && caught.first().first == 'E' && caught.first().second == MOD_WIN && masked.size() == 3,
+              && caught.size() == 1 && caught.first().first == 'E' && caught.first().second == MOD_WIN
+              && masked.size() == recorderMasked + 1,
           QStringLiteral("grabador: atrapa Win+E aunque el Explorador la reserve, y enmascara soltar Win"));
     check(!rec(VK_LCONTROL, false) && !rec(VK_LMENU, false) && rec(VK_F5, false) && rec(VK_F5, true)
-              && !rec(VK_LCONTROL, true) && caught.size() == 2 && caught.last().second == (MOD_CONTROL | MOD_ALT)
-              && rec(VK_LMENU, true) && masked.size() == 4,
-          QStringLiteral("grabador: Ctrl+Alt+F5 se atrapa con sus dos modificadores"));
+              && rec(VK_LCONTROL, true) && caught.size() == 2 && caught.last().second == (MOD_CONTROL | MOD_ALT)
+              && !rec(VK_LMENU, true) && masked.size() == recorderMasked + 2 && masked.last() == VK_LCONTROL,
+          QStringLiteral("grabador: Ctrl+Alt+F5 se atrapa con sus dos modificadores; la tecla muda va antes de la "
+                         "primera liberacion (Ctrl)"));
     check(!rec(VK_LSHIFT, false) && !rec('A', false) && !rec('A', true) && !rec(VK_LSHIFT, true)
               && !rec(VK_ESCAPE, false) && !rec(VK_ESCAPE, true) && !rec(VK_LCONTROL, false) && !rec(VK_HOME, false)
               && !rec(VK_HOME, true) && !rec(VK_LCONTROL, true) && caught.size() == 2,
