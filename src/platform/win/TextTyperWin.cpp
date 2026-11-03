@@ -14,8 +14,11 @@
 
 namespace {
 
-constexpr int kBatchUnits = 12;      // caracteres por lote (un emoji o un salto de línea cuentan uno)
-constexpr int kTickMs = 12;          // pausa entre lotes: ~1000 caracteres por segundo
+// Un carácter por lote (un emoji o un salto de línea cuentan uno). Con 12 por lote el Bloc de notas de Windows 11
+// se atrasaba y las teclas en cola salían con el carácter que se estaba mandando en ese momento, no con el suyo
+// («acá aaaaaaaa ......»): el carácter de VK_PACKET se toma al procesar la tecla.
+constexpr int kBatchUnits = 1;
+constexpr int kTickMs = 12;          // pausa entre lotes: ~80 caracteres por segundo
 constexpr int kModifierWaitMs = 1000;
 
 struct Batch
@@ -105,7 +108,8 @@ struct TextTyper::Private
     QList<Batch> batches;
     int next = 0;
     int waitedMs = 0;
-    bool checked = false; ///< el destino ya se reviso (administrador, modificadores)
+    bool checked = false;  ///< el destino ya se reviso (administrador)
+    bool released = false; ///< ya se soltaron a la fuerza los modificadores en este texto
 };
 
 TextTyper::TextTyper(QObject *parent)
@@ -127,15 +131,21 @@ TextTyper::TextTyper(QObject *parent)
             DWORD pid = 0;
             GetWindowThreadProcessId(d->target, &pid);
             if (MouseButtonsSystem::injectionBlocked(pid)) return finish(Result::Elevated);
-            if (anyModifierDown()) {
-                if (d->waitedMs < kModifierWaitMs) {
-                    d->waitedMs += kTickMs;
-                    return;
-                }
-                // Siguen apretados (o Windows los da por apretados): se sueltan, con la tecla muda antes de Win o Alt.
-                InputInjector(false).releaseModifiers();
-            }
             d->checked = true;
+        }
+        // En cada carácter, no solo al empezar: un texto largo tarda segundos y un Ctrl apretado en el medio
+        // convertiría cada carácter en Ctrl+carácter. Se espera a que se suelte.
+        if (!anyModifierDown()) {
+            d->waitedMs = 0;
+        } else if (!d->released) {
+            if (d->waitedMs < kModifierWaitMs) {
+                d->waitedMs += kTickMs;
+                return;
+            }
+            // Siguen apretados (o Windows los da por apretados): se sueltan, con la tecla muda antes de Win o Alt.
+            // Una sola vez por texto: si Windows los sigue dando por apretados, no se espera 1 s por carácter.
+            InputInjector(false).releaseModifiers();
+            d->released = true;
         }
         const Batch &batch = d->batches.at(d->next);
         if (!send(batch.inputs)) {
@@ -163,6 +173,7 @@ bool TextTyper::type(quintptr target, const QString &text)
     d->next = 0;
     d->waitedMs = 0;
     d->checked = false;
+    d->released = false;
     if (AutomatedRun::active() || d->batches.isEmpty()) {
         const Result result = d->batches.isEmpty() ? Result::Typed : Result::LoggedOnly;
         qInfo() << "[dictation] (automatizada o vacio) no se escribe nada:" << d->batches.size() << "lotes";

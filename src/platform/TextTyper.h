@@ -38,9 +38,9 @@ public:
     // La ventana del frente ahora (la de nivel superior). Se toma al empezar a grabar y se pasa a type().
     static quintptr foregroundWindow();
 
-    // Escribe `text` en `target`. Antes espera hasta 1 s a que se suelten los modificadores del atajo; si siguen
-    // apretados, los suelta (con la tecla muda, para que soltar Win no abra Inicio). Antes de cada lote mira que
-    // `target` siga al frente. El resultado llega por finished(), siempre después de volver. False si ya está
+    // Escribe `text` en `target`, un carácter por lote. Antes de cada lote mira que `target` siga al frente y
+    // espera hasta 1 s a que se suelten los modificadores (los del atajo o uno apretado a mitad de la escritura);
+    // si siguen apretados, los suelta una vez (con la tecla muda, para que soltar Win no abra Inicio). El resultado llega por finished(), siempre después de volver. False si ya está
     // escribiendo otro texto.
     bool type(quintptr target, const QString &text);
     bool isBusy() const;

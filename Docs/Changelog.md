@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation: en el Bloc de notas de Windows 11 el texto final salía roto («acá aaaaaaaa ......») aunque el motor lo había transcripto bien. La escritura mandaba lotes de 12 caracteres cada 12 ms (~1000 por segundo); el Bloc de notas se atrasaba y las teclas en cola salían con el carácter que se estaba mandando en ese momento, no con el suyo. Ahora va un carácter por lote (~80 por segundo) y los modificadores se revisan antes de cada carácter, no solo al empezar: un Ctrl apretado a mitad de un texto largo ya no convierte cada letra en Ctrl+letra.
+
+[ Dictation - Un caracter por lote al escribir: el Bloc de notas atrasado repetia letras ]
+
 Dictation: un «No» o un «Sí» suelto no se escribía. Con la frase de contexto Whisper contesta a una palabra corta repitiendo la frase («Fijate si el roto anda bien.»), y el filtro de eco la descartaba entera. Ahora, cuando hubo poca voz (menos de ~1 s) y el final se descarta por eco, se repite la pasada final sin la frase de contexto (con el vocabulario, como en vivo; ~100 ms más, solo en ese caso) y se usa ese texto si no es eco ni vacío. La decisión está en `DictationWorker::finalText`, probada con un doble del motor.
 
 [ Dictation - Una palabra corta sola se escribe: segunda pasada sin la frase de contexto cuando la primera es eco ]

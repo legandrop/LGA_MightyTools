@@ -1034,16 +1034,15 @@ void testTyping(const Check &check)
     const QString emoji = QString::fromUtf8("\xF0\x9F\x98\x80");
     check(TextTyper::describe(emoji) == unicode("D83D") + unicode("DE00"),
           QStringLiteral("escritura: un emoji va como su par sustituto, en orden"));
-    check(TextTyper::describe(QStringLiteral("a\r\nb")) == unicode("0061") + shiftEnter + unicode("0062")
+    const QStringList separator = {QStringLiteral("--")};
+    check(TextTyper::describe(QStringLiteral("a\r\nb")) == unicode("0061") + separator + shiftEnter + separator + unicode("0062")
               && TextTyper::describe(QStringLiteral("\n")) == shiftEnter && TextTyper::describe(QStringLiteral("\r")) == shiftEnter,
           QStringLiteral("escritura: un salto de linea (\\r\\n, \\n o \\r) es UN Shift+Enter: en un chat Enter solo enviaria"));
     check(TextTyper::describe(QString(QChar(0x01))).isEmpty() && TextTyper::describe(QString()).isEmpty(),
           QStringLiteral("escritura: los caracteres de control no se mandan"));
-    const QStringList atEnd = TextTyper::describe(QString(11, QLatin1Char('x')) + emoji + QLatin1Char('y'));
-    const QStringList pushed = TextTyper::describe(QString(12, QLatin1Char('x')) + emoji);
-    check(atEnd.indexOf(QStringLiteral("--")) == 26 && atEnd.mid(22, 4) == unicode("D83D") + unicode("DE00")
-              && pushed.indexOf(QStringLiteral("--")) == 24 && pushed.mid(25) == unicode("D83D") + unicode("DE00"),
-          QStringLiteral("escritura: lotes de 12 caracteres; un emoji nunca queda partido entre dos lotes"));
+    check(TextTyper::describe(QStringLiteral("xy") + emoji) == unicode("0078") + separator + unicode("0079") + separator
+                                                                   + unicode("D83D") + unicode("DE00"),
+          QStringLiteral("escritura: un caracter por lote (el Bloc de notas atrasado repetia el ultimo); un emoji nunca queda partido"));
     const QStringList mixed = TextTyper::describe(QStringLiteral("Nuke, ¿andás?\n") + emoji);
     check(!mixed.isEmpty() && mixed.filter(QStringLiteral("SIN-MARCA")).isEmpty(),
           QStringLiteral("escritura: cada tecla lleva la marca propia (los ganchos de la app no la toman)"));
