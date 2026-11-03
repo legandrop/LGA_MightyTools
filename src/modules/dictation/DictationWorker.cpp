@@ -540,7 +540,8 @@ Attempt finalText(int voiceFrames, const QStringList &vocabulary, const QString 
     if (!DictationText::finalEchoesContext(first.text, vocabulary, prompt, little ? 4 : 8)) {
         return first;
     }
-    if (log) *log << QStringLiteral("Final que solo repite el contexto, se descarta: %1").arg(first.text);
+    // El log nunca lleva lo dictado (Recent tampoco va al disco): solo cuantas palabras.
+    if (log) *log << QStringLiteral("Final que solo repite el contexto, se descarta (%1 palabras)").arg(first.text.split(QLatin1Char(' '), Qt::SkipEmptyParts).size());
     first.text.clear();
     if (!little || prompt.isEmpty()) {
         return first;
@@ -554,9 +555,9 @@ Attempt finalText(int voiceFrames, const QStringList &vocabulary, const QString 
     if (!bare.ok) {
         if (log) *log << QStringLiteral("La pasada sin la frase de contexto fallo: %1").arg(bare.error);
     } else if (!DictationText::hasWords(bare.text) || DictationText::finalEchoesContext(bare.text, vocabulary, prompt, 4)) {
-        if (log) *log << QStringLiteral("Sin la frase de contexto tampoco hay texto: \"%1\"").arg(bare.text);
+        if (log) *log << QStringLiteral("Sin la frase de contexto tampoco hay texto");
     } else {
-        if (log) *log << QStringLiteral("Sin la frase de contexto: %1").arg(bare.text);
+        if (log) *log << QStringLiteral("Sin la frase de contexto: %1 palabras").arg(bare.text.split(QLatin1Char(' '), Qt::SkipEmptyParts).size());
         first.text = bare.text;
     }
     return first;
