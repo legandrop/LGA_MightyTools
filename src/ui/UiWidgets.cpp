@@ -795,6 +795,37 @@ void SwitchRow::mouseReleaseEvent(QMouseEvent *event)
 
 // ------------------------------------------------------------------ StatusDot
 
+AppIconTile::AppIconTile(QWidget *parent)
+    : QWidget(parent)
+{
+    setFixedSize(31, 31);
+}
+
+void AppIconTile::setIcon(const QIcon &icon)
+{
+    m_icon = icon;
+    update();
+}
+
+void AppIconTile::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Theme::color(Theme::kBorderStrong));
+    painter.setBrush(Theme::color(Theme::kWindow));
+    painter.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 3, 3);
+    const QRectF box(QRectF(rect()).center() - QPointF(10, 10), QSizeF(20, 20));
+    if (!m_icon.isNull()) {
+        m_icon.paint(&painter, box.toRect());
+        return;
+    }
+    painter.setPen(QPen(Theme::color(Theme::kTextMuted), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
+    const QRectF frame = box.adjusted(2.5, 3.5, -2.5, -3.5);
+    painter.drawRoundedRect(frame, 1.5, 1.5);
+    painter.drawLine(QPointF(frame.left(), frame.top() + 3.2), QPointF(frame.right(), frame.top() + 3.2));
+}
+
 StatusDot::StatusDot(int diameter, QWidget *parent)
     : QWidget(parent)
 {

@@ -152,6 +152,14 @@ void ShortcutRow::setExtraChip(const QString &tone, const QString &text)
 void ShortcutRow::setShortcut(const Shortcut &shortcut)
 {
     m_shortcut = shortcut;
+    m_keyLabels.clear();
+    rebuildKeys();
+}
+
+void ShortcutRow::setKeyLabels(const QStringList &labels)
+{
+    m_shortcut = Shortcut();
+    m_keyLabels = labels;
     rebuildKeys();
 }
 
@@ -161,7 +169,7 @@ void ShortcutRow::rebuildKeys()
         delete item->widget();
         delete item;
     }
-    for (const QString &key : m_shortcut.displayKeys()) {
+    for (const QString &key : m_keyLabels.isEmpty() ? m_shortcut.displayKeys() : m_keyLabels) {
         auto *chip = new Chip(m_keys);
         chip->set(QStringLiteral("key"), key);
         m_keysLayout->addWidget(chip, 0, Qt::AlignVCenter);
@@ -172,10 +180,10 @@ void ShortcutRow::rebuildKeys()
     }
 }
 
-QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers)
+QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers) const
 {
     if (!relevantModifiers(modifiers)) {
-        return I18n::tr("Press a shortcut...");
+        return m_holdKeys ? I18n::tr("Press the keys...") : I18n::tr("Press a shortcut...");
     }
     Shortcut probe;
     probe.modifiers = relevantModifiers(modifiers);
@@ -195,7 +203,8 @@ void ShortcutRow::setRecordingVisible(bool recording, const QString &partial)
     m_recorder->setVisible(recording);
     m_recorderText->setText(partial);
     if (recording) {
-        m_caption->setText(I18n::tr("Press the new combination. Esc cancels."));
+        m_caption->setText(m_holdKeys ? I18n::tr("Press the keys to hold, like Space. Esc cancels.")
+                                      : I18n::tr("Press the new combination. Esc cancels."));
         Ui::setStyleProperty(m_caption, "tone", QString());
     }
 }
@@ -294,10 +303,13 @@ void ShortcutRow::acceptCandidate(const Shortcut &candidate)
     const Shortcut previous = m_shortcut;
     finishRecording();
 
+    // Teclas para mantener (Mouse Buttons): una sola sin modificadores es lo comun (Espacio en Photoshop).
+    const bool keyOk = Shortcut::isSupportedKey(candidate.key) || (m_holdKeys && candidate.key == Qt::Key_Space);
     QString error;
-    if (!Shortcut::isSupportedKey(candidate.key)) {
-        error = I18n::tr("Use a letter, a number, F1-F12 or an arrow key.");
-    } else if (!(modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
+    if (!keyOk) {
+        error = m_holdKeys ? I18n::tr("Use a letter, a number, F1-F12, an arrow key or Space.")
+                           : I18n::tr("Use a letter, a number, F1-F12 or an arrow key.");
+    } else if (!m_holdKeys && !(modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier))) {
 #ifdef Q_OS_MACOS
         error = I18n::tr("Add ⌘, ⌥ or ⌃ so it doesn't take a plain key.");
 #else

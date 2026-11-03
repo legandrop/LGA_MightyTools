@@ -24,38 +24,6 @@
 
 namespace {
 
-// La miniatura de la fila: el icono de la app en una baldosa con los materiales de la de Window
-// Layouts. Sin icono (la app no esta en el disco), una ventana dibujada.
-class AppTile : public QWidget
-{
-public:
-    explicit AppTile(QWidget *parent = nullptr) : QWidget(parent) { setFixedSize(31, 31); }
-    void setIcon(const QIcon &icon) { m_icon = icon; update(); }
-
-protected:
-    void paintEvent(QPaintEvent *) override
-    {
-        QPainter painter(this);
-        painter.setRenderHint(QPainter::Antialiasing, true);
-        painter.setPen(Theme::color(Theme::kBorderStrong));
-        painter.setBrush(Theme::color(Theme::kWindow));
-        painter.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 3, 3);
-        const QRectF box(QRectF(rect()).center() - QPointF(10, 10), QSizeF(20, 20));
-        if (!m_icon.isNull()) {
-            m_icon.paint(&painter, box.toRect());
-            return;
-        }
-        painter.setPen(QPen(Theme::color(Theme::kTextMuted), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.setBrush(Qt::NoBrush);
-        const QRectF frame = box.adjusted(2.5, 3.5, -2.5, -3.5);
-        painter.drawRoundedRect(frame, 1.5, 1.5);
-        painter.drawLine(QPointF(frame.left(), frame.top() + 3.2), QPointF(frame.right(), frame.top() + 3.2));
-    }
-
-private:
-    QIcon m_icon;
-};
-
 QString description(const AppEntry &entry)
 {
     const QString file = QFileInfo(QDir::fromNativeSeparators(entry.path)).fileName();
@@ -301,7 +269,7 @@ void AppTogglePanel::rebuildList()
         auto *line = new QHBoxLayout(row);
         line->setContentsMargins(0, 10, 0, 10);
         line->setSpacing(9);
-        auto *tile = new AppTile(row);
+        auto *tile = new AppIconTile(row);
         tile->setIcon(iconFor(entry.path));
         line->addWidget(tile, 0, Qt::AlignTop);
         auto *shortcut = new ShortcutRow(entry.name, description(entry), row);

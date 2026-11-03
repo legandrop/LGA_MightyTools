@@ -11,6 +11,7 @@
 
 #if defined(Q_OS_WIN)
 #include "modules/folderswitch/FolderSwitchModule.h"
+#include "modules/mousebuttons/MouseButtonsModule.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
 #endif
@@ -33,6 +34,9 @@ QList<ModuleDescriptor> all()
     list << linkRedirectorDescriptor();
     list << windowLayoutsDescriptor();
     list << appToggleDescriptor();
+#if defined(Q_OS_WIN)
+    list << mouseButtonsDescriptor();
+#endif
 
 #if defined(Q_OS_WIN)
     const int current = PlatformWindows;
@@ -60,6 +64,9 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
+#if defined(Q_OS_WIN)
+    providers.insert(QStringLiteral("mouseButtons"), &mouseButtonsHelp);
+#endif
     return providers;
 }
 

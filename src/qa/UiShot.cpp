@@ -118,7 +118,7 @@ QString canvasState(const QString &id)
 bool canvasOff(const QString &id)
 {
     return id == QLatin1String("linkRedirector") || id == QLatin1String("windowLayouts")
-        || id == QLatin1String("appToggle");
+        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons");
 }
 
 // Prende para captura una herramienta con su estado (vacio = el primero que declara).
