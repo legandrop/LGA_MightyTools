@@ -216,7 +216,8 @@ QList<Cleanup::Category> appCategories(const QString &state, qint64 now)
                              {item(I18n::tr("Recycle Bin"), at(root + QStringLiteral("/")), 9.06, 0, true, now)}, true));
         QList<Cleanup::Item> media = {
             item(QStringLiteral("Adobe Media Cache"), at(adobeCommon), 1.33, 1, true, now),
-            item(QStringLiteral("Adobe Media Cache"), at(root + QStringLiteral("/MediaCache")), 4.12, 2, true, now),
+            shown(item(QStringLiteral("Adobe Media Cache"), at(root + QStringLiteral("/MediaCache")), 4.12, 2, true, now),
+                  root + QStringLiteral("/MediaCache/Media Cache Files + Media Cache + Peak Files")),
             item(I18n::tr("After Effects disk cache"), at(aeCache), 6.85, 3, true, now),
             item(I18n::tr("DaVinci Resolve render cache"), at(resolve + QStringLiteral("/CacheClip")), 18.4, 5, true, now),
             item(I18n::tr("Ableton Live decoding cache"), at(ableton), 1.21, 40, true, now),
