@@ -279,10 +279,13 @@ RestoreRun restoreInto(QList<DesktopSnapshot> *stored, const QString &targetId, 
         && std::all_of(run.plan.moves.cbegin(), run.plan.moves.cend(),
                        [&at](const DesktopIconView::Icon &icon) { return at.value(icon.path) == icon.position; });
     // El escritorio de ahora ya esta guardado: no hace falta otro "antes" (y no se empuja afuera el original).
+    // Con los mismos flags y nunca el destino: un cambio que es solo de flags tiene que poder deshacerse.
     QString match;
     QDateTime matchWhen;
     for (const DesktopSnapshot &snapshot : std::as_const(*stored)) {
-        if ((match.isEmpty() || snapshot.when > matchWhen) && sameArrangement(snapshot.layout, current)) {
+        if (snapshot.id != targetId && (match.isEmpty() || snapshot.when > matchWhen)
+            && snapshot.layout.autoArrange == current.autoArrange && snapshot.layout.snapToGrid == current.snapToGrid
+            && sameArrangement(snapshot.layout, current)) {
             match = snapshot.id;
             matchWhen = snapshot.when;
         }

@@ -1015,7 +1015,7 @@ const QHash<QString, QString> &spanishTable()
         E("Restored 1 icon", "1 ícono restaurado"),
         E("Restored %1 icons", "%1 íconos restaurados"),
         E("%1 not found", "%1 sin encontrar"),
-        E("%1 not placed", "%1 fuera de lugar"),
+        E("%1 not placed", "%1 corridos"),
         E("Windows left %1 in another spot, for example with Auto arrange icons on.",
           "Windows dejó %1 en otro lugar, por ejemplo con Organizar iconos automáticamente activado."),
         E("Undo puts them back where they were before restoring.", "Deshacer los devuelve a donde estaban antes de restaurar."),
