@@ -33,6 +33,15 @@ bool AppToggleState::validPath(const QString &path)
         && clean.endsWith(suffix, Qt::CaseInsensitive) && clean.size() > suffix.size() + 1;
 }
 
+QString AppToggleState::cleanPath(const QString &text)
+{
+    QString clean = text.trimmed();
+    if (clean.size() >= 2 && clean.startsWith(QLatin1Char('"')) && clean.endsWith(QLatin1Char('"'))) {
+        clean = clean.mid(1, clean.size() - 2).trimmed();
+    }
+    return clean;
+}
+
 bool AppToggleState::valid(const AppEntry &entry)
 {
     return entry.id >= 1 && entry.id <= kMaxApps && !entry.name.trimmed().isEmpty() && entry.name.size() <= 80

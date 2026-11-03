@@ -42,7 +42,7 @@ protected:
         painter.drawRoundedRect(QRectF(rect()).adjusted(.5, .5, -.5, -.5), 3, 3);
         const QRectF box(QRectF(rect()).center() - QPointF(10, 10), QSizeF(20, 20));
         if (!m_icon.isNull()) {
-            m_icon.paint(&painter, box.toRect());
+            paintIcon(painter, box.toRect());
             return;
         }
         painter.setPen(QPen(Theme::color(Theme::kTextMuted), 1.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
@@ -53,6 +53,36 @@ protected:
     }
 
 private:
+    // QIcon elige el cuadro por el tamano logico (20) y despues lo estira a la densidad de la pantalla: a
+    // 200 o 300 % el icono salia borroso. Aca se elige por pixeles reales (el cuadro mas chico que alcanza)
+    // y se achica suave. Sin tamanos a la vista (el icono de mac lo dibuja el sistema), QIcon como siempre.
+    void paintIcon(QPainter &painter, const QRect &target) const
+    {
+        const QList<QSize> sizes = m_icon.availableSizes();
+        if (sizes.isEmpty()) {
+            m_icon.paint(&painter, target);
+            return;
+        }
+        // La escala real de lo que se pinta: la de la pantalla en la app, la del pixmap en una captura a
+        // --dpr 3 (ahi el widget sigue creyendo que su pantalla es de 1).
+        const qreal dpr = qMax<qreal>(1.0, painter.deviceTransform().m11());
+        const int device = qRound(target.width() * dpr);
+        QSize pick;
+        for (const QSize &size : sizes) {
+            const bool fits = size.width() >= device;
+            if (!pick.isValid() || (fits && (pick.width() < device || size.width() < pick.width()))
+                || (!fits && pick.width() < device && size.width() > pick.width())) {
+                pick = size;
+            }
+        }
+        QPixmap pixmap = m_icon.pixmap(pick, 1.0);
+        if (pixmap.width() != device) {
+            pixmap = pixmap.scaled(device, device, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+        pixmap.setDevicePixelRatio(dpr);
+        painter.drawPixmap(target.topLeft(), pixmap);
+    }
+
     QIcon m_icon;
 };
 
@@ -171,6 +201,7 @@ QWidget *AppTogglePanel::createEditorPage()
 #else
     m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Opens the app, brings it to the front or minimizes it."), card);
 #endif
+    m_shortcut->showWindowsShortcutNote(true);
     form->addWidget(m_shortcut);
     m_editorError = Ui::caption(QString(), card);
     m_editorError->setWordWrap(true);
@@ -193,6 +224,14 @@ QWidget *AppTogglePanel::createEditorPage()
     if (m_interactive) {
         connect(browse, &QPushButton::clicked, this, &AppTogglePanel::browse);
         connect(m_path, &QLineEdit::textChanged, this, &AppTogglePanel::updateFolderPlaceholder);
+        // Una ruta pegada con «Copiar como ruta» llega entre comillas: se le sacan a la vista.
+        for (QLineEdit *edit : {m_path, m_folder}) {
+            if (!edit) continue;
+            connect(edit, &QLineEdit::editingFinished, this, [edit]() {
+                const QString clean = AppToggleState::cleanPath(edit->text());
+                if (clean != edit->text()) edit->setText(clean);
+            });
+        }
         connect(m_shortcut, &ShortcutRow::shortcutRecorded, this, [this](const Shortcut &shortcut) {
             m_draft.shortcut = shortcut;
             m_shortcut->setShortcut(shortcut);
@@ -396,7 +435,7 @@ void AppTogglePanel::updateEditor()
 void AppTogglePanel::updateFolderPlaceholder()
 {
     if (!m_folder) return;
-    const QString path = m_path->text().trimmed();
+    const QString path = AppToggleState::cleanPath(m_path->text());
     // Vacio = la carpeta de la app: se muestra cual es.
     m_folder->setPlaceholderText(AppToggleState::validPath(path)
                                      ? QDir::toNativeSeparators(QFileInfo(QDir::fromNativeSeparators(path)).absolutePath())
@@ -405,7 +444,7 @@ void AppTogglePanel::updateFolderPlaceholder()
 
 void AppTogglePanel::browse()
 {
-    const QString current = QDir::fromNativeSeparators(m_path->text().trimmed());
+    const QString current = QDir::fromNativeSeparators(AppToggleState::cleanPath(m_path->text()));
 #ifdef Q_OS_MACOS
     const QString start = AppToggleState::validPath(current) ? QFileInfo(current).absolutePath() : QStringLiteral("/Applications");
     const QString filter = I18n::tr("Applications (*.app);;All files (*)");
@@ -429,9 +468,11 @@ void AppTogglePanel::browse()
 void AppTogglePanel::saveEditor()
 {
     m_draft.name = m_name->text().trimmed();
-    m_draft.path = m_path->text().trimmed();
+    m_draft.path = AppToggleState::cleanPath(m_path->text());
     m_draft.arguments = m_arguments->text().trimmed();
-    m_draft.workingDir = m_folder ? m_folder->text().trimmed() : QString();
+    m_draft.workingDir = m_folder ? AppToggleState::cleanPath(m_folder->text()) : QString();
+    m_path->setText(m_draft.path);
+    if (m_folder) m_folder->setText(m_draft.workingDir);
     QString error;
     if (!m_module->saveApp(m_draft, &error)) {
         m_editorError->setText(error);
@@ -442,7 +483,12 @@ void AppTogglePanel::saveEditor()
     m_pages->setCurrentWidget(m_listPage);
 }
 
-void AppTogglePanel::showEditorForCapture(int id)
+void AppTogglePanel::showEditorForCapture(int id, const QString &error, const QString &recording)
 {
     editApp(id);
+    if (!error.isEmpty()) {
+        m_editorError->setText(error);
+        m_editorError->show();
+    }
+    if (!recording.isEmpty()) m_shortcut->showRecordingFixture(recording);
 }

@@ -44,6 +44,26 @@ bool Shortcut::isSupportedKey(int key)
         || key == Qt::Key_Left || key == Qt::Key_Right || key == Qt::Key_Up || key == Qt::Key_Down;
 }
 
+bool Shortcut::replacesWindowsShortcut() const
+{
+#ifdef Q_OS_WIN
+    const Qt::KeyboardModifiers relevant = modifiers & (Qt::ControlModifier | Qt::AltModifier | Qt::ShiftModifier | Qt::MetaModifier);
+    return relevant == Qt::MetaModifier
+        && ((key >= Qt::Key_A && key <= Qt::Key_Z) || (key >= Qt::Key_0 && key <= Qt::Key_9));
+#else
+    return false;
+#endif
+}
+
+bool Shortcut::isLockShortcut() const
+{
+#ifdef Q_OS_WIN
+    return replacesWindowsShortcut() && key == Qt::Key_L;
+#else
+    return false;
+#endif
+}
+
 bool Shortcut::isModifierKey(int key)
 {
     return key == Qt::Key_Control || key == Qt::Key_Shift || key == Qt::Key_Alt || key == Qt::Key_Meta

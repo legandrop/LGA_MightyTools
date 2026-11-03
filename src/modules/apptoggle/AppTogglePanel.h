@@ -23,8 +23,9 @@ class AppTogglePanel : public QWidget
 public:
     AppTogglePanel(AppToggleModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
-    // Captura de QA: el editor de una entrada nueva (0) o de la entrada `id`.
-    void showEditorForCapture(int id);
+    // Captura de QA: el editor de una entrada nueva (0) o de la entrada `id`, con un error abajo o el
+    // grabador abierto con ese texto.
+    void showEditorForCapture(int id, const QString &error = QString(), const QString &recording = QString());
 
 protected:
     void hideEvent(QHideEvent *event) override;

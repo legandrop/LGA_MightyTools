@@ -43,11 +43,20 @@ Decision decide(const QString &appPath, const Snapshot &snapshot)
         decision.reason = inFront ? QStringLiteral("la app esta al frente") : QStringLiteral("la app corre sin el foco");
         return decision;
     }
+    // Se minimiza solo una ventana normal de la app que este a la vista. Si lo del frente es un menu o un
+    // globo de la bandeja (de herramientas, con dueno), o algo ya minimizado, se sigue como si estuviera
+    // detras: se trae su ultima ventana.
     if (inFront && snapshot.foreground) {
-        decision.action = Action::Minimize;
-        decision.window = snapshot.foreground;
-        decision.reason = QStringLiteral("la ventana del frente es de la app");
-        return decision;
+        for (const Window &window : snapshot.windows) {
+            if (window.id != snapshot.foreground) continue;
+            if (eligible(window) && !window.minimized) {
+                decision.action = Action::Minimize;
+                decision.window = snapshot.foreground;
+                decision.reason = QStringLiteral("la ventana del frente es de la app");
+                return decision;
+            }
+            break;
+        }
     }
     for (const Window &window : snapshot.windows) {
         if (!samePath(window.processPath, appPath) || !eligible(window)) {

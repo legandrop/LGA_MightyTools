@@ -345,6 +345,7 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     methodHint->setWordWrap(true);
     form->addWidget(methodHint);
     m_shortcut = new ShortcutRow(I18n::tr("Shortcut"), I18n::tr("Acts on the window in front."), card);
+    m_shortcut->showWindowsShortcutNote(true);
     form->addWidget(m_shortcut);
     m_editorError = Ui::caption(QString(), card);
     Ui::setStyleProperty(m_editorError, "tone", QStringLiteral("err"));

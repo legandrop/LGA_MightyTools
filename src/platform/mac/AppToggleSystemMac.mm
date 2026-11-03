@@ -1,5 +1,6 @@
 #include "platform/AppToggleSystem.h"
 
+#include "core/AutomatedRun.h"
 #include "core/I18n.h"
 
 #include <QDebug>
@@ -70,6 +71,11 @@ Snapshot snapshot(const QString &appPath)
 bool run(const Decision &decision, const Target &target, QString *error)
 {
     if (error) error->clear();
+    // Segunda barrera (la primera es el modulo): una corrida automatizada nunca abre, activa ni oculta.
+    if (AutomatedRun::active()) {
+        qInfo().noquote() << "[appToggle] Corrida automatizada, no se ejecuta:" << describe(decision);
+        return true;
+    }
     if (decision.action == Action::Nothing) {
         return true;
     }
