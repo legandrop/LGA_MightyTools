@@ -372,6 +372,15 @@ if(WIN32)
         src/modules/desktopicons/DesktopIconsPanel.cpp
         src/modules/desktopicons/DesktopSnapshots.cpp
         src/platform/win/DesktopIconViewWin.cpp
+        # Dictation (por ahora solo Windows): el motor corre en otro proceso (--dictation-worker) y carga
+        # transcribe.dll en tiempo de ejecucion; la app no enlaza contra el motor.
+        src/modules/dictation/DictationEngine.cpp
+        src/modules/dictation/DictationModels.cpp
+        src/modules/dictation/DictationProtocol.cpp
+        src/modules/dictation/DictationQa.cpp
+        src/modules/dictation/DictationText.cpp
+        src/modules/dictation/DictationWorker.cpp
+        src/platform/win/DictationProcessWin.cpp
     )
     list(APPEND HEADERS
         src/modules/desktopicons/DesktopIconsModule.h
@@ -398,6 +407,16 @@ if(WIN32)
         src/modules/mousebuttons/MouseButtonsPanel.h
         src/modules/mousebuttons/MouseButtonsState.h
         src/platform/MouseButtonsSystem.h
+        src/modules/dictation/DictationEngine.h
+        src/modules/dictation/DictationModels.h
+        src/modules/dictation/DictationProtocol.h
+        src/modules/dictation/DictationQa.h
+        src/modules/dictation/DictationText.h
+        src/modules/dictation/DictationWorker.h
+        # Encabezados de transcribe.cpp 0.4.1 (MIT): solo tipos y firmas.
+        src/modules/dictation/third_party/transcribe.h
+        src/modules/dictation/third_party/whisper.h
+        src/platform/DictationProcess.h
     )
 elseif(APPLE)
     list(APPEND SOURCES

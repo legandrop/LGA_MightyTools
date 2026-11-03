@@ -1234,6 +1234,28 @@ const QHash<QString, QString> &spanishTable()
         E("The snapshot was not saved.", "El snapshot no se guardó."),
         E("Could not write the snapshot file.", "No se pudo escribir el archivo del snapshot."),
 
+        // ---------- Dictation: motor, descarga y verificacion
+        E("The dictation engine is not installed.", "El motor de dictado no está instalado."),
+        E("The dictation model is not installed.", "El modelo de dictado no está instalado."),
+        E("The dictation engine is not running.", "El motor de dictado no está en marcha."),
+        E("The dictation engine could not start: %1", "No se pudo iniciar el motor de dictado: %1"),
+        E("Dictation failed: %1", "Falló el dictado: %1"),
+        E("The dictation engine stopped unexpectedly.", "El motor de dictado se cerró de forma inesperada."),
+        E("The file on disk is not the expected one: %1", "El archivo en el disco no es el esperado: %1"),
+        E("The file on disk is damaged (its checksum does not match): %1",
+          "El archivo en el disco está dañado (su suma de verificación no coincide): %1"),
+        E("Downloads are off during automated tests.", "Las descargas están desactivadas en las pruebas automáticas."),
+        E("Could not save the download: %1", "No se pudo guardar la descarga: %1"),
+        E("The server answered %1.", "El servidor respondió %1."),
+        E("The download does not have the expected size.", "La descarga no tiene el tamaño esperado."),
+        E("The download failed: %1", "Falló la descarga: %1"),
+        E("The download is damaged (its checksum does not match).", "La descarga está dañada (su suma de verificación no coincide)."),
+        E("Could not replace %1.", "No se pudo reemplazar %1."),
+        E("This Windows does not have tar.exe, which is needed to unpack the engine.",
+          "Este Windows no tiene tar.exe, que hace falta para desempaquetar el motor."),
+        E("Could not unpack the engine.", "No se pudo desempaquetar el motor."),
+        E("Could not delete %1.", "No se pudo borrar %1."),
+
     };
     return table;
 }

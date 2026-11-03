@@ -22,6 +22,7 @@
 #include "updates/UpdateSelfTest.h"
 
 #ifdef Q_OS_WIN
+#include "modules/dictation/DictationQa.h"
 #include "qa/RegistryHiveTest.h"
 #include "qa/HotkeyPriorityTest.h"
 #endif
@@ -966,6 +967,10 @@ int run()
         const QString prefix = QStringLiteral("[%1] ").arg(d.id);
         d.selfTest([&check, prefix](bool ok, const QString &what) { check(ok, prefix + what); });
     }
+#ifdef Q_OS_WIN
+    // El motor de dictado todavia no tiene herramienta en la lista: su self-test va directo.
+    DictationQa::selfTest([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[dictation] ") + what); });
+#endif
 
 #ifdef Q_OS_WIN
     // Registro y --uninstall-cleanup sobre un hive privado (nunca el HKCU real).
