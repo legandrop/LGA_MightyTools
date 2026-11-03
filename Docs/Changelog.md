@@ -2,6 +2,10 @@
 
 v1.53:
 
+Disk Space: las cachés de los programas de video, audio y VFX solo se buscaban en su carpeta por defecto (Media Cache de Adobe), y quien las movía a otro disco no veía nada (Nuke en `E:` en la PC de Lega). `AppCacheRules` lee las preferencias de cada programa (`preferences*.nk` de Nuke, registro y plist de Adobe, `Prefs.txt` de After Effects, `Preferences.cfg` de Ableton, Topaz, REAPER, Unreal, Redshift, CUDA) y reconoce por forma en el escaneo `CacheClip`/`OptimizedMedia`/`ProxyMedia` de Resolve, previews de Premiere y `BL_proxy`. Nunca se borra la carpeta que dice una preferencia: solo subcarpetas conocidas con su marca. Se rechazan raíces de volumen, carpetas del usuario o de datos, rutas de red y carpetas con proyectos. Cada fila muestra lo que se borra. D-70.
+
+[ Disk Space - Caches de programas de video, audio y VFX leyendo sus preferencias ]
+
 Disk Space (Windows): la limpieza dejaba afuera `C:\Windows\Installer` porque borrar la copia de un programa instalado rompe su reparación y su desinstalación. Ahora lista un `.msi`/`.msp` solo si ningún producto ni parche lo reclama (API de Windows Installer más `Installer\UserData`) y su programa no está instalado en ninguna versión (ProductCode y UpgradeCode leídos del paquete en solo lectura). La consulta es completa o nada: sin administrador, la de todos los usuarios falla, y tomarla como «nada reclamado» marcaba los 142 paquetes de la PC de prueba como huérfanos. Con una instalación corriendo, suspendida o esperando un reinicio no se lista nada. Borrar pide administrador una vez: un paso elevado re-verifica cada archivo y lo manda a la Papelera. D-69.
 
 [ Disk Space - Instaladores huerfanos de Windows Installer, solo los de programas que ya no estan ]

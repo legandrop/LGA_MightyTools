@@ -18,8 +18,11 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); probar de verdad los instaladores huérfanos (D-69: el UAC, el paso
    elevado y la Papelera; en la PC de Lega hoy no aparece ninguno porque las 6 copias sueltas son de
-   programas instalados); reglas que quedaron afuera
-   (DaVinci Resolve, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o
+   programas instalados); probar las cachés de programas audiovisuales (D-70) con los programas
+   instalados y en la Mac (sin compilar en local, sin Adobe/Resolve/Unreal reales para confirmar
+   formatos: la base `.mcdb` de Adobe, el `Preferences.cfg` de Live 12, los nombres de archivo del
+   timeline de Nuke); reglas que quedaron afuera (preferencias de Resolve y de Redshift, Zen de Unreal
+   5.4+, Topaz y Unreal en mac, NuGet, conda, miniaturas); medir el primer escaneo con el disco frío; aceptar o
    corregir los desvíos del diseño (D-31).
    - **Observaciones de la auditoría (no frenan):** un programa extraído en la carpeta temporal hace más de
      7 días y todavía corriendo puede perder sus archivos de datos (la sonda de «en uso» no ve un exe

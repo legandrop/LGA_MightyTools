@@ -5,6 +5,16 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-70 · Cachés de programas audiovisuales: leídas de sus preferencias, borradas solo por marca**
+  (2026-11-03, Lega: «buscar dónde apuntan las cachés» en las preferencias de cada programa). La
+  limpieza lee dónde configuró el usuario la caché de Nuke, Adobe, After Effects, Ableton, Topaz,
+  REAPER, Unreal y Redshift, y reconoce por forma las de Resolve, Premiere y Blender. Nunca se borra la
+  carpeta que dice una preferencia, solo sus subcarpetas conocidas con la marca del programa; sin
+  marca no hay ítem (en Topaz Video 1.6.0 una carpeta de proyectos movida terminó vaciando media
+  unidad). Lo regenerable va en «Safe to delete»; lo que cuesta rehacer (timeline y copias locales de
+  Nuke, proxies, medios optimizados, previews, modelos de Topaz, DDC de Unreal) en «Yours to decide».
+  Quedan afuera la carpeta de localización de Nuke (no tiene marca), Houdini (su temporal guarda la
+  recuperación de escenas), Final Cut Pro, Mocha, Fusion, Maya y Avid.
 - **D-69 · Instaladores huérfanos: solo los de programas que ya no están, con administrador**
   (2026-11-03, Lega: «Si están instaladas, no podemos borrarlos de ninguna manera. No deberían ni
   aparecer si la app está instalada»). La ventana de limpieza lista un `.msi` o `.msp` de primer nivel de

@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new] La limpieza de Disk Space encuentra las cachés de Nuke, DaVinci Resolve, After Effects, Premiere, Ableton, Topaz Video, REAPER, Unreal y otros programas de video y audio aunque las hayas movido a otro disco, y deja para que decidas lo que cuesta rehacer, como proxies, medios optimizados o modelos.
 - [new][win] La limpieza de Disk Space encuentra copias de instaladores que Windows guarda de programas que ya no están instalados y las manda a la Papelera con permiso de administrador; las de programas instalados nunca aparecen.
 - [new][win] Mouse Buttons hace que un botón del mouse mantenga teclas y el botón izquierdo solo en las apps que elijas: por ejemplo, mover la imagen de Photoshop con el botón del medio.
 - [new] App Toggle abre una app con un atajo, la trae al frente si ya está abierta o la minimiza si ya la estás usando (en Mac la oculta).
