@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation: un «No» o un «Sí» suelto no se escribía. Con la frase de contexto Whisper contesta a una palabra corta repitiendo la frase («Fijate si el roto anda bien.»), y el filtro de eco la descartaba entera. Ahora, cuando hubo poca voz (menos de ~1 s) y el final se descarta por eco, se repite la pasada final sin la frase de contexto (con el vocabulario, como en vivo; ~100 ms más, solo en ese caso) y se usa ese texto si no es eco ni vacío. La decisión está en `DictationWorker::finalText`, probada con un doble del motor.
+
+[ Dictation - Una palabra corta sola se escribe: segunda pasada sin la frase de contexto cuando la primera es eco ]
+
 Dictation, segunda revisión: un click o un golpe sin voz todavía inventaban texto («Fijate si el roto anda bien.», «¡Gracias!») porque el piso miraba solo el tramo más fuerte y un pico de 30 ms lo pasaba. Ahora hacen falta 6 tramos de 30 ms sobre −45 dBFS (180 ms de voz), en la pasada final y en vivo; con menos de ~1 s de voz se descarta un final que es un pedazo de 4 palabras de la frase de contexto, y uno sin letras ni dígitos («.») no se escribe. Antes de transcribir se recorta el silencio de antes y de después, con 300 ms de margen: 8 s de silencio delante daban basura. El motor se verifica contra la tabla fija de tamaño y SHA-256 del paquete 0.4.1, no contra el marcador. Cada Esc se retira con su propio flag.
 
 [ Dictation - Voz por duracion y no por pico, silencio recortado y motor verificado contra la tabla del paquete ]

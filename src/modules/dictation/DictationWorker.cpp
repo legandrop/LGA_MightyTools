@@ -528,6 +528,40 @@ QString describe(const DictationProtocol::Voice &voice, size_t samples)
 
 namespace DictationWorker {
 
+Attempt finalText(int voiceFrames, const QStringList &vocabulary, const QString &prompt,
+                  const std::function<Attempt(bool withPrompt)> &pass, QStringList *log)
+{
+    Attempt first = pass(true);
+    if (!first.ok || first.aborted) {
+        return first;
+    }
+    // Con poca voz, un pedazo de 4 palabras de la frase de contexto ya es el contexto repetido.
+    const bool little = voiceFrames < DictationProtocol::kShortVoiceFrames;
+    if (!DictationText::finalEchoesContext(first.text, vocabulary, prompt, little ? 4 : 8)) {
+        return first;
+    }
+    if (log) *log << QStringLiteral("Final que solo repite el contexto, se descarta: %1").arg(first.text);
+    first.text.clear();
+    if (!little || prompt.isEmpty()) {
+        return first;
+    }
+    // Un "No" o un "Si" suelto: con la frase de contexto Whisper contesta con la frase. Otra pasada sin ella.
+    const Attempt bare = pass(false);
+    if (bare.aborted) {
+        return bare;
+    }
+    first.ms += bare.ms;
+    if (!bare.ok) {
+        if (log) *log << QStringLiteral("La pasada sin la frase de contexto fallo: %1").arg(bare.error);
+    } else if (!DictationText::hasWords(bare.text) || DictationText::finalEchoesContext(bare.text, vocabulary, prompt, 4)) {
+        if (log) *log << QStringLiteral("Sin la frase de contexto tampoco hay texto: \"%1\"").arg(bare.text);
+    } else {
+        if (log) *log << QStringLiteral("Sin la frase de contexto: %1").arg(bare.text);
+        first.text = bare.text;
+    }
+    return first;
+}
+
 int run(int argc, char *argv[])
 {
     QElapsedTimer clock;
@@ -598,7 +632,7 @@ int run(int argc, char *argv[])
             shared->runningFinal = job.session;
             g_abortFinal = false;
             lock.unlock();
-            Pass pass;
+            Attempt pass;
             const DictationProtocol::Voice voice = DictationProtocol::measureVoice(job.audio.data(), job.audio.size());
             if (!voice.enough()) {
                 // Sin voz (silencio, ruido, un click) no se transcribe: Whisper inventaria una frase. Final
@@ -606,17 +640,27 @@ int run(int argc, char *argv[])
                 note(QStringLiteral("Final sin voz suficiente (%1): no se transcribe").arg(describe(voice, job.audio.size())));
                 pass.ok = true;
             } else {
-                pass = engine.run(voicedPart(job.audio, voice), job.params, &g_abortFinal);
-                if (pass.dropped > 0) {
-                    note(QStringLiteral("Final: %1 tramo(s) sin voz descartados (probabilidad %2)").arg(pass.dropped).arg(double(pass.noSpeech), 0, 'f', 2));
-                }
-                // Con poca voz, un pedazo de 4 palabras de la frase de contexto ya es el contexto repetido.
-                const int run = voice.frames < DictationProtocol::kShortVoiceFrames ? 4 : 8;
-                if (pass.ok && DictationText::finalEchoesContext(pass.text, job.params.vocabulary, job.params.prompt, run)) {
-                    note(QStringLiteral("Final que solo repite el contexto: se descarta"));
-                    pass.text.clear();
-                }
-                note(QStringLiteral("Final: %1, sin voz %2").arg(describe(voice, job.audio.size())).arg(double(pass.noSpeech), 0, 'f', 2));
+                const std::vector<float> audio = voicedPart(job.audio, voice);
+                float noSpeech = 0.0f;
+                QStringList log;
+                pass = finalText(voice.frames, job.params.vocabulary, job.params.prompt, [&](bool withPrompt) {
+                    Params params = job.params;
+                    if (!withPrompt) params.prompt.clear();
+                    const Pass done = engine.run(audio, params, &g_abortFinal);
+                    if (done.dropped > 0) {
+                        note(QStringLiteral("Final: %1 tramo(s) sin voz descartados (probabilidad %2)").arg(done.dropped).arg(double(done.noSpeech), 0, 'f', 2));
+                    }
+                    noSpeech = qMax(noSpeech, done.noSpeech);
+                    Attempt attempt;
+                    attempt.ok = done.ok;
+                    attempt.aborted = done.aborted;
+                    attempt.text = done.text;
+                    attempt.error = done.error;
+                    attempt.ms = done.ms;
+                    return attempt;
+                }, &log);
+                for (const QString &line : std::as_const(log)) note(line);
+                note(QStringLiteral("Final: %1, sin voz %2").arg(describe(voice, job.audio.size())).arg(double(noSpeech), 0, 'f', 2));
             }
             lock.lock();
             shared->runningFinal = 0;

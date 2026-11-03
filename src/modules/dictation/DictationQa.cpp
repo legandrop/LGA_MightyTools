@@ -11,6 +11,7 @@
 #include "modules/dictation/DictationProtocol.h"
 #include "modules/dictation/DictationText.h"
 #include "modules/dictation/DictationTrigger.h"
+#include "modules/dictation/DictationWorker.h"
 #include "platform/AudioCapture.h"
 #include "platform/DictationProcess.h"
 #include "platform/TextTyper.h"
@@ -248,6 +249,61 @@ void testVoiceGate(const Check &check)
     check(!hasWords(QStringLiteral(".")) && !hasWords(QStringLiteral(" ¡! ...")) && !hasWords(QString())
               && hasWords(QStringLiteral("Ok.")) && hasWords(QStringLiteral("3")) && hasWords(QStringLiteral("¿Qué?")),
           QStringLiteral("voz: un final sin letras ni digitos (\".\") no cuenta como texto"));
+
+    // La pasada final con un doble del motor: que contesta con y sin la frase de contexto, y cuantas veces corrio.
+    using DictationWorker::Attempt;
+    struct Double
+    {
+        Attempt withPrompt;
+        Attempt bare;
+        QList<bool> calls; ///< withPrompt de cada pasada
+        Attempt operator()(bool prompt) { calls << prompt; return prompt ? withPrompt : bare; }
+    };
+    const auto said = [](const QString &text, quint32 ms = 100) {
+        Attempt a;
+        a.ok = true;
+        a.text = text;
+        a.ms = ms;
+        return a;
+    };
+    const auto decide = [&](Double &engine, int frames) {
+        return DictationWorker::finalText(frames, kVocabulary, kPrompt, [&](bool prompt) { return engine(prompt); });
+    };
+    const QString echo = QStringLiteral("Fijate si el roto anda bien.");
+    // Un "No" suelto (9 tramos): con la frase Whisper la repite; sin ella dice "No.".
+    Double no{said(echo, 110), said(QStringLiteral("No."), 90), {}};
+    const Attempt shortNo = decide(no, 9);
+    check(shortNo.ok && shortNo.text == QLatin1String("No.") && no.calls == QList<bool>({true, false}) && shortNo.ms == 200,
+          QStringLiteral("voz: con poca voz y el final que repite la frase, otra pasada sin la frase da la palabra (%1)").arg(shortNo.text));
+    // Sin la frase sale el glosario repetido o nada: final vacio.
+    Double glossary{said(echo), said(QStringLiteral("Glossary, Nuke, Nuke.")), {}};
+    Double nothing{said(echo), said(QStringLiteral(" . ")), {}};
+    const Attempt viaGlossary = decide(glossary, 9);
+    const Attempt viaNothing = decide(nothing, 12);
+    check(viaGlossary.ok && viaGlossary.text.isEmpty() && glossary.calls.size() == 2 && viaNothing.ok && viaNothing.text.isEmpty()
+              && nothing.calls.size() == 2,
+          QStringLiteral("voz: si la pasada sin la frase tambien es eco o no tiene palabras, el final queda vacio"));
+    // Sin eco, o con voz de sobra, una sola pasada.
+    Double plain{said(QStringLiteral("No.")), said(QStringLiteral("otra")), {}};
+    Double longEcho{said(echo), said(QStringLiteral("otra")), {}};
+    Double fullEcho{said(QStringLiteral("Che, ¿vos ya revisaste el comp en Nuke Studio?")), said(QStringLiteral("otra")), {}};
+    const Attempt viaPlain = decide(plain, 9);
+    const Attempt viaLong = decide(longEcho, 120);
+    const Attempt viaFull = decide(fullEcho, 120);
+    check(viaPlain.text == QLatin1String("No.") && plain.calls.size() == 1 && viaLong.text == echo && longEcho.calls.size() == 1
+              && viaFull.ok && viaFull.text.isEmpty() && fullEcho.calls.size() == 1,
+          QStringLiteral("voz: sin eco, o con voz de sobra (eco de 8 palabras descartado), no hay segunda pasada"));
+    // Un error en la primera pasada se informa; una sesion cortada en la segunda queda cortada.
+    Attempt failed;
+    failed.error = QStringLiteral("backend");
+    Attempt aborted;
+    aborted.aborted = true;
+    Double broken{failed, said(QStringLiteral("No.")), {}};
+    Double cut{said(echo), aborted, {}};
+    const Attempt viaBroken = decide(broken, 9);
+    const Attempt viaCut = decide(cut, 9);
+    check(!viaBroken.ok && viaBroken.error == QLatin1String("backend") && broken.calls.size() == 1 && viaCut.aborted,
+          QStringLiteral("voz: un error de la primera pasada se informa y un corte en la segunda no entrega nada"));
 }
 
 // ---------------------------------------------------------------- Texto
