@@ -14,7 +14,8 @@
 // salida estandar), el lector los saltea hasta el proximo "DCT1".
 //
 // App -> motor:  Begin(sesion, idioma, vocabulario, frase de contexto), Audio(float32 mono 16 kHz, de
-//                la sesion abierta), End(sesion), Cancel(sesion), Quit.
+//                la sesion abierta), End(sesion), Cancel(sesion). La app no manda un "salir": cierra el
+//                canal o mata el proceso, y el motor sale al ver el canal cerrado.
 // Motor -> app:  Ready(dispositivo, ms de carga), Partial(sesion, ms de audio, ms de la pasada, texto),
 //                Final(idem), Error(sesion, texto; sesion 0 = el motor no pudo arrancar y sale).
 namespace DictationProtocol {
@@ -27,12 +28,26 @@ constexpr int kMaxSamples = kMaxSeconds * kSampleRate;
 // Cuerpo mas grande que se acepta: un mensaje de audio de 1 s pesa 64 KB.
 constexpr quint32 kMaxBody = 4 * 1024 * 1024;
 
+// Sin voz no hay texto: Whisper sobre silencio o ruido de fondo inventa frases ("Gracias por ver el video.",
+// "Gracias."). Se mide el tramo de 30 ms mas fuerte del audio (RMS, en dBFS). Medido el 2026-11-03: las
+// cinco grabaciones reales de Lega dan de -23,1 a -19,2 dBFS; el silencio digital, -120; el ruido bajo
+// de la auditoria, -54,7. Por debajo de este piso no se transcribe nada (22 dB por debajo de la voz mas
+// baja medida, para quien habla bajo o lejos del microfono).
+constexpr float kVoiceFloorDb = -45.0f;
+// Un tramo de 30 s que Whisper da por "sin voz" con esta probabilidad o mas se descarta aunque el modelo
+// haya escrito algo (su propio corte exige ademas poca confianza, y una frase inventada sale confiada).
+constexpr float kNoSpeechProb = 0.6f;
+// El tramo de 30 ms mas fuerte de `pcm`, en dBFS (-120 si no hay audio o es silencio digital).
+float loudestFrameDb(const float *pcm, size_t count);
+// Error(sesion 0) con este prefijo: los archivos del motor no son los que se verificaron al bajarlo (sigue
+// el archivo que fallo). El motor no cargo nada.
+constexpr char kDamagedPrefix[] = "engine-files:";
+
 enum class Type : quint8 {
     Begin = 1,
     Audio = 2,
     End = 3,
     Cancel = 4,
-    Quit = 5,
     Ready = 16,
     Partial = 17,
     Final = 18,
@@ -41,7 +56,7 @@ enum class Type : quint8 {
 
 struct Message
 {
-    Type type = Type::Quit;
+    Type type = Type::Error;
     quint32 session = 0;
     // Begin
     QString language;

@@ -39,7 +39,8 @@ public:
     void stop();
     bool isRunning() const { return m_process != nullptr; }
     bool isReady() const { return m_ready; }
-    QString device() const { return m_device; }
+    // El ultimo failed() fue porque los archivos del motor no son los verificados (no se cargo nada).
+    bool engineDamaged() const { return m_damaged; }
 
     // Un dictado. Con otro grabando, ese se descarta (uno que ya espera su final() lo recibe igual).
     // language: "es" (vacio = que lo detecte el modelo). vocabulary: terminos en orden de prioridad
@@ -50,7 +51,6 @@ public:
     void feed(const QVector<float> &samples);
     void finish();
     void cancel();
-    bool inSession() const { return m_open; }                      ///< grabando
     bool busy() const { return m_open || !m_awaitingFinal.isEmpty(); } ///< grabando o esperando un final()
 
     // 0 = nunca (por defecto).
@@ -89,9 +89,9 @@ private:
     QString m_modelPath;
     QByteArray m_buffer;
     QByteArray m_errorBuffer;
-    QString m_device;
     bool m_ready = false;
     bool m_failedSent = false;
+    bool m_damaged = false;
 
     quint32 m_session = 0;
     bool m_open = false;          // grabando: acepta feed()

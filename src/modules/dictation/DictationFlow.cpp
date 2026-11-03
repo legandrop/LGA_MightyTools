@@ -10,7 +10,9 @@ using OverlayState = DictationOverlay::State;
 using Action = DictationTrigger::Action;
 
 // Transcribiendo sin respuesta del motor (colgado, no caído: una caída avisa sola): se da por fallido.
+// 30 s más tres veces lo grabado: sin GPU la pasada final de 2 minutos de audio puede tardar minutos.
 constexpr qint64 kFinalTimeoutMs = 30000;
+constexpr qint64 kFinalTimeoutPerRecordedMs = 3;
 
 } // namespace
 
@@ -57,6 +59,9 @@ void DictationFlow::escape()
         cancel();
     } else if (m_phase == Phase::Transcribing) {
         cancel();
+    } else if (m_phase == Phase::Typing) {
+        // Lo que falta no se escribe: typed() llega con Stopped y el texto queda en Recent.
+        m_io.stopTyping();
     }
 }
 
@@ -66,13 +71,14 @@ void DictationFlow::tick(qint64 nowMs)
     if (m_phase == Phase::Recording && m_trigger.tick(nowMs) == Action::Finish) {
         qInfo() << "[Dictado] Tope de duracion: se termina solo";
         finish();
-    } else if (m_phase == Phase::Transcribing && nowMs - m_finishAt > kFinalTimeoutMs) {
+    } else if (m_phase == Phase::Transcribing && nowMs - m_finishAt > m_finalTimeoutMs) {
         fail(I18n::tr("The dictation engine did not answer."));
     }
 }
 
 void DictationFlow::start()
 {
+    m_startedAt = m_lastNow;
     m_target = m_io.foregroundWindow();
     m_confirmed.clear();
     m_previous.clear();
@@ -116,6 +122,7 @@ void DictationFlow::finish()
     }
     m_io.engineFinish();
     m_finishAt = m_lastNow;
+    m_finalTimeoutMs = kFinalTimeoutMs + kFinalTimeoutPerRecordedMs * qMax<qint64>(0, m_lastNow - m_startedAt);
     setPhase(Phase::Transcribing);
     m_io.overlayState(OverlayState::Transcribing, QString());
 }
@@ -201,14 +208,15 @@ void DictationFlow::final(const QString &text)
         return;
     }
     const QString result = DictationText::applyReplacements(text.trimmed(), m_replacements).trimmed();
-    m_io.setActive(false);
     if (result.isEmpty()) {
         // No se entendio nada (silencio, ruido): no se escribe nada.
         qInfo() << "[Dictado] Final vacio: no se escribe nada";
+        m_io.setActive(false);
         setPhase(Phase::Idle);
         m_io.hideOverlay(0);
         return;
     }
+    // Esc sigue registrado mientras escribe: corta lo que falta.
     setPhase(Phase::Typing);
     m_pending = result;
     m_io.overlayText(result, QString());
@@ -240,10 +248,15 @@ void DictationFlow::typed(TextTyper::Result result, int count)
     const QString text = m_pending;
     m_pending.clear();
     setPhase(Phase::Idle);
+    m_io.setActive(false);
     const QString note = noteFor(result, count > 0);
     record(text, result == TextTyper::Result::Typed, note);
     if (result == TextTyper::Result::Typed || result == TextTyper::Result::LoggedOnly) {
         m_io.hideOverlay(700);
+        return;
+    }
+    if (result == TextTyper::Result::Stopped) {
+        m_io.hideOverlay(0); // lo pidió el usuario con Esc: no es un error
         return;
     }
     m_io.overlayState(OverlayState::Error, note + QStringLiteral(". ") + I18n::tr("The text is in Recent, in Dictation."));
@@ -278,6 +291,7 @@ QString DictationFlow::noteFor(TextTyper::Result result, bool partly)
         return partly ? I18n::tr("Partly typed: the window changed") : I18n::tr("Not typed: the window changed");
     case TextTyper::Result::Elevated: return I18n::tr("Not typed: the window runs as administrator");
     case TextTyper::Result::NoTarget: return I18n::tr("Not typed: the window closed");
+    case TextTyper::Result::Stopped: return I18n::trc("dictation", "Stopped");
     case TextTyper::Result::Failed: break;
     }
     return I18n::tr("Not typed: Windows did not take the keys");
@@ -285,11 +299,7 @@ QString DictationFlow::noteFor(TextTyper::Result result, bool partly)
 
 void DictationFlow::setPhase(Phase phase)
 {
-    if (m_phase == phase) {
-        return;
-    }
     m_phase = phase;
-    emit phaseChanged();
 }
 
 void DictationFlow::record(const QString &text, bool typed, const QString &note)

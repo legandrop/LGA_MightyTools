@@ -1,5 +1,6 @@
 #include "modules/dictation/DictationWorker.h"
 
+#include "modules/dictation/DictationModels.h"
 #include "modules/dictation/DictationProtocol.h"
 #include "modules/dictation/DictationText.h"
 #include "platform/DictationProcess.h"
@@ -31,6 +32,8 @@ using DictationProtocol::Type;
 namespace {
 
 using Clock = std::chrono::steady_clock;
+// Entre pasadas en vivo, al menos medio segundo y el doble de lo que tardo la ultima: en una CPU (sin GPU)
+// una pasada tarda segundos y seguidas dejarian el procesador al 100 %.
 constexpr auto kLiveInterval = std::chrono::milliseconds(500);
 // Con medio segundo de audio Whisper inventa ("Lukas", "GarneX, volken까요?") y tarda: la primera pasada
 // en vivo espera a tener 1 s.
@@ -124,6 +127,8 @@ struct Pass
     QString text;
     QString error;
     quint32 ms = 0;
+    float noSpeech = 0.0f; ///< la probabilidad de "sin voz" mas alta entre los tramos de 30 s
+    int dropped = 0;       ///< tramos descartados por no tener voz
 };
 
 class Engine
@@ -149,6 +154,7 @@ private:
     transcribe_status open(transcribe_backend_request backend);
     QString status(int code) const { return QString::fromUtf8(m_statusString(code)); }
     QString readDevice() const;
+    void dropSilentChunks(Pass *pass) const;
 
     decltype(&transcribe_status_string) m_statusString = nullptr;
     decltype(&transcribe_version) m_version = nullptr;
@@ -168,6 +174,13 @@ private:
     decltype(&transcribe_full_text) m_fullText = nullptr;
     decltype(&transcribe_model_accepts_ext_kind) m_acceptsExt = nullptr;
     decltype(&transcribe_whisper_run_ext_init) m_whisperExtInit = nullptr;
+    // Para descartar los tramos sin voz. Opcionales: sin ellos queda solo el corte por nivel.
+    decltype(&transcribe_whisper_chunk_trace_init) m_traceInit = nullptr;
+    decltype(&transcribe_get_whisper_chunk_count) m_traceCount = nullptr;
+    decltype(&transcribe_get_whisper_chunk_trace) m_trace = nullptr;
+    decltype(&transcribe_n_segments) m_segmentCount = nullptr;
+    decltype(&transcribe_segment_init) m_segmentInit = nullptr;
+    decltype(&transcribe_get_segment) m_segment = nullptr;
 
     QByteArray m_model;
     bool m_whisper = false; // el modelo acepta la extension de Whisper
@@ -200,6 +213,16 @@ bool Engine::load(const QString &engineDir, const QString &modelPath, QString *e
         || !bind(library, "transcribe_model_accepts_ext_kind", &m_acceptsExt, error)
         || !bind(library, "transcribe_whisper_run_ext_init", &m_whisperExtInit, error)) {
         return false;
+    }
+    QString optional;
+    if (!bind(library, "transcribe_whisper_chunk_trace_init", &m_traceInit, &optional)
+        || !bind(library, "transcribe_get_whisper_chunk_count", &m_traceCount, &optional)
+        || !bind(library, "transcribe_get_whisper_chunk_trace", &m_trace, &optional)
+        || !bind(library, "transcribe_n_segments", &m_segmentCount, &optional)
+        || !bind(library, "transcribe_segment_init", &m_segmentInit, &optional)
+        || !bind(library, "transcribe_get_segment", &m_segment, &optional)) {
+        note(optional + QStringLiteral(" (sin el descarte de tramos sin voz)"));
+        m_traceCount = nullptr;
     }
     // Los *_init() del motor escriben su sizeof: si la DLL no es la del encabezado, pisarian memoria.
     if (QByteArray(m_version()) != TRANSCRIBE_VERSION
@@ -337,11 +360,54 @@ Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomi
         const char *text = m_fullText(m_session);
         pass.ok = true;
         pass.text = DictationProtocol::cleanText(QByteArray(text ? text : "")).trimmed();
+        dropSilentChunks(&pass);
         return pass;
     }
     pass.backendError = result == TRANSCRIBE_ERR_BACKEND;
     pass.error = QStringLiteral("transcribe_run: %1").arg(status(result));
     return pass;
+}
+
+// Whisper calcula por cada tramo de 30 s la probabilidad de que no haya voz, pero su propio corte solo
+// actua si ademas el texto sale con poca confianza: "Gracias por ver el video." sobre silencio sale
+// confiado y pasaba. Aca un tramo con kNoSpeechProb o mas se descarta igual, con sus segmentos.
+void Engine::dropSilentChunks(Pass *pass) const
+{
+    if (!m_traceCount || !m_whisper || pass->text.isEmpty()) {
+        return;
+    }
+    QList<QPair<qint64, qint64>> silent;
+    for (int i = 0, count = m_traceCount(m_session); i < count; ++i) {
+        transcribe_whisper_chunk_trace trace;
+        m_traceInit(&trace);
+        if (m_trace(m_session, i, &trace) != TRANSCRIBE_OK) {
+            continue;
+        }
+        pass->noSpeech = qMax(pass->noSpeech, trace.no_speech_prob);
+        if (trace.no_speech_prob >= DictationProtocol::kNoSpeechProb) {
+            silent.append({trace.t0_ms, trace.t1_ms});
+        }
+    }
+    if (silent.isEmpty()) {
+        return;
+    }
+    QStringList kept;
+    for (int i = 0, count = m_segmentCount(m_session); i < count; ++i) {
+        transcribe_segment segment;
+        m_segmentInit(&segment);
+        if (m_segment(m_session, i, &segment) != TRANSCRIBE_OK || !segment.text) {
+            continue;
+        }
+        bool inSilent = false;
+        for (const auto &window : std::as_const(silent)) {
+            inSilent |= segment.t0_ms >= window.first && segment.t0_ms < window.second;
+        }
+        if (!inSilent) {
+            kept << DictationProtocol::cleanText(QByteArray(segment.text)).trimmed();
+        }
+    }
+    pass->dropped = int(silent.size());
+    pass->text = kept.join(QLatin1Char(' ')).simplified();
 }
 
 void Engine::close()
@@ -406,11 +472,6 @@ void handle(Shared *shared, const Message &message)
             g_abortFinal = true;
         }
         break;
-    case Type::Quit:
-        shared->quit = true;
-        g_abortLive = true;
-        g_abortFinal = true;
-        break;
     default:
         break;
     }
@@ -435,9 +496,6 @@ void readCommands(Shared *shared)
             handle(shared, message);
         }
         shared->wake.notify_all();
-        if (shared->quit) {
-            return;
-        }
     }
     std::lock_guard<std::mutex> lock(shared->mutex);
     shared->quit = true;
@@ -449,6 +507,12 @@ void readCommands(Shared *shared)
 quint32 audioMs(size_t samples)
 {
     return quint32(quint64(samples) * 1000 / DictationProtocol::kSampleRate);
+}
+
+bool hasVoice(const std::vector<float> &pcm, float *db)
+{
+    *db = DictationProtocol::loudestFrameDb(pcm.data(), pcm.size());
+    return *db >= DictationProtocol::kVoiceFloorDb;
 }
 
 } // namespace
@@ -477,6 +541,15 @@ int run(int argc, char *argv[])
         sendError(0, QStringLiteral("uso: --dictation-worker <carpeta del motor> <modelo>"));
         return 2;
     }
+    // Antes de cargar ninguna DLL: cada archivo del motor tiene que ser el que se verifico al bajarlo, y no
+    // puede haber DLL de mas (el motor carga las de su carpeta). Aca y no en la app: es el mismo proceso que
+    // las carga, y la app no se traba leyendo 56 MB.
+    QString damaged;
+    if (!DictationModels::checkEngineFiles(engineDir, &damaged)) {
+        note(QStringLiteral("Motor danado: %1").arg(damaged));
+        sendError(0, QLatin1String(DictationProtocol::kDamagedPrefix) + damaged);
+        return 1;
+    }
     if (!engine.load(engineDir, modelPath, &error)) {
         note(error);
         sendError(0, error);
@@ -489,6 +562,8 @@ int run(int argc, char *argv[])
     send(ready);
 
     quint64 liveVersion = 0;
+    auto liveInterval = std::chrono::milliseconds(kLiveInterval);
+    quint32 voiceSession = 0; // la sesion que ya tuvo voz: no se vuelve a medir
     for (;;) {
         std::unique_lock<std::mutex> lock(shared->mutex);
         for (;;) {
@@ -496,7 +571,7 @@ int run(int argc, char *argv[])
                 break;
             }
             if (shared->active && shared->audioVersion != liveVersion && shared->audio.size() >= kMinLiveSamples) {
-                const Clock::time_point due = shared->lastStart + kLiveInterval;
+                const Clock::time_point due = shared->lastStart + liveInterval;
                 if (Clock::now() >= due) {
                     break;
                 }
@@ -515,7 +590,23 @@ int run(int argc, char *argv[])
             shared->runningFinal = job.session;
             g_abortFinal = false;
             lock.unlock();
-            const Pass pass = engine.run(job.audio, job.params, &g_abortFinal);
+            Pass pass;
+            float db = 0.0f;
+            if (!hasVoice(job.audio, &db)) {
+                // Sin voz no se transcribe: Whisper inventaria una frase. Final vacio, no se escribe nada.
+                note(QStringLiteral("Final sin voz (tramo mas fuerte %1 dBFS): no se transcribe").arg(double(db), 0, 'f', 1));
+                pass.ok = true;
+            } else {
+                pass = engine.run(job.audio, job.params, &g_abortFinal);
+                if (pass.dropped > 0) {
+                    note(QStringLiteral("Final: %1 tramo(s) sin voz descartados (probabilidad %2)").arg(pass.dropped).arg(double(pass.noSpeech), 0, 'f', 2));
+                }
+                if (pass.ok && DictationText::finalEchoesContext(pass.text, job.params.vocabulary, job.params.prompt)) {
+                    note(QStringLiteral("Final que solo repite el contexto: se descarta"));
+                    pass.text.clear();
+                }
+                note(QStringLiteral("Final: tramo mas fuerte %1 dBFS, sin voz %2").arg(double(db), 0, 'f', 1).arg(double(pass.noSpeech), 0, 'f', 2));
+            }
             lock.lock();
             shared->runningFinal = 0;
             const bool deliver = !pass.aborted && shared->cancelledFinal != job.session && !shared->quit;
@@ -549,7 +640,14 @@ int run(int argc, char *argv[])
         shared->lastStart = Clock::now();
         g_abortLive = false;
         lock.unlock();
+        // Mientras no hubo voz, la ventanita no muestra nada (ni se gasta una pasada).
+        float db = 0.0f;
+        if (session != voiceSession && !hasVoice(pcm, &db)) {
+            continue;
+        }
+        voiceSession = session;
         const Pass pass = engine.run(pcm, params, &g_abortLive, true);
+        liveInterval = qMax(std::chrono::milliseconds(kLiveInterval), std::chrono::milliseconds(2 * qint64(pass.ms)));
         lock.lock();
         const bool current = !pass.aborted && !shared->quit && epoch == shared->epoch;
         lock.unlock();

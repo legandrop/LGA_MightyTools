@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation, correcciones de la auditoría: con silencio o ruido de fondo Whisper inventaba frases («Gracias por ver el video.») que se habrían escrito. El proceso del motor ya no transcribe audio cuyo tramo de 30 ms más fuerte queda bajo −45 dBFS (las grabaciones reales dan de −23 a −19), descarta los tramos con `no_speech_prob` ≥ 0,6 y los finales que solo repiten el contexto. Manteniendo Win+H, Esc llegaba como Win+Esc y no cancelaba: se registra también con los modificadores del atajo, y Esc corta además la escritura («Stopped»). Los archivos del motor se verifican por tamaño y SHA-256 antes de cargarlo. Sin GPU, el tope del final crece con lo grabado y las pasadas en vivo se espacian. El motor ya no se carga al arrancar la app: al prenderla o con el primer dictado. Página: acciones contra el borde, títulos parejos y solo rutas completas.
+
+[ Dictation - Correcciones de la auditoria: silencio sin texto, Esc con Win apretado, motor verificado y pagina alineada ]
+
 Dictation (Windows), herramienta nueva: faltaba un dictado propio que reemplace el Win+H de Windows y escriba bien los nombres de Nuke. El atajo (Win+H con prioridad; tocar o mantener, Esc cancela) toma la ventana del frente, abre el micrófono por WASAPI solo mientras graba y manda el audio a un proceso aparte (`--dictation-worker`: transcribe.cpp 0.4.1 con Whisper large-v3 turbo por Vulkan), que acepta audio mientras carga. El texto en vivo se ve en una ventanita sin foco; al terminar se escribe con `SendInput` Unicode, nunca con el portapapeles. Si la ventana cambió o es de administrador no se escribe y queda en «Recent», solo en memoria. `DictationFlow` arma el recorrido sin sistema y el self-test lo prueba con dobles. Motor y modelo (MIT, 863 MB entre los dos) se bajan con un botón y se verifican por SHA-256; el motor se descarga tras 10 minutos sin uso. D-72.
 
 [ Dictation - Herramienta nueva: dictado por voz en cualquier campo de texto ]

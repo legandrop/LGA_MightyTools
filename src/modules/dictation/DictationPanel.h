@@ -18,6 +18,7 @@ class QStackedLayout;
 class QVBoxLayout;
 class ShortcutRow;
 class StatusCard;
+class UsageBar;
 
 // La página de Dictation, con los materiales de App Toggle y Mouse Buttons: tarjeta de estado, el atajo, idioma
 // y micrófono, palabras propias y reemplazos, el motor y el modelo (descarga con botón) y los últimos dictados.
@@ -26,8 +27,10 @@ class DictationPanel : public QWidget
 public:
     DictationPanel(DictationModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
-    // Captura de QA: el editor de reemplazos con el segundo par cargado para editar.
+    // Captura de QA: el editor de reemplazos con el segundo par cargado para editar, o el tacho de una pieza
+    // armado («Confirm delete»).
     void showReplacementEditorForCapture();
+    void armPieceDeleteForCapture(const QString &id) { armDelete(QStringLiteral("p") + id); }
 
 protected:
     void showEvent(QShowEvent *event) override;
@@ -38,6 +41,7 @@ private:
     QWidget *buildShortcutCard();
     QWidget *buildSpeechCard();
     QWidget *buildWordsCard();
+    QWidget *buildReplacementsCard();
     QWidget *buildModelCard();
     QWidget *buildRecentCard();
     void refreshStatus();
@@ -51,6 +55,7 @@ private:
     void saveRoot();
     void browseRoot();
     void submitReplacement();
+    void finishReplacementField(QLineEdit *field);
     void editReplacement(int index);
     void resetReplacementEditor();
     void armDelete(const QString &key);
@@ -71,12 +76,24 @@ private:
     QLabel *m_replacementError = nullptr;
     int m_editing = -1;
     QLineEdit *m_root = nullptr;
+    QLabel *m_rootError = nullptr;
     QWidget *m_pieceRows = nullptr;
     QPushButton *m_unload = nullptr;
     QWidget *m_recentRows = nullptr;
     QList<AudioCapture::Device> m_devices;
     QHash<QString, QStackedLayout *> m_deleteSlots; // "r<indice>" reemplazos, "p<id>" piezas
     QString m_armed;
+    // Lo que muestran las listas: se rearman solo si cambio (una descarga avisa en cada 1 %, y rearmar
+    // haria desaparecer «Cancel» o «Confirm delete» bajo el click).
+    QString m_shownReplacements;
+    QString m_shownRecent;
+    QString m_shownPieces;
+    struct PieceProgress
+    {
+        UsageBar *bar = nullptr;
+        QLabel *percent = nullptr;
+    };
+    QHash<QString, PieceProgress> m_progress;
 };
 
 #endif // MIGHTYTOOLS_DICTATIONPANEL_H

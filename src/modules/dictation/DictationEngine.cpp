@@ -67,6 +67,7 @@ void DictationEngine::launch()
 {
     m_ready = false;
     m_failedSent = false;
+    m_damaged = false;
     m_buffer.clear();
     m_errorBuffer.clear();
     if (!QFileInfo::exists(QDir(m_enginePath).filePath(QStringLiteral("transcribe.dll")))) {
@@ -226,8 +227,7 @@ void DictationEngine::onOutput()
         switch (message.type) {
         case Type::Ready:
             m_ready = true;
-            m_device = message.text;
-            qInfo() << "[Dictado] Motor listo en" << m_device << "en" << message.passMs << "ms";
+            qInfo() << "[Dictado] Motor listo en" << message.text << "en" << message.passMs << "ms";
             armIdle();
             emit ready(message.text, int(message.passMs));
             break;
@@ -251,7 +251,11 @@ void DictationEngine::onOutput()
                 // El motor no pudo arrancar y sale solo: el finished() que sigue no repite el aviso.
                 qWarning() << "[Dictado] El motor no arranco:" << message.text;
                 m_failedSent = true;
-                emit failed(I18n::tr("The dictation engine could not start: %1").arg(message.text));
+                const QLatin1String damaged(DictationProtocol::kDamagedPrefix);
+                m_damaged = message.text.startsWith(damaged);
+                emit failed(m_damaged ? I18n::tr("The engine files are not the ones that were downloaded (%1). Delete the engine and download it again.")
+                                            .arg(message.text.mid(damaged.size()))
+                                      : I18n::tr("The dictation engine could not start: %1").arg(message.text));
             } else if (m_awaitingFinal.remove(message.session) || (m_open && message.session == m_session)) {
                 qWarning() << "[Dictado] Fallo la pasada final:" << message.text;
                 if (message.session == m_session) {

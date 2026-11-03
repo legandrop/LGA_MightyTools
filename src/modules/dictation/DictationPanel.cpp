@@ -52,13 +52,48 @@ QLineEdit *field(const QString &placeholder, const QString &accessibleName, QWid
     return edit;
 }
 
-QFrame *cardWithColumn(QWidget *parent, QVBoxLayout **column, int spacing)
+// Una tarjeta con su título en negrita, como «Saved rules» y «Create a mouse rule» en Mouse Buttons.
+QFrame *titledCard(QWidget *parent, const QString &title, QVBoxLayout **column, int spacing = 6)
 {
     QFrame *card = Ui::card(parent);
     *column = new QVBoxLayout(card);
     (*column)->setContentsMargins(14, 12, 14, 12);
     (*column)->setSpacing(spacing);
+    (*column)->addWidget(Ui::label(title, "cardTitle", card));
     return card;
+}
+
+// Lo de la derecha de una fila (acciones normales) y, en su mismo lugar, «Confirm delete» mientras se
+// confirma: la fila no salta y los controles quedan contra el borde derecho (como Desktop Icons).
+struct DeleteSlot
+{
+    QWidget *actions = nullptr;
+    QHBoxLayout *normal = nullptr; ///< ya trae el estiramiento: lo que se agrega queda a la derecha
+    QPushButton *confirm = nullptr;
+    QStackedLayout *slot = nullptr;
+};
+
+DeleteSlot deleteSlot(QWidget *row)
+{
+    DeleteSlot d;
+    d.actions = new QWidget(row);
+    d.slot = new QStackedLayout(d.actions);
+    d.slot->setContentsMargins(0, 0, 0, 0);
+    auto *normalPage = new QWidget(d.actions);
+    d.normal = new QHBoxLayout(normalPage);
+    d.normal->setContentsMargins(0, 0, 0, 0);
+    d.normal->setSpacing(5);
+    d.normal->addStretch(1);
+    auto *armedPage = new QWidget(d.actions);
+    auto *armedLine = new QHBoxLayout(armedPage);
+    armedLine->setContentsMargins(0, 0, 0, 0);
+    d.confirm = Ui::button(I18n::tr("Confirm delete"), QStringLiteral("danger"), QStringLiteral("sm"), armedPage);
+    d.confirm->setFocusPolicy(Qt::NoFocus);
+    d.confirm->setSizePolicy(QSizePolicy::Expanding, d.confirm->sizePolicy().verticalPolicy());
+    armedLine->addWidget(d.confirm, 1, Qt::AlignVCenter);
+    d.slot->addWidget(normalPage);
+    d.slot->addWidget(armedPage);
+    return d;
 }
 
 void clearLayout(QLayout *layout)
@@ -94,6 +129,7 @@ DictationPanel::DictationPanel(DictationModule *module, bool interactive, QWidge
     column->addWidget(buildShortcutCard());
     column->addWidget(buildSpeechCard());
     column->addWidget(buildWordsCard());
+    column->addWidget(buildReplacementsCard());
     column->addWidget(buildModelCard());
     column->addWidget(buildRecentCard());
     column->addStretch();
@@ -120,8 +156,8 @@ DictationPanel::DictationPanel(DictationModule *module, bool interactive, QWidge
 QWidget *DictationPanel::buildShortcutCard()
 {
     QVBoxLayout *column = nullptr;
-    QFrame *card = cardWithColumn(this, &column, 0);
-    m_shortcut = new ShortcutRow(I18n::tr("Shortcut"),
+    QFrame *card = titledCard(this, I18n::tr("Shortcut"), &column);
+    m_shortcut = new ShortcutRow(I18n::tr("Dictate"),
                                  I18n::tr("Tap to start and again to finish, or hold it while you speak. Esc cancels."), card);
     // Win + letra reemplaza el atajo de Windows (Win+H abre su dictado): la nota gris lo dice.
     m_shortcut->showWindowsShortcutNote(true);
@@ -140,7 +176,7 @@ QWidget *DictationPanel::buildShortcutCard()
 QWidget *DictationPanel::buildSpeechCard()
 {
     QVBoxLayout *column = nullptr;
-    QFrame *card = cardWithColumn(this, &column, 0);
+    QFrame *card = titledCard(this, I18n::tr("Voice"), &column);
     // Como Language y Zoom en General: una grilla para que los dos desplegables arranquen en la misma columna.
     auto *box = new QWidget(card);
     auto *grid = new QGridLayout(box);
@@ -177,16 +213,24 @@ QWidget *DictationPanel::buildSpeechCard()
 QWidget *DictationPanel::buildWordsCard()
 {
     QVBoxLayout *column = nullptr;
-    QFrame *card = cardWithColumn(this, &column, 6);
-    column->addWidget(Ui::label(I18n::tr("Custom words"), "optionLabel", card));
+    QFrame *card = titledCard(this, I18n::tr("Custom words"), &column);
     m_words = field(I18n::tr("Words separated by commas"), I18n::tr("Custom words"), card);
     column->addWidget(m_words);
     auto *wordsHint = Ui::caption(I18n::tr("Names and terms it should spell right, separated by commas."), card);
     wordsHint->setWordWrap(true);
     column->addWidget(wordsHint);
-    Ui::addDivider(column, card);
+    if (m_interactive) {
+        connect(m_words, &QLineEdit::editingFinished, this, &DictationPanel::saveWords);
+        // Enter guarda y suelta el campo (regla de la app); editingFinished ya guardo.
+        connect(m_words, &QLineEdit::returnPressed, m_words, &QWidget::clearFocus);
+    }
+    return card;
+}
 
-    column->addWidget(Ui::label(I18n::tr("Replacements"), "optionLabel", card));
+QWidget *DictationPanel::buildReplacementsCard()
+{
+    QVBoxLayout *column = nullptr;
+    QFrame *card = titledCard(this, I18n::tr("Replacements"), &column);
     auto *replaceHint = Ui::caption(I18n::tr("When it writes the text on the left, it puts the one on the right instead."), card);
     replaceHint->setWordWrap(true);
     column->addWidget(replaceHint);
@@ -216,15 +260,11 @@ QWidget *DictationPanel::buildWordsCard()
     m_replacementError->hide();
     column->addWidget(m_replacementError);
     if (m_interactive) {
-        connect(m_words, &QLineEdit::editingFinished, this, &DictationPanel::saveWords);
-        // Enter guarda y suelta el campo (regla de la app); editingFinished ya guardo.
-        connect(m_words, &QLineEdit::returnPressed, m_words, &QWidget::clearFocus);
         connect(m_addReplacement, &QPushButton::clicked, this, &DictationPanel::submitReplacement);
-        connect(m_to, &QLineEdit::returnPressed, this, &DictationPanel::submitReplacement);
-        connect(m_from, &QLineEdit::returnPressed, this, [this]() {
-            if (m_to->text().trimmed().isEmpty()) m_to->setFocus(Qt::OtherFocusReason);
-            else submitReplacement();
-        });
+        // Enter en cualquiera de los dos: con los dos escritos agrega; si no, suelta el campo. Nada mueve el
+        // foco por su cuenta (los campos lo toman solo por click).
+        connect(m_from, &QLineEdit::returnPressed, this, [this]() { finishReplacementField(m_from); });
+        connect(m_to, &QLineEdit::returnPressed, this, [this]() { finishReplacementField(m_to); });
         connect(m_cancelReplacement, &QPushButton::clicked, this, &DictationPanel::resetReplacementEditor);
     }
     return card;
@@ -233,8 +273,7 @@ QWidget *DictationPanel::buildWordsCard()
 QWidget *DictationPanel::buildModelCard()
 {
     QVBoxLayout *column = nullptr;
-    QFrame *card = cardWithColumn(this, &column, 6);
-    column->addWidget(Ui::label(I18n::tr("Model"), "cardTitle", card));
+    QFrame *card = titledCard(this, I18n::tr("Model"), &column);
     column->addWidget(Ui::caption(I18n::tr("Models folder"), card));
     auto *rootRow = new QHBoxLayout();
     rootRow->setSpacing(6);
@@ -244,6 +283,10 @@ QWidget *DictationPanel::buildModelCard()
     browse->setFocusPolicy(Qt::NoFocus);
     rootRow->addWidget(browse);
     column->addLayout(rootRow);
+    m_rootError = Ui::caption(I18n::tr("Write a full path, like E:\\LGA_AI."), card);
+    Ui::setStyleProperty(m_rootError, "tone", QStringLiteral("err"));
+    m_rootError->hide();
+    column->addWidget(m_rootError);
     auto *rootHint = Ui::caption(I18n::tr("Changing it doesn't move what's already downloaded."), card);
     rootHint->setWordWrap(true);
     column->addWidget(rootHint);
@@ -286,8 +329,7 @@ QWidget *DictationPanel::buildModelCard()
 QWidget *DictationPanel::buildRecentCard()
 {
     QVBoxLayout *column = nullptr;
-    QFrame *card = cardWithColumn(this, &column, 8);
-    column->addWidget(Ui::label(I18n::trc("dictation", "Recent"), "cardTitle", card));
+    QFrame *card = titledCard(this, I18n::trc("dictation", "Recent"), &column);
     m_recentRows = new QWidget(card);
     auto *rows = new QVBoxLayout(m_recentRows);
     rows->setContentsMargins(0, 0, 0, 0);
@@ -373,12 +415,17 @@ void DictationPanel::refreshStatus()
 
 void DictationPanel::refreshReplacements()
 {
+    const DictationText::Replacements list = m_module->replacements();
+    const QString shown = DictationModule::replacementsToJson(list);
+    if (shown == m_shownReplacements && m_replacementRows->layout()->count() > 0) {
+        return;
+    }
+    m_shownReplacements = shown;
     auto *rows = static_cast<QVBoxLayout *>(m_replacementRows->layout());
     clearLayout(rows);
     for (auto it = m_deleteSlots.begin(); it != m_deleteSlots.end();) {
         it = it.key().startsWith(QLatin1Char('r')) ? m_deleteSlots.erase(it) : std::next(it);
     }
-    const DictationText::Replacements list = m_module->replacements();
     if (list.isEmpty()) {
         rows->addWidget(Ui::caption(I18n::tr("No replacements yet."), m_replacementRows));
         return;
@@ -398,27 +445,22 @@ void DictationPanel::refreshReplacements()
         to->setObjectName(QStringLiteral("optionLabel"));
         to->setText(list.at(index).second);
         line->addWidget(to, 1, Qt::AlignVCenter);
-        auto *edit = iconButton(Icon::Pencil, I18n::tr("Edit replacement"), row);
-        line->addWidget(edit, 0, Qt::AlignVCenter);
-        // Tacho y, en su mismo lugar, «Confirm delete»: la fila no salta (como Desktop Icons).
-        auto *actions = new QWidget(row);
-        auto *slot = new QStackedLayout(actions);
-        slot->setContentsMargins(0, 0, 0, 0);
-        auto *remove = iconButton(Icon::Trash, I18n::tr("Delete replacement"), actions);
+        // Lápiz y tacho contra el borde derecho; «Confirm delete» en su mismo lugar (como Desktop Icons).
+        const DeleteSlot actions = deleteSlot(row);
+        auto *edit = iconButton(Icon::Pencil, I18n::tr("Edit replacement"), actions.actions);
+        actions.normal->addWidget(edit, 0, Qt::AlignVCenter);
+        auto *remove = iconButton(Icon::Trash, I18n::tr("Delete replacement"), actions.actions);
         CustomTooltip::instance()->setToolTip(remove, I18n::tr("Delete this replacement. Click again to confirm."));
-        auto *confirm = Ui::button(I18n::tr("Confirm delete"), QStringLiteral("danger"), QStringLiteral("sm"), actions);
-        confirm->setFocusPolicy(Qt::NoFocus);
-        slot->addWidget(remove);
-        slot->addWidget(confirm);
-        line->addWidget(actions, 0, Qt::AlignVCenter);
+        actions.normal->addWidget(remove, 0, Qt::AlignVCenter);
+        line->addWidget(actions.actions, 0, Qt::AlignVCenter);
         const QString key = QStringLiteral("r%1").arg(index);
-        m_deleteSlots.insert(key, slot);
-        slot->setCurrentIndex(m_armed == key ? 1 : 0);
+        m_deleteSlots.insert(key, actions.slot);
+        actions.slot->setCurrentIndex(m_armed == key ? 1 : 0);
         rows->addWidget(row);
         if (m_interactive) {
             connect(edit, &QPushButton::clicked, this, [this, index]() { editReplacement(index); });
             connect(remove, &QPushButton::clicked, this, [this, key]() { armDelete(key); });
-            connect(confirm, &QPushButton::clicked, this, [this, index]() {
+            connect(actions.confirm, &QPushButton::clicked, this, [this, index]() {
                 runLater([this, index]() {
                     DictationText::Replacements current = m_module->replacements();
                     if (index < current.size()) current.removeAt(index);
@@ -433,12 +475,28 @@ void DictationPanel::refreshReplacements()
 
 void DictationPanel::refreshPieces()
 {
+    const QList<DictationModule::PieceInfo> pieces = m_module->pieces();
+    QString shown;
+    for (const DictationModule::PieceInfo &piece : pieces) {
+        shown += QStringLiteral("%1:%2:%3;").arg(piece.id).arg(int(piece.state)).arg(piece.error);
+    }
+    if (shown == m_shownPieces) {
+        // Solo avanzo el porcentaje: la barra y el número, sin rearmar la fila (Cancel sigue bajo el mouse).
+        for (const DictationModule::PieceInfo &piece : pieces) {
+            const PieceProgress view = m_progress.value(piece.id);
+            if (view.bar) view.bar->set(true, piece.progress / 100.0, -1.0, false);
+            if (view.percent && piece.state == State::Downloading) view.percent->setText(I18n::tr("%1%").arg(piece.progress));
+        }
+        return;
+    }
+    m_shownPieces = shown;
+    m_progress.clear();
     auto *rows = static_cast<QVBoxLayout *>(m_pieceRows->layout());
     clearLayout(rows);
     for (auto it = m_deleteSlots.begin(); it != m_deleteSlots.end();) {
         it = it.key().startsWith(QLatin1Char('p')) ? m_deleteSlots.erase(it) : std::next(it);
     }
-    for (const DictationModule::PieceInfo &piece : m_module->pieces()) {
+    for (const DictationModule::PieceInfo &piece : pieces) {
         auto *row = new QWidget(m_pieceRows);
         row->setObjectName(QStringLiteral("pieceRow"));
         auto *line = new QHBoxLayout(row);
@@ -475,9 +533,10 @@ void DictationPanel::refreshPieces()
             bar->setFixedWidth(90);
             bar->set(true, piece.progress / 100.0, -1.0, false);
             line->addWidget(bar, 0, Qt::AlignVCenter);
-            line->addWidget(Ui::label(piece.state == State::Verifying ? I18n::trc("dictation", "Checking…") : I18n::tr("%1%").arg(piece.progress),
-                                      "meta", row),
-                            0, Qt::AlignVCenter);
+            auto *percent = Ui::label(piece.state == State::Verifying ? I18n::trc("dictation", "Checking…") : I18n::tr("%1%").arg(piece.progress),
+                                      "meta", row);
+            line->addWidget(percent, 0, Qt::AlignVCenter);
+            m_progress.insert(id, {bar, percent});
             if (piece.state == State::Downloading) {
                 action = Ui::button(I18n::tr("Cancel"), QStringLiteral("ghost"), QStringLiteral("sm"), row);
                 if (m_interactive) connect(action, &QPushButton::clicked, this, [this, id]() { runLater([this, id]() { m_module->cancelDownload(id); }); });
@@ -485,25 +544,21 @@ void DictationPanel::refreshPieces()
             break;
         }
         case State::Ready: {
-            auto *ready = new Chip(row);
+            // «Ready» y el tacho contra el borde derecho; «Confirm delete» en su mismo lugar.
+            const DeleteSlot actions = deleteSlot(row);
+            auto *ready = new Chip(actions.actions);
             ready->set(QStringLiteral("ok"), I18n::tr("Ready"));
-            line->addWidget(ready, 0, Qt::AlignVCenter);
-            auto *actions = new QWidget(row);
-            auto *slot = new QStackedLayout(actions);
-            slot->setContentsMargins(0, 0, 0, 0);
-            auto *remove = iconButton(Icon::Trash, I18n::tr("Delete from disk"), actions);
+            actions.normal->addWidget(ready, 0, Qt::AlignVCenter);
+            auto *remove = iconButton(Icon::Trash, I18n::tr("Delete from disk"), actions.actions);
             CustomTooltip::instance()->setToolTip(remove, I18n::tr("Delete it from the disk. Click again to confirm."));
-            auto *confirm = Ui::button(I18n::tr("Confirm delete"), QStringLiteral("danger"), QStringLiteral("sm"), actions);
-            confirm->setFocusPolicy(Qt::NoFocus);
-            slot->addWidget(remove);
-            slot->addWidget(confirm);
+            actions.normal->addWidget(remove, 0, Qt::AlignVCenter);
             const QString key = QStringLiteral("p") + id;
-            m_deleteSlots.insert(key, slot);
-            slot->setCurrentIndex(m_armed == key ? 1 : 0);
-            line->addWidget(actions, 0, Qt::AlignVCenter);
+            m_deleteSlots.insert(key, actions.slot);
+            actions.slot->setCurrentIndex(m_armed == key ? 1 : 0);
+            line->addWidget(actions.actions, 0, Qt::AlignVCenter);
             if (m_interactive) {
                 connect(remove, &QPushButton::clicked, this, [this, key]() { armDelete(key); });
-                connect(confirm, &QPushButton::clicked, this, [this, id]() {
+                connect(actions.confirm, &QPushButton::clicked, this, [this, id]() {
                     runLater([this, id]() {
                         m_armed.clear();
                         m_module->removePiece(id);
@@ -524,9 +579,16 @@ void DictationPanel::refreshPieces()
 
 void DictationPanel::refreshRecent()
 {
+    const QList<DictationFlow::Entry> history = m_module->history();
+    // El historial solo crece por adelante: alcanza con cuántos son y el último.
+    const QString shown = history.isEmpty() ? QStringLiteral("0")
+                                            : QStringLiteral("%1:%2").arg(history.size()).arg(history.first().when.toMSecsSinceEpoch());
+    if (shown == m_shownRecent) {
+        return;
+    }
+    m_shownRecent = shown;
     auto *rows = static_cast<QVBoxLayout *>(m_recentRows->layout());
     clearLayout(rows);
-    const QList<DictationFlow::Entry> history = m_module->history();
     if (history.isEmpty()) {
         auto *empty = Ui::caption(I18n::tr("Nothing yet. The last 10 dictations show up here until you quit the app; they're never saved to disk."),
                                   m_recentRows);
@@ -614,10 +676,13 @@ void DictationPanel::saveWords()
 
 void DictationPanel::saveRoot()
 {
-    const QString typed = QDir::fromNativeSeparators(m_root->text().trimmed());
-    if (QDir::isAbsolutePath(typed)) {
+    // Solo una ruta completa (unidad + barra o UNC): "\models" o "C:models" dependen de la carpeta actual.
+    const QString typed = m_root->text().trimmed();
+    const bool valid = typed.isEmpty() || DictationModule::fullPath(typed);
+    if (valid && !typed.isEmpty()) {
         m_module->setModelsRoot(typed);
     }
+    m_rootError->setVisible(!valid);
     m_root->setText(QDir::toNativeSeparators(m_module->modelsRoot()));
 }
 
@@ -660,6 +725,15 @@ void DictationPanel::submitReplacement()
     m_to->clearFocus();
     resetReplacementEditor();
     m_module->setReplacements(list);
+}
+
+void DictationPanel::finishReplacementField(QLineEdit *field)
+{
+    if (!m_from->text().trimmed().isEmpty() && !m_to->text().trimmed().isEmpty()) {
+        submitReplacement();
+    } else {
+        field->clearFocus();
+    }
 }
 
 void DictationPanel::editReplacement(int index)
@@ -736,6 +810,7 @@ bool DictationPanel::eventFilter(QObject *watched, QEvent *event)
         }
         if (watched == m_root) {
             m_root->setText(QDir::toNativeSeparators(m_module->modelsRoot()));
+            m_rootError->hide();
             m_root->clearFocus();
             return true;
         }
@@ -747,11 +822,18 @@ bool DictationPanel::eventFilter(QObject *watched, QEvent *event)
     }
     if (event->type() == QEvent::MouseButtonPress) {
         // Un click fuera del campo que tiene el teclado lo suelta: las palabras y la carpeta se guardan
-        // (editingFinished); un reemplazo a medias queda escrito sin agregarse.
+        // (editingFinished). Un reemplazo con los dos campos escritos se agrega (o se guarda, si se editaba);
+        // a medias queda escrito sin agregarse. Pasar de un campo del reemplazo al otro no cuenta.
         QWidget *focused = QApplication::focusWidget();
         auto *target = qobject_cast<QWidget *>(watched);
         if (focused && target && focused != target && !focused->isAncestorOf(target)
             && (focused == m_words || focused == m_root || focused == m_from || focused == m_to)) {
+            const bool replacement = focused == m_from || focused == m_to;
+            const bool otherField = target == m_from || target == m_to || m_from->isAncestorOf(target) || m_to->isAncestorOf(target);
+            const bool ownButton = target == m_addReplacement || target == m_cancelReplacement;
+            if (replacement && !otherField && !ownButton && !m_from->text().trimmed().isEmpty() && !m_to->text().trimmed().isEmpty()) {
+                runLater([this]() { submitReplacement(); });
+            }
             focused->clearFocus();
         }
         // Un click fuera de «Confirm delete» lo desarma.

@@ -19,7 +19,8 @@
 //                       \--Esc, fallo del micrófono o del motor--> Idle (sin escribir nada)
 //
 // Mientras transcribe o escribe, el atajo no empieza otro dictado. Esc durante la transcripción descarta el
-// texto. Nunca queda el micrófono abierto: toda salida de Recording pasa por stopCapture().
+// texto, y durante la escritura corta lo que falta (queda en Recent como «Stopped»). Nunca queda el micrófono
+// abierto: toda salida de Recording pasa por stopCapture().
 class DictationFlow : public QObject
 {
     Q_OBJECT
@@ -43,12 +44,14 @@ public:
         // Entrega los últimos bloques (samples) antes de volver.
         virtual void stopCapture() = 0;
         virtual bool type(quintptr target, const QString &text) = 0;
+        // Corta la escritura en curso entre dos lotes (nunca queda una tecla apretada): typed() con Stopped.
+        virtual void stopTyping() = 0;
         virtual void showOverlay(quintptr target) = 0;
         virtual void overlayState(DictationOverlay::State state, const QString &message) = 0;
         virtual void overlayText(const QString &confirmed, const QString &provisional) = 0;
         virtual void overlayLevel(float level) = 0;
         virtual void hideOverlay(int delayMs) = 0;
-        // Hay un dictado en curso (grabando o transcribiendo): Esc registrado y el reloj del tope andando.
+        // Hay un dictado en curso (grabando, transcribiendo o escribiendo): Esc registrado y el reloj andando.
         virtual void setActive(bool active) = 0;
     };
 
@@ -98,7 +101,6 @@ public:
 
 signals:
     void finished(const DictationFlow::Entry &entry);
-    void phaseChanged();
 
 private:
     void start();
@@ -120,7 +122,9 @@ private:
     QString m_live;      // lo que muestra la ventanita (para «Recent» si se cancela)
     QString m_pending;   // el texto que se está escribiendo
     qint64 m_lastNow = 0;  // el reloj del último atajo o tick
-    qint64 m_finishAt = 0; // cuándo empezó a transcribir (tope de espera del final)
+    qint64 m_startedAt = 0;      // cuándo empezó a grabar
+    qint64 m_finishAt = 0;       // cuándo empezó a transcribir
+    qint64 m_finalTimeoutMs = 0; // tope de espera del final: crece con lo grabado
 };
 
 #endif // MIGHTYTOOLS_DICTATIONFLOW_H

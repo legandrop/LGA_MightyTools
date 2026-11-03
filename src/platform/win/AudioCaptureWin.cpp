@@ -312,7 +312,6 @@ bool AudioCapture::start(const QString &deviceId)
     d->thread->onStarted = [this, generation]() {
         if (generation == d->generation && d->thread) {
             qInfo() << "[dictation] Microfono abierto";
-            emit started();
         }
     };
     d->thread->onBlock = [this, generation](const QVector<float> &block, float value) {

@@ -76,6 +76,11 @@ bool ModuleContextImpl::persistentRegistrationAllowed() const
     return persistentAllowed(automatedRun(), m_host->options().buildTree);
 }
 
+bool ModuleContextImpl::startingWithApp() const
+{
+    return m_host->startingWithApp();
+}
+
 ModuleHotkeys *ModuleContextImpl::hotkeys()
 {
     if (!m_hotkeys) {

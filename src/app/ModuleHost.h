@@ -68,6 +68,8 @@ public:
     void setEnabled(const QString &id, bool enabled);
     // Arranque de la app: prende los que estaban prendidos.
     void startEnabled();
+    // True mientras corre startEnabled() (ModuleContext::startingWithApp).
+    bool startingWithApp() const { return m_startingWithApp; }
     // Salida: apaga todos (sin tocar settings.ini) y borra en el acto.
     void shutdown();
 
@@ -125,6 +127,7 @@ private:
     HostOptions m_options;
     HostServices *m_services = nullptr;
     HotkeyHub *m_hotkeys = nullptr;
+    bool m_startingWithApp = false;
     std::map<QString, Slot> m_slots;
     // Modulos apagados cuyo deleteLater todavia no corrio: al cerrar el host se borran en el acto.
     QList<QPointer<Module>> m_pendingDelete;

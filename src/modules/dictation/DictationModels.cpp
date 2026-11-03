@@ -10,12 +10,14 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
+#include <QSet>
 #include <QTimer>
 #include <QUuid>
 
@@ -64,7 +66,96 @@ bool removeTree(const QString &path)
     return done(FileSystemOps::removeDir(FileSystemOps::nativePath(path)));
 }
 
+// Para el log del tacho: lo que ocupaba la pieza (sin seguir enlaces).
+qint64 treeSize(const QString &path)
+{
+    const QFileInfo info(path);
+    if (info.isSymLink() || !info.isDir()) {
+        return info.isFile() && !info.isSymLink() ? info.size() : 0;
+    }
+    qint64 total = 0;
+    for (const QFileInfo &child : QDir(path).entryInfoList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot)) {
+        total += treeSize(child.absoluteFilePath());
+    }
+    return total;
+}
+
+QByteArray fileSha256(const QString &path, qint64 *size)
+{
+    QFile in(path);
+    if (!in.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    if (!hash.addData(&in)) {
+        return {};
+    }
+    *size = in.size();
+    return hash.result().toHex();
+}
+
+// Los archivos de la carpeta del motor, relativos y ordenados (sin el marcador ni enlaces).
+QStringList engineFiles(const QString &dir)
+{
+    QStringList files;
+    QDirIterator it(dir, QDir::Files | QDir::Hidden | QDir::System, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QFileInfo info(it.next());
+        const QString relative = QDir(dir).relativeFilePath(info.absoluteFilePath());
+        if (!info.isSymLink() && relative != QLatin1String(".verified")) files << relative;
+    }
+    files.sort(Qt::CaseInsensitive);
+    return files;
+}
+
+// "file=<relativo>|<tamano>|<sha256>" del marcador del motor.
+struct EngineFile
+{
+    QString relative;
+    qint64 size = 0;
+    QByteArray sha256;
+};
+
+QList<EngineFile> markerFiles(const QByteArray &marker)
+{
+    QList<EngineFile> files;
+    for (const QByteArray &line : marker.split('\n')) {
+        if (!line.startsWith("file=")) continue;
+        const QList<QByteArray> parts = line.mid(5).trimmed().split('|');
+        if (parts.size() == 3) files.append({QString::fromUtf8(parts.at(0)), parts.at(1).toLongLong(), parts.at(2)});
+    }
+    return files;
+}
+
 } // namespace
+
+bool DictationModels::checkEngineFiles(const QString &engineDir, QString *problem)
+{
+    QFile marker(QDir(engineDir).filePath(QStringLiteral(".verified")));
+    const QList<EngineFile> listed = marker.open(QIODevice::ReadOnly) ? markerFiles(marker.readAll()) : QList<EngineFile>();
+    if (listed.isEmpty()) {
+        *problem = QStringLiteral(".verified");
+        return false;
+    }
+    QSet<QString> known;
+    for (const EngineFile &file : listed) {
+        known.insert(file.relative.toLower());
+        qint64 size = -1;
+        const QByteArray sha = fileSha256(QDir(engineDir).filePath(file.relative), &size);
+        if (size != file.size || sha != file.sha256) {
+            *problem = file.relative;
+            return false;
+        }
+    }
+    // Una DLL que no vino en el paquete la cargaria el motor (busca sus modulos en su carpeta).
+    for (const QString &relative : engineFiles(engineDir)) {
+        if (relative.endsWith(QLatin1String(".dll"), Qt::CaseInsensitive) && !known.contains(relative.toLower())) {
+            *problem = relative;
+            return false;
+        }
+    }
+    return true;
+}
 
 QList<DictationModels::Piece> DictationModels::defaultPieces()
 {
@@ -129,7 +220,7 @@ DictationModels::~DictationModels()
             job.tar->waitForFinished(3000);
         }
         if (!job.extractDir.isEmpty()) {
-            QDir(job.extractDir).removeRecursively();
+            removeTree(job.extractDir);
         }
     }
 }
@@ -245,7 +336,15 @@ bool DictationModels::markerOk(const Piece &piece) const
         return false;
     }
     if (!piece.archiveFolder.isEmpty()) {
-        return true;
+        // Barato (sin leer los archivos): cada uno esta y con su tamano. El SHA-256 de cada uno lo mira el
+        // proceso del motor antes de cargarlo (checkEngineFiles).
+        file.seek(0);
+        const QList<EngineFile> files = markerFiles(file.readAll());
+        for (const EngineFile &listed : files) {
+            const QFileInfo info(QDir(target).filePath(listed.relative));
+            if (!info.isFile() || info.size() != listed.size) return false;
+        }
+        return !files.isEmpty();
     }
     // Si el archivo cambio despues de verificarlo (otro tamano u otra fecha), se vuelve a verificar.
     const QFileInfo info(target);
@@ -261,6 +360,13 @@ void DictationModels::writeMarker(const Piece &piece)
         const QFileInfo info(target);
         text += "size=" + QByteArray::number(info.size()) + '\n';
         text += "modified=" + QByteArray::number(info.lastModified().toMSecsSinceEpoch()) + '\n';
+    } else {
+        // Recien desempaquetado del paquete verificado: lo que hay es lo que vino.
+        for (const QString &relative : engineFiles(target)) {
+            qint64 size = -1;
+            const QByteArray sha = fileSha256(QDir(target).filePath(relative), &size);
+            text += "file=" + relative.toUtf8() + '|' + QByteArray::number(size) + '|' + sha + '\n';
+        }
     }
     QFile file(markerPath(piece, target));
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(text) != text.size()) {
@@ -559,7 +665,7 @@ void DictationModels::onExtracted(const QString &id, bool ok)
     const QString target = path(id);
     QString why;
     if (job.cancelled) {
-        QDir(extractDir).removeRecursively();
+        removeTree(extractDir);
         setState(id, State::Missing);
         return;
     }
@@ -570,7 +676,7 @@ void DictationModels::onExtracted(const QString &id, bool ok)
     } else if (!QDir().rename(unpacked, target)) {
         why = I18n::tr("Could not unpack the engine.");
     }
-    QDir(extractDir).removeRecursively();
+    removeTree(extractDir);
     if (!why.isEmpty()) {
         qWarning() << "[Dictado] Desempaquetar" << p->title << "fallo:" << why;
         setState(id, State::Error, 0, why);
@@ -607,6 +713,7 @@ bool DictationModels::remove(const QString &id, QString *error)
     stopVerifier(job);
     job.state = State::Missing; // para que readDisk lo vuelva a mirar
     const QString target = path(id);
+    const qint64 bytes = treeSize(target) + (p->archiveFolder.isEmpty() ? treeSize(markerPath(*p, target)) : 0);
     // Primero la pieza: si esta en uso y no se borra, el marcador queda y sigue "lista" sin re-verificar.
     const bool ok = removeTree(target) && removeTree(markerPath(*p, target));
     readDisk(*p);
@@ -616,6 +723,16 @@ bool DictationModels::remove(const QString &id, QString *error)
         if (error) {
             *error = text;
         }
+    } else {
+        qInfo().noquote() << "[Dictado] Borrado del disco:" << p->title << native(target)
+                          << QStringLiteral("(%1 bytes)").arg(bytes);
     }
     return ok;
+}
+
+void DictationModels::markDamaged(const QString &id, const QString &why)
+{
+    if (piece(id)) {
+        setState(id, State::Error, 0, why);
+    }
 }

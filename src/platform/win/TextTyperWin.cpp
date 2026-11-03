@@ -179,6 +179,18 @@ bool TextTyper::isBusy() const
     return d->timer.isActive();
 }
 
+void TextTyper::stop()
+{
+    if (!d->timer.isActive()) {
+        return;
+    }
+    d->timer.stop();
+    const int typed = d->next > 0 ? d->batches.at(d->next - 1).end : 0;
+    qInfo() << "[dictation] Escritura detenida con Esc:" << typed << "de" << d->batches.last().end;
+    d->batches.clear();
+    QTimer::singleShot(0, this, [this, typed]() { emit finished(Result::Stopped, typed); });
+}
+
 QStringList TextTyper::describe(const QString &text)
 {
     QStringList lines;

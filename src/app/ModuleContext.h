@@ -117,6 +117,9 @@ public:
     // el registro LGA). Una accion explicita del usuario (Apply, Make Default) desde un build si se
     // hace: la decide automatedRun().
     virtual bool persistentRegistrationAllowed() const = 0;
+    // True mientras el host prende las herramientas que ya estaban prendidas, al arrancar la app; false
+    // cuando la prende el usuario. Sirve para no cargar al arrancar lo que puede esperar a usarse.
+    virtual bool startingWithApp() const { return false; }
 
     // Servicios compartidos, perezosos: se crean con el primer pedido.
     virtual ModuleHotkeys *hotkeys() = 0;

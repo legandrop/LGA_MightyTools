@@ -10,12 +10,16 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   los dos con licencia MIT: los baja el usuario con un botón que muestra antes tamaño y licencia, se
   verifican por SHA-256 y nunca viajan en el instalador; quien no dicta no baja nada. La carpeta por
   defecto es `<app>\models` (se borra al desinstalar) y se puede cambiar. El motor corre en un proceso
-  aparte que se descarga tras N minutos sin uso (10 por defecto). El texto se ve en vivo en una ventanita
-  sin foco y se escribe al terminar en la ventana que estaba al frente, por `SendInput` Unicode, nunca
-  por el portapapeles; si la ventana cambió o es de administrador, no se escribe y queda en «Recent».
-  Win+H por defecto (reemplaza el dictado de Windows), tocar o mantener, Esc cancela. Palabras propias
-  para el modelo y reemplazos «X → Y» después. El historial vive solo en memoria. Solo Windows por ahora;
-  vive en la rama `dictado` hasta que Lega la apruebe.
+  aparte, verifica sus archivos antes de cargarse, se carga al prender la herramienta o con el primer
+  dictado (nunca al arrancar la app: el audio espera mientras carga, ~1 s) y se descarga tras N minutos
+  sin uso (10 por defecto). El texto se ve en vivo en una ventanita sin foco y se escribe al terminar en
+  la ventana que estaba al frente, por `SendInput` Unicode, nunca por el portapapeles; sin voz no se
+  escribe nada, y si la ventana cambió no se escribe y queda en «Recent». Con una ventana de
+  administrador al frente el atajo no llega (Windows no le pasa las teclas a una app sin administrador)
+  y se abre el dictado de Windows. Win+H por defecto (reemplaza el dictado de Windows), tocar o mantener,
+  Esc cancela (también mientras escribe). Palabras propias para el modelo y reemplazos «X → Y» después.
+  El historial vive solo en memoria. Solo Windows por ahora; vive en la rama `dictado` hasta que Lega la
+  apruebe.
 - **D-71 · Ejemplos apagados en App Toggle y Mouse Buttons, y el Explorador como toggle** (2026-11-03,
   Lega: «debe venir con la app ya puesto… es como un setting que viene por defecto», «pero apagado»).
   La primera vez que se prende cada herramienta (sin la clave en settings) trae ejemplos apagados: App

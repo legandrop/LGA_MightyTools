@@ -48,7 +48,7 @@ public:
     // Texto para el usuario (I18n), con el código del sistema si no hay uno mejor.
     static QString errorText(Error error, long systemCode = 0);
 
-    // Empieza a grabar sin frenar la UI: el resultado llega por started() o failed(). `deviceId` vacío: el
+    // Empieza a grabar sin frenar la UI: si no se puede abrir, llega failed(). `deviceId` vacío: el
     // micrófono por defecto de Windows (el de «Elegir un dispositivo para hablar o grabar», rol consola).
     // False si ni siquiera arrancó: ya graba, o es una corrida automatizada.
     bool start(const QString &deviceId = QString());
@@ -76,7 +76,6 @@ public:
     static float levelOf(const QVector<float> &block);
 
 signals:
-    void started();
     // Bloques de ~50 ms a 16 kHz mono, en orden.
     void samples(const QVector<float> &block);
     // Nivel del último bloque, 0..1.

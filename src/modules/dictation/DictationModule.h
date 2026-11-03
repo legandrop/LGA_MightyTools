@@ -19,9 +19,10 @@ class QTimer;
 // prioridad) graba mientras se mantiene o entre dos toques; el texto se ve en vivo en una ventanita y al
 // terminar se escribe en la ventana que estaba al frente, tecla por tecla y sin el portapapeles.
 //
-// Prendida: el atajo registrado; el motor (otro proceso) se carga al prender si el motor y el modelo ya están
-// en disco y se descarga solo después de N minutos sin dictar. El micrófono se abre solo mientras graba, y Esc
-// se registra solo mientras hay un dictado en curso. Apagada no existe nada: ni proceso, ni gancho, ni timers.
+// Prendida: el atajo registrado; el motor (otro proceso) se carga cuando el usuario la prende (o termina de
+// bajar las piezas) o con el primer dictado, nunca al arrancar la app, y se descarga solo después de N minutos
+// sin dictar. El micrófono se abre solo mientras graba, y Esc se registra solo mientras hay un dictado en curso
+// (también escribiendo: corta lo que falta). Apagada no existe nada: ni proceso, ni gancho, ni timers.
 // En una corrida automatizada no se abre el micrófono, no se escribe, no se muestra la ventanita, no se baja
 // nada y el motor no se precarga.
 class DictationModule : public Module, protected DictationFlow::Io
@@ -68,7 +69,8 @@ public:
     DictationText::Replacements replacements() const;
     void setReplacements(const DictationText::Replacements &replacements);
     QString modelsRoot() const; ///< la carpeta elegida, o la de por defecto
-    void setModelsRoot(const QString &root);
+    void setModelsRoot(const QString &root); ///< solo una ruta completa (fullPath); si no, no cambia nada
+    static bool fullPath(const QString &path); ///< unidad + barra, o UNC
     int unloadMinutes() const; ///< 0 = nunca
     void setUnloadMinutes(int minutes);
 
@@ -101,6 +103,7 @@ public:
     // QA
     qint64 enginePidForQa() const;
     bool escapeRegisteredForQa() const;
+    bool warmUpPendingForQa() const { return m_warmUp; }
 
 signals:
     // Cambió algo que muestra la página (ajustes, piezas, motor, historial).
@@ -118,6 +121,7 @@ protected:
     bool startCapture() override;
     void stopCapture() override;
     bool type(quintptr target, const QString &text) override;
+    void stopTyping() override;
     void showOverlay(quintptr target) override;
     void overlayState(DictationOverlay::State state, const QString &message) override;
     void overlayText(const QString &confirmed, const QString &provisional) override;
@@ -143,6 +147,7 @@ private:
 
     DictationFlow m_flow;
     bool m_started = false;
+    bool m_warmUp = false; ///< cargar el motor apenas esten las piezas (lo prendio o lo bajo el usuario)
     ModuleHotkeys *m_hotkeys = nullptr;
     QString m_shortcutError;
     DictationModels *m_models = nullptr;

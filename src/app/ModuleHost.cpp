@@ -138,11 +138,13 @@ void ModuleHost::setEnabled(const QString &id, bool enabled)
 
 void ModuleHost::startEnabled()
 {
+    m_startingWithApp = true;
     for (const ModuleDescriptor &d : m_descriptors) {
         if (isEnabled(d.id) && !isRunning(d.id)) {
             build(d.id, true);
         }
     }
+    m_startingWithApp = false;
     qInfo() << "[ModuleHost] Herramientas prendidas al arrancar:" << runningIds();
 }
 

@@ -5,10 +5,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 1. **Herramientas nuevas (Lega, 2026-11-02), en este orden:**
    1. **Dictation** (Windows, rama `dictado`, D-72): hecha, sin probar con micrófono. Falta la prueba real de
       Lega en su PC: Win+H en Nuke, el navegador y un chat (tocar y mantener, Esc), con el modelo cargando y
-      ya cargado, el texto en vivo de la ventanita, la escritura en un campo y en una ventana de
-      administrador (no escribe y queda en «Recent»), cambiar de ventana mientras transcribe, la descarga
-      con el botón y el borrado con el tacho. Después: macOS (micrófono con AVAudioEngine, escritura con
-      CGEvent, permisos de micrófono y de accesibilidad); Parakeet y Voxtral como modelos opcionales.
+      ya cargado, el texto en vivo de la ventanita, la escritura en un campo, cambiar de ventana mientras
+      transcribe, silencio (no escribe nada), la descarga con el botón y el borrado con el tacho. Con una
+      ventana de administrador al frente el atajo no llega y se abre el dictado de Windows: pendiente
+      posible, sumar el dictado al ayudante elevado de D-61. Después: macOS (micrófono con AVAudioEngine,
+      escritura con CGEvent, permisos de micrófono y de accesibilidad); Parakeet y Voxtral como modelos
+      opcionales.
    2. **App Toggle** (Windows y macOS): hecha en la v1.53 (D-67). Falta la prueba real de Lega (Win+E con
       XYplorer; OBS y UAD Console desde el Stream Deck con botones de tipo atajo) y probarla en la Mac
       (el CI ya la compila). Pendientes posibles: con una ventana de administrador al frente el atajo no llega

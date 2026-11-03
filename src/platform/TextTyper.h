@@ -28,6 +28,7 @@ public:
         Elevated,     ///< la ventana corre como administrador y esta app no (UIPI): no se escribió nada
         NoTarget,     ///< la ventana ya no existe (o nunca hubo una)
         Failed,       ///< Windows no tomó las teclas (pantalla de bloqueo, aviso de UAC)
+        Stopped,      ///< stop(): el usuario lo cortó con Esc; lo que faltaba no se escribió
     };
     Q_ENUM(Result)
 
@@ -43,6 +44,9 @@ public:
     // escribiendo otro texto.
     bool type(quintptr target, const QString &text);
     bool isBusy() const;
+    // Corta la escritura en curso antes del próximo lote (cada lote va entero, con sus liberaciones: no queda
+    // ninguna tecla apretada). finished(Stopped, lo escrito) llega después de volver. Sin escritura, nada.
+    void stop();
 
     // Las teclas que se mandarían, una línea por evento y "--" entre lotes. No manda nada.
     static QStringList describe(const QString &text);

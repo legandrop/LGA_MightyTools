@@ -29,8 +29,10 @@ class QProcess;
 // .part, y recien con el tamano y el SHA-256 correctos pasa a su lugar (el motor se desempaqueta con
 // el tar.exe de Windows a una carpeta temporal dentro de la raiz y despues se renombra). Lista = el
 // archivo con su marcador "<archivo>.verified" (tamano, fecha y SHA-256), o la carpeta del motor con
-// ".verified" adentro: asi no se vuelven a leer 886 MB en cada arranque. Un archivo que ya estaba (el
-// modelo copiado a mano) se verifica una vez, en otro hilo.
+// ".verified" adentro (el SHA-256 del paquete y el tamano y SHA-256 de cada archivo desempaquetado): asi
+// no se vuelven a leer 886 MB en cada arranque. Un archivo que ya estaba (el modelo copiado a mano) se
+// verifica una vez, en otro hilo. Los archivos del motor se vuelven a verificar cada vez que se carga
+// (checkEngineFiles), porque son codigo que se ejecuta.
 //
 // En una corrida automatizada no se baja nada ni se abre la red: solo se aceptan URL file:// (el
 // self-test con archivos chicos), y borrar lo que ya estaba solo actua dentro de la carpeta de pruebas
@@ -85,6 +87,14 @@ public:
     void cancel(const QString &id);
     // Borra la pieza del disco (el modelo no puede estar cargado: parar antes el motor).
     bool remove(const QString &id, QString *error = nullptr);
+    // El motor no paso la verificacion de sus archivos al cargarse: queda en error hasta bajarlo de nuevo.
+    void markDamaged(const QString &id, const QString &why);
+
+    // Los archivos de la carpeta del motor contra su ".verified" (tamano y SHA-256 de cada uno, escritos
+    // al desempaquetarlo). False, con el archivo en `problem`, si falta o cambio alguno o si hay una DLL
+    // que no estaba (el motor carga las DLL de su carpeta). Lee todo (56 MB): la llama el proceso del
+    // motor antes de cargar nada, no la app.
+    static bool checkEngineFiles(const QString &engineDir, QString *problem);
 
 signals:
     void changed(const QString &id);

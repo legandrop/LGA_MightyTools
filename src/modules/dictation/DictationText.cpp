@@ -62,6 +62,47 @@ bool echoesContext(const QString &hypothesis, const QStringList &vocabulary, con
     return true;
 }
 
+bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt)
+{
+    QStringList said;
+    for (const QString &word : words(hypothesis)) {
+        const QString normalized = normalizedWord(word);
+        if (!normalized.isEmpty()) said << normalized;
+    }
+    if (said.isEmpty()) {
+        return false;
+    }
+    if (said.contains(QLatin1String("glossary"))) {
+        return true;
+    }
+    QSet<QString> terms;
+    for (const QString &word : words(vocabulary.join(QLatin1Char(' ')))) {
+        terms.insert(normalizedWord(word));
+    }
+    bool onlyTerms = true;
+    for (const QString &word : std::as_const(said)) {
+        onlyTerms &= terms.contains(word);
+    }
+    if (onlyTerms && QSet<QString>(said.cbegin(), said.cend()).size() < said.size()) {
+        return true;
+    }
+    // 8 palabras o mas, todas seguidas y en orden dentro de la frase de contexto.
+    QStringList context;
+    for (const QString &word : words(prompt)) {
+        const QString normalized = normalizedWord(word);
+        if (!normalized.isEmpty()) context << normalized;
+    }
+    if (said.size() < 8 || said.size() > context.size()) {
+        return false;
+    }
+    for (qsizetype start = 0; start + said.size() <= context.size(); ++start) {
+        if (context.mid(start, said.size()) == said) {
+            return true;
+        }
+    }
+    return false;
+}
+
 Split stabilize(const QString &confirmed, const QString &previous, const QString &next)
 {
     const QStringList kept = words(confirmed);

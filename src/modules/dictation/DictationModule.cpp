@@ -18,9 +18,12 @@
 
 namespace {
 
-// Ids locales de los atajos: el del dictado y Esc (solo mientras hay un dictado en curso).
+// Ids locales de los atajos: el del dictado y Esc (solo mientras hay un dictado en curso). Esc va dos veces:
+// sola y con los modificadores del atajo, porque en modo mantener Win (o lo que tenga el atajo) sigue apretado
+// y el gancho compara los modificadores exactos: Win+Esc no es Esc.
 constexpr int kShortcutId = 1;
 constexpr int kEscapeId = 2;
+constexpr int kEscapeHeldId = 3;
 constexpr int kTickMs = 100;
 
 const QString kDefaultShortcut = QStringLiteral("Meta+H");
@@ -73,6 +76,9 @@ void DictationModule::start()
         return;
     }
     m_started = true;
+    // Al arrancar la app no se carga el motor (memoria de video para algo que quizas no se use hoy): se carga
+    // al prenderla el usuario o con el primer dictado, que guarda el audio mientras carga (~1 s).
+    m_warmUp = !context().startingWithApp() && preloadAllowed();
     applyFlowSettings();
     registerShortcut();
     openModels();
@@ -110,7 +116,7 @@ void DictationModule::registerShortcut()
         connect(m_hotkeys, &ModuleHotkeys::activated, this, [this](int id) {
             if (id == kShortcutId) {
                 m_flow.press(m_clock.elapsed());
-            } else if (id == kEscapeId) {
+            } else if (id == kEscapeId || id == kEscapeHeldId) {
                 m_flow.escape();
             }
         });
@@ -167,8 +173,9 @@ void DictationModule::closeModels()
 
 void DictationModule::onPieceChanged()
 {
-    if (m_started && piecesReady() && preloadAllowed()
+    if (m_started && m_warmUp && piecesReady()
         && (m_engineState == EngineState::Off || m_engineState == EngineState::Error)) {
+        m_warmUp = false;
         ensureEngine();
     }
     notifyChanged();
@@ -199,6 +206,10 @@ void DictationModule::ensureEngine()
         connect(m_engine, &DictationEngine::failed, this, [this](const QString &error) {
             m_engineState = EngineState::Error;
             m_engineError = error;
+            if (m_engine->engineDamaged() && m_models) {
+                // No se cargo nada: el motor queda en error en su fila, con el tacho para bajarlo de nuevo.
+                m_models->markDamaged(DictationModels::kEngine, error);
+            }
             m_flow.engineFailed(error);
             notifyChanged();
         });
@@ -318,6 +329,11 @@ bool DictationModule::type(quintptr target, const QString &text)
     return m_typer->type(target, text);
 }
 
+void DictationModule::stopTyping()
+{
+    if (m_typer) m_typer->stop();
+}
+
 void DictationModule::showOverlay(quintptr target)
 {
     if (context().automatedRun()) {
@@ -363,12 +379,15 @@ void DictationModule::setActive(bool active)
             Shortcut escape;
             escape.key = Qt::Key_Escape;
             m_escRegistered = m_hotkeys->registerPriorityHotkey(kEscapeId, escape);
+            escape.modifiers = shortcut().modifiers;
+            if (escape.modifiers != Qt::NoModifier) m_hotkeys->registerPriorityHotkey(kEscapeHeldId, escape);
         }
         return;
     }
     if (m_tick) m_tick->stop();
     if (m_hotkeys && m_escRegistered) {
         m_hotkeys->unregisterHotkey(kEscapeId);
+        m_hotkeys->unregisterHotkey(kEscapeHeldId);
     }
     m_escRegistered = false;
 }
@@ -464,14 +483,29 @@ void DictationModule::setReplacements(const DictationText::Replacements &list)
 
 QString DictationModule::modelsRoot() const
 {
-    const QString root = context().value(QStringLiteral("modelsRoot"), QString()).toString().trimmed();
-    return root.isEmpty() ? DictationModels::defaultRoot() : QDir::cleanPath(root);
+    const QString root = QDir::cleanPath(QDir::fromNativeSeparators(context().value(QStringLiteral("modelsRoot"), QString()).toString().trimmed()));
+    return fullPath(root) ? root : DictationModels::defaultRoot();
+}
+
+bool DictationModule::fullPath(const QString &path)
+{
+    // Unidad + barra ("C:/x") o UNC ("//servidor/recurso"). QDir::isAbsolutePath acepta tambien "\x" y
+    // "C:x", que Windows resuelve contra la unidad o la carpeta actual (regla 8 de Doc_Borrado_Seguro).
+    const QString p = QDir::fromNativeSeparators(path.trimmed());
+    if (p.size() >= 3 && p.at(0).isLetter() && p.at(0).unicode() < 128 && p.at(1) == QLatin1Char(':') && p.at(2) == QLatin1Char('/')) {
+        return true;
+    }
+    if (!p.startsWith(QLatin1String("//"))) {
+        return false;
+    }
+    const QStringList parts = p.mid(2).split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    return parts.size() >= 2 && parts.at(0) != QLatin1String("?") && parts.at(0) != QLatin1String(".");
 }
 
 void DictationModule::setModelsRoot(const QString &root)
 {
-    const QString clean = QDir::cleanPath(root.trimmed());
-    if (clean.isEmpty() || clean == modelsRoot()) {
+    const QString clean = QDir::cleanPath(QDir::fromNativeSeparators(root.trimmed()));
+    if (!fullPath(clean) || clean == modelsRoot()) {
         return;
     }
     // La de por defecto no se guarda: si la app cambia de carpeta, la sigue.
@@ -536,11 +570,14 @@ bool DictationModule::piecesReady() const
 
 void DictationModule::download(const QString &id)
 {
+    // Lo pidio el usuario: al quedar listo, el motor se carga para el primer dictado.
+    m_warmUp = preloadAllowed();
     if (m_models) m_models->download(id);
 }
 
 void DictationModule::downloadMissing()
 {
+    m_warmUp = preloadAllowed();
     if (m_models) m_models->downloadMissing();
 }
 
@@ -606,13 +643,15 @@ QWidget *DictationModule::createPanel(QWidget *parent)
     auto *panel = new DictationPanel(this, !context().captureMode(), parent);
     connect(this, &DictationModule::changed, panel, &DictationPanel::refresh);
     if (m_captureState == QLatin1String("replacements-edit")) panel->showReplacementEditorForCapture();
+    if (m_captureState == QLatin1String("confirm-delete")) panel->armPieceDeleteForCapture(DictationModels::kModel);
     return panel;
 }
 
 QStringList DictationModule::captureStates() const
 {
     return {QStringLiteral("ready"),  QStringLiteral("missing"), QStringLiteral("downloading"),
-            QStringLiteral("error"),  QStringLiteral("recent"),  QStringLiteral("replacements-edit")};
+            QStringLiteral("error"),  QStringLiteral("recent"),  QStringLiteral("replacements-edit"),
+            QStringLiteral("confirm-delete")};
 }
 
 bool DictationModule::applyCaptureState(const QString &state)
@@ -786,7 +825,8 @@ HelpSection dictationHelp(const SettingsReader &value)
     help.steps = {I18n::tr("Download the model from the tool's page. It's done once and stays on this computer."),
                   I18n::tr("Click in any text field and press %1. Tap it to start and again to finish, or hold it while you speak.")
                       .arg(HelpSection::strong((keys.isValid() ? keys : Shortcut::fromPortableString(kDefaultShortcut)).displayText())),
-                  I18n::tr("The text shows up as you speak and is typed when you finish. Esc cancels.")};
-    help.note = I18n::tr("Nothing goes through the clipboard. If the window changes before typing, the text waits in Recent, on the tool's page.");
+                  I18n::tr("The text shows up as you speak and is typed when you finish. Esc cancels, also while it types.")};
+    help.note = I18n::tr("Nothing goes through the clipboard. If the window changes before typing, the text waits in Recent, on the tool's page. "
+                         "With an administrator window in front the shortcut doesn't arrive, so Windows opens its own dictation.");
     return help;
 }

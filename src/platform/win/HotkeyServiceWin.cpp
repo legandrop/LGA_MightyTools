@@ -547,6 +547,30 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
     key(VK_LSHIFT, false);
     check(!key(VK_ESCAPE, false) && !key(VK_ESCAPE, true), QStringLiteral("Esc: Shift+Esc no es el atajo y pasa"));
     key(VK_LSHIFT, true);
+    // Modo mantener del dictado: Win+H sigue apretado y Esc llega como Win+Esc. El gancho compara los
+    // modificadores exactos, por eso el dictado registra tambien Esc con los modificadores de su atajo (33).
+    Shortcut heldEscape = escape;
+    heldEscape.modifiers = Qt::MetaModifier;
+    holder.add(33, heldEscape, 10);
+    int lastHeld = 0;
+    const auto holdKey = [&](DWORD vk, bool up, DWORD flags = 0) {
+        KBDLLHOOKSTRUCT event{};
+        event.vkCode = vk;
+        event.flags = flags | (up ? LLKHF_UP : 0);
+        return holder.consumeKey(up ? WM_KEYUP : WM_KEYDOWN, event, [&](int id, quint64) { lastHeld = id; return true; },
+                                 nullptr, mask, [&](int id, quint64 generation) { releases << qMakePair(id, generation); });
+    };
+    const int maskedHeld = masked.size();
+    check(!holdKey(VK_LWIN, false, LLKHF_EXTENDED) && holdKey('H', false) && lastHeld == 30
+              && holdKey(VK_ESCAPE, false) && lastHeld == 33 && holdKey(VK_ESCAPE, true)
+              && holdKey('H', true) && releases.last() == qMakePair(30, quint64(7))
+              && holdKey(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == maskedHeld + 1,
+          QStringLiteral("dictado mantenido: con Win+H apretado, Esc llega como Win+Esc y cancela; soltar Win no abre Inicio"));
+    holder.remove(33);
+    check(!holdKey(VK_LWIN, false, LLKHF_EXTENDED) && holdKey('H', false) && !holdKey(VK_ESCAPE, false)
+              && !holdKey(VK_ESCAPE, true) && holdKey('H', true),
+          QStringLiteral("dictado mantenido: sin esa segunda Esc, Win+Esc pasaba de largo (el error de antes)"));
+    holdKey(VK_LWIN, true, LLKHF_EXTENDED);
     PriorityHookThread catcher(0, kCatchMessage, true);
     const int releasesBefore = releases.size();
     check(!hold(catcher, VK_LCONTROL, false) && hold(catcher, 'K', false) && hold(catcher, 'K', true)

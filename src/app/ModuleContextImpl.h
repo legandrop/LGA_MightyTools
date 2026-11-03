@@ -26,6 +26,7 @@ public:
     bool dryRunInput() const override;
     bool automatedRun() const override;
     bool persistentRegistrationAllowed() const override;
+    bool startingWithApp() const override;
 
     ModuleHotkeys *hotkeys() override;
     InputInjector *injector() override;

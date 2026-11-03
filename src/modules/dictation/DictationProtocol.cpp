@@ -2,6 +2,7 @@
 
 #include <QtEndian>
 
+#include <cmath>
 #include <cstring>
 
 namespace {
@@ -55,10 +56,29 @@ struct Reader
 
 bool known(quint8 type)
 {
-    return (type >= 1 && type <= 5) || (type >= 16 && type <= 19);
+    return (type >= 1 && type <= 4) || (type >= 16 && type <= 19);
 }
 
 } // namespace
+
+namespace DictationProtocol {
+
+float loudestFrameDb(const float *pcm, size_t count)
+{
+    constexpr size_t kFrame = kSampleRate * 30 / 1000;
+    double loudest = 0.0;
+    for (size_t start = 0; start < count; start += kFrame) {
+        const size_t end = qMin(count, start + kFrame);
+        double sum = 0.0;
+        for (size_t i = start; i < end; ++i) {
+            sum += double(pcm[i]) * double(pcm[i]);
+        }
+        loudest = qMax(loudest, sum / double(end - start));
+    }
+    return loudest > 1e-12 ? float(10.0 * std::log10(loudest)) : -120.0f;
+}
+
+} // namespace DictationProtocol
 
 namespace DictationProtocol {
 
@@ -85,8 +105,6 @@ QByteArray encode(const Message &message)
     case Type::End:
     case Type::Cancel:
         putU32(&body, message.session);
-        break;
-    case Type::Quit:
         break;
     case Type::Ready:
         putU32(&body, message.passMs);
@@ -165,8 +183,6 @@ QList<Message> decode(QByteArray *buffer)
         case Type::End:
         case Type::Cancel:
             message.session = in.u32();
-            break;
-        case Type::Quit:
             break;
         case Type::Ready:
             message.passMs = in.u32();
