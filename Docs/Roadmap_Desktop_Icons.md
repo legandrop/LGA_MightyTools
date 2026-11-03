@@ -42,10 +42,13 @@ cualquiera de ellas con un click.
 - **Qué guarda cada snapshot** (un JSON por snapshot en la carpeta de configuración de la app): por ícono, el
   nombre visible, la ruta y la posición; y de la pantalla, la resolución, el escalado (DPI), el espaciado de
   íconos y si están activos «Organizar automáticamente» y «Alinear a la cuadrícula».
-- **Tiempo despierta:** se toma el más reciente entre el momento del arranque y el de la última vuelta de
-  suspensión. Para la vuelta de suspensión: `WM_POWERBROADCAST` / `PBT_APMRESUMEAUTOMATIC` mientras la app
-  corre, y si la app arrancó después, el evento de reanudación del registro de sistema. Para el arranque:
-  ahora menos `GetTickCount64`, que también cuenta el tiempo suspendido, por eso no alcanza solo.
+- **Tiempo despierta (como quedó implementado):** «despierta desde» arranca cuando se prende la herramienta (o
+  el interruptor «Daily snapshot»): si la app se reinicia a mitad del día, esperar una hora más no hace daño. Un
+  timer cada 15 minutos compara cuánto avanzó el reloj de pared con cuánto avanzó `QueryUnbiasedInterruptTime`
+  (que no cuenta el tiempo suspendido ni hibernado): si el de pared avanzó más de 2 minutos de más, hubo una
+  suspensión y «despierta desde» vuelve a empezar. Así no hace falta una ventana para `WM_POWERBROADCAST` ni
+  leer el registro de eventos. Límite conocido: adelantar el reloj a mano también cuenta como suspensión (solo
+  atrasa el automático una hora).
 - **No reiniciar el Explorador** para aplicar nada: en la PC de Lega dejó una vez la pantalla gris sin barra de
   tareas. El orden restaurado lo graba el propio Explorador al cerrar sesión o reiniciar.
 
@@ -60,3 +63,15 @@ cualquiera de ellas con un click.
 - **«Organizar automáticamente» y «Alinear a la cuadrícula»** se dejan como estaban en el snapshot al
   restaurar: si no, Windows reacomoda los íconos encima de lo restaurado.
 - Solo Windows: macOS queda fuera de la primera versión.
+
+## Cómo quedó la primera versión (2026-11-02)
+
+- **Dónde:** un JSON por snapshot en `%APPDATA%\LGA\LGA_MightyTools\desktop_icons\`. El desinstalador borra esa
+  carpeta junto con `settings.ini`. Un archivo ilegible se ignora y queda donde está.
+- **Resolución:** la de la pantalla virtual (todos los monitores) en píxeles físicos, que es el área de la vista
+  del escritorio. **Habitual** es la que más se repite entre los manuales y automáticos guardados; los «antes de
+  restaurar» no cuentan. Sin snapshots, o con un empate en el primer lugar, cuenta como habitual.
+- **Deshacer:** «Undo» restaura el «antes de restaurar», y como toda restauración guarda antes uno nuevo, apretar
+  «Undo» otra vez vuelve a lo restaurado.
+- **Íconos nuevos** que no estaban en el snapshot quedan donde están.
+- Las filas de un snapshot con otra resolución que la actual lo avisan antes de restaurar.
