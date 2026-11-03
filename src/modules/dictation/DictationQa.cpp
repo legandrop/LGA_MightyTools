@@ -229,6 +229,30 @@ void testVoiceGate(const Check &check)
               && late.to == size_t(16000 * 9),
           QStringLiteral("voz: con 8 s de silencio delante se transcribe desde 7,7 s (%1)").arg(late.from));
 
+    // Pedazos: hasta 29 s va entero; mas, en pedazos de 29 s o menos cortados en el silencio.
+    using DictationProtocol::pieces;
+    const std::vector<float> shortTalk = noise(16000 * 20, -20.0f);
+    const auto one = pieces(shortTalk.data(), shortTalk.size());
+    check(one.size() == 1 && one[0].first == 0 && one[0].second == shortTalk.size(),
+          QStringLiteral("pedazos: 20 s van en una sola pasada"));
+    // 40 s de voz con una pausa de 300 ms a los 25 s: el corte cae en la pausa.
+    const std::vector<float> paused = with(noise(16000 * 40, -20.0f), std::vector<float>(4800, 0.0f), 16000 * 25);
+    const auto two = pieces(paused.data(), paused.size());
+    check(two.size() == 2 && two[0].first == 0 && two[0].second == two[1].first && two[1].second == paused.size()
+              && two[0].second >= size_t(16000 * 25) && two[0].second + 480 <= size_t(16000 * 25 + 4800),
+          QStringLiteral("pedazos: 40 s con una pausa a los 25 s se cortan en la pausa (%1)").arg(two.empty() ? 0 : two[0].second));
+    const std::vector<float> longTalk = noise(16000 * 70, -20.0f);
+    const auto three = pieces(longTalk.data(), longTalk.size());
+    bool contiguous = !three.empty() && three.front().first == 0 && three.back().second == longTalk.size();
+    for (size_t i = 0; i < three.size(); ++i) {
+        contiguous &= three[i].second - three[i].first <= DictationProtocol::kMaxPieceSamples;
+        if (i > 0) contiguous &= three[i].first == three[i - 1].second;
+    }
+    check(three.size() >= 3 && contiguous, QStringLiteral("pedazos: 70 s sin pausas van en %1 pedazos seguidos de 29 s o menos").arg(three.size()));
+    const std::vector<float> edge = noise(DictationProtocol::kMaxPieceSamples + 1, -20.0f);
+    check(pieces(edge.data(), DictationProtocol::kMaxPieceSamples).size() == 1 && pieces(edge.data(), edge.size()).size() == 2,
+          QStringLiteral("pedazos: 29 s justos van enteros; una muestra mas ya son dos"));
+
     using DictationText::finalEchoesContext;
     check(finalEchoesContext(QStringLiteral("Glossary: Nuke Studio, Hiero."), kVocabulary, kPrompt)
               && finalEchoesContext(QStringLiteral("Nuke, Nuke, Nuke."), kVocabulary, kPrompt)
@@ -712,8 +736,9 @@ int simulateTranscribe(const QStringList &args)
             recordings.append({QFileInfo(wav).fileName(), samples});
         }
     }
-    const QStringList vocabulary = context ? kVocabulary : QStringList();
-    const QString prompt = context ? kPrompt : QString();
+    // Lo mismo que lleva la app sin palabras propias, para que el banco mida lo que va a escribir.
+    const QStringList vocabulary = context ? DictationModule::vocabularyFrom(DictationModule::defaultWords()) : QStringList();
+    const QString prompt = context ? DictationModule::contextPhrase(QStringLiteral("es")) : QString();
     out(QStringLiteral("vocabulario: %1\nfrase de contexto: %2 (\"¿\" en UTF-8: %3)")
             .arg(vocabulary.isEmpty() ? QStringLiteral("(ninguno)") : vocabulary.join(QStringLiteral(", ")),
                  prompt.isEmpty() ? QStringLiteral("(ninguna)") : prompt,
@@ -1499,8 +1524,17 @@ void testModule(const Check &check)
         DictationModule module(context);
         check(module.shortcut() == Shortcut::fromPortableString(QStringLiteral("Meta+H")) && module.language() == QLatin1String("es")
                   && module.unloadMinutes() == 10 && module.replacements().isEmpty()
-                  && module.customWords() == QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto"),
-              QStringLiteral("modulo: de fabrica Win+H, castellano, 10 min, sin reemplazos y las palabras de Nuke"));
+                  && module.customWords() == DictationModule::defaultWords()
+                  && module.customWords().contains(QStringLiteral("Nuke Studio")) && module.customWords().contains(QStringLiteral("pushear"))
+                  && !module.customWords().contains(QStringLiteral("pullear")),
+              QStringLiteral("modulo: de fabrica Win+H, castellano, 10 min, sin reemplazos y las palabras de VFX y de desarrollo"));
+        // Quien tiene guardada la lista de antes sin tocar recibe la nueva; una lista propia queda como esta.
+        context.values.insert(QStringLiteral("customWords"), QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto"));
+        const bool migrated = module.customWords() == DictationModule::defaultWords();
+        context.values.insert(QStringLiteral("customWords"), QStringLiteral("Nuke, roto"));
+        check(migrated && module.customWords() == QLatin1String("Nuke, roto"),
+              QStringLiteral("modulo: la lista de fabrica vieja pasa a la nueva; una lista propia no se toca"));
+        context.values.remove(QStringLiteral("customWords"));
         context.values.insert(QStringLiteral("language"), QStringLiteral("klingon"));
         context.values.insert(QStringLiteral("unloadMinutes"), 7);
         check(module.language() == QLatin1String("es") && module.unloadMinutes() == 10,

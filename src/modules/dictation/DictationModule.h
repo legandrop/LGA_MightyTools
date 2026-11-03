@@ -96,6 +96,7 @@ public:
     static QList<int> unloadChoices();
     static QString unloadText(int minutes);
     static QStringList vocabularyFrom(const QString &words);
+    static QString defaultWords();
     static QString contextPhrase(const QString &language);
     static QString replacementsToJson(const DictationText::Replacements &replacements);
     static DictationText::Replacements replacementsFromJson(const QString &json);

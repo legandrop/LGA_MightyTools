@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation: en un dictado de 37 s la vista en vivo decía «Nuke Studio» y el texto final «nook studio», sin mayúsculas ni puntos. Whisper trabaja en ventanas de 30 s y el vocabulario y la frase de contexto solo entran en la primera. Ponerlos en todas, arrastrando el texto anterior, hacía inventar frases al final («Huevo Huevo Huevo…», 3 de 3 corridas), así que se descartó. Ahora un audio de más de 29 s se transcribe en pedazos cortados en el tramo más silencioso de sus últimos 10 s, cada uno con todo el contexto; los pedazos sin voz se saltean. Además, la lista de palabras de fábrica suma términos de VFX y de desarrollo (compo, DMP, matte painting, comitear, pushear…); quien tenía la lista vieja sin tocar recibe la nueva. Probado con 11 grabaciones reales de Lega: todas correctas.
+
+[ Dictation - Audio largo en pedazos de 29 s y palabras de VFX y desarrollo ]
+
 Dictation: aun de a un carácter, el Bloc de notas de Windows 11 cambiaba la primera letra de una palabra por la siguiente («que» → «uue»): tras un espacio revisa la ortografía, se atrasa y toma el carácter de VK_PACKET al procesar la tecla, así que ninguna pausa lo garantiza. Lega eligió el «pegado sin historial» de sus reglas: se guarda lo que hay en el portapapeles (todos los formatos copiables), se pone el texto con render diferido y las marcas que lo dejan fuera del historial de Win+V, de la nube y de los monitores, se manda Ctrl+V y, cuando la ventana ya lo pidió (y al menos 1 s después), se devuelve lo de antes, también sin historial y solo si nadie copió otra cosa mientras tanto. Si el portapapeles está ocupado se reintenta sin trabar la interfaz.
 
 [ Dictation - Pegado sin historial: el texto llega entero aunque la ventana se atrase ]

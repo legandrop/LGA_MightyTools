@@ -7,6 +7,9 @@
 #include <QStringList>
 #include <QVector>
 
+#include <utility>
+#include <vector>
+
 // Protocolo entre la app (DictationEngine) y el proceso del motor (--dictation-worker), por el stdin y
 // el stdout del proceso. Binario y con largo: "DCT1" + u32 largo del cuerpo + u8 tipo + cuerpo (todo
 // little endian). Los textos van SIEMPRE en UTF-8 valido (un "¿" en otra pagina de codigos hace fallar
@@ -59,6 +62,16 @@ struct Voice
     bool enough() const { return frames >= kMinVoiceFrames; }
 };
 Voice measureVoice(const float *pcm, size_t count);
+// Whisper trabaja en ventanas de 30 s y el vocabulario y la frase de contexto solo entran en la primera:
+// pasados los 30 s, "Nuke Studio" salia "nook studio". Ponerlos en todas (arrastrando el texto anterior)
+// hacia inventar frases al final ("Huevo Huevo Huevo..."). Por eso un audio largo se transcribe en pedazos
+// de hasta kMaxPieceSamples, cortados en el tramo de 30 ms mas silencioso de los ultimos kSplitSearchSamples
+// de cada pedazo, y cada pedazo lleva todo el contexto.
+constexpr size_t kMaxPieceSamples = size_t(kSampleRate) * 29;
+constexpr size_t kSplitSearchSamples = size_t(kSampleRate) * 10;
+// Los pedazos [desde, hasta) en que se transcribe un audio de `count` muestras; uno solo si entra en una
+// ventana.
+std::vector<std::pair<size_t, size_t>> pieces(const float *pcm, size_t count);
 // El tramo de 30 ms mas fuerte de `pcm`, en dBFS (-120 si no hay audio o es silencio digital).
 inline float loudestFrameDb(const float *pcm, size_t count) { return measureVoice(pcm, count).loudestDb; }
 // Error(sesion 0) con este prefijo: los archivos del motor no son los que se verificaron al bajarlo (sigue

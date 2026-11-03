@@ -136,7 +136,8 @@ class Engine
 public:
     bool load(const QString &engineDir, const QString &modelPath, QString *error);
     // live: pasada en vivo, sin los reintentos de Whisper a otra temperatura (con audio que todavia no
-    // dice nada multiplicaban el tiempo de la pasada); la final los conserva.
+    // dice nada multiplicaban el tiempo de la pasada); la final los conserva. Mas de 29 s van en pedazos
+    // (DictationProtocol::pieces), cada uno con el vocabulario y la frase.
     Pass run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool live = false);
     void close();
     QString device() const { return m_device; }
@@ -155,6 +156,7 @@ private:
     QString status(int code) const { return QString::fromUtf8(m_statusString(code)); }
     QString readDevice() const;
     void dropSilentChunks(Pass *pass) const;
+    Pass runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool live);
 
     decltype(&transcribe_status_string) m_statusString = nullptr;
     decltype(&transcribe_version) m_version = nullptr;
@@ -309,11 +311,48 @@ QString Engine::readDevice() const
 
 Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool live)
 {
-    Pass pass;
     if (pcm.empty()) {
+        Pass pass;
         pass.ok = true; // nada que transcribir (End sin audio)
         return pass;
     }
+    const auto list = DictationProtocol::pieces(pcm.data(), pcm.size());
+    if (list.size() == 1) {
+        return runPiece(pcm.data(), pcm.size(), params, abortFlag, live);
+    }
+    Pass total;
+    QStringList texts;
+    for (const auto &piece : list) {
+        // Un pedazo sin voz (una pausa larga) no se transcribe: sobre silencio Whisper inventa frases.
+        const DictationProtocol::Voice voice = DictationProtocol::measureVoice(pcm.data() + piece.first, piece.second - piece.first);
+        if (!voice.enough()) {
+            continue;
+        }
+        const Pass pass = runPiece(pcm.data() + piece.first, piece.second - piece.first, params, abortFlag, live);
+        total.ms += pass.ms;
+        if (!pass.ok) {
+            total.aborted = pass.aborted;
+            total.backendError = pass.backendError;
+            total.error = pass.error;
+            return total;
+        }
+        total.noSpeech = qMax(total.noSpeech, pass.noSpeech);
+        total.dropped += pass.dropped;
+        // Un pedazo corto que solo repite el contexto no se nota en el texto unido: se filtra aca, por pedazo.
+        const bool little = voice.frames < DictationProtocol::kShortVoiceFrames;
+        if (DictationText::finalEchoesContext(pass.text, params.vocabulary, params.prompt, little ? 4 : 8)) {
+            continue;
+        }
+        if (!pass.text.isEmpty()) texts << pass.text;
+    }
+    total.ok = true;
+    total.text = texts.join(QLatin1Char(' '));
+    return total;
+}
+
+Pass Engine::runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool live)
+{
+    Pass pass;
     // El motor copia los textos antes de volver: alcanza con que vivan durante la llamada.
     const QByteArray language = params.language.trimmed().toUtf8();
     const QByteArray prompt = params.prompt.trimmed().toUtf8();
@@ -346,7 +385,7 @@ Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomi
 
     QElapsedTimer timer;
     timer.start();
-    const transcribe_status result = m_run(m_session, pcm.data(), int(pcm.size()), &run);
+    const transcribe_status result = m_run(m_session, pcm, int(count), &run);
     pass.ms = quint32(timer.elapsed());
     if (result == TRANSCRIBE_ERR_ABORTED) {
         pass.aborted = true;

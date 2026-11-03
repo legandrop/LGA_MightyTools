@@ -28,7 +28,14 @@ constexpr int kTickMs = 100;
 
 const QString kDefaultShortcut = QStringLiteral("Meta+H");
 const QString kDefaultLanguage = QStringLiteral("es");
-const QString kDefaultWords = QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto");
+// Palabras de VFX y de desarrollo que Whisper no conoce o escribe en inglés ("Nook Studio", "pujear").
+// Probadas con grabaciones reales: con "pullear" en la lista, "pushear" salía "pullear".
+const QString kDefaultWords = QStringLiteral(
+    "Nuke, NukeX, Nuke Studio, Hiero, comp, compo, roto, DMP, matte painting, keying, tracking, plate, render, "
+    "shot, After Effects, Photoshop, DaVinci Resolve, Houdini, Blender, Maya, Mighty Tools, comitear, pushear, "
+    "mergear, branch, repo, release, deploy, bug, GitHub, Python, Qt");
+// La lista de antes: quien la tiene guardada sin cambios recibe la nueva.
+const QString kOldDefaultWords = QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto");
 constexpr int kDefaultUnload = 10;
 
 // Un micrófono: la cápsula, el soporte en U y el pie. Mismo trazo que los vecinos (1,4 sobre 16).
@@ -465,7 +472,13 @@ void DictationModule::setMicrophone(const QString &id)
 
 QString DictationModule::customWords() const
 {
-    return context().value(QStringLiteral("customWords"), kDefaultWords).toString();
+    const QString words = context().value(QStringLiteral("customWords"), kDefaultWords).toString();
+    return words == kOldDefaultWords ? kDefaultWords : words;
+}
+
+QString DictationModule::defaultWords()
+{
+    return kDefaultWords;
 }
 
 void DictationModule::setCustomWords(const QString &words)

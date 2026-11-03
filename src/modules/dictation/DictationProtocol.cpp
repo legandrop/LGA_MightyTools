@@ -94,6 +94,34 @@ Voice measureVoice(const float *pcm, size_t count)
     return voice;
 }
 
+std::vector<std::pair<size_t, size_t>> pieces(const float *pcm, size_t count)
+{
+    std::vector<std::pair<size_t, size_t>> list;
+    size_t from = 0;
+    while (count - from > kMaxPieceSamples) {
+        // El corte va al principio del tramo mas silencioso entre el limite menos la busqueda y el limite.
+        const size_t limit = from + kMaxPieceSamples;
+        size_t cut = limit;
+        double quietest = -1.0;
+        for (size_t start = limit - kSplitSearchSamples; start + kFrameSamples <= limit; start += kFrameSamples) {
+            double sum = 0.0;
+            for (size_t i = start; i < start + size_t(kFrameSamples); ++i) {
+                sum += double(pcm[i]) * double(pcm[i]);
+            }
+            if (quietest < 0.0 || sum < quietest) {
+                quietest = sum;
+                cut = start;
+            }
+        }
+        list.push_back({from, cut});
+        from = cut;
+    }
+    if (count > from) {
+        list.push_back({from, count});
+    }
+    return list;
+}
+
 } // namespace DictationProtocol
 
 namespace DictationProtocol {
