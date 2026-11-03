@@ -53,7 +53,7 @@ public:
     void systemPassThrough(const Shortcut &shortcut);
 
 private:
-    void onActivated(int globalId);
+    void onActivated(int globalId, bool released = false);
 
     bool m_automated = false;
     OffModuleLookup m_offLookup;
@@ -90,7 +90,7 @@ public:
     // Soltar todo sin avisar al hub (el hub se esta cerrando).
     void detachFromHub() { m_hub = nullptr; }
     bool ownsGlobalId(int globalId) const;
-    void fire(int globalId);
+    void fire(int globalId, bool released = false);
 
 private:
     int globalId(int localId) const { return (m_index + 1) * kRangeSize + localId; }

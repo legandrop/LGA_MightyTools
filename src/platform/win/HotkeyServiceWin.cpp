@@ -25,6 +25,7 @@ constexpr int kIdOffset = 100;
 constexpr int kProbeId = 99;
 constexpr UINT kPriorityMessage = WM_APP + 0x143;
 constexpr UINT kCatchMessage = WM_APP + 0x144;
+constexpr UINT kReleaseMessage = WM_APP + 0x145;
 // Tecla virtual sin asignar (la misma de InputInjectorWin): apretarla antes de soltar Win o Alt evita el
 // menu Inicio y la barra de menu de la ventana.
 constexpr WORD kMaskKey = 0xE8;
@@ -53,6 +54,9 @@ UINT nativeKey(int key)
     if (key == Qt::Key_Right) return VK_RIGHT;
     if (key == Qt::Key_Up) return VK_UP;
     if (key == Qt::Key_Down) return VK_DOWN;
+    // Esc sin modificadores: solo la registra el dictado mientras graba, para cancelar. El grabador de atajos
+    // no la acepta (Shortcut::isSupportedKey) ni la atrapa (qtKey).
+    if (key == Qt::Key_Escape) return VK_ESCAPE;
     return 0;
 }
 
@@ -179,7 +183,11 @@ private:
                 return PostThreadMessageW(self->m_ownerThread, self->m_message,
                                           static_cast<WPARAM>(id + kIdOffset),
                                           static_cast<LPARAM>(generation)) != 0;
-            }, refresh ? &physicalModifiers : nullptr, &PriorityHookThread::sendMaskedRelease)) return 1;
+            }, refresh ? &physicalModifiers : nullptr, &PriorityHookThread::sendMaskedRelease,
+            [self](int id, quint64 generation) {
+                PostThreadMessageW(self->m_ownerThread, kReleaseMessage, static_cast<WPARAM>(id + kIdOffset),
+                                   static_cast<LPARAM>(generation));
+            })) return 1;
         return CallNextHookEx(nullptr, code, message, data);
     }
 
@@ -204,7 +212,8 @@ private:
     bool consumeKey(WPARAM message, const KBDLLHOOKSTRUCT &key,
                     const std::function<bool(int, quint64)> &deliver,
                     const QSet<DWORD> *physicalModifiers = nullptr,
-                    const std::function<bool(const KBDLLHOOKSTRUCT &)> &maskedRelease = {})
+                    const std::function<bool(const KBDLLHOOKSTRUCT &)> &maskedRelease = {},
+                    const std::function<void(int, quint64)> &released = {})
     {
         const bool down = message == WM_KEYDOWN || message == WM_SYSKEYDOWN;
         const bool up = message == WM_KEYUP || message == WM_SYSKEYUP;
@@ -239,7 +248,15 @@ private:
 
         QMutexLocker lock(&m_mutex);
         const quint64 keyToken = key.vkCode | (quint64(injected) << 32);
-        if (up && m_swallowed.remove(keyToken)) return true;
+        if (up) {
+            const auto swallowed = m_swallowed.constFind(keyToken);
+            if (swallowed == m_swallowed.cend()) return false;
+            // La liberacion de la tecla de un atajo que sigue registrado avisa al soltar (el grabador guarda -1).
+            const int id = swallowed.value();
+            m_swallowed.erase(swallowed);
+            if (released && id >= 0 && m_entries.contains(id)) released(id, m_entries.value(id).generation);
+            return true;
+        }
         if (!down) return false;
         if (m_swallowed.contains(keyToken)) return true;
 
@@ -255,7 +272,7 @@ private:
                 || !deliver(static_cast<int>(key.vkCode), modifiers)) {
                 return false;
             }
-            m_swallowed.insert(keyToken);
+            m_swallowed.insert(keyToken, -1);
             m_maskPending = (modifiers & (MOD_WIN | MOD_ALT)) != 0;
             return true;
         }
@@ -263,7 +280,7 @@ private:
             if (it->key != key.vkCode || it->modifiers != modifiers) continue;
             // Sin filtro o con filtro aceptado se come la combinacion; si no, sigue al proximo hook.
             if ((!m_filter || m_filter()) && deliver(it.key(), it->generation)) {
-                m_swallowed.insert(keyToken);
+                m_swallowed.insert(keyToken, it.key());
                 m_maskPending = (it->modifiers & (MOD_WIN | MOD_ALT)) != 0;
                 return true;
             }
@@ -279,7 +296,7 @@ private:
     QMutex m_mutex;
     QHash<int, Entry> m_entries;
     std::function<bool()> m_filter;
-    QSet<quint64> m_swallowed;
+    QHash<quint64, int> m_swallowed; ///< tecla interceptada (y su marca de inyeccion) -> id del atajo
     QSet<DWORD> m_modifiersDown;
     QSemaphore m_ready;
     bool m_installed = false;
@@ -481,6 +498,60 @@ void PriorityHookThread::selfTest(const std::function<void(bool, const QString &
     explorer.m_modifiersDown.remove(VK_LWIN); // la liberacion que nunca llego
     check(!win(VK_LWIN, false, LLKHF_EXTENDED) && !win(VK_LWIN, true, LLKHF_EXTENDED) && masked.size() == maskedBefore,
           QStringLiteral("una pulsacion nueva de Win descarta la tecla muda pendiente: Win sola abre el menu Inicio"));
+
+    // Al soltar (el modo «mantener» del dictado): la liberacion interceptada de la tecla del atajo avisa una
+    // vez, con el id y la generacion vigentes. Nada mas avisa.
+    PriorityHookThread holder(0);
+    holder.add(30, Shortcut::fromPortableString(QStringLiteral("Meta+H")), 7);
+    holder.add(31, Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+D")), 8);
+    Shortcut escape;
+    escape.key = Qt::Key_Escape;
+    holder.add(32, escape, 9);
+    QList<QPair<int, quint64>> releases;
+    int holdActivations = 0;
+    const auto hold = [&](PriorityHookThread &hook, DWORD vk, bool up, DWORD flags = 0, ULONG_PTR tag = 0) {
+        KBDLLHOOKSTRUCT event{};
+        event.vkCode = vk;
+        event.flags = flags | (up ? LLKHF_UP : 0);
+        event.dwExtraInfo = tag;
+        return hook.consumeKey(up ? WM_KEYUP : WM_KEYDOWN, event, [&](int, quint64) { ++holdActivations; return true; },
+                               nullptr, mask, [&](int id, quint64 generation) { releases << qMakePair(id, generation); });
+    };
+    const auto key = [&](DWORD vk, bool up, DWORD flags = 0, ULONG_PTR tag = 0) { return hold(holder, vk, up, flags, tag); };
+    using Releases = QList<QPair<int, quint64>>;
+    check(!key(VK_LWIN, false, LLKHF_EXTENDED) && key('H', false) && key('H', false) && key('H', false)
+              && releases.isEmpty() && holdActivations == 1,
+          QStringLiteral("al soltar: mantener Win+H activa una vez; la repeticion de la H no avisa nada"));
+    check(key('H', true) && releases == Releases{{30, 7}} && key(VK_LWIN, true, LLKHF_EXTENDED),
+          QStringLiteral("al soltar: soltar la H avisa una vez, con el id y la generacion del atajo"));
+    check(!key('H', false) && !key('H', true) && releases.size() == 1, QStringLiteral("al soltar: la H sola no avisa"));
+    key(VK_LWIN, false, LLKHF_EXTENDED);
+    key('H', false);
+    check(key(VK_LWIN, true, LLKHF_EXTENDED) && releases.size() == 1 && key('H', true) && releases.size() == 2,
+          QStringLiteral("al soltar: soltar Win antes que la H no avisa; avisa la H, que sigue interceptada"));
+    key(VK_LWIN, false, LLKHF_EXTENDED);
+    key('H', false);
+    check(!key('H', true, LLKHF_INJECTED, kMightyToolsInputTag) && releases.size() == 2 && key('H', true)
+              && releases.size() == 3,
+          QStringLiteral("al soltar: una liberacion propia inyectada no avisa ni consume la fisica"));
+    key(VK_LWIN, true, LLKHF_EXTENDED);
+    key(VK_LCONTROL, false);
+    key(VK_LMENU, false);
+    key('D', false);
+    holder.remove(31);
+    check(key('D', true) && releases.size() == 3, QStringLiteral("al soltar: un atajo retirado mientras se mantiene no avisa"));
+    key(VK_LMENU, true);
+    key(VK_LCONTROL, true);
+    check(key(VK_ESCAPE, false) && key(VK_ESCAPE, true) && releases.last() == qMakePair(32, quint64(9)),
+          QStringLiteral("Esc sin modificadores (cancelar el dictado): se intercepta entera, la app del frente no la recibe"));
+    key(VK_LSHIFT, false);
+    check(!key(VK_ESCAPE, false) && !key(VK_ESCAPE, true), QStringLiteral("Esc: Shift+Esc no es el atajo y pasa"));
+    key(VK_LSHIFT, true);
+    PriorityHookThread catcher(0, kCatchMessage, true);
+    const int releasesBefore = releases.size();
+    check(!hold(catcher, VK_LCONTROL, false) && hold(catcher, 'K', false) && hold(catcher, 'K', true)
+              && !hold(catcher, VK_LCONTROL, true) && releases.size() == releasesBefore,
+          QStringLiteral("al soltar: el grabador atrapa y se come la liberacion, sin avisar"));
 }
 
 void HotkeyPriorityTest::run(const std::function<void(bool, const QString &)> &check)
@@ -503,10 +574,12 @@ struct HotkeyService::Private : public QAbstractNativeEventFilter
             return false;
         }
         const MSG *msg = static_cast<const MSG *>(message);
-        if (msg->message == kPriorityMessage) {
+        if (msg->message == kPriorityMessage || msg->message == kReleaseMessage) {
             const int id = static_cast<int>(msg->wParam) - kIdOffset;
-            if (priorityGeneration.value(id) == static_cast<quint64>(msg->lParam)
-                && priorityGeneration.contains(id)) emit q->activated(id);
+            if (priorityGeneration.value(id) == static_cast<quint64>(msg->lParam) && priorityGeneration.contains(id)) {
+                if (msg->message == kPriorityMessage) emit q->activated(id);
+                else emit q->released(id);
+            }
             return true;
         }
         if (msg->message != WM_HOTKEY) {

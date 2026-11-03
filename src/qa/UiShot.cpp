@@ -9,6 +9,9 @@
 #include "app/TrayMenu.h"
 #include "core/I18n.h"
 #include "core/UiScale.h"
+#ifdef Q_OS_WIN
+#include "modules/dictation/DictationOverlay.h"
+#endif
 #include "modules/diskspace/DiskCard.h"
 #include "modules/diskspace/DiskReminderToast.h"
 #include "modules/diskspace/DiskSpaceModule.h"
@@ -195,9 +198,29 @@ QWidget *makeCanvas()
     return canvas;
 }
 
+// La ventanita del dictado (Windows): "dictation:overlay-<estado>". Va aparte de los estados de herramienta
+// porque es una ventana propia, no la pagina.
+QString dictationOverlayState(const QString &state)
+{
+#ifdef Q_OS_WIN
+    const QString prefix = QStringLiteral("dictation:");
+    if (state.startsWith(prefix) && state.mid(prefix.size()).startsWith(QLatin1String("overlay-"))) {
+        return state.mid(prefix.size());
+    }
+#else
+    Q_UNUSED(state);
+#endif
+    return QString();
+}
+
 QStringList allStates(const ModuleHost &host)
 {
     QStringList states = kHostStates;
+#ifdef Q_OS_WIN
+    for (const QString &overlay : DictationOverlay::captureStates()) {
+        states << QStringLiteral("dictation:%1").arg(overlay);
+    }
+#endif
     for (const ModuleDescriptor &d : host.descriptors()) {
         states << QStringLiteral("off:%1").arg(d.id);
         if (d.offNotice) {
@@ -310,7 +333,10 @@ int runUiShot(const QStringList &args)
     QString moduleState;
     QString offId;
     QString offNotice;
-    if (state.startsWith(QLatin1String("off:"))) {
+    const QString overlayState = dictationOverlayState(state);
+    if (!overlayState.isEmpty()) {
+        // se arma mas abajo, sobre el lienzo oscuro
+    } else if (state.startsWith(QLatin1String("off:"))) {
         const QStringList parts = state.split(QLatin1Char(':'));
         offId = parts.value(1);
         offNotice = parts.value(2);
@@ -450,6 +476,22 @@ int runUiShot(const QStringList &args)
         settle(*root);
         root->adjustSize();
         settle(*root);
+    } else if (!overlayState.isEmpty()) {
+#ifdef Q_OS_WIN
+        canvas.reset(makeCanvas());
+        auto *layout = new QVBoxLayout(canvas.data());
+        layout->setContentsMargins(20, 20, 20, 20);
+        DictationOverlay *overlay = DictationOverlay::createCaptureWidget(overlayState, canvas.data());
+        if (!overlay) {
+            fprintf(stderr, "ui-shot: the dictation overlay does not know the state '%s'\n", qPrintable(overlayState));
+            return 2;
+        }
+        layout->addWidget(overlay);
+        root = canvas.data();
+        settle(*root);
+        root->adjustSize();
+        settle(*root);
+#endif
     } else if (state == QLatin1String("update-dialog")) {
         canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"),
                                                  QStringLiteral(MIGHTYTOOLS_VERSION)));

@@ -26,7 +26,8 @@ ModuleHotkeysImpl *HotkeyHub::acquire(const QString &moduleId, const QString &mo
 {
     if (!m_automated && !m_service) {
         m_service = new HotkeyService(this);
-        connect(m_service, &HotkeyService::activated, this, &HotkeyHub::onActivated);
+        connect(m_service, &HotkeyService::activated, this, [this](int id) { onActivated(id); });
+        connect(m_service, &HotkeyService::released, this, [this](int id) { onActivated(id, true); });
         qInfo() << "[HotkeyHub] Servicio de atajos creado por" << moduleId;
     }
     auto *client = new ModuleHotkeysImpl(this, moduleId, moduleTitle, index);
@@ -115,11 +116,11 @@ void HotkeyHub::systemPassThrough(const Shortcut &shortcut)
     }
 }
 
-void HotkeyHub::onActivated(int globalId)
+void HotkeyHub::onActivated(int globalId, bool released)
 {
     for (ModuleHotkeysImpl *client : m_clients) {
         if (client->ownsGlobalId(globalId)) {
-            client->fire(globalId);
+            client->fire(globalId, released);
             return;
         }
     }
@@ -254,10 +255,15 @@ bool ModuleHotkeysImpl::ownsGlobalId(int id) const
     return id > (m_index + 1) * kRangeSize && id < (m_index + 2) * kRangeSize;
 }
 
-void ModuleHotkeysImpl::fire(int id)
+void ModuleHotkeysImpl::fire(int id, bool released)
 {
     const int localId = id - (m_index + 1) * kRangeSize;
-    if (m_registered.contains(localId)) {
+    if (!m_registered.contains(localId)) {
+        return;
+    }
+    if (released) {
+        emit this->released(localId);
+    } else {
         emit activated(localId);
     }
 }

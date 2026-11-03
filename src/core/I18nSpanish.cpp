@@ -1234,6 +1234,17 @@ const QHash<QString, QString> &spanishTable()
         E("The snapshot was not saved.", "El snapshot no se guardó."),
         E("Could not write the snapshot file.", "No se pudo escribir el archivo del snapshot."),
 
+        // ---------- Dictation: micrófono y ventanita
+        E("Listening…", "Escuchando…"),
+        E("Loading model…", "Cargando el modelo…"),
+        E("Transcribing…", "Transcribiendo…"),
+        E("No microphone found.", "No se encontró ningún micrófono."),
+        E("Turn on microphone access for desktop apps in Windows Settings.",
+          "Permitir el acceso al micrófono a las apps de escritorio en la Configuración de Windows."),
+        E("The microphone is in use by another app.", "Otra app está usando el micrófono."),
+        E("The microphone is not connected.", "El micrófono no está conectado."),
+        E("Could not open the microphone (%1).", "No se pudo abrir el micrófono (%1)."),
+
     };
     return table;
 }

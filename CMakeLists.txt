@@ -449,6 +449,27 @@ elseif(APPLE)
     )
 endif()
 
+if(WIN32)
+    # Dictation: captura, atajo, escritura y ventanita
+    list(APPEND SOURCES
+        src/modules/dictation/DictationOverlay.cpp
+        src/modules/dictation/DictationQa.cpp
+        src/modules/dictation/DictationTrigger.cpp
+        src/platform/AudioCaptureCommon.cpp
+        src/platform/win/AudioCaptureWin.cpp
+        src/platform/win/OverlayWindowWin.cpp
+        src/platform/win/TextTyperWin.cpp
+    )
+    list(APPEND HEADERS
+        src/modules/dictation/DictationOverlay.h
+        src/modules/dictation/DictationQa.h
+        src/modules/dictation/DictationTrigger.h
+        src/platform/AudioCapture.h
+        src/platform/OverlayWindow.h
+        src/platform/TextTyper.h
+    )
+endif()
+
 qt_add_executable(${PROJECT_NAME}
     ${SOURCES}
     ${HEADERS}

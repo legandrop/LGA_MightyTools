@@ -22,6 +22,7 @@
 #include "updates/UpdateSelfTest.h"
 
 #ifdef Q_OS_WIN
+#include "modules/dictation/DictationQa.h"
 #include "qa/RegistryHiveTest.h"
 #include "qa/HotkeyPriorityTest.h"
 #endif
@@ -954,6 +955,9 @@ int run()
 #ifdef Q_OS_WIN
     testOperations(check);
     HotkeyPriorityTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[atajos Windows] ") + what); });
+    // Dictation todavia no tiene descriptor: sus pruebas de captura, atajo y escritura van directo. Cuando la
+    // herramienta las enchufe en ModuleDescriptor::selfTest, esta linea se va.
+    DictationQa::selfTest([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[dictation] ") + what); });
 #endif
 
     UpdateSelfTest::run([&check](bool ok, const QString &what) { check(ok, QStringLiteral("[updates] ") + what); });

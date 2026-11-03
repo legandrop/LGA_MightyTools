@@ -64,6 +64,8 @@ public:
 
 signals:
     void activated(int localId);
+    // Se solto la tecla de un atajo activado (ver HotkeyService::released): solo los de prioridad, en Windows.
+    void released(int localId);
 };
 
 // Un aviso con un desplegable y un boton al lado (Windows; en mac sale el aviso simple). Elegir una
