@@ -375,8 +375,11 @@ int InstallerCleanup::runHelper(int argc, char *argv[])
             const QString path = check.file.path;
             // Lo ultimo antes de moverlo: ninguna instalacion empezo ni quedo a medias, y el archivo es
             // el mismo que se verifico (un archivo comun, no un enlace, con la misma identidad).
-            if (InstallerPackages::installBusy(survey.installerDir)) {
+            const InstallerPackages::BusyState busy = InstallerPackages::installState(survey.installerDir);
+            if (busy.running) {
                 result.result = InstallerOrphans::Result::Busy;
+            } else if (busy.unfinished) {
+                result.result = InstallerOrphans::Result::Unfinished;
             } else if (FileSystemOps::kind(path) != FileSystemOps::Kind::File || !(FileSystemOps::identity(path) == check.file.id)) {
                 result.result = InstallerOrphans::Result::NotAllowed;
             } else {

@@ -19,6 +19,7 @@ const ResultName kResultNames[] = {
     {InstallerOrphans::Result::Trashed, "trashed"},       {InstallerOrphans::Result::Claimed, "claimed"},
     {InstallerOrphans::Result::Installed, "installed"},   {InstallerOrphans::Result::Unverifiable, "unverifiable"},
     {InstallerOrphans::Result::TooNew, "too-new"},        {InstallerOrphans::Result::Busy, "busy"},
+    {InstallerOrphans::Result::Unfinished, "unfinished"},
     {InstallerOrphans::Result::Incomplete, "incomplete"}, {InstallerOrphans::Result::NotAllowed, "not-allowed"},
     {InstallerOrphans::Result::Missing, "missing"},       {InstallerOrphans::Result::TrashFailed, "trash-failed"},
 };
@@ -68,7 +69,8 @@ Status status(const Survey &survey)
         return Status::Unavailable;
     }
     if (survey.busy) {
-        return Status::Busy;
+        // Corriendo (o sin saber) pesa mas que sin terminar: la espera es otra.
+        return survey.busyRunning || !survey.busyUnfinished ? Status::Busy : Status::Unfinished;
     }
     // Una enumeracion que fallo, o UserData sin leer: lo reclamado esta incompleto. Nada en uso con una
     // carpeta llena es mas probable una lectura rota que una maquina sin ningun programa de Windows
@@ -102,6 +104,17 @@ Reason packageReason(const FileFacts &file, const Survey &survey)
         }
     }
     if (own.isEmpty() || (!package.patch && package.productCode.trimmed().isEmpty())) {
+        return Reason::Unverifiable;
+    }
+    // Un parche sin el UpgradeCode de sus destinos: no se puede saber si su programa esta instalado en
+    // otra version.
+    if (package.patch && package.upgradeCodes.isEmpty()) {
+        return Reason::Unverifiable;
+    }
+    // Con la consulta de todos los usuarios, MsiEnumRelatedProducts sigue sin ver las instalaciones por
+    // usuario de los demas: si otro usuario tiene programas instalados, otra version del mismo programa
+    // puede ser suya. Sin poder descartarlo, no se ofrece. (Sin administrador ese caso ya es NeedsAdmin.)
+    if (!package.upgradeCodes.isEmpty() && hasForeignSids(survey.userDataSids, survey.currentSid)) {
         return Reason::Unverifiable;
     }
     return Reason::Ok;
@@ -164,6 +177,8 @@ QList<Check> reverify(const Survey &survey, const QStringList &names, qint64 now
             check.reason = Reason::NotAllowed;
         } else if (state == Status::Busy) {
             check.reason = Reason::Busy;
+        } else if (state == Status::Unfinished) {
+            check.reason = Reason::Unfinished;
         } else if (state != Status::Ok || !survey.allUsers) {
             // El paso elevado solo borra con la consulta de todos los usuarios.
             check.reason = Reason::Incomplete;
@@ -203,6 +218,8 @@ Result resultFor(Reason reason)
         return Result::TooNew;
     case Reason::Busy:
         return Result::Busy;
+    case Reason::Unfinished:
+        return Result::Unfinished;
     case Reason::Incomplete:
         break;
     }

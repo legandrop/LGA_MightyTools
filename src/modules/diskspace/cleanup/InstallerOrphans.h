@@ -31,7 +31,8 @@ enum class Status {
     Ok,          ///< la consulta esta completa: la lista de huerfanos vale
     NeedsAdmin,  ///< otro usuario tiene instalaciones propias: solo la consulta de todos (administrador) las ve
     Unverified,  ///< fallo una lectura (la API, UserData, los enlaces de origen) o no aparecio nada en uso
-    Busy,        ///< hay una instalacion corriendo o a medio terminar
+    Busy,        ///< hay una instalacion corriendo (o no se pudo saber)
+    Unfinished,  ///< hay una instalacion suspendida o esperando un reinicio
     Unavailable, ///< no hay una carpeta de instaladores usable
 };
 
@@ -45,6 +46,7 @@ enum class Reason {
     Unverifiable, ///< no se pudo leer que producto es, o si sigue instalado: no se ofrece
     TooNew,       ///< cambio hace menos de 24 h
     Busy,         ///< hay una instalacion corriendo
+    Unfinished,   ///< hay una instalacion suspendida o esperando un reinicio
     Incomplete,   ///< no se pudo verificar todo lo reclamado
 };
 
@@ -83,7 +85,7 @@ struct Check
 // Lo pedido contra una consulta de TODOS los usuarios: sin ella, nada pasa (Incomplete).
 QList<Check> reverify(const Survey &survey, const QStringList &names, qint64 nowSecs);
 
-enum class Result { Trashed, Claimed, Installed, Unverifiable, TooNew, Busy, Incomplete, NotAllowed, Missing, TrashFailed };
+enum class Result { Trashed, Claimed, Installed, Unverifiable, TooNew, Busy, Unfinished, Incomplete, NotAllowed, Missing, TrashFailed };
 struct FileResult
 {
     QString name;

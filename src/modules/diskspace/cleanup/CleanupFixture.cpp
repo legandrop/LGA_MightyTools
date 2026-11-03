@@ -325,12 +325,13 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
         list.append(orphanedInstallers(now, InstallerOrphans::Status::NeedsAdmin));
         return list;
     }
-    if (state == QLatin1String("cleanup-installers-unverified")) {
+    if (state == QLatin1String("cleanup-installers-unverified") || state == QLatin1String("cleanup-installers-unfinished")) {
         list.append(category(QStringLiteral("rule:0"), Cleanup::Group::Yours, I18n::tr("Folders named %1").arg(QStringLiteral("build")),
                              I18n::tr("%1 folders named %2 in %3.").arg(2).arg(QStringLiteral("build"), portable),
                              {item(QStringLiteral("LGA_PipeSync_2"), portable + QStringLiteral("\\LGA_PipeSync_2\\build"), 5.46, 0, false, now),
                               item(QStringLiteral("LGA_FrameRev"), portable + QStringLiteral("\\LGA_FrameRev\\build"), 0.75, 0, false, now)}));
-        list.append(orphanedInstallers(now, InstallerOrphans::Status::Unverified));
+        list.append(orphanedInstallers(now, state.endsWith(QLatin1String("unfinished")) ? InstallerOrphans::Status::Unfinished
+                                                                                         : InstallerOrphans::Status::Unverified));
         return list;
     }
 
@@ -426,7 +427,7 @@ QStringList states()
     // Instaladores huerfanos (solo Windows): la lista, la consulta que pide administrador, el resultado de
     // una limpieza y el pedido de administrador cancelado.
     list << QStringLiteral("cleanup-installers") << QStringLiteral("cleanup-installers-admin") << QStringLiteral("cleanup-installers-unverified")
-         << QStringLiteral("cleanup-installers-result") << QStringLiteral("cleanup-installers-denied");
+         << QStringLiteral("cleanup-installers-unfinished") << QStringLiteral("cleanup-installers-result") << QStringLiteral("cleanup-installers-denied");
 #endif
     return list;
 }

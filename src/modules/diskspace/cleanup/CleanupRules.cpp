@@ -235,6 +235,10 @@ Cleanup::Category installerCategory(const InstallerOrphans::Verdict &verdict, co
         case InstallerOrphans::Status::Busy:
             category.caption = I18n::tr("An installation is running. Rescan when it finishes.");
             break;
+        case InstallerOrphans::Status::Unfinished:
+            // Suspendida o con archivos que se reemplazan al reiniciar: esperar no alcanza.
+            category.caption = I18n::tr("An installation is unfinished or waiting for a restart. Restart Windows and rescan.");
+            break;
         case InstallerOrphans::Status::NeedsAdmin:
             // Solo cuando el administrador lo resolveria: otro usuario tiene instalaciones propias.
             category.caption = I18n::tr("Checking which ones no installed program uses needs administrator permission.");

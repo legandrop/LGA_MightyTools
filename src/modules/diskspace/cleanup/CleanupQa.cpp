@@ -206,6 +206,8 @@ const char *statusName(InstallerOrphans::Status status)
         return "unverified";
     case InstallerOrphans::Status::Busy:
         return "busy";
+    case InstallerOrphans::Status::Unfinished:
+        return "unfinished";
     case InstallerOrphans::Status::Unavailable:
         break;
     }
@@ -349,7 +351,9 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
         f.package.patch = name.endsWith(QLatin1String(".msp"), Qt::CaseInsensitive);
         const QString code = QStringLiteral("{00000000-0000-0000-0000-%1}").arg(index, 12, 10, QLatin1Char('0'));
         if (f.package.patch) {
+            // Un parche trae el UpgradeCode de su destino; un .msi de prueba no tiene (algunos no tienen).
             f.package.targets = {code};
+            f.package.upgradeCodes = {QStringLiteral("{11111111-0000-0000-0000-%1}").arg(index, 12, 10, QLatin1Char('0'))};
         } else {
             f.package.productCode = code;
         }
@@ -444,6 +448,39 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
         check(classify(patch, withPatch, now) == Reason::Installed && classify(patch, survey, now) == Reason::Ok
                   && classify(noTargets, survey, now) == Reason::Unverifiable && classify(youngInstalled, survey, now) == Reason::Installed,
               QStringLiteral("instaladores: un parche de un producto instalado no se lista; sin destinos, tampoco; instalado gana a nuevo"));
+        // Un parche viejo de un programa instalado en otra version: la plataforma lo encuentra por el
+        // UpgradeCode del destino (installed); sin ese UpgradeCode, no se ofrece.
+        FileFacts oldPatch = file(QStringLiteral("old.msp"), 90, 34);
+        oldPatch.package.installed = {QStringLiteral("{22222222-0000-0000-0000-000000000001}")};
+        FileFacts noUpgrade = file(QStringLiteral("noup.msp"), 90, 35);
+        noUpgrade.package.upgradeCodes.clear();
+        check(classify(oldPatch, survey, now) == Reason::Installed && classify(noUpgrade, survey, now) == Reason::Unverifiable,
+              QStringLiteral("instaladores: un parche de otra version instalada no se lista; sin UpgradeCode de su destino, tampoco"));
+        // Con administrador y otro usuario con programas instalados, un paquete con UpgradeCode no se puede
+        // descartar (MsiEnumRelatedProducts no ve las instalaciones por usuario ajenas).
+        Survey others = survey;
+        others.allUsers = true;
+        others.userDataSids.append(QStringLiteral("S-1-5-21-9-9-9-1002"));
+        FileFacts withUpgrade = file(QStringLiteral("withup.msi"), 90, 36);
+        withUpgrade.package.upgradeCodes = {QStringLiteral("{33333333-0000-0000-0000-000000000001}")};
+        FileFacts withoutUpgrade = file(QStringLiteral("withoutup.msi"), 90, 37);
+        check(classify(withUpgrade, others, now) == Reason::Unverifiable && classify(withoutUpgrade, others, now) == Reason::Ok
+                  && classify(withUpgrade, survey, now) == Reason::Ok,
+              QStringLiteral("instaladores: con otros usuarios con programas, un paquete con UpgradeCode no se ofrece"));
+        // El XML de aplicabilidad de un parche.
+        const QString xml = QStringLiteral(
+            "<MsiPatch xmlns=\"http://www.microsoft.com/msi/patch_applicability.xsd\" SchemaVersion=\"1.0.0.0\">"
+            "<TargetProduct MinMsiVersion=\"200\"><TargetProductCode Validate=\"true\">{AAAA0000-0000-0000-0000-000000000001}</TargetProductCode>"
+            "<UpgradeCode Validate=\"true\">{BBBB0000-0000-0000-0000-000000000001}</UpgradeCode></TargetProduct>"
+            "<TargetProduct MinMsiVersion=\"200\"><TargetProductCode Validate=\"true\">{AAAA0000-0000-0000-0000-000000000002}</TargetProductCode>"
+            "<UpgradeCode Validate=\"false\">{BBBB0000-0000-0000-0000-000000000001}</UpgradeCode></TargetProduct></MsiPatch>");
+        QString noUpgradeXml = xml;
+        noUpgradeXml.replace(QStringLiteral("<UpgradeCode Validate=\"false\">{BBBB0000-0000-0000-0000-000000000001}</UpgradeCode>"), QString());
+        const InstallerPackages::PatchTargets parsed = InstallerPackages::parsePatchXml(xml);
+        check(parsed.complete && parsed.products.size() == 2 && parsed.upgradeCodes == QStringList({QStringLiteral("{BBBB0000-0000-0000-0000-000000000001}")})
+                  && !InstallerPackages::parsePatchXml(noUpgradeXml).complete && !InstallerPackages::parsePatchXml(QStringLiteral("<MsiPatch>")).complete
+                  && !InstallerPackages::parsePatchXml(QStringLiteral("<MsiPatch/>")).complete,
+              QStringLiteral("instaladores: del XML de un parche salen sus destinos y UpgradeCodes; un destino sin UpgradeCode lo deja incompleto"));
     }
 
     // Completa o nada.
@@ -479,6 +516,24 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
     check(statusWith([](Survey &s) { s.busy = true; }) == Status::Busy && statusWith([](Survey &s) { s.installerDir.clear(); }) == Status::Unavailable
               && statusWith([](Survey &s) { s.listed = false; }) == Status::Unavailable,
           QStringLiteral("instaladores: con una instalacion corriendo o sin la carpeta entera, nada"));
+    check(statusWith([](Survey &s) {
+              s.busy = true;
+              s.busyRunning = false;
+              s.busyUnfinished = true;
+          }) == Status::Unfinished
+              && statusWith([](Survey &s) {
+                     s.busy = true;
+                     s.busyRunning = true;
+                     s.busyUnfinished = true;
+                 }) == Status::Busy,
+          QStringLiteral("instaladores: una instalacion sin terminar o esperando un reinicio tiene su propio estado (corriendo pesa mas)"));
+    // Un REG_MULTI_SZ de renombres pendientes: un borrado (destino vacio) primero no corta la lectura.
+    const QString pending = QStringLiteral("\\??\\C:\\Temp\\a.tmp") + QChar(0) + QChar(0) + QStringLiteral("\\??\\C:\\Windows\\Installer\\x.msi")
+                            + QChar(0) + QStringLiteral("!\\??\\C:\\Windows\\Installer\\y.msi") + QChar(0) + QChar(0);
+    const QStringList entries = InstallerPackages::splitMultiString(pending);
+    check(entries.size() == 3 && entries.at(1) == QStringLiteral("\\??\\C:\\Windows\\Installer\\x.msi")
+              && InstallerPackages::renameTouches(entries.at(1), dir) && !InstallerPackages::renameTouches(entries.at(0), dir),
+          QStringLiteral("instaladores: los renombres pendientes se leen enteros aunque el primero sea un borrado"));
     using InstallerPackages::renameTouches;
     check(renameTouches(QStringLiteral("\\??\\C:\\WINDOWS\\Installer\\a199bd5.msi"), dir) && renameTouches(QStringLiteral("!\\??\\c:\\windows\\installer\\x.tmp"), dir)
               && renameTouches(QStringLiteral("\\??\\C:\\Windows\\Installer"), dir) && !renameTouches(QStringLiteral("\\??\\C:\\Windows\\Installer2\\a.msi"), dir)
@@ -517,6 +572,11 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
     all.busy = true;
     checks = reverify(all, {QStringLiteral("orphan1.msi")}, now);
     check(checks.size() == 1 && checks.first().reason == Reason::Busy, QStringLiteral("instaladores: con una instalacion corriendo, el paso elevado no mueve nada"));
+    all.busyRunning = false;
+    all.busyUnfinished = true;
+    checks = reverify(all, {QStringLiteral("orphan1.msi")}, now);
+    check(checks.size() == 1 && checks.first().reason == Reason::Unfinished && resultFor(checks.first().reason) == Result::Unfinished,
+          QStringLiteral("instaladores: con una instalacion sin terminar, el paso elevado tampoco mueve nada (y lo dice aparte)"));
 
     // El pedido y las respuestas.
     QStringList decoded;
@@ -532,7 +592,7 @@ void selfTestInstallers(const std::function<void(bool ok, const QString &what)> 
     }
     check(!decodeRequest(encodeRequest(many), nullptr), QStringLiteral("instaladores: un pedido con mas de %1 archivos se rechaza").arg(kMaxRequest));
     bool roundTrip = true;
-    for (const Result result : {Result::Trashed, Result::Claimed, Result::Installed, Result::Unverifiable, Result::TooNew, Result::Busy, Result::Incomplete, Result::NotAllowed, Result::Missing,
+    for (const Result result : {Result::Trashed, Result::Claimed, Result::Installed, Result::Unverifiable, Result::TooNew, Result::Busy, Result::Unfinished, Result::Incomplete, Result::NotAllowed, Result::Missing,
                                 Result::TrashFailed}) {
         FileResult in;
         in.name = QStringLiteral("x.msi");

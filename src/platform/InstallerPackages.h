@@ -7,6 +7,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <QXmlStreamReader>
 
 // Windows Installer guarda en %WINDIR%\Installer una copia de cada .msi y .msp de lo instalado, para
 // reparar y desinstalar. Esto lee, SIN tocar nada, lo que hace falta para saber cuales de esas copias
@@ -41,9 +42,9 @@ struct PackageFacts
     bool read = false;         ///< se leyo lo que identifica al paquete (sin esto, no se ofrece)
     bool patch = false;        ///< .msp
     QString productCode;       ///< .msi: ProductCode de su tabla Property
-    QString upgradeCode;       ///< .msi: UpgradeCode (puede no tener)
+    QStringList upgradeCodes;  ///< .msi: su UpgradeCode (puede no tener); .msp: los de sus productos destino
     QString productName;       ///< .msi: ProductName y ProductVersion, para el motivo
-    QStringList targets;       ///< .msp: los productos a los que se aplica (PID_TEMPLATE)
+    QStringList targets;       ///< .msp: los productos a los que se aplica (PID_TEMPLATE y su XML)
     QStringList installed;     ///< productos instalados con ese ProductCode o UpgradeCode, o destino del parche
     QString installedName;     ///< nombre y version del primero ("Topaz Video 1.7.1")
     bool lookupFailed = false; ///< una consulta de lo instalado fallo
@@ -79,6 +80,63 @@ inline QString pathKey(const QString &path)
         text.chop(1);
     }
     return text.toCaseFolded();
+}
+
+// Las cadenas de un REG_MULTI_SZ leido entero (con sus '\0' adentro). Un renombre pendiente que es un
+// borrado tiene el destino vacio: las cadenas vacias se saltean, sin cortar ahi. Pura.
+inline QStringList splitMultiString(const QString &raw)
+{
+    QStringList lines;
+    for (const QString &line : raw.split(QChar(0))) {
+        if (!line.isEmpty()) {
+            lines.append(line);
+        }
+    }
+    return lines;
+}
+
+// Los productos destino de un parche, segun su XML de aplicabilidad (MsiExtractPatchXMLData). `complete`:
+// el XML se entendio, tiene algun destino y cada destino trae su UpgradeCode. Pura.
+struct PatchTargets
+{
+    QStringList products;
+    QStringList upgradeCodes;
+    bool complete = false;
+};
+inline PatchTargets parsePatchXml(const QString &xml)
+{
+    PatchTargets result;
+    QXmlStreamReader reader(xml);
+    int targets = 0;
+    bool missing = false;
+    bool inTarget = false;
+    QString upgrade;
+    while (!reader.atEnd()) {
+        reader.readNext();
+        if (reader.isStartElement()) {
+            if (reader.name() == QLatin1String("TargetProduct")) {
+                inTarget = true;
+                upgrade.clear();
+                ++targets;
+            } else if (inTarget && reader.name() == QLatin1String("TargetProductCode")) {
+                const QString code = reader.readElementText().trimmed();
+                if (!code.isEmpty() && !result.products.contains(code, Qt::CaseInsensitive)) {
+                    result.products.append(code);
+                }
+            } else if (inTarget && reader.name() == QLatin1String("UpgradeCode")) {
+                upgrade = reader.readElementText().trimmed();
+            }
+        } else if (reader.isEndElement() && reader.name() == QLatin1String("TargetProduct")) {
+            inTarget = false;
+            if (upgrade.isEmpty()) {
+                missing = true;
+            } else if (!result.upgradeCodes.contains(upgrade, Qt::CaseInsensitive)) {
+                result.upgradeCodes.append(upgrade);
+            }
+        }
+    }
+    result.complete = !reader.hasError() && targets > 0 && !missing;
+    return result;
 }
 
 // Una entrada de PendingFileRenameOperations ("\??\C:\...", a veces con "!" adelante) cae dentro de
@@ -119,6 +177,8 @@ struct Survey
     bool listed = false;      ///< la carpeta se listo entera
     QList<FileFacts> files;   ///< solo los .msi y .msp de primer nivel (lo demas no se mira)
     bool busy = true;         ///< hay una instalacion corriendo o a medio terminar, o no se pudo saber
+    bool busyRunning = true;  ///< corriendo (el mutex), o no se pudo saber
+    bool busyUnfinished = false; ///< suspendida (InProgress) o esperando un reinicio (renombres pendientes)
     QString busyReason;       ///< cual de las senales, para el log
     bool allUsers = false;    ///< la API se consulto para todos los usuarios (pide administrador)
     bool enumerated = false;  ///< todas las enumeraciones terminaron en ERROR_NO_MORE_ITEMS
@@ -142,10 +202,17 @@ enum class Scope {
 // Lee la carpeta, la API (en el alcance pedido), UserData, los enlaces de origen, el producto de cada
 // paquete sin reclamar y si hay una instalacion en curso. Solo lectura.
 Survey survey(Scope scope);
-// Hay una instalacion de Windows Installer corriendo (el mutex Global\_MSIExecute), suspendida
-// (Installer\InProgress) o un reemplazo de archivos pendiente dentro de `installerDir`
-// (PendingFileRenameOperations). Ante la duda, true. `reason`: cual, para el log.
-bool installBusy(const QString &installerDir, QString *reason = nullptr);
+// Si hay una instalacion de Windows Installer corriendo (el mutex Global\_MSIExecute) o sin terminar:
+// suspendida (Installer\InProgress) o con un reemplazo de archivos pendiente dentro de `installerDir`
+// (PendingFileRenameOperations, espera un reinicio). Ante la duda, ocupado.
+struct BusyState
+{
+    bool running = false;    ///< corriendo, o no se pudo saber
+    bool unfinished = false; ///< suspendida o esperando un reinicio, o no se pudo saber
+    QString reason;          ///< cual de las senales, para el log
+    bool any() const { return running || unfinished; }
+};
+BusyState installState(const QString &installerDir);
 // Autor y asunto del resumen del paquete ("Boris FX, Inc.", el nombre del producto). Vacios si no se
 // pudo leer.
 void summary(const QString &path, QString *author, QString *subject);

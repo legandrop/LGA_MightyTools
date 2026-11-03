@@ -2199,6 +2199,9 @@ void CleanupWindow::onJobFinished()
             case InstallerOrphans::Result::Busy:
                 why = I18n::tr("An installation is running");
                 break;
+            case InstallerOrphans::Result::Unfinished:
+                why = I18n::tr("An installation is unfinished or waiting for a restart");
+                break;
             case InstallerOrphans::Result::Incomplete:
                 why = I18n::tr("Could not check every installed program");
                 break;

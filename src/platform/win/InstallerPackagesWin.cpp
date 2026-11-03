@@ -299,13 +299,9 @@ bool readMultiString(HKEY key, const wchar_t *subKey, const wchar_t *value, QStr
         if (status != ERROR_SUCCESS) {
             return false;
         }
-        const wchar_t *cursor = buffer.c_str();
-        const wchar_t *end = buffer.c_str() + qMin<size_t>(bytes / sizeof(wchar_t), buffer.size());
-        while (cursor < end && *cursor) {
-            const std::wstring line(cursor);
-            lines->append(QString::fromStdWString(line));
-            cursor += line.size() + 1;
-        }
+        // Todo el valor, con sus '\0': un borrado pendiente deja una cadena vacia en el medio.
+        const size_t chars = qMin<size_t>(bytes / sizeof(wchar_t), buffer.size());
+        *lines = InstallerPackages::splitMultiString(QString::fromWCharArray(buffer.data(), int(chars)));
         return true;
     }
     return false;
@@ -554,7 +550,10 @@ bool readProperties(const QString &path, PackageFacts &package)
                 if (property == QLatin1String("ProductCode")) {
                     package.productCode = value.trimmed();
                 } else if (property == QLatin1String("UpgradeCode")) {
-                    package.upgradeCode = value.trimmed();
+                    package.upgradeCodes.clear();
+                    if (!value.trimmed().isEmpty()) {
+                        package.upgradeCodes.append(value.trimmed());
+                    }
                 } else if (property == QLatin1String("ProductName")) {
                     name = value.simplified();
                 } else if (property == QLatin1String("ProductVersion")) {
@@ -594,6 +593,22 @@ void readPackage(FileFacts &file)
             }
         }
         package.read = ok && !package.targets.isEmpty();
+        // El UpgradeCode de cada destino esta en el XML de aplicabilidad del parche: con el, un parche
+        // viejo de un programa instalado en otra version tambien se esconde. Sin el, no se ofrece.
+        QString xml;
+        const UINT extracted = readText(
+            [&](wchar_t *buffer, DWORD *length) { return MsiExtractPatchXMLDataW(native.c_str(), 0, buffer, length); }, &xml);
+        const InstallerPackages::PatchTargets parsed = extracted == ERROR_SUCCESS ? InstallerPackages::parsePatchXml(xml)
+                                                                                   : InstallerPackages::PatchTargets();
+        if (!parsed.complete) {
+            package.lookupFailed = true;
+        }
+        package.upgradeCodes = parsed.upgradeCodes;
+        for (const QString &product : parsed.products) {
+            if (!package.targets.contains(product, Qt::CaseInsensitive)) {
+                package.targets.append(product);
+            }
+        }
         candidates = package.targets;
     } else {
         package.read = readProperties(file.path, package);
@@ -601,23 +616,23 @@ void readPackage(FileFacts &file)
             return;
         }
         candidates.append(package.productCode);
-        // Cualquier version del mismo programa (mismo UpgradeCode) instalada tambien lo esconde.
-        if (!package.upgradeCode.isEmpty()) {
-            const std::wstring upgrade = package.upgradeCode.toStdWString();
-            for (DWORD index = 0;; ++index) {
-                wchar_t related[39] = {};
-                const UINT result = MsiEnumRelatedProductsW(upgrade.c_str(), 0, index, related);
-                if (result == ERROR_NO_MORE_ITEMS) {
-                    break;
-                }
-                if (result != ERROR_SUCCESS) {
-                    package.lookupFailed = true;
-                    break;
-                }
-                const QString code = QString::fromWCharArray(related);
-                if (!package.installed.contains(code, Qt::CaseInsensitive)) {
-                    package.installed.append(code);
-                }
+    }
+    // Cualquier version del mismo programa (mismo UpgradeCode) instalada tambien lo esconde.
+    for (const QString &upgradeCode : std::as_const(package.upgradeCodes)) {
+        const std::wstring upgrade = upgradeCode.toStdWString();
+        for (DWORD index = 0;; ++index) {
+            wchar_t related[39] = {};
+            const UINT result = MsiEnumRelatedProductsW(upgrade.c_str(), 0, index, related);
+            if (result == ERROR_NO_MORE_ITEMS) {
+                break;
+            }
+            if (result != ERROR_SUCCESS) {
+                package.lookupFailed = true;
+                break;
+            }
+            const QString code = QString::fromWCharArray(related);
+            if (!package.installed.contains(code, Qt::CaseInsensitive)) {
+                package.installed.append(code);
             }
         }
     }
@@ -694,8 +709,9 @@ QList<FileFacts> listPackages(const QString &installerDir, bool *listed)
 
 namespace InstallerPackages {
 
-bool installBusy(const QString &installerDir, QString *reason)
+BusyState installState(const QString &installerDir)
 {
+    BusyState state;
     QStringList why;
     // Windows Installer crea este mutex mientras ejecuta una instalacion. Si existe (aunque no se pueda
     // abrir), hay una corriendo; con cualquier otra respuesta que "no existe", se asume que si.
@@ -703,8 +719,10 @@ bool installBusy(const QString &installerDir, QString *reason)
     if (mutex) {
         CloseHandle(mutex);
         why << QStringLiteral("mutex");
+        state.running = true;
     } else if (GetLastError() != ERROR_FILE_NOT_FOUND) {
         why << QStringLiteral("mutex?");
+        state.running = true;
     }
     // Una instalacion suspendida (se corto a mitad, espera reanudarse o deshacerse).
     {
@@ -712,8 +730,10 @@ bool installBusy(const QString &installerDir, QString *reason)
         const LSTATUS status = inProgress.open(HKEY_LOCAL_MACHINE, kInProgressKey);
         if (status == ERROR_SUCCESS) {
             why << QStringLiteral("InProgress");
+            state.unfinished = true;
         } else if (status != ERROR_FILE_NOT_FOUND) {
             why << QStringLiteral("InProgress?");
+            state.unfinished = true;
         }
     }
     // Un reemplazo de archivos que espera el reinicio y toca la carpeta de instaladores.
@@ -721,19 +741,19 @@ bool installBusy(const QString &installerDir, QString *reason)
         QStringList entries;
         if (!readMultiString(HKEY_LOCAL_MACHINE, kSessionManagerKey, value, &entries)) {
             why << QStringLiteral("PendingFileRenameOperations?");
+            state.unfinished = true;
             continue;
         }
         for (const QString &entry : std::as_const(entries)) {
             if (renameTouches(entry, installerDir)) {
                 why << QStringLiteral("PendingFileRenameOperations");
+                state.unfinished = true;
                 break;
             }
         }
     }
-    if (reason) {
-        *reason = why.join(QLatin1Char(','));
-    }
-    return !why.isEmpty();
+    state.reason = why.join(QLatin1Char(','));
+    return state;
 }
 
 Survey survey(Scope scope)
@@ -742,7 +762,11 @@ Survey survey(Scope scope)
     result.allUsers = scope == Scope::AllUsers;
     result.currentSid = currentUserSid();
     result.installerDir = installerDirectory();
-    result.busy = installBusy(result.installerDir, &result.busyReason);
+    const BusyState busy = installState(result.installerDir);
+    result.busy = busy.any();
+    result.busyRunning = busy.running;
+    result.busyUnfinished = busy.unfinished;
+    result.busyReason = busy.reason;
     result.files = listPackages(result.installerDir, &result.listed);
 
     // La API: "s-1-1-0" son todos los usuarios (sin administrador falla); nulo, la maquina y el usuario
