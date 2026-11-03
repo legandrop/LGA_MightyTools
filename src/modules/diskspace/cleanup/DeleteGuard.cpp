@@ -106,17 +106,17 @@ DeleteGuard::Verdict DeleteGuard::check(const QString &path, Scope scope, bool t
         return Verdict::OutsideVolume;
     }
     // Una excepcion dentro de un arbol protegido: se vacia (Contents) o se borra algo de adentro, nunca
-    // la carpeta misma ni lo de arriba.
-    bool allowed = false;
+    // la carpeta misma ni lo de arriba. Vale solo frente a los arboles que CONTIENEN la excepcion.
+    QString exceptionFor;
     for (const QString &exception : allowedTrees) {
         if ((samePath(target, exception) && scope == Scope::Contents) || isInside(target, exception)) {
-            allowed = true;
+            exceptionFor = exception;
             break;
         }
     }
     for (const QString &tree : protectedTrees) {
         if (samePath(target, tree) || isInside(target, tree)) {
-            if (allowed && !samePath(target, tree)) {
+            if (!exceptionFor.isEmpty() && isInside(exceptionFor, tree)) {
                 continue;
             }
             return Verdict::ProtectedTree;

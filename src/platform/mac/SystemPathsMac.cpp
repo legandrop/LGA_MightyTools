@@ -112,6 +112,7 @@ CleanupBases cleanupBases()
 {
     CleanupBases bases;
     bases.profile = real(QDir::homePath());
+    bases.documents = real(home("Documents"));
     bases.library = real(home("Library"));
     bases.caches = real(home("Library/Caches"));
     bases.appSupport = real(home("Library/Application Support"));

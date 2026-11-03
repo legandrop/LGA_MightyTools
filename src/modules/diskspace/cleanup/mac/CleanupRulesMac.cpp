@@ -1,6 +1,7 @@
 #include "modules/diskspace/cleanup/CleanupRules.h"
 
 #include "core/I18n.h"
+#include "modules/diskspace/cleanup/AppCacheRules.h"
 #include "modules/diskspace/cleanup/DeleteGuard.h"
 
 #include <QDir>
@@ -215,17 +216,14 @@ QList<Cleanup::Category> systemCategories(const Context &context)
         media.id = QStringLiteral("media");
         media.group = Cleanup::Group::Safe;
         media.title = I18n::tr("Media caches");
-        media.caption = I18n::tr("Rebuilt when a project opens.");
+        media.caption = I18n::tr("Their programs rebuild them when they need them.");
         const QString common = join(b.appSupport, QStringLiteral("Adobe/Common"));
         addItem(media,
                 makeItem(QStringLiteral("Adobe Media Cache"), common,
                          {join(common, QStringLiteral("Media Cache Files")), join(common, QStringLiteral("Media Cache")),
                           join(common, QStringLiteral("Peak Files"))},
                          Cleanup::Action::Contents, context),
-                {QStringLiteral("com.adobe.premierepro"), QStringLiteral("com.adobe.aftereffects"), QStringLiteral("com.adobe.ame"),
-                 QStringLiteral("com.adobe.audition"), QStringLiteral("adobe premiere pro"), QStringLiteral("after effects"),
-                 QStringLiteral("adobe media encoder"), QStringLiteral("adobe audition")},
-                QStringLiteral("Adobe"));
+                AppCacheRules::adobeBlockers(), QStringLiteral("Adobe"));
         remember(media);
         categories.append(media);
     }

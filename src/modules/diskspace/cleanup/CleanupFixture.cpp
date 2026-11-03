@@ -161,6 +161,13 @@ Cleanup::Item inUse(Cleanup::Item it, const QString &app)
     return it;
 }
 
+// Un item de varias carpetas: se muestra lo que se borra, no la carpeta que las junta.
+Cleanup::Item shown(Cleanup::Item it, const QString &detail)
+{
+    it.detail = QDir::toNativeSeparators(detail);
+    return it;
+}
+
 Cleanup::Category category(const QString &id, Cleanup::Group group, const QString &title, const QString &caption,
                            const QList<Cleanup::Item> &items, bool single = false)
 {
@@ -213,12 +220,13 @@ QList<Cleanup::Category> appCategories(const QString &state, qint64 now)
             item(I18n::tr("After Effects disk cache"), at(aeCache), 6.85, 3, true, now),
             item(I18n::tr("DaVinci Resolve render cache"), at(resolve + QStringLiteral("/CacheClip")), 18.4, 5, true, now),
             item(I18n::tr("Ableton Live decoding cache"), at(ableton), 1.21, 40, true, now),
-            item(I18n::tr("REAPER peak files"), at(root + QStringLiteral("/ReaperPeaks")), 0.31, 12, true, now),
+            shown(item(I18n::tr("REAPER peak files"), at(root + QStringLiteral("/ReaperPeaks")), 0.31, 12, true, now), root + QStringLiteral("/ReaperPeaks/*/*.reapeaks")),
         };
 #ifndef Q_OS_MACOS
-        media.append(item(I18n::tr("Topaz Video thumbnails"), at(home + QStringLiteral("/Documents/Topaz Video Projects")), 0.02, 1, true, now));
+        media.append(shown(item(I18n::tr("Topaz Video thumbnails"), at(home + QStringLiteral("/Documents/Topaz Video Projects")), 0.02, 1, true, now),
+                           home + QStringLiteral("/Documents/Topaz Video Projects/*/thumbnails")));
 #endif
-        list.append(category(QStringLiteral("media"), Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Rebuilt when a project opens."), media));
+        list.append(category(QStringLiteral("media"), Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Their programs rebuild them when they need them."), media));
         QList<Cleanup::Item> nukeItems = {
             item(I18n::tr("Audio cache"), at(nuke + QStringLiteral("/audiocache")), 2.41, 0, true, now),
             item(I18n::tr("Viewer cache"), at(nuke + QStringLiteral("/ViewerCache")), 0.57, 0, true, now),
@@ -230,18 +238,18 @@ QList<Cleanup::Category> appCategories(const QString &state, qint64 now)
         nukeItems.append(item(I18n::tr("CUDA kernels"), at(prefs + QStringLiteral("/NVIDIA/NukeComputeCache")), 0.0001, 0, true, now));
 #endif
         list.append(category(QStringLiteral("nuke"), Cleanup::Group::Safe, I18n::tr("Nuke caches"),
-                             I18n::tr("Viewer, audio, thumbnail and paint caches. Nuke fills them again as you work."), nukeItems));
+                             I18n::tr("Viewer, audio, thumbnail, paint, read-block and CUDA caches. Nuke fills them again as you work."), nukeItems));
         list.append(category(QStringLiteral("rendercache"), Cleanup::Group::Safe, I18n::tr("Render caches"),
                              I18n::tr("Converted textures and compiled shaders. The renderer makes them again on the next render."),
                              {inUse(item(I18n::tr("Redshift cache"), at(redshift), 3.62, 0, true, now), QStringLiteral("Cinema 4D"))}));
         list.append(category(QStringLiteral("pstemp"), Cleanup::Group::Safe, I18n::tr("Photoshop scratch files"),
                              I18n::tr("Left at the root of a scratch disk when Photoshop closes unexpectedly."),
-                             {item(I18n::tr("Photoshop scratch files"), at(root + QStringLiteral("/")), 2.0, 9, true, now)}, true));
+                             {shown(item(I18n::tr("Photoshop scratch files"), at(root + QStringLiteral("/")), 2.0, 9, true, now), root + QStringLiteral("/Photoshop Temp*"))}, true));
     }
 
     list.append(category(QStringLiteral("nukework"), Cleanup::Group::Yours, I18n::tr("Nuke timeline cache and local copies"),
                          I18n::tr("Frames sent to the timeline cache and local copies of footage. Nuke makes them again, but it takes time."),
-                         {item(I18n::tr("Timeline cache"), at(nuke), 12.3, 0, false, now),
+                         {shown(item(I18n::tr("Timeline cache"), at(nuke), 12.3, 0, false, now), nuke + QStringLiteral("/timeline_cache.db + 00–ff")),
                           item(I18n::tr("Localized files"), at(nuke + QStringLiteral("/jitCache-LEGA-PC/LocalisedFiles")), 4.4, 6, false, now)}));
     QList<Cleanup::Item> previews = {
         item(I18n::tr("DaVinci Resolve optimized media"), at(resolve + QStringLiteral("/OptimizedMedia")), 31.2, 5, false, now),
@@ -251,15 +259,17 @@ QList<Cleanup::Category> appCategories(const QString &state, qint64 now)
     };
     QList<Cleanup::Item> downloads;
 #ifndef Q_OS_MACOS
-    previews.insert(3, item(I18n::tr("Topaz Video previews"), at(home + QStringLiteral("/Documents/Topaz Video Projects")), 1.1, 1, false, now));
+    previews.insert(3, shown(item(I18n::tr("Topaz Video previews"), at(home + QStringLiteral("/Documents/Topaz Video Projects")), 1.1, 1, false, now),
+                             home + QStringLiteral("/Documents/Topaz Video Projects/*/previews")));
     downloads.append(item(I18n::tr("Topaz Video models"), at(QStringLiteral("C:/ProgramData/Topaz Labs LLC/Topaz Video/models/models")), 22.75, 1, false, now));
-    downloads.append(item(I18n::tr("Unreal Engine derived data"), at(home + QStringLiteral("/AppData/Local/UnrealEngine/Common/DerivedDataCache")), 14.2, 20, false, now));
+    downloads.append(shown(item(I18n::tr("Unreal Engine derived data"), at(home + QStringLiteral("/AppData/Local/UnrealEngine/Common/DerivedDataCache")), 14.2, 20, false, now),
+                           home + QStringLiteral("/AppData/Local/UnrealEngine/Common/DerivedDataCache/0–9")));
 #endif
     downloads.append(item(I18n::tr("Ableton Live pack downloads"), at(packs), 2.3, 60, false, now));
     list.append(category(QStringLiteral("previews"), Cleanup::Group::Yours, I18n::tr("Previews, proxies and optimized media"),
                          I18n::tr("Made by video apps from your footage. They can be made again, but it takes render time."), previews));
     list.append(category(QStringLiteral("appdownloads"), Cleanup::Group::Yours, I18n::tr("Downloads and derived data"),
-                         I18n::tr("The app downloads or builds them again when it needs them, which can take a long time."), downloads));
+                         I18n::tr("Each program downloads or builds them again when it needs them, which can take a long time."), downloads));
     return list;
 }
 
@@ -438,7 +448,7 @@ QList<Cleanup::Category> categories(const QString &state, qint64 now)
                              I18n::tr("Downloads kept by pip and uv. Installing a package fetches it again."),
                              {item(QStringLiteral("uv cache"), QStringLiteral("C:\\DevTools\\cache"), 21.56, 1, true, now),
                               item(QStringLiteral("pip cache"), home + QStringLiteral("\\AppData\\Local\\pip\\cache"), 10.35, 7, true, now)}));
-        list.append(category(QStringLiteral("media"), Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Rebuilt when a project opens."),
+        list.append(category(QStringLiteral("media"), Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Their programs rebuild them when they need them."),
                              {item(QStringLiteral("Adobe Media Cache"), home + QStringLiteral("\\AppData\\Roaming\\Adobe\\Common"), 1.33, 1, true, now)}));
         list.append(category(QStringLiteral("dev"), Cleanup::Group::Safe, I18n::tr("Developer caches"),
                              I18n::tr("Package downloads. Fetched again by the next install or build."),

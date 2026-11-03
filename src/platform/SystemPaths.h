@@ -21,6 +21,7 @@ bool cleanupSupported();
 struct CleanupBases
 {
     QString profile;        ///< C:\Users\<usuario>
+    QString documents;      ///< Documentos del usuario (puede no estar dentro del perfil)
     QString localAppData;   ///< ...\AppData\Local
     QString roamingAppData; ///< ...\AppData\Roaming
     QString temp;           ///< la carpeta temporal del usuario

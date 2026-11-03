@@ -84,6 +84,7 @@ struct Offered
 {
     QStringList targets;            ///< todos, de las categorias de estas reglas
     QHash<QString, QStringList> by; ///< por id de categoria
+    QStringList shown;              ///< lo que se ve de cada item: su detalle o, si no tiene, su ruta
     bool yoursUnchecked = true;
     bool safeChecked = true;
 };
@@ -106,6 +107,7 @@ Offered offered(const QList<Cleanup::Category> &categories)
             if (category.group == Cleanup::Group::Safe && !item.checked && !item.blocked) {
                 o.safeChecked = false;
             }
+            o.shown.append(QDir::toNativeSeparators(item.detail.isEmpty() ? item.path : item.detail));
             for (const Cleanup::Target &target : item.targets) {
                 o.targets.append(target.path);
                 o.by[category.id].append(target.path);
@@ -215,11 +217,9 @@ void selfTestParsers(const Check &check)
 
     // Lo que ya se lleva la regla de temporales (una hija sin tocar en 7 dias) no se cuenta dos veces.
     {
-#ifdef Q_OS_WIN
-        const QString root = QStringLiteral("X:\\");
-#else
-        const QString root = QStringLiteral("/X");
-#endif
+        // Un arbol armado a mano sobre una carpeta que no existe (en la temporal, para no tocar otra unidad):
+        // dropInsideSwept mira las fechas de la hija en el disco y no las encuentra.
+        const QString root = QDir::toNativeSeparators(QDir(QDir::tempPath()).filePath(QStringLiteral("lga_mt_no_such_dir_5c1e")));
         const qint64 now = 2000000000;
         const qint64 old = now - 30 * 86400;
         ScanTree tree;
@@ -341,6 +341,13 @@ void selfTestAppCaches(const Check &check)
                          == DeleteGuard::Verdict::ProtectedTree
                   && guard.check(programData, DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::ProtectedTree,
               QStringLiteral("guarda: dentro de ProgramData solo se vacia la carpeta de modelos exceptuada; ella, lo de al lado y lo de arriba no"));
+        // Un arbol protegido que NO contiene la excepcion (esta dentro de ella) sigue protegido.
+        const QString locked = at(models, QStringLiteral("locked"));
+        guard.protectedTrees = {programData, locked};
+        check(guard.check(at(locked, QStringLiteral("x.bin")), DeleteGuard::Scope::Entire, false) == DeleteGuard::Verdict::ProtectedTree
+                  && guard.check(at(models, QStringLiteral("astra")), DeleteGuard::Scope::Entire, false) == DeleteGuard::Verdict::Ok
+                  && guard.check(models, DeleteGuard::Scope::Contents, false) == DeleteGuard::Verdict::ContainsProtected,
+              QStringLiteral("guarda: la excepcion vale solo frente a los arboles que la contienen; uno de adentro sigue protegido"));
     }
 
     // ---- El perfil de mentira.
@@ -399,9 +406,35 @@ void selfTestAppCaches(const Check &check)
     writeFile(at(nukeCache, QStringLiteral("tilecache/DiskSize")), QByteArray("1"));
     writeFile(at(nukeCache, QStringLiteral("jitCache-host/BlockCache/b.cch")));
     writeFile(at(nukeCache, QStringLiteral("jitCache-host/LocalisedFiles/plate.exr")));
+    // El timeline con su forma entera: las 256 carpetas 00..ff, una con un cuadro.
+    const auto makeBuckets = [&](const QString &dir) {
+        for (int i = 0; i < 256; ++i) {
+            QDir().mkpath(at(dir, QStringLiteral("%1").arg(i, 2, 16, QLatin1Char('0'))));
+        }
+    };
+    makeBuckets(nukeCache);
     writeFile(at(nukeCache, QStringLiteral("00/frame.bin")));
-    QDir().mkpath(at(nukeCache, QStringLiteral("0a")));
     writeFile(at(nukeCache, QStringLiteral("timeline_cache.db")));
+    // Carpetas de trabajo a las que apunta un TimelineDiskCachePath, con un timeline_cache.db: una con solo
+    // "01" y "10" (con subcarpetas y media), otra con las 256 pero una con subcarpeta, otra con las 256 pero
+    // una con un .exr. Ninguna carpeta 00..ff de ellas se ofrece.
+    const QString work1 = at(vol, QStringLiteral("Work1"));
+    const QString work2 = at(vol, QStringLiteral("Work2"));
+    const QString work3 = at(vol, QStringLiteral("Work3"));
+    writeFile(at(work1, QStringLiteral("01/plates/plate.0001.exr")));
+    writeFile(at(work1, QStringLiteral("10/render_v001.mov")));
+    writeFile(at(work1, QStringLiteral("timeline_cache.db")));
+    makeBuckets(work2);
+    writeFile(at(work2, QStringLiteral("05/frame.bin")));
+    writeFile(at(work2, QStringLiteral("3a/sub/x.bin")));
+    writeFile(at(work2, QStringLiteral("timeline_cache.db")));
+    makeBuckets(work3);
+    writeFile(at(work3, QStringLiteral("05/frame.bin")));
+    writeFile(at(work3, QStringLiteral("7f/shot.exr")));
+    writeFile(at(work3, QStringLiteral("timeline_cache.db")));
+    writeFile(at(dotNuke, QStringLiteral("preferences8.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work1\n").arg(slashVol)));
+    writeFile(at(dotNuke, QStringLiteral("preferences7.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work2\n").arg(slashVol)));
+    writeFile(at(dotNuke, QStringLiteral("preferences6.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work3\n").arg(slashVol)));
     writeFile(at(nukeCache, QStringLiteral("keep.txt")));
     writeFile(at(nukeCache, QStringLiteral("notes/n.txt")));
     writeFile(at(vol, QStringLiteral("NukeLocalize/x.exr")));
@@ -474,6 +507,15 @@ void selfTestAppCaches(const Check &check)
     writeFile(at(vol, QStringLiteral("AdobeMC2/Media Cache Files/c.pek")));
     writeFile(at(vol, QStringLiteral("AdobeMC2/other.txt")));
     writeFile(at(vol, QStringLiteral("AdobeEmpty/Media Cache Files/readme.txt")));
+    // Una carpeta del usuario llamada "Media Cache" con la cache adentro (y cosas suyas al lado), y una
+    // "Media Cache Files" con un archivo ajeno.
+    const QString userMc = at(vol, QStringLiteral("UserMC/Media Cache"));
+    writeFile(at(userMc, QStringLiteral("Media Cache Files/d.cfa")));
+    writeFile(at(userMc, QStringLiteral("notes.txt")));
+    writeFile(at(userMc, QStringLiteral("Cuts/cut.txt")));
+    const QString foreignMc = at(vol, QStringLiteral("AdobeForeign/Media Cache Files"));
+    writeFile(at(foreignMc, QStringLiteral("e.cfa")));
+    writeFile(at(foreignMc, QStringLiteral("report.docx")));
 
     // ---- REAPER, Redshift y Photoshop.
     writeFile(reaperIni, QStringLiteral("[REAPER]\naltpeaks=1\naltpeakspath=%1\n").arg(at(vol, QStringLiteral("Peaks"))).toUtf8());
@@ -493,6 +535,8 @@ void selfTestAppCaches(const Check &check)
     writeFile(at(vol, QStringLiteral("TopazProjects/P1/thumbnails/t.jpg")));
     writeFile(at(vol, QStringLiteral("TopazProjects/P1/previews/p.mp4")));
     writeFile(at(vol, QStringLiteral("TopazProjects/P2/thumbnails/t2.jpg")));
+    writeFile(at(vol, QStringLiteral("TopazProjects/P3/project.tvai")));
+    writeFile(at(vol, QStringLiteral("TopazProjects/P3/thumbnails/t3.jpg")));
     writeFile(at(vol, QStringLiteral("TopazData/models/auth.tpz")));
     writeFile(at(vol, QStringLiteral("TopazData/models/aaa-10.json")));
     writeFile(at(vol, QStringLiteral("TopazData/models/models/astra/blob.0123abcd")));
@@ -507,7 +551,8 @@ void selfTestAppCaches(const Check &check)
 #else
     // ---- Solo mac: los plist de Adobe (los lee la fuente de mentira, por nombre) y una cache de Ableton que
     // "Other app caches" ya no tiene que ofrecer entera.
-    for (const char *name : {"com.Adobe.Common 24.0.plist", "com.Adobe.Common 25.0.plist", "com.Adobe.Common 26.0.plist"}) {
+    for (const char *name : {"com.Adobe.Common 24.0.plist", "com.Adobe.Common 25.0.plist", "com.Adobe.Common 26.0.plist",
+                             "com.Adobe.Common 27.0.plist", "com.Adobe.Common 28.0.plist"}) {
         writeFile(at(library, QStringLiteral("Preferences/") + QLatin1String(name)), QByteArray("plist"));
     }
 #endif
@@ -515,13 +560,16 @@ void selfTestAppCaches(const Check &check)
     // ---- Las fuentes de mentira: nada de esta maquina.
     const QHash<QString, QString> env = {{QStringLiteral("NUKE_TEMP_DIR"), at(vol, QStringLiteral("nuketemp"))},
                                          {QStringLiteral("LGA_TEST_CACHE"), slashVol},
-                                         {QStringLiteral("ProgramData"), at(vol, QStringLiteral("PD"))}};
+                                         {QStringLiteral("ProgramData"), at(vol, QStringLiteral("PD"))},
+                                         {QStringLiteral("ProgramFiles"), at(vol, QStringLiteral("PF"))}};
     const QString adobeKey = QStringLiteral("Software\\Adobe\\Common %1\\Media Cache");
     QHash<QString, QString> registry = {
         {adobeKey.arg(QStringLiteral("24.0")) + QStringLiteral("|FolderPath"), at(vol, QStringLiteral("AdobeMC"))},
         {adobeKey.arg(QStringLiteral("24.0")) + QStringLiteral("|DatabasePath"), at(vol, QStringLiteral("AdobeMC/Media Cache"))},
         {adobeKey.arg(QStringLiteral("25.0")) + QStringLiteral("|FolderPath"), at(vol, QStringLiteral("AdobeMC2/Media Cache Files"))},
         {adobeKey.arg(QStringLiteral("26.0")) + QStringLiteral("|FolderPath"), at(vol, QStringLiteral("AdobeEmpty"))},
+        {adobeKey.arg(QStringLiteral("27.0")) + QStringLiteral("|FolderPath"), userMc},
+        {adobeKey.arg(QStringLiteral("28.0")) + QStringLiteral("|FolderPath"), foreignMc},
         // Con barras mezcladas, como las escribe Topaz.
         {QStringLiteral("Software\\Topaz Labs LLC\\Topaz Video|defaultProjectDir"), vol + QStringLiteral("/TopazProjects")},
         {QStringLiteral("Software\\Topaz Labs LLC\\Topaz Video|veaiDataFolder"), at(vol, QStringLiteral("TopazData/models")) + sep},
@@ -531,13 +579,14 @@ void selfTestAppCaches(const Check &check)
     sources.registry = [registry](const QString &key, const QString &value) { return registry.value(key + QLatin1Char('|') + value); };
     sources.registryKeys = [](const QString &key) {
         return key == QLatin1String("Software\\Adobe")
-                   ? QStringList{QStringLiteral("Common 24.0"), QStringLiteral("Common 25.0"), QStringLiteral("Common 26.0"), QStringLiteral("Bridge")}
+                   ? QStringList{QStringLiteral("Common 24.0"), QStringLiteral("Common 25.0"), QStringLiteral("Common 26.0"),
+                                 QStringLiteral("Common 27.0"), QStringLiteral("Common 28.0"), QStringLiteral("Bridge")}
                    : QStringList();
     };
     const QString adobeMc = at(vol, QStringLiteral("AdobeMC"));
     const QString adobeMc2 = at(vol, QStringLiteral("AdobeMC2/Media Cache Files"));
     const QString adobeEmpty = at(vol, QStringLiteral("AdobeEmpty"));
-    sources.plist = [adobeMc, adobeMc2, adobeEmpty](const QString &path) {
+    sources.plist = [adobeMc, adobeMc2, adobeEmpty, userMc, foreignMc](const QString &path) {
         QVariantMap media;
         if (path.endsWith(QLatin1String("24.0.plist"))) {
             media.insert(QStringLiteral("FolderPath"), adobeMc + QLatin1Char('/'));
@@ -545,6 +594,10 @@ void selfTestAppCaches(const Check &check)
             media.insert(QStringLiteral("FolderPath"), adobeMc2);
         } else if (path.endsWith(QLatin1String("26.0.plist"))) {
             media.insert(QStringLiteral("FolderPath"), adobeEmpty);
+        } else if (path.endsWith(QLatin1String("27.0.plist"))) {
+            media.insert(QStringLiteral("FolderPath"), userMc);
+        } else if (path.endsWith(QLatin1String("28.0.plist"))) {
+            media.insert(QStringLiteral("FolderPath"), foreignMc);
         }
         return QVariantMap{{QStringLiteral("Media Cache"), media}};
     };
@@ -552,6 +605,8 @@ void selfTestAppCaches(const Check &check)
     CleanupRules::Context context;
     context.volumeRoot = DeleteGuard::clean(vol);
     context.bases.profile = profile;
+    // Documentos de las bases, dentro del perfil de mentira: Topaz no lee la carpeta real.
+    context.bases.documents = at(profile, QStringLiteral("Documents"));
     context.bases.temp = temp;
 #ifdef Q_OS_WIN
     context.bases.localAppData = local;
@@ -562,6 +617,53 @@ void selfTestAppCaches(const Check &check)
     context.bases.appSupport = support;
 #endif
     context.sources = sources;
+
+    // ---- acceptedBase: lo que se rechaza como carpeta de una preferencia (todas existen: se rechazan por
+    // lo que son, no por faltar) y una que sirve.
+    {
+        struct Case
+        {
+            QString path;
+            bool accept;
+            const char *what;
+        };
+#ifdef Q_OS_WIN
+        const QString dataChild = at(roaming, QStringLiteral("SomeApp"));
+        const QString programChild = at(vol, QStringLiteral("PF/App"));
+        QDir().mkpath(programChild);
+#else
+        const QString dataChild = at(support, QStringLiteral("SomeApp"));
+        const QString programChild;
+#endif
+        QDir().mkpath(dataChild);
+        QDir().mkpath(at(profile, QStringLiteral("Desktop")));
+        QDir().mkpath(at(profile, QStringLiteral("Documents")));
+        QList<Case> cases = {{dataChild, false, "hija directa de la carpeta de datos (AppData\\Roaming, Application Support)"},
+                             {at(vol, QStringLiteral("Users")), false, "la carpeta de usuarios"},
+                             {profile, false, "la carpeta del usuario"},
+                             {at(profile, QStringLiteral("Desktop")), false, "Escritorio"},
+                             {at(profile, QStringLiteral("Documents")), false, "Documentos"},
+                             {QStringLiteral(".."), false, ".."},
+                             {at(profile, QStringLiteral("AppData/Local/..")), false, "AppData por .."},
+                             {QStringLiteral("E:foo"), false, "E:foo (relativa a la unidad)"},
+                             {QStringLiteral("\\\\server\\share\\cache"), false, "UNC con \\\\"},
+                             {QStringLiteral("//server/share/cache"), false, "UNC con //"},
+                             {vol, false, "la raiz del volumen"},
+                             {at(otherVol, QStringLiteral("NukeCache")), false, "otro volumen"},
+                             {nukeCache, true, "una carpeta de cache comun"}};
+        if (!programChild.isEmpty()) {
+            cases.append({programChild, false, "hija directa de Program Files"});
+        }
+        QStringList wrong;
+        for (const Case &c : cases) {
+            const QString result = AppCacheRules::acceptedBase(c.path, context);
+            const bool accepted = !result.isEmpty();
+            if (accepted != c.accept || (accepted && !DeleteGuard::samePath(result, c.path))) {
+                wrong.append(QString::fromLatin1(c.what));
+            }
+        }
+        check(wrong.isEmpty(), QStringLiteral("acceptedBase: %1 casos, fallan: %2").arg(cases.size()).arg(wrong.join(QLatin1String("; "))));
+    }
 
     ScanEngine engine;
     engine.start(vol);
@@ -587,12 +689,27 @@ void selfTestAppCaches(const Check &check)
     check(!touches(o.targets, at(vol, QStringLiteral("NoMarks"))) && !touches(o.targets, linkCache) && !touches(o.targets, linkViewer)
               && !touches(o.targets, at(vol, QStringLiteral("elsewhere"))) && !touches(o.targets, at(sandbox, QStringLiteral("linktarget"))),
           QStringLiteral("nuke: sin marca no hay item; una carpeta configurada o una cache que es un enlace se rechaza"));
-    check(nukeWork.size() == 3 && hasPath(nukeWork, at(nukeCache, QStringLiteral("00")))
-              && hasPath(nukeWork, at(nukeCache, QStringLiteral("timeline_cache.db")))
+    check(hasPath(nukeWork, at(nukeCache, QStringLiteral("00"))) && hasPath(nukeWork, at(nukeCache, QStringLiteral("timeline_cache.db")))
               && hasPath(nukeWork, at(nukeCache, QStringLiteral("jitCache-host/LocalisedFiles")))
               && !hasPath(nukeWork, at(nukeCache, QStringLiteral("0a"))),
-          QStringLiteral("nuke: el timeline (sus carpetas con algo y su base) y las copias locales van en Yours (%1)")
-              .arg(nukeWork.join(QLatin1String(" | "))));
+          QStringLiteral("nuke: el timeline con sus 256 carpetas (las que tienen algo y su base) y las copias locales van en Yours"));
+    check(o.shown.contains(at(nukeCache, QStringLiteral("timeline_cache.db")) + QStringLiteral(" + 00–ff"), Qt::CaseInsensitive),
+          QStringLiteral("nuke: el timeline se muestra como lo que se borra (timeline_cache.db + 00–ff), no como su carpeta"));
+    {
+        // De cada carpeta de trabajo, como mucho su timeline_cache.db: ninguna carpeta 00..ff.
+        QStringList wrong;
+        for (const QString &work : {work1, work2, work3}) {
+            const QString database = at(work, QStringLiteral("timeline_cache.db"));
+            for (const QString &target : o.targets) {
+                if ((DeleteGuard::isInside(target, work) || DeleteGuard::samePath(target, work)) && !DeleteGuard::samePath(target, database)) {
+                    wrong.append(target);
+                }
+            }
+        }
+        check(wrong.isEmpty() && o.shown.contains(at(work1, QStringLiteral("timeline_cache.db")), Qt::CaseInsensitive),
+              QStringLiteral("nuke: una carpeta de trabajo con 01 y 10, o con 00..ff pero subcarpetas o media, no ofrece ninguna carpeta (%1)")
+                  .arg(wrong.join(QLatin1String(" | "))));
+    }
     check(!touches(o.targets, at(vol, QStringLiteral("NukeLocalize"))) && !hasPath(o.targets, nukeCache)
               && !touches(o.targets, at(nukeCache, QStringLiteral("notes"))) && !hasPath(o.targets, at(nukeCache, QStringLiteral("keep.txt"))),
           QStringLiteral("nuke: nunca la carpeta de la preferencia, ni lo que no es suyo, ni la de localCachePath (sin marca conocida)"));
@@ -615,6 +732,10 @@ void selfTestAppCaches(const Check &check)
               && hasPath(media, at(adobeMc, QStringLiteral("Peak Files"))) && hasPath(media, adobeMc2) && !touches(o.targets, adobeEmpty)
               && !hasPath(o.targets, adobeMc),
           QStringLiteral("adobe: la Media Cache movida, por la carpeta madre o la propia, solo con .cfa/.pek"));
+    check(hasPath(media, at(userMc, QStringLiteral("Media Cache Files"))) && !hasPath(o.targets, userMc)
+              && !touches(o.targets, at(userMc, QStringLiteral("notes.txt"))) && !touches(o.targets, at(userMc, QStringLiteral("Cuts")))
+              && !touches(o.targets, at(vol, QStringLiteral("AdobeForeign"))),
+          QStringLiteral("adobe: una carpeta del usuario llamada Media Cache es la madre (solo su Media Cache Files); una cache con un archivo ajeno, nada"));
     check(hasPath(media, at(vol, QStringLiteral("Peaks/ab"))) && !touches(o.targets, at(vol, QStringLiteral("Peaks/cd")))
               && !hasPath(o.targets, at(vol, QStringLiteral("Peaks"))),
           QStringLiteral("reaper: solo las carpetas de picos con .reapeaks"));
@@ -628,6 +749,11 @@ void selfTestAppCaches(const Check &check)
     check(hasPath(media, at(vol, QStringLiteral("TopazProjects/P1/thumbnails"))) && hasPath(previews, at(vol, QStringLiteral("TopazProjects/P1/previews")))
               && !touches(o.targets, at(vol, QStringLiteral("TopazProjects/P2"))) && !hasPath(o.targets, at(vol, QStringLiteral("TopazProjects/P1/project.tvai"))),
           QStringLiteral("topaz: con project.tvai, thumbnails segura y previews en Yours; sin project.tvai, nada"));
+    check(hasPath(media, at(vol, QStringLiteral("TopazProjects/P3/thumbnails")))
+              && o.shown.contains(at(vol, QStringLiteral("TopazProjects/*/thumbnails")), Qt::CaseInsensitive)
+              && o.shown.contains(at(vol, QStringLiteral("TopazProjects/P1/previews")), Qt::CaseInsensitive)
+              && !o.shown.contains(at(vol, QStringLiteral("TopazProjects")), Qt::CaseInsensitive),
+          QStringLiteral("topaz: se muestra lo que se borra (...\\*\\thumbnails, o la carpeta de previews), nunca la de proyectos sola"));
     check(hasPath(downloads, at(vol, QStringLiteral("TopazData/models/models"))) && !hasPath(o.targets, at(vol, QStringLiteral("TopazData/models")))
               && !touches(o.targets, at(vol, QStringLiteral("TopazData/models/auth.tpz"))),
           QStringLiteral("topaz: los modelos (models\\models con blob.*) en Yours; auth.tpz y sus definiciones no"));
@@ -706,6 +832,10 @@ void selfTestAppCaches(const Check &check)
               && QFileInfo::exists(at(vol, QStringLiteral("Peaks/keep.txt"))) && QFileInfo::exists(at(vol, QStringLiteral("Peaks/cd/y.wav")))
               && QFileInfo::exists(at(redshift, QStringLiteral("preferences.xml"))) && QFileInfo::exists(at(redshift, QStringLiteral("redshift.lic")))
               && QFileInfo::exists(at(vol, QStringLiteral("Photoshop Template.psd"))) && QFileInfo::exists(at(packs, QStringLiteral("pack.alp")))
+              && QFileInfo::exists(at(work1, QStringLiteral("01/plates/plate.0001.exr"))) && QFileInfo::exists(at(work1, QStringLiteral("10/render_v001.mov")))
+              && QFileInfo::exists(at(work2, QStringLiteral("3a/sub/x.bin"))) && QFileInfo::exists(at(work3, QStringLiteral("7f/shot.exr")))
+              && QFileInfo::exists(at(userMc, QStringLiteral("notes.txt"))) && QFileInfo::exists(at(foreignMc, QStringLiteral("report.docx")))
+              && QFileInfo::exists(at(foreignMc, QStringLiteral("e.cfa")))
 #ifdef Q_OS_WIN
               && QFileInfo::exists(at(vol, QStringLiteral("TopazProjects/P1/project.tvai")))
               && QFileInfo::exists(at(vol, QStringLiteral("TopazProjects/P1/previews/p.mp4")))

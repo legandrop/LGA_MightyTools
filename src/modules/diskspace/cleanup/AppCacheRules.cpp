@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QRegularExpression>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QStringDecoder>
@@ -26,11 +27,14 @@
 //    definida), claves `DiskCachePath` y `TimelineDiskCachePath`; sin la linea valen
 //    `[getenv NUKE_TEMP_DIR]` y `[getenv NUKE_TEMP_DIR]/TimelineCache`. `FC_DISK_CACHE` y
 //    `NUKE_DISK_CACHE` tambien cuentan. Dentro: `ViewerCache`, `audiocache`, `thumbnailcache`, `tilecache`
-//    y `jitCache-<equipo>\BlockCache` (seguras), el timeline (`timeline_cache.db` + carpetas 00..ff) y
-//    `jitCache-<equipo>\LocalisedFiles` (del usuario). `%APPDATA%\NVIDIA\NukeComputeCache` (CUDA de Nuke).
+//    y `jitCache-<equipo>\BlockCache` (seguras), el timeline y `jitCache-<equipo>\LocalisedFiles` (del
+//    usuario). Del timeline va siempre `timeline_cache.db` y sus carpetas 00..ff solo si estan las 256,
+//    con archivos sueltos y nada de media ni proyectos (auditoria 2026-11-03: una carpeta de trabajo con
+//    "01" y "10" no es una cache). `%APPDATA%\NVIDIA\NukeComputeCache` (CUDA de Nuke).
 //  - Adobe Media Cache movida: `HKCU\Software\Adobe\Common <N>.0\Media Cache` (Windows) o
-//    `com.Adobe.Common <N>.0.plist` (mac), `FolderPath` y `DatabasePath`; vale la carpeta madre o la
-//    propia, solo por marca (`.cfa` / `.pek`).
+//    `com.Adobe.Common <N>.0.plist` (mac), `FolderPath` y `DatabasePath`. Primero como carpeta madre
+//    (su `Media Cache Files` con `.cfa`/`.pek`); si no, la carpeta misma, solo si TODO lo de adentro
+//    tiene forma de cache de Adobe (`.cfa`, `.pek`, `.pkf`, `.ims`, `.mcdb`).
 //  - After Effects: `Adobe After Effects <ver> Prefs*.txt`, seccion "Disk Cache Controls", `"Folder N"`;
 //    se ofrecen las `Disk Cache - *` de adentro.
 //  - Ableton Live: `CacheDirectory` del bloque `FileCachePrefData` de `Preferences.cfg` y la de fabrica;
@@ -248,11 +252,18 @@ bool hasLicenseFile(const QString &dir)
 QStringList nukeBlockers()
 {
     // Un exe por version ("Nuke17.0.exe"); NukeX, Studio y Hiero son el mismo con otra bandera.
-    return {QStringLiteral("nuke"),  QStringLiteral("nuke1*"), QStringLiteral("nuke2*"), QStringLiteral("nuke9*"),
-            QStringLiteral("nuke8*"), QStringLiteral("nuke7*"), QStringLiteral("nuke6*"), QStringLiteral("com.foundry.nuke*")};
+    QStringList list = {QStringLiteral("nuke"),  QStringLiteral("nuke1*"), QStringLiteral("nuke2*"), QStringLiteral("nuke9*"),
+                        QStringLiteral("nuke8*"), QStringLiteral("nuke7*"), QStringLiteral("nuke6*"), QStringLiteral("com.foundry.nuke*")};
+#ifdef Q_OS_MACOS
+    // En mac cada edicion es su propia app ("NukeX17.0v4.app", "Hiero17.0v4.app").
+    list << QStringLiteral("nukex*") << QStringLiteral("nukestudio*") << QStringLiteral("hiero*") << QStringLiteral("com.foundry.hiero");
+#endif
+    return list;
 }
 
-QStringList adobeBlockers()
+} // namespace
+
+QStringList AppCacheRules::adobeBlockers()
 {
 #ifdef Q_OS_MACOS
     return {QStringLiteral("com.adobe.premierepro"), QStringLiteral("com.adobe.aftereffects"), QStringLiteral("com.adobe.ame"),
@@ -263,6 +274,8 @@ QStringList adobeBlockers()
             QStringLiteral("adobe audition")};
 #endif
 }
+
+namespace {
 
 QStringList afterEffectsBlockers()
 {
@@ -331,6 +344,8 @@ QString dotNukeDir(const Context &context)
 
 struct Fences
 {
+    QString volumeRoot;    ///< el volumen de la ventana: lo de otro volumen ni se mira
+    QStringList mounts;    ///< raices montadas (para saber si una ruta cae en otro volumen), tal cual
     QStringList banned;    ///< ni ellas ni una carpeta que las contenga
     QStringList dataRoots; ///< ni ellas ni sus hijas directas (la carpeta de datos de un programa)
     QStringList allowed;   ///< hijas de una carpeta de datos que si sirven (la temporal)
@@ -351,7 +366,9 @@ Fences fences(const Context &context)
             list.append(value);
         }
     };
+    f.volumeRoot = DeleteGuard::clean(context.volumeRoot);
     for (const QStorageInfo &storage : QStorageInfo::mountedVolumes()) {
+        f.mounts.append(DeleteGuard::clean(storage.rootPath()));
         add(f.banned, storage.rootPath());
     }
     add(f.banned, context.volumeRoot);
@@ -363,6 +380,7 @@ Fences fences(const Context &context)
             add(f.banned, join(profile, QLatin1String(name)));
         }
     }
+    add(f.banned, context.bases.documents);
     for (const QStandardPaths::StandardLocation location :
          {QStandardPaths::HomeLocation, QStandardPaths::DesktopLocation, QStandardPaths::DocumentsLocation,
           QStandardPaths::DownloadLocation, QStandardPaths::PicturesLocation, QStandardPaths::MusicLocation,
@@ -399,10 +417,33 @@ Fences fences(const Context &context)
     return f;
 }
 
+// La ruta esta en el volumen de la ventana, solo por su texto (no abre nada): adentro de su raiz y no
+// dentro de otro volumen montado mas abajo (una carpeta de montaje en Windows, /Volumes/X en mac).
+bool onVolume(const QString &path, const Fences &f)
+{
+    if (path.isEmpty() || f.volumeRoot.isEmpty()) {
+        return false;
+    }
+    if (!DeleteGuard::samePath(path, f.volumeRoot) && !DeleteGuard::isInside(path, f.volumeRoot)) {
+        return false;
+    }
+    for (const QString &mount : f.mounts) {
+        if (DeleteGuard::isInside(mount, f.volumeRoot) && (DeleteGuard::samePath(path, mount) || DeleteGuard::isInside(path, mount))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 QString acceptedBaseWith(const QString &path, const Fences &f)
 {
-    const QString cleaned = native(path.trimmed());
-    if (cleaned.isEmpty() || QDir::isRelativePath(cleaned)) {
+    const QString trimmed = path.trimmed();
+    // De red: antes de tocar nada (un recurso caido trabaria la ventana) y nunca se limpia.
+    if (trimmed.isEmpty() || FileSystemOps::isNetworkPath(trimmed)) {
+        return QString();
+    }
+    const QString cleaned = native(trimmed);
+    if (cleaned.isEmpty() || QDir::isRelativePath(cleaned) || FileSystemOps::isNetworkPath(cleaned)) {
         return QString();
     }
     // Lo que macOS protege sin acceso total al disco ni se mira: mirarlo mostraria un cartel.
@@ -411,9 +452,13 @@ QString acceptedBaseWith(const QString &path, const Fences &f)
             return QString();
         }
     }
+    // Otro volumen ni se abre: con la ventana sobre C: no se lee nada de E:.
+    if (!onVolume(cleaned, f)) {
+        return QString();
+    }
     // La ruta real; si la carpeta misma es un enlace, `kind` no es Dir y se rechaza.
     const QString real = FileSystemOps::canonicalPath(cleaned);
-    if (real.isEmpty() || FileSystemOps::kind(real) != FileSystemOps::Kind::Dir) {
+    if (real.isEmpty() || !onVolume(real, f) || FileSystemOps::kind(real) != FileSystemOps::Kind::Dir) {
         return QString();
     }
     for (const QString &banned : f.banned) {
@@ -467,8 +512,10 @@ void addFile(Cleanup::Item &item, const QString &path, const Context &context)
 
 // Un item con esas carpetas (se vacian) y esos archivos (se borran): solo los que existen, no son enlaces,
 // estan en el volumen y no tienen un proyecto adentro. Sin ninguno, no agrega nada.
+// `detail`, si no esta vacio, es lo que se muestra en lugar de la ruta: nombra lo que se borra cuando son
+// varias carpetas ("...\Nuke_Cache\timeline_cache.db + 00–ff"), nunca solo la carpeta que las junta.
 void offer(Cleanup::Category &category, const QString &name, const QString &shown, const QStringList &dirs, const QStringList &files,
-           const Context &context, const QStringList &blockers, const QString &label)
+           const Context &context, const QStringList &blockers, const QString &label, const QString &detail = QString())
 {
     QStringList clean;
     for (const QString &dir : dirs) {
@@ -483,10 +530,16 @@ void offer(Cleanup::Category &category, const QString &name, const QString &show
     if (item.targets.isEmpty()) {
         return;
     }
-    if (item.path.isEmpty()) {
-        const QString usable = CleanupRules::usableDir(shown, context);
-        item.path = usable.isEmpty() ? (DeleteGuard::samePath(shown, context.volumeRoot) ? context.volumeRoot : item.targets.first().path)
-                                     : usable;
+    // Lo que se ve nombra lo que se borra: con un solo destino, ese destino; con varios, `detail` (o la
+    // carpeta que los junta, si sus nombres ya se entienden).
+    if (item.targets.size() == 1) {
+        item.path = item.targets.first().path;
+    } else {
+        if (item.path.isEmpty()) {
+            const QString usable = CleanupRules::usableDir(shown, context);
+            item.path = usable.isEmpty() ? item.targets.first().path : usable;
+        }
+        item.detail = detail;
     }
     item.blockers = blockers;
     item.blockerLabel = label;
@@ -520,11 +573,11 @@ struct Pending
 Pending pending()
 {
     Pending p;
-    p.media = category("media", Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Rebuilt when a project opens."));
+    p.media = category("media", Cleanup::Group::Safe, I18n::tr("Media caches"), I18n::tr("Their programs rebuild them when they need them."));
     p.shaders = category("shaders", Cleanup::Group::Safe, I18n::tr("Shader caches and crash dumps"),
                          I18n::tr("Games and 3D apps compile their shaders again as they run."));
     p.nuke = category("nuke", Cleanup::Group::Safe, I18n::tr("Nuke caches"),
-                      I18n::tr("Viewer, audio, thumbnail and paint caches. Nuke fills them again as you work."));
+                      I18n::tr("Viewer, audio, thumbnail, paint, read-block and CUDA caches. Nuke fills them again as you work."));
     p.render = category("rendercache", Cleanup::Group::Safe, I18n::tr("Render caches"),
                         I18n::tr("Converted textures and compiled shaders. The renderer makes them again on the next render."));
     p.scratch = category("pstemp", Cleanup::Group::Safe, I18n::tr("Photoshop scratch files"),
@@ -534,7 +587,7 @@ Pending pending()
     p.previews = category("previews", Cleanup::Group::Yours, I18n::tr("Previews, proxies and optimized media"),
                           I18n::tr("Made by video apps from your footage. They can be made again, but it takes render time."));
     p.downloads = category("appdownloads", Cleanup::Group::Yours, I18n::tr("Downloads and derived data"),
-                           I18n::tr("The app downloads or builds them again when it needs them, which can take a long time."));
+                           I18n::tr("Each program downloads or builds them again when it needs them, which can take a long time."));
     return p;
 }
 
@@ -621,6 +674,76 @@ bool isTileCache(const QString &dir)
     return looksLike(
         dir, [](const QFileInfo &info) { return info.isDir() ? isHexName(info.fileName(), 1, 1) : info.fileName() == QLatin1String("index"); },
         [](const QFileInfo &info) { return info.isFile(); });
+}
+
+// Un archivo que nunca deja una cache: media (imagen, video, audio) o un proyecto.
+bool isMediaOrProject(const QString &name)
+{
+    static const QStringList suffixes = {
+        // imagen
+        QStringLiteral("exr"), QStringLiteral("dpx"), QStringLiteral("cin"), QStringLiteral("tif"), QStringLiteral("tiff"),
+        QStringLiteral("tga"), QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("jp2"),
+        QStringLiteral("bmp"), QStringLiteral("gif"), QStringLiteral("psd"), QStringLiteral("psb"), QStringLiteral("hdr"),
+        QStringLiteral("dng"), QStringLiteral("cr2"), QStringLiteral("cr3"), QStringLiteral("arw"), QStringLiteral("nef"),
+        QStringLiteral("heic"), QStringLiteral("webp"), QStringLiteral("avif"),
+        // video
+        QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("m4v"), QStringLiteral("mxf"), QStringLiteral("avi"),
+        QStringLiteral("mkv"), QStringLiteral("webm"), QStringLiteral("mpg"), QStringLiteral("mpeg"), QStringLiteral("mts"),
+        QStringLiteral("m2ts"), QStringLiteral("r3d"), QStringLiteral("braw"), QStringLiteral("ari"), QStringLiteral("arx"),
+        // audio
+        QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("aiff"), QStringLiteral("mp3"), QStringLiteral("m4a"),
+        QStringLiteral("flac"), QStringLiteral("ogg"), QStringLiteral("aac"), QStringLiteral("bwf"),
+        // proyectos y escenas
+        QStringLiteral("nk"), QStringLiteral("nknc"), QStringLiteral("hrox"), QStringLiteral("prproj"), QStringLiteral("aep"),
+        QStringLiteral("aepx"), QStringLiteral("drp"), QStringLiteral("als"), QStringLiteral("blend"), QStringLiteral("hip"),
+        QStringLiteral("hipnc"), QStringLiteral("hiplc"), QStringLiteral("c4d"), QStringLiteral("ma"), QStringLiteral("mb"),
+        QStringLiteral("uproject"), QStringLiteral("rpp"), QStringLiteral("tvai"), QStringLiteral("fbx"), QStringLiteral("abc"),
+        QStringLiteral("usd"), QStringLiteral("usda"), QStringLiteral("usdc"), QStringLiteral("obj"), QStringLiteral("vdb")};
+    const qsizetype dot = name.lastIndexOf(QLatin1Char('.'));
+    return dot >= 0 && suffixes.contains(name.mid(dot + 1), Qt::CaseInsensitive);
+}
+
+// Las carpetas del timeline de Studio y Hiero que tienen algo, solo si la carpeta tiene la forma entera de
+// esa cache: el juego 00..ff COMPLETO (256 carpetas de verdad, no enlaces), cada una con solo archivos
+// sueltos (sin subcarpetas) y ninguno de media ni de proyecto. Si algo no cierra, ninguna: una carpeta de
+// trabajo con "01" y "10" adentro no es una cache. Mira 100000 entradas como mucho.
+QStringList timelineBuckets(const QString &base)
+{
+    QSet<QString> seen;
+    QStringList buckets;
+    for (const QString &name : subDirs(base)) {
+        if (isHexName(name, 2, 2)) {
+            seen.insert(name.toLower());
+            buckets.append(join(base, name));
+        }
+    }
+    if (seen.size() != 256 || buckets.size() != 256) {
+        return {};
+    }
+    QStringList full;
+    int budget = 100000;
+    for (const QString &bucket : buckets) {
+        if (FileSystemOps::kind(bucket) != FileSystemOps::Kind::Dir) {
+            return {};
+        }
+        bool any = false;
+        QDirIterator it(bucket, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+        while (it.hasNext()) {
+            if (--budget < 0) {
+                return {};
+            }
+            it.next();
+            const QFileInfo info = it.fileInfo();
+            if (isLink(info) || !info.isFile() || isMediaOrProject(info.fileName())) {
+                return {};
+            }
+            any = true;
+        }
+        if (any) {
+            full.append(bucket);
+        }
+    }
+    return full;
 }
 
 void addNuke(Pending &p, const Context &context, const Fences &f)
@@ -714,20 +837,15 @@ void addNuke(Pending &p, const Context &context, const Fences &f)
         if (FileSystemOps::kind(database) != FileSystemOps::Kind::File) {
             continue;
         }
-        QStringList buckets;
-        for (const QString &name : subDirs(base)) {
-            const QString bucket = join(base, name);
-            if (isHexName(name, 2, 2) && !QDir(bucket).isEmpty()) {
-                buckets.append(bucket);
-            }
-        }
-        offer(p.nukeWork, I18n::tr("Timeline cache"), base, buckets, {database}, context, nukeBlockers(), label);
+        const QStringList buckets = timelineBuckets(base);
+        const QString shown = buckets.isEmpty() ? database : database + QStringLiteral(" + 00–ff");
+        offer(p.nukeWork, I18n::tr("Timeline cache"), base, buckets, {database}, context, nukeBlockers(), label, shown);
     }
 
 #ifdef Q_OS_WIN
     // La cache de CUDA propia de Nuke (Nuke le fija CUDA_CACHE_PATH).
     const QString compute = join(join(context.bases.roamingAppData, QStringLiteral("NVIDIA")), QStringLiteral("NukeComputeCache"));
-    if (isComputeCache(compute)) {
+    if (onVolume(compute, f) && isComputeCache(compute)) {
         offer(p.nuke, I18n::tr("CUDA kernels"), compute, {compute}, {}, context, nukeBlockers(), label);
     }
 #endif
@@ -738,6 +856,48 @@ void addNuke(Pending &p, const Context &context, const Fences &f)
 bool hasAdobeMedia(const QString &dir)
 {
     return hasFileWithin(dir, 2, {QStringLiteral("cfa"), QStringLiteral("pek")});
+}
+
+// Todo lo que hay adentro (hasta 3 niveles, sin enlaces) tiene la forma de la cache de Adobe: audio
+// conformado (.cfa), picos (.pek, .pkf), cuadros indexados (.ims) y la base (.mcdb). `needMedia` pide
+// ademas al menos un .cfa o .pek. Vacia, o con mas de 20000 entradas, no cuenta.
+bool isAdobeCacheTree(const QString &dir, bool needMedia)
+{
+    static const QStringList shapes = {QStringLiteral("cfa"), QStringLiteral("pek"), QStringLiteral("pkf"), QStringLiteral("ims"),
+                                       QStringLiteral("mcdb")};
+    if (FileSystemOps::kind(dir) != FileSystemOps::Kind::Dir) {
+        return false;
+    }
+    int budget = kMarkerBudget;
+    bool media = false;
+    bool any = false;
+    std::function<bool(const QString &, int)> walk = [&](const QString &at, int depth) {
+        QDirIterator it(at, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
+        while (it.hasNext()) {
+            if (--budget < 0) {
+                return false;
+            }
+            it.next();
+            const QFileInfo info = it.fileInfo();
+            if (isLink(info)) {
+                return false;
+            }
+            if (info.isDir()) {
+                if (depth <= 1 || !walk(info.filePath(), depth - 1)) {
+                    return false;
+                }
+                continue;
+            }
+            const QString suffix = info.suffix().toLower();
+            if (!shapes.contains(suffix)) {
+                return false;
+            }
+            any = true;
+            media = media || suffix == QLatin1String("cfa") || suffix == QLatin1String("pek");
+        }
+        return true;
+    };
+    return walk(dir, 3) && any && (media || !needMedia);
 }
 
 void addAdobeMediaCache(Pending &p, const Context &context, const Fences &f)
@@ -780,35 +940,32 @@ void addAdobeMediaCache(Pending &p, const Context &context, const Fences &f)
         if (real.isEmpty()) {
             continue;
         }
-        const QString name = QFileInfo(real).fileName();
-        if (names.contains(name, Qt::CaseInsensitive)) {
-            // La preferencia nombra la carpeta de cache misma: va ella sola, con su marca. La de la base de
-            // datos ("Media Cache") cuenta si al lado estan los archivos de la cache.
-            const QString parent = parentOf(real);
-            const bool marked = name.compare(QLatin1String("Media Cache"), Qt::CaseInsensitive) == 0
-                                    ? hasAdobeMedia(join(parent, QStringLiteral("Media Cache Files")))
-                                    : hasAdobeMedia(real);
-            if (marked) {
-                put(parent, real);
+        // Primero, como carpeta madre: Adobe crea adentro sus tres carpetas y "Media Cache Files" lleva la
+        // marca. Una carpeta del usuario que se llama "Media Cache" y tiene adentro la cache cae aca: se
+        // ofrecen solo esas carpetas, nunca lo demas que tenga.
+        const QString files = join(real, QStringLiteral("Media Cache Files"));
+        if (hasAdobeMedia(files)) {
+            put(real, files);
+            const QString database = join(real, QStringLiteral("Media Cache"));
+            if (isAdobeCacheTree(database, false)) {
+                put(real, database);
+            }
+            const QString peaks = join(real, QStringLiteral("Peak Files"));
+            if (hasAdobeMedia(peaks)) {
+                put(real, peaks);
             }
             continue;
         }
-        // La preferencia nombra la carpeta madre: Adobe crea adentro sus tres carpetas.
-        const QString files = join(real, QStringLiteral("Media Cache Files"));
-        const QString peaks = join(real, QStringLiteral("Peak Files"));
-        const QString database = join(real, QStringLiteral("Media Cache"));
-        if (hasAdobeMedia(files)) {
-            put(real, files);
-            if (FileSystemOps::kind(database) == FileSystemOps::Kind::Dir) {
-                put(real, database);
-            }
-        }
-        if (hasAdobeMedia(peaks)) {
-            put(real, peaks);
+        // Si no, la preferencia nombra la carpeta de cache misma: vale solo si TODO lo que tiene adentro
+        // tiene la forma de la cache de Adobe. Un solo archivo ajeno y no se ofrece.
+        const QString name = QFileInfo(real).fileName();
+        const bool database = name.compare(QLatin1String("Media Cache"), Qt::CaseInsensitive) == 0;
+        if (names.contains(name, Qt::CaseInsensitive) && isAdobeCacheTree(real, !database)) {
+            put(parentOf(real), real);
         }
     }
     for (qsizetype i = 0; i < parents.size(); ++i) {
-        offer(p.media, QStringLiteral("Adobe Media Cache"), parents.at(i), dirsByParent.at(i), {}, context, adobeBlockers(),
+        offer(p.media, QStringLiteral("Adobe Media Cache"), parents.at(i), dirsByParent.at(i), {}, context, AppCacheRules::adobeBlockers(),
               QStringLiteral("Adobe"));
     }
 }
@@ -852,8 +1009,8 @@ void addAfterEffects(Pending &p, const Context &context, const Fences &f)
                 dirs.append(join(parent, name));
             }
         }
-        offer(p.media, I18n::tr("After Effects disk cache"), dirs.size() == 1 ? dirs.first() : parent, dirs, {}, context,
-              afterEffectsBlockers(), QStringLiteral("After Effects"));
+        offer(p.media, I18n::tr("After Effects disk cache"), parent, dirs, {}, context, afterEffectsBlockers(), QStringLiteral("After Effects"),
+              join(parent, QStringLiteral("Disk Cache - *")));
     }
 }
 
@@ -902,7 +1059,7 @@ void addAbleton(Pending &p, const Context &context, const Fences &f)
 #else
     const QString packs = join(cacheRoot, QStringLiteral("PackDownloads"));
 #endif
-    if (FileSystemOps::kind(packs) == FileSystemOps::Kind::Dir && !QDir(packs).isEmpty()) {
+    if (onVolume(packs, f) && FileSystemOps::kind(packs) == FileSystemOps::Kind::Dir && !QDir(packs).isEmpty()) {
         offer(p.downloads, I18n::tr("Ableton Live pack downloads"), packs, {packs}, {}, context, abletonBlockers(),
               QStringLiteral("Ableton Live"));
     }
@@ -934,8 +1091,9 @@ void addTopaz(Pending &p, const Context &context, const Fences &f)
             dataDirs.append(join(join(join(programData, QStringLiteral("Topaz Labs LLC")), QLatin1String(app)), QStringLiteral("models")));
         }
     }
+    // La de fabrica, en Documentos (de las bases: el self-test no lee la carpeta real).
+    projectDirs.append(join(context.bases.documents, QStringLiteral("Topaz Video Projects")));
     projectDirs.append(join(context.bases.profile, QStringLiteral("Documents/Topaz Video Projects")));
-    projectDirs.append(join(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation), QStringLiteral("Topaz Video Projects")));
     const QString label = QStringLiteral("Topaz Video");
 
     // Proyectos: cada subcarpeta con `project.tvai` (que nunca se toca). La carpeta de proyectos misma no
@@ -963,8 +1121,10 @@ void addTopaz(Pending &p, const Context &context, const Fences &f)
                 previews.append(renders);
             }
         }
-        offer(p.media, I18n::tr("Topaz Video thumbnails"), real, thumbnails, {}, context, topazBlockers(), label);
-        offer(p.previews, I18n::tr("Topaz Video previews"), real, previews, {}, context, topazBlockers(), label);
+        offer(p.media, I18n::tr("Topaz Video thumbnails"), real, thumbnails, {}, context, topazBlockers(), label,
+              join(real, QStringLiteral("*/thumbnails")));
+        offer(p.previews, I18n::tr("Topaz Video previews"), real, previews, {}, context, topazBlockers(), label,
+              join(real, QStringLiteral("*/previews")));
     }
 
     // Modelos: `models` dentro de la carpeta de datos, con sus `blob.*`. Al lado quedan las definiciones y
@@ -1016,7 +1176,8 @@ void addReaper(Pending &p, const Context &context, const Fences &f)
             dirs.append(dir);
         }
     }
-    offer(p.media, I18n::tr("REAPER peak files"), base, dirs, {}, context, reaperBlockers(), QStringLiteral("REAPER"));
+    offer(p.media, I18n::tr("REAPER peak files"), base, dirs, {}, context, reaperBlockers(), QStringLiteral("REAPER"),
+          join(base, QStringLiteral("*/*.reapeaks")));
 }
 
 void addUnreal(Pending &p, const Context &context, const Fences &f)
@@ -1053,7 +1214,7 @@ void addUnreal(Pending &p, const Context &context, const Fences &f)
             }
         }
         offer(p.downloads, I18n::tr("Unreal Engine derived data"), base, buckets, {}, context, unrealBlockers(),
-              QStringLiteral("Unreal Engine"));
+              QStringLiteral("Unreal Engine"), join(base, QStringLiteral("0–9")));
     }
 #else
     Q_UNUSED(p)
@@ -1062,13 +1223,16 @@ void addUnreal(Pending &p, const Context &context, const Fences &f)
 #endif
 }
 
-void addRedshift(Pending &p, const Context &context)
+void addRedshift(Pending &p, const Context &context, const Fences &f)
 {
 #ifdef Q_OS_WIN
     const QString maxon = join(context.bases.roamingAppData, QStringLiteral("Maxon"));
 #else
     const QString maxon = join(context.bases.library, QStringLiteral("Preferences/Maxon"));
 #endif
+    if (!onVolume(maxon, f)) {
+        return;
+    }
     for (const QString &name : subDirs(maxon)) {
         if (!name.contains(QLatin1String("Cinema 4D"), Qt::CaseInsensitive)) {
             continue;
@@ -1092,19 +1256,20 @@ void addPhotoshop(Pending &p, const Context &context)
         }
     }
     offer(p.scratch, I18n::tr("Photoshop scratch files"), context.volumeRoot, {}, files, context, photoshopBlockers(),
-          QStringLiteral("Photoshop"));
+          QStringLiteral("Photoshop"), join(context.volumeRoot, QStringLiteral("Photoshop Temp*")));
 }
 
-void addCuda(Pending &p, const Context &context)
+void addCuda(Pending &p, const Context &context, const Fences &f)
 {
 #ifdef Q_OS_WIN
     const QString compute = join(context.bases.roamingAppData, QStringLiteral("NVIDIA/ComputeCache"));
-    if (isComputeCache(compute)) {
+    if (onVolume(compute, f) && isComputeCache(compute)) {
         offer(p.shaders, I18n::tr("CUDA compute cache"), compute, {compute}, {}, context, {}, QString());
     }
 #else
     Q_UNUSED(p)
     Q_UNUSED(context)
+    Q_UNUSED(f)
 #endif
 }
 
@@ -1461,9 +1626,9 @@ void add(QList<Cleanup::Category> &categories, const CleanupRules::Context &cont
     addTopaz(p, context, f);
     addReaper(p, context, f);
     addUnreal(p, context, f);
-    addRedshift(p, context);
+    addRedshift(p, context, f);
     addPhotoshop(p, context);
-    addCuda(p, context);
+    addCuda(p, context, f);
     dropCovered(categories, p);
     merge(categories, p.media, QString());
     merge(categories, p.nuke, QStringLiteral("media"));

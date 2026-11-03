@@ -191,6 +191,20 @@ Identity identity(const QString &path)
     return id;
 }
 
+bool isNetworkPath(const QString &path)
+{
+    const QString text = path.trimmed();
+    if (text.startsWith(QLatin1String("\\\\")) || text.startsWith(QLatin1String("//"))) {
+        return true; // UNC (tambien \\?\UNC\...)
+    }
+    // Una unidad de red: GetDriveTypeW la responde por la letra, sin abrir el recurso.
+    if (text.size() >= 2 && text.at(0).isLetter() && text.at(1) == QLatin1Char(':')) {
+        const wchar_t root[] = {wchar_t(text.at(0).unicode()), L':', L'\\', L'\0'};
+        return GetDriveTypeW(root) == DRIVE_REMOTE;
+    }
+    return false;
+}
+
 bool createDirLink(const QString &link, const QString &target)
 {
     if (AutomatedRun::active() && !AutomatedRun::mayModify(link)) {

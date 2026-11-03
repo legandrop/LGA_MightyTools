@@ -123,6 +123,9 @@ int simulatePlan(const QStringList &args)
                         qPrintable(DiskSpace::formatSize(item.bytes)), static_cast<long long>(item.files),
                         qPrintable(DiskSpace::ageText(item.newest, now)), qPrintable(item.name), qPrintable(item.path),
                         item.keptBytes > 0 ? qPrintable(QStringLiteral(" (kept %1)").arg(DiskSpace::formatSize(item.keptBytes))) : "");
+            if (!item.detail.isEmpty()) {
+                std::printf("        shown  %s\n", qPrintable(item.detail)); // lo que la ventana muestra en lugar de la ruta
+            }
             for (const Cleanup::Target &target : item.targets) {
                 // Un instalador huerfano no pasa por el trabajo comun (que lo rechazaria por estar dentro de
                 // Windows): lo vuelve a verificar y lo mueve a la Papelera el paso elevado.

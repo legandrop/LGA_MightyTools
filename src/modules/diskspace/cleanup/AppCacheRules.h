@@ -25,7 +25,10 @@ class ScanTree;
 //  - Una carpeta leida de una preferencia se descarta (acceptedBase) si es la raiz de un volumen, la
 //    carpeta del usuario o una de sus carpetas conocidas (o las contiene), una carpeta de datos raiz
 //    (AppData, Application Support...) o la de un programa (su hija directa), esta en `.nuke`, o tiene
-//    adentro la marca de un proyecto.
+//    adentro la marca de un proyecto. Una ruta de red (UNC, unidad de red, volumen no local en mac) o de
+//    otro volumen se descarta ANTES de abrirla: con la ventana sobre C: no se lee nada de E:.
+//  - Lo que se muestra de un item nombra lo que se borra ("...\timeline_cache.db + 00–ff",
+//    "...\Topaz Video Projects\*\thumbnails"), nunca solo la carpeta que lo junta.
 //  - Al lado de algunas caches hay licencias (Redshift, el `auth.tpz` de Topaz, los `.hid` de Foundry):
 //    nunca se ofrecen.
 //  - Cada item lleva los procesos (Windows) o identificadores de app (mac) que lo bloquean.
@@ -36,6 +39,10 @@ namespace AppCacheRules {
 void add(QList<Cleanup::Category> &categories, const CleanupRules::Context &context);
 // Con el arbol del escaneo (con su candado tomado): Resolve, previews de Premiere Pro y proxies de Blender.
 void addScanned(QList<Cleanup::Category> &categories, const ScanTree &tree, const CleanupRules::Context &context);
+
+// Los programas de Adobe que usan la Media Cache comun (procesos en Windows; identificadores de app y
+// nombres en mac). La comparten la regla de su lugar de fabrica (CleanupRulesWin/Mac) y la de la movida.
+QStringList adobeBlockers();
 
 // ---- Piezas, expuestas para el self-test.
 

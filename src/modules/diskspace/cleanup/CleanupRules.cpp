@@ -539,11 +539,23 @@ void dropInsideSwept(QList<Cleanup::Category> &categories, const ScanTree &tree,
             while (rest.startsWith(QDir::separator())) {
                 rest.remove(0, 1);
             }
-            const ScanTree::Index child = tree.find(join(sweep.path, rest.section(QDir::separator(), 0, 0)));
+            const QString childPath = join(sweep.path, rest.section(QDir::separator(), 0, 0));
+            const ScanTree::Index child = tree.find(childPath);
             if (child == ScanTree::kNone || !tree.isAlive(child)) {
                 return false;
             }
-            return nowSecs - tree.node(child).newest >= qint64(sweep.minAgeDays) * 86400;
+            // Como la regla de temporales: lo mas nuevo entre modificacion y creacion. El arbol guarda solo
+            // la modificacion de los archivos; la de la hija misma (y su creacion) se lee aca. La creacion
+            // de lo que hay mas adentro no esta: en ese caso el item puede no ofrecerse esa vez, nunca de mas.
+            const QFileInfo info(childPath);
+            qint64 newest = tree.node(child).newest;
+            if (info.lastModified().isValid()) {
+                newest = qMax(newest, info.lastModified().toSecsSinceEpoch());
+            }
+            if (info.birthTime().isValid()) {
+                newest = qMax(newest, info.birthTime().toSecsSinceEpoch());
+            }
+            return nowSecs - newest >= qint64(sweep.minAgeDays) * 86400;
         }
         return false;
     };

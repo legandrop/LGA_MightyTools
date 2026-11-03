@@ -66,6 +66,7 @@ CleanupBases cleanupBases()
 {
     CleanupBases bases;
     bases.profile = real(known(FOLDERID_Profile));
+    bases.documents = real(known(FOLDERID_Documents));
     bases.localAppData = real(known(FOLDERID_LocalAppData));
     bases.roamingAppData = real(known(FOLDERID_RoamingAppData));
     // %TEMP% puede venir en formato corto (8.3): real() lo deja en su forma larga.
@@ -115,15 +116,20 @@ QStringList protectedTreeExceptions()
     // Los modelos de IA que Topaz Video baja por su cuenta (con el usuario como dueno) a
     // ProgramData\Topaz Labs LLC\<app>\models\models. Al lado, en ...\models, quedan sus definiciones y
     // `auth.tpz`: eso sigue protegido.
+    // Cada excepcion, en su ruta real, tiene que ser una carpeta de verdad (no un enlace) DENTRO de la
+    // ProgramData real: si un tramo lleva a otro lado, se descarta.
     QStringList list;
-    const QString programData = known(FOLDERID_ProgramData);
+    const QString programData = FileSystemOps::canonicalPath(known(FOLDERID_ProgramData));
     if (programData.isEmpty()) {
         return list;
     }
+    const QString inside = programData.endsWith(QLatin1Char('\\')) ? programData : programData + QLatin1Char('\\');
     for (const char *app : {"Topaz Video", "Topaz Video AI"}) {
-        const QString models = QDir(programData).filePath(QStringLiteral("Topaz Labs LLC/%1/models/models").arg(QLatin1String(app)));
-        if (QFileInfo(models).isDir()) {
-            add(list, models);
+        const QString models = FileSystemOps::canonicalPath(
+            QDir(programData).filePath(QStringLiteral("Topaz Labs LLC/%1/models/models").arg(QLatin1String(app))));
+        if (!models.isEmpty() && FileSystemOps::kind(models) == FileSystemOps::Kind::Dir && models.startsWith(inside, Qt::CaseInsensitive)
+            && !list.contains(models, Qt::CaseInsensitive)) {
+            list.append(models);
         }
     }
     return list;

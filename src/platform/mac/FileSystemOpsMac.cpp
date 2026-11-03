@@ -10,6 +10,7 @@
 
 #include <libproc.h>
 #include <sys/attr.h>
+#include <sys/mount.h>
 #include <sys/proc_info.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -237,6 +238,33 @@ Identity identity(const QString &path)
         id.valid = true;
     }
     return id;
+}
+
+bool isNetworkPath(const QString &path)
+{
+    const QString text = path.trimmed();
+    if (text.startsWith(QLatin1String("//"))) {
+        return true;
+    }
+    // El punto de montaje mas largo que contiene la ruta, de la tabla que ya tiene el sistema (MNT_NOWAIT:
+    // no le pregunta nada a un servidor). Sin MNT_LOCAL es un volumen de red.
+    struct statfs *mounts = nullptr;
+    const int count = getmntinfo(&mounts, MNT_NOWAIT);
+    const QByteArray target = QDir::cleanPath(text).toUtf8();
+    size_t best = 0;
+    bool remote = false;
+    for (int i = 0; i < count; ++i) {
+        const char *point = mounts[i].f_mntonname;
+        const size_t length = std::strlen(point);
+        const bool root = length == 1 && point[0] == '/';
+        const bool inside = root || (target.startsWith(QByteArray(point, int(length)))
+                                     && (target.size() == qsizetype(length) || target.at(qsizetype(length)) == '/'));
+        if (inside && length >= best) {
+            best = length;
+            remote = (mounts[i].f_flags & MNT_LOCAL) == 0;
+        }
+    }
+    return remote;
 }
 
 bool createDirLink(const QString &link, const QString &target)

@@ -60,6 +60,10 @@ struct Identity
 };
 Identity identity(const QString &path);
 
+// La ruta es de red: UNC (`\\servidor\...`, `//servidor/...`), una unidad de red (Windows) o un volumen
+// montado que no es local (macOS). Se responde sin abrir la ruta: un recurso de red caido no la traba.
+bool isNetworkPath(const QString &path);
+
 // Crea un enlace de carpeta `link` que apunta a `target` (junction en Windows). Lo usa el self-test
 // para comprobar, con un enlace de verdad, que ni el escaneo ni el borrado lo siguen. Misma guarda de
 // corrida automatizada que removeFile.
