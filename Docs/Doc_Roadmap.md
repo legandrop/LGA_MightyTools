@@ -4,8 +4,8 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
 
 1. **Herramientas nuevas (Lega, 2026-11-02), en este orden:**
    1. **App Toggle** (Windows y macOS): hecha en la v1.53 (D-67). Falta la prueba real de Lega (Win+E con
-      XYplorer; OBS y UAD Console desde el Stream Deck con botones de tipo atajo) y compilarla y probarla
-      en la Mac. Pendientes posibles: con una ventana de administrador al frente el atajo no llega
+      XYplorer; OBS y UAD Console desde el Stream Deck con botones de tipo atajo) y probarla en la Mac
+      (el CI ya la compila). Pendientes posibles: con una ventana de administrador al frente el atajo no llega
       (sumar App Toggle al ayudante elevado de D-61); una app viva sin ventana (solo en la bandeja, como
       UAD Console a veces) no se muestra, igual que el AHK (opción: volver a ejecutar el exe).
    2. **Mouse Buttons** (Windows): hecha en la v1.53 (D-68). Falta la prueba real de Lega con Photoshop
