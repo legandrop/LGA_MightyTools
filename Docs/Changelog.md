@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation: aun de a un carácter, el Bloc de notas de Windows 11 cambiaba la primera letra de una palabra por la siguiente («que» → «uue»): tras un espacio revisa la ortografía, se atrasa y toma el carácter de VK_PACKET al procesar la tecla, así que ninguna pausa lo garantiza. Lega eligió el «pegado sin historial» de sus reglas: se guarda lo que hay en el portapapeles (todos los formatos copiables), se pone el texto con render diferido y las marcas que lo dejan fuera del historial de Win+V, de la nube y de los monitores, se manda Ctrl+V y, cuando la ventana ya lo pidió (y al menos 1 s después), se devuelve lo de antes, también sin historial y solo si nadie copió otra cosa mientras tanto. Si el portapapeles está ocupado se reintenta sin trabar la interfaz.
+
+[ Dictation - Pegado sin historial: el texto llega entero aunque la ventana se atrase ]
+
 Dictation: en el Bloc de notas de Windows 11 el texto final salía roto («acá aaaaaaaa ......») aunque el motor lo había transcripto bien. La escritura mandaba lotes de 12 caracteres cada 12 ms (~1000 por segundo); el Bloc de notas se atrasaba y las teclas en cola salían con el carácter que se estaba mandando en ese momento, no con el suyo. Ahora va un carácter por lote (~80 por segundo) y los modificadores se revisan antes de cada carácter, no solo al empezar: un Ctrl apretado a mitad de un texto largo ya no convierte cada letra en Ctrl+letra.
 
 [ Dictation - Un caracter por lote al escribir: el Bloc de notas atrasado repetia letras ]

@@ -1023,29 +1023,28 @@ void testAudio(const Check &check)
 
 void testTyping(const Check &check)
 {
-    const auto unicode = [](const char *hex) {
-        return QStringList{QStringLiteral("unicode U+%1 abajo").arg(QLatin1String(hex)),
-                           QStringLiteral("unicode U+%1 arriba").arg(QLatin1String(hex))};
-    };
-    const QStringList shiftEnter = {QStringLiteral("tecla vk=0x10 abajo"), QStringLiteral("tecla vk=0x0d abajo"),
-                                    QStringLiteral("tecla vk=0x0d arriba"), QStringLiteral("tecla vk=0x10 arriba")};
-    check(TextTyper::describe(QStringLiteral("á")) == unicode("00E1") && TextTyper::describe(QStringLiteral("ñ")) == unicode("00F1"),
-          QStringLiteral("escritura: la a con tilde y la enie van como caracteres Unicode, sin depender del teclado"));
+    const auto text = [](const QStringList &plan) { return plan.value(0); };
+    const QStringList plain = TextTyper::describe(QStringLiteral("Nuke, ¿andás?"));
+    check(text(plain) == QStringLiteral("texto Nuke, ¿andás?"),
+          QStringLiteral("pegado: el texto va tal cual, con tildes y signos (sin depender del teclado)"));
     const QString emoji = QString::fromUtf8("\xF0\x9F\x98\x80");
-    check(TextTyper::describe(emoji) == unicode("D83D") + unicode("DE00"),
-          QStringLiteral("escritura: un emoji va como su par sustituto, en orden"));
-    const QStringList separator = {QStringLiteral("--")};
-    check(TextTyper::describe(QStringLiteral("a\r\nb")) == unicode("0061") + separator + shiftEnter + separator + unicode("0062")
-              && TextTyper::describe(QStringLiteral("\n")) == shiftEnter && TextTyper::describe(QStringLiteral("\r")) == shiftEnter,
-          QStringLiteral("escritura: un salto de linea (\\r\\n, \\n o \\r) es UN Shift+Enter: en un chat Enter solo enviaria"));
-    check(TextTyper::describe(QString(QChar(0x01))).isEmpty() && TextTyper::describe(QString()).isEmpty(),
-          QStringLiteral("escritura: los caracteres de control no se mandan"));
-    check(TextTyper::describe(QStringLiteral("xy") + emoji) == unicode("0078") + separator + unicode("0079") + separator
-                                                                   + unicode("D83D") + unicode("DE00"),
-          QStringLiteral("escritura: un caracter por lote (el Bloc de notas atrasado repetia el ultimo); un emoji nunca queda partido"));
-    const QStringList mixed = TextTyper::describe(QStringLiteral("Nuke, ¿andás?\n") + emoji);
-    check(!mixed.isEmpty() && mixed.filter(QStringLiteral("SIN-MARCA")).isEmpty(),
-          QStringLiteral("escritura: cada tecla lleva la marca propia (los ganchos de la app no la toman)"));
+    check(text(TextTyper::describe(QStringLiteral("x") + emoji)) == QStringLiteral("texto x") + emoji,
+          QStringLiteral("pegado: un emoji queda entero"));
+    check(text(TextTyper::describe(QStringLiteral("a\r\nb"))) == QStringLiteral("texto a\\r\\nb")
+              && text(TextTyper::describe(QStringLiteral("a\nb"))) == QStringLiteral("texto a\\r\\nb")
+              && text(TextTyper::describe(QStringLiteral("a\rb"))) == QStringLiteral("texto a\\r\\nb"),
+          QStringLiteral("pegado: un salto de linea (\\r\\n, \\n o \\r) va como \\r\\n (pegado no envia el mensaje de un chat)"));
+    check(TextTyper::describe(QString(QChar(0x01))).isEmpty() && TextTyper::describe(QString()).isEmpty()
+              && text(TextTyper::describe(QStringLiteral("a\tb") + QChar(0x07))) == QStringLiteral("texto a\tb"),
+          QStringLiteral("pegado: los caracteres de control no se pegan, salvo el tabulador"));
+    check(plain.contains(QStringLiteral("formato CF_UNICODETEXT diferido"))
+              && plain.contains(QStringLiteral("marca CanIncludeInClipboardHistory"))
+              && plain.contains(QStringLiteral("marca CanUploadToCloudClipboard"))
+              && plain.contains(QStringLiteral("marca ExcludeClipboardContentFromMonitorProcessing")),
+          QStringLiteral("pegado: render diferido y fuera del historial de Win+V, de la nube y de los monitores del portapapeles"));
+    check(plain.filter(QStringLiteral("tecla ")) == QStringList{QStringLiteral("tecla vk=0x11 abajo"), QStringLiteral("tecla vk=0x56 abajo"),
+                                                                QStringLiteral("tecla vk=0x56 arriba"), QStringLiteral("tecla vk=0x11 arriba")},
+          QStringLiteral("pegado: las teclas son Ctrl+V, con la marca propia (los ganchos de la app no la toman)"));
 }
 
 void testAutomatedRun(const Check &check)
