@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation (Windows), herramienta nueva: faltaba un dictado propio que reemplace el Win+H de Windows y escriba bien los nombres de Nuke. El atajo (Win+H con prioridad; tocar o mantener, Esc cancela) toma la ventana del frente, abre el micrófono por WASAPI solo mientras graba y manda el audio a un proceso aparte (`--dictation-worker`: transcribe.cpp 0.4.1 con Whisper large-v3 turbo por Vulkan), que acepta audio mientras carga. El texto en vivo se ve en una ventanita sin foco; al terminar se escribe con `SendInput` Unicode, nunca con el portapapeles. Si la ventana cambió o es de administrador no se escribe y queda en «Recent», solo en memoria. `DictationFlow` arma el recorrido sin sistema y el self-test lo prueba con dobles. Motor y modelo (MIT, 863 MB entre los dos) se bajan con un botón y se verifican por SHA-256; el motor se descarga tras 10 minutos sin uso. D-72.
+
+[ Dictation - Herramienta nueva: dictado por voz en cualquier campo de texto ]
+
 App Toggle y Window Layouts: el botón de OBS del Stream Deck (Ctrl+Alt+Shift+Win+1) abría OBS y además la app de Office/Copilot. Ctrl+Alt+Shift+Win es la «tecla Office»: si Windows no ve otra tecla con las cuatro apretadas, al soltarlas abre esa app. El gancho mandaba la tecla muda antes de soltar Win o Alt, pero el Stream Deck suelta Ctrl primero y la combinación ya estaba rota. Ahora la tecla muda va antes de la PRIMERA liberación de cualquier modificador, después de una combinación interceptada con Win o Alt. Self-test con la secuencia del Stream Deck.
 
 [ Atajos - La tecla muda va antes de la primera liberacion: el Stream Deck ya no abre la app de Office ]

@@ -53,6 +53,9 @@ Source: "tools\close_by_path.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 ;    el registro compartido de apps LGA de esta app (LgaRegistry). La carpeta LGA solo se borra si
 ;    queda vacia (la usan otras apps LGA).
 ;  - Los instaladores bajados por el auto-update, en %TEMP%\LGA_MightyTools_updates.
+;  - El motor y el modelo de Dictation en su carpeta por defecto, {app}\models (los baja la app con un
+;    boton, src/modules/dictation/DictationModels.cpp). Una carpeta que el usuario eligio fuera de
+;    {app} no se toca: puede compartirla con otras apps.
 ; Lo que la app escribe en el REGISTRO (asociacion .nk, navegador, Run) lo borra el propio exe con
 ; --uninstall-cleanup, y la entrada de inicio con Windows ademas en Pascal: CurUninstallStepChanged,
 ; abajo.
@@ -62,6 +65,7 @@ Type: filesandordirs; Name: "{userappdata}\LGA\LGA_MightyTools"
 Type: files; Name: "{userappdata}\LGA\LGA_MightyTools.json"
 Type: dirifempty; Name: "{userappdata}\LGA"
 Type: filesandordirs; Name: "{%TEMP}\LGA_MightyTools_updates"
+Type: filesandordirs; Name: "{app}\models"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"

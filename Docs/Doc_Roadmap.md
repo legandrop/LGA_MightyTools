@@ -3,16 +3,22 @@
 Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, sección 6.
 
 1. **Herramientas nuevas (Lega, 2026-11-02), en este orden:**
-   1. **App Toggle** (Windows y macOS): hecha en la v1.53 (D-67). Falta la prueba real de Lega (Win+E con
+   1. **Dictation** (Windows, rama `dictado`, D-72): hecha, sin probar con micrófono. Falta la prueba real de
+      Lega en su PC: Win+H en Nuke, el navegador y un chat (tocar y mantener, Esc), con el modelo cargando y
+      ya cargado, el texto en vivo de la ventanita, la escritura en un campo y en una ventana de
+      administrador (no escribe y queda en «Recent»), cambiar de ventana mientras transcribe, la descarga
+      con el botón y el borrado con el tacho. Después: macOS (micrófono con AVAudioEngine, escritura con
+      CGEvent, permisos de micrófono y de accesibilidad); Parakeet y Voxtral como modelos opcionales.
+   2. **App Toggle** (Windows y macOS): hecha en la v1.53 (D-67). Falta la prueba real de Lega (Win+E con
       XYplorer; OBS y UAD Console desde el Stream Deck con botones de tipo atajo) y probarla en la Mac
       (el CI ya la compila). Pendientes posibles: con una ventana de administrador al frente el atajo no llega
       (sumar App Toggle al ayudante elevado de D-61); una app viva sin ventana (solo en la bandeja, como
       UAD Console a veces) no se muestra, igual que el AHK (opción: volver a ejecutar el exe).
-   2. **Mouse Buttons** (Windows): hecha en la v1.53 (D-68). Falta la prueba real de Lega con Photoshop
+   3. **Mouse Buttons** (Windows): hecha en la v1.53 (D-68). Falta la prueba real de Lega con Photoshop
       (mover la imagen con el botón del medio; en otra app el botón del medio hace lo de siempre).
       Pendientes posibles: macOS; dos reglas que comparten una tecla y se aprietan a la vez (soltar una
       suelta la tecla de las dos).
-   3. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
+   4. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
       prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
       «Organizar automáticamente» prendido, y Undo.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de

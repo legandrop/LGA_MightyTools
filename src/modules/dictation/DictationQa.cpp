@@ -1,9 +1,13 @@
 #include "modules/dictation/DictationQa.h"
 
 #include "app/HotkeyHub.h"
+#include "app/ModuleContext.h"
 #include "core/AutomatedRun.h"
+#include "core/I18n.h"
 #include "modules/dictation/DictationEngine.h"
+#include "modules/dictation/DictationFlow.h"
 #include "modules/dictation/DictationModels.h"
+#include "modules/dictation/DictationModule.h"
 #include "modules/dictation/DictationProtocol.h"
 #include "modules/dictation/DictationText.h"
 #include "modules/dictation/DictationTrigger.h"
@@ -19,6 +23,7 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QNetworkAccessManager>
 #include <QProcess>
 #include <QTemporaryDir>
@@ -871,6 +876,546 @@ void testAutomatedRun(const Check &check)
           QStringLiteral("corrida automatizada: type() solo anota en el log; no manda ninguna tecla"));
 }
 
+// ---------------------------------------------------------------- Recorrido (DictationFlow con dobles)
+
+using Phase = DictationFlow::Phase;
+using OverlayState = DictationOverlay::State;
+
+// El sistema de mentira: anota cada pedido y lleva lo que importa (microfono abierto, Esc, ventanita).
+class FakeIo : public DictationFlow::Io
+{
+public:
+    QString problem;
+    bool ready = true;
+    bool captureStarts = true;
+    bool typeAccepts = true;
+    bool captureOpen = false;
+    bool active = false;
+    bool overlayShown = false;
+    OverlayState overlay = OverlayState::Listening;
+    QString overlayMessage;
+    QString overlayConfirmed;
+    int fed = 0;
+    int begins = 0;
+    int finishes = 0;
+    int cancels = 0;
+    QStringList typedTexts;
+    quintptr typedTarget = 0;
+
+    quintptr foregroundWindow() override { return 0x51; }
+    QString engineProblem() override { return problem; }
+    bool engineReady() override { return ready; }
+    void engineBegin() override { ++begins; }
+    void engineFeed(const QVector<float> &samples) override { fed += int(samples.size()); }
+    void engineFinish() override { ++finishes; }
+    void engineCancel() override { ++cancels; }
+    bool startCapture() override { captureOpen = captureStarts; return captureStarts; }
+    void stopCapture() override { captureOpen = false; }
+    bool type(quintptr target, const QString &text) override
+    {
+        typedTarget = target;
+        typedTexts << text;
+        return typeAccepts;
+    }
+    void showOverlay(quintptr) override { overlayShown = true; }
+    void overlayState(OverlayState state, const QString &message) override
+    {
+        overlay = state;
+        overlayMessage = message;
+    }
+    void overlayText(const QString &confirmed, const QString &) override { overlayConfirmed = confirmed; }
+    void overlayLevel(float) override {}
+    // Se va (con la demora pedida): queda anotada la demora, para ver que un error se lee unos segundos.
+    void hideOverlay(int delayMs) override
+    {
+        overlayShown = false;
+        hideDelay = delayMs;
+    }
+    int hideDelay = -1;
+    void setActive(bool on) override { active = on; }
+};
+
+struct FlowRig
+{
+    FakeIo io;
+    DictationFlow flow{io};
+    QList<DictationFlow::Entry> entries;
+    FlowRig()
+    {
+        QObject::connect(&flow, &DictationFlow::finished, &flow, [this](const DictationFlow::Entry &e) { entries << e; });
+    }
+    // Nada queda abierto: microfono cerrado, Esc retirado, sin dictado en curso.
+    bool clean() const { return !io.captureOpen && !io.active && flow.phase() == Phase::Idle; }
+};
+
+void testFlow(const Check &check)
+{
+    {
+        FlowRig r;
+        r.flow.press(0);
+        check(r.flow.phase() == Phase::Recording && r.io.captureOpen && r.io.active && r.io.begins == 1 && r.io.overlayShown
+                  && r.io.overlay == OverlayState::Listening,
+              QStringLiteral("recorrido: el atajo abre el microfono, empieza el motor, registra Esc y muestra la ventanita"));
+        r.flow.release(120);
+        check(r.flow.phase() == Phase::Recording && r.io.captureOpen, QStringLiteral("recorrido: un toque corto (tocar) sigue grabando"));
+        r.flow.samples(QVector<float>(1600, 0.1f));
+        r.flow.partial(QStringLiteral("Abrí el comp"));
+        r.flow.partial(QStringLiteral("Abrí el comp en Nuke"));
+        check(r.io.fed == 1600 && r.io.overlayConfirmed == QStringLiteral("Abrí el comp"),
+              QStringLiteral("recorrido: el audio va al motor y lo que se repite entre pasadas queda confirmado en la ventanita"));
+        r.flow.press(4000);
+        check(r.flow.phase() == Phase::Transcribing && !r.io.captureOpen && r.io.finishes == 1 && r.io.active
+                  && r.io.overlay == OverlayState::Transcribing,
+              QStringLiteral("recorrido: el segundo toque cierra el microfono y pide el final (Esc sigue para cancelar)"));
+        r.flow.press(4100);
+        r.flow.release(4150);
+        check(r.io.begins == 1 && r.flow.phase() == Phase::Transcribing,
+              QStringLiteral("recorrido: transcribiendo, el atajo no empieza otro dictado"));
+        r.flow.final(QStringLiteral(" Abrí el comp en Nuke Studio. "));
+        check(r.flow.phase() == Phase::Typing && r.io.typedTexts == QStringList{QStringLiteral("Abrí el comp en Nuke Studio.")}
+                  && r.io.typedTarget == 0x51 && !r.io.active,
+              QStringLiteral("recorrido: el final se escribe en la ventana que estaba al frente al empezar"));
+        r.flow.press(4300);
+        check(r.io.begins == 1, QStringLiteral("recorrido: escribiendo, el atajo no empieza otro dictado"));
+        r.flow.typed(TextTyper::Result::Typed, 28);
+        check(r.clean() && !r.io.overlayShown && r.entries.size() == 1 && r.entries.first().typed
+                  && r.entries.first().text == QStringLiteral("Abrí el comp en Nuke Studio."),
+              QStringLiteral("recorrido: escrito, la ventanita se va y queda en Recent"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.release(900);
+        check(r.flow.phase() == Phase::Transcribing && !r.io.captureOpen,
+              QStringLiteral("recorrido: mantener y soltar termina (mantener)"));
+        r.flow.final(QString());
+        check(r.clean() && r.io.typedTexts.isEmpty() && r.entries.isEmpty() && !r.io.overlayShown,
+              QStringLiteral("recorrido: un final vacio no escribe nada ni queda en Recent"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.partial(QStringLiteral("esto no va"));
+        r.flow.escape();
+        check(r.clean() && r.io.cancels == 1 && r.io.typedTexts.isEmpty() && r.entries.size() == 1 && !r.entries.first().typed
+                  && r.entries.first().note == I18n::tr("Cancelled"),
+              QStringLiteral("recorrido: Esc grabando cancela sin escribir; lo dicho queda en Recent como cancelado"));
+        r.flow.release(500);
+        check(r.clean() && r.io.finishes == 0, QStringLiteral("recorrido: soltar el atajo despues de Esc no hace nada"));
+        r.flow.press(1000);
+        r.flow.release(2000);
+        r.flow.escape();
+        r.flow.final(QStringLiteral("tarde"));
+        check(r.clean() && r.io.typedTexts.isEmpty() && r.io.cancels == 2,
+              QStringLiteral("recorrido: Esc transcribiendo descarta el final"));
+    }
+    {
+        FlowRig r;
+        r.io.ready = false;
+        r.flow.press(0);
+        r.flow.samples(QVector<float>(800, 0.0f));
+        r.flow.samples(QVector<float>(800, 0.0f));
+        check(r.io.overlay == OverlayState::Loading && r.io.fed == 1600 && r.io.begins == 1,
+              QStringLiteral("recorrido: con el motor cargando, la ventanita dice Loading y el audio se guarda igual"));
+        r.io.ready = true;
+        r.flow.engineReady();
+        check(r.io.overlay == OverlayState::Listening, QStringLiteral("recorrido: al quedar listo pasa a Listening sin cortar"));
+        r.flow.release(800);
+        r.flow.final(QStringLiteral("lo dicho mientras cargaba"));
+        check(r.io.typedTexts == QStringList{QStringLiteral("lo dicho mientras cargaba")},
+              QStringLiteral("recorrido: lo dicho mientras cargaba se escribe"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.release(700);
+        r.flow.final(QStringLiteral("hola"));
+        r.flow.typed(TextTyper::Result::FocusChanged, 0);
+        check(r.clean() && r.entries.size() == 1 && !r.entries.first().typed
+                  && r.entries.first().note == I18n::tr("Not typed: the window changed") && r.io.overlay == OverlayState::Error,
+              QStringLiteral("recorrido: con el foco cambiado no se escribe; la ventanita lo dice en rojo y queda en Recent"));
+        r.flow.press(1000);
+        r.flow.release(1700);
+        r.flow.final(QStringLiteral("hola de nuevo"));
+        r.flow.typed(TextTyper::Result::Elevated, 0);
+        check(r.entries.size() == 2 && r.entries.last().note == I18n::tr("Not typed: the window runs as administrator"),
+              QStringLiteral("recorrido: una ventana de administrador tampoco recibe nada"));
+        check(DictationFlow::noteFor(TextTyper::Result::FocusChanged, true) == I18n::tr("Partly typed: the window changed"),
+              QStringLiteral("recorrido: cortado a la mitad dice que se escribio en parte"));
+    }
+    {
+        FlowRig r;
+        r.io.problem = QStringLiteral("Download the dictation model in Mighty Tools first.");
+        r.flow.press(0);
+        check(r.clean() && r.io.begins == 0 && r.io.overlay == OverlayState::Error && r.io.hideDelay == DictationFlow::kErrorMs,
+              QStringLiteral("recorrido: sin el modelo no se abre el microfono; la ventanita avisa en rojo unos segundos"));
+        r.flow.release(100);
+        check(r.clean(), QStringLiteral("recorrido: y soltar no deja nada a medias"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.partial(QStringLiteral("algo dicho"));
+        r.flow.captureFailed(QStringLiteral("The microphone is not connected."));
+        check(r.clean() && r.io.cancels == 1 && r.io.overlay == OverlayState::Error && r.entries.size() == 1,
+              QStringLiteral("recorrido: si el microfono falla grabando, se cancela el motor y se avisa en rojo"));
+        r.io.captureStarts = false;
+        r.flow.press(1000);
+        check(r.clean() && r.io.cancels == 2 && r.io.overlay == OverlayState::Error,
+              QStringLiteral("recorrido: si el microfono ni siquiera arranca, igual"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.release(600);
+        r.flow.engineFailed(QStringLiteral("Dictation failed: backend error"));
+        check(r.clean() && r.io.typedTexts.isEmpty() && r.io.overlay == OverlayState::Error,
+              QStringLiteral("recorrido: si el motor falla en la pasada final, no se escribe y se avisa"));
+        r.flow.press(1000);
+        r.flow.release(1600);
+        r.flow.tick(1600 + 30001);
+        check(r.clean() && r.io.overlay == OverlayState::Error,
+              QStringLiteral("recorrido: un motor que no contesta en 30 s no deja el atajo trabado"));
+    }
+    {
+        FlowRig r;
+        r.flow.setMaxDurationMs(1000);
+        r.flow.press(0);
+        r.flow.release(100);
+        r.flow.tick(999);
+        const bool stillRecording = r.flow.phase() == Phase::Recording;
+        r.flow.tick(1000);
+        check(stillRecording && r.flow.phase() == Phase::Transcribing && !r.io.captureOpen,
+              QStringLiteral("recorrido: el tope de duracion termina solo y cierra el microfono"));
+        r.flow.press(2000);
+        r.flow.limitReached();
+        check(r.io.finishes == 1, QStringLiteral("recorrido: el aviso de tope del motor no termina dos veces"));
+    }
+    {
+        FlowRig r;
+        r.flow.setContext({QStringLiteral("Nuke Studio"), QStringLiteral("Hiero")}, QString());
+        r.flow.setReplacements({{QStringLiteral("jairo"), QStringLiteral("Hiero")}});
+        r.flow.press(0);
+        r.flow.partial(QStringLiteral("Glossary, Nuke Studio"));
+        check(r.io.overlayConfirmed.isEmpty(), QStringLiteral("recorrido: una pasada que solo repite el vocabulario no se muestra"));
+        r.flow.release(800);
+        r.flow.final(QStringLiteral("Abrí jairo."));
+        check(r.io.typedTexts == QStringList{QStringLiteral("Abrí Hiero.")}, QStringLiteral("recorrido: los reemplazos se aplican al final"));
+    }
+    {
+        FlowRig r;
+        r.flow.press(0);
+        r.flow.samples(QVector<float>(1600, 0.0f));
+        r.flow.shutdown();
+        check(r.clean() && r.io.cancels == 1 && r.io.typedTexts.isEmpty() && !r.io.overlayShown,
+              QStringLiteral("recorrido: apagar la herramienta grabando cierra el microfono, cancela el motor y no escribe"));
+        r.flow.release(500);
+        r.flow.samples(QVector<float>(1600, 0.0f));
+        check(r.clean() && r.io.fed == 1600, QStringLiteral("recorrido: lo que llega despues de apagar no va al motor"));
+        r.flow.press(1000);
+        r.flow.release(1600);
+        r.flow.final(QStringLiteral("a medias"));
+        r.flow.shutdown();
+        r.flow.typed(TextTyper::Result::Typed, 8);
+        check(r.clean() && r.entries.isEmpty(), QStringLiteral("recorrido: apagar escribiendo no deja nada pendiente"));
+    }
+}
+
+// ---------------------------------------------------------------- Modulo (contexto y atajos de mentira)
+
+class FakeHotkeys : public ModuleHotkeys
+{
+public:
+    QHash<int, Shortcut> registered;
+    QHash<int, Shortcut> declared;
+    Shortcut takenByOther;
+    bool registerHotkey(int id, const Shortcut &keys) override { registered.insert(id, keys); return true; }
+    bool registerPriorityHotkey(int id, const Shortcut &keys) override { registered.insert(id, keys); return true; }
+    void unregisterHotkey(int id) override { registered.remove(id); }
+    void unregisterAll() override { registered.clear(); }
+    bool isRegistered(int id) const override { return registered.contains(id); }
+    bool probe(const Shortcut &) override { return true; }
+    void passThrough(const Shortcut &) override {}
+    QString declare(int id, const Shortcut &keys) override
+    {
+        if (keys.isValid()) declared.insert(id, keys); else declared.remove(id);
+        return QString();
+    }
+    QString declaredByOtherModule(const Shortcut &keys) const override
+    {
+        return keys == takenByOther ? QStringLiteral("App Toggle") : QString();
+    }
+    void press(int id) { emit activated(id); }
+    void let(int id) { emit released(id); }
+};
+
+class FakeContext : public ModuleContext
+{
+public:
+    QString moduleId() const override { return QStringLiteral("dictation"); }
+    QString moduleTitle() const override { return QStringLiteral("Dictation"); }
+    QVariant value(const QString &key, const QVariant &fallback = {}) const override { return values.value(key, fallback); }
+    void setValue(const QString &key, const QVariant &value) override { values.insert(key, value); }
+    void removeValue(const QString &key) override { values.remove(key); }
+    bool captureMode() const override { return false; }
+    bool dryRunInput() const override { return true; }
+    bool automatedRun() const override { return true; }
+    bool persistentRegistrationAllowed() const override { return false; }
+    ModuleHotkeys *hotkeys() override { return &fake; }
+    InputInjector *injector() override { return nullptr; }
+    ForegroundWatcher *foreground() override { return nullptr; }
+    void notify(const QString &, const QString &, NoticeIcon, int) override {}
+    void showPanel() override {}
+    void hideWindowTemporarily() override {}
+    void restoreWindow() override {}
+    QWidget *window() const override { return nullptr; }
+
+    FakeHotkeys fake;
+    QHash<QString, QVariant> values;
+};
+
+// El modulo de verdad con el microfono, la ventana del frente y, si se pide, el motor reemplazados.
+//  - fakeEngine: el motor anota y nunca falla (self-test).
+//  - wav: el microfono entrega ese audio en tiempo real (simulacion con el motor real).
+class QaModule : public DictationModule
+{
+public:
+    using DictationModule::DictationModule;
+    bool fakeEngine = false;
+    QVector<float> wav;
+    bool captureOpen = false;
+    int engineCancels = 0;
+    using DictationModule::flow;
+
+protected:
+    bool preloadAllowed() const override { return !fakeEngine; }
+    quintptr foregroundWindow() override { return 0x51; }
+    QString engineProblem() override { return fakeEngine ? QString() : DictationModule::engineProblem(); }
+    bool engineReady() override { return fakeEngine || DictationModule::engineReady(); }
+    void engineBegin() override { if (!fakeEngine) DictationModule::engineBegin(); }
+    void engineFeed(const QVector<float> &samples) override { if (!fakeEngine) DictationModule::engineFeed(samples); }
+    void engineFinish() override { if (!fakeEngine) DictationModule::engineFinish(); }
+    void engineCancel() override
+    {
+        ++engineCancels;
+        if (!fakeEngine) DictationModule::engineCancel();
+    }
+    bool startCapture() override
+    {
+        captureOpen = true;
+        m_fedUntil = 0;
+        m_since.start();
+        if (!m_feeder) {
+            m_feeder = new QTimer(this);
+            m_feeder->setInterval(50);
+            QObject::connect(m_feeder, &QTimer::timeout, this, [this]() { feed(m_since.elapsed()); });
+        }
+        if (!wav.isEmpty()) m_feeder->start();
+        return true;
+    }
+    void stopCapture() override
+    {
+        // Como el microfono de verdad: lo que ya estaba grabado sale antes de cerrar.
+        if (captureOpen && !wav.isEmpty()) feed(m_since.elapsed());
+        if (m_feeder) m_feeder->stop();
+        captureOpen = false;
+    }
+
+private:
+    void feed(qint64 elapsedMs)
+    {
+        const qsizetype until = qMin<qsizetype>(wav.size(), qsizetype(elapsedMs) * 16);
+        if (until > m_fedUntil) {
+            flow().samples(wav.mid(m_fedUntil, until - m_fedUntil));
+            m_fedUntil = until;
+        }
+    }
+    QTimer *m_feeder = nullptr;
+    QElapsedTimer m_since;
+    qsizetype m_fedUntil = 0;
+};
+
+void testModule(const Check &check)
+{
+    // Ajustes y textos.
+    FakeContext context;
+    check(DictationModule::vocabularyFrom(QStringLiteral(" Nuke,  Nuke Studio ,,nuke, Hiero "))
+              == QStringList({QStringLiteral("Nuke"), QStringLiteral("Nuke Studio"), QStringLiteral("Hiero")}),
+          QStringLiteral("modulo: las palabras propias se separan por coma, sin vacias ni repetidas"));
+    const DictationText::Replacements pairs{{QStringLiteral("jairo"), QStringLiteral("Hiero")},
+                                            {QStringLiteral("nuke estudio"), QStringLiteral("Nuke Studio")}};
+    check(DictationModule::replacementsFromJson(DictationModule::replacementsToJson(pairs)) == pairs
+              && DictationModule::replacementsFromJson(QStringLiteral("no es json")).isEmpty()
+              && DictationModule::replacementsFromJson(QStringLiteral("[[\"\",\"x\"],[\"a\"],[\"b\",\"c\"]]")).size() == 1,
+          QStringLiteral("modulo: los reemplazos van y vuelven en JSON; los rotos o sin texto se descartan"));
+    const QString phrase = DictationModule::contextPhrase(QStringLiteral("es"));
+    check(phrase.contains(QStringLiteral("¿vos")) && phrase.toUtf8().contains("\xC2\xBF")
+              && DictationModule::contextPhrase(QStringLiteral("en")).isEmpty()
+              && DictationModule::contextPhrase(QStringLiteral("auto")).isEmpty(),
+          QStringLiteral("modulo: la frase de contexto va solo en castellano, en UTF-8 real"));
+    context.values.insert(QStringLiteral("modelsRoot"),
+                          QDir(QDir::tempPath()).filePath(QStringLiteral("lga_mt_dictation_no_models")));
+    {
+        DictationModule module(context);
+        check(module.shortcut() == Shortcut::fromPortableString(QStringLiteral("Meta+H")) && module.language() == QLatin1String("es")
+                  && module.unloadMinutes() == 10 && module.replacements().isEmpty()
+                  && module.customWords() == QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto"),
+              QStringLiteral("modulo: de fabrica Win+H, castellano, 10 min, sin reemplazos y las palabras de Nuke"));
+        context.values.insert(QStringLiteral("language"), QStringLiteral("klingon"));
+        context.values.insert(QStringLiteral("unloadMinutes"), 7);
+        check(module.language() == QLatin1String("es") && module.unloadMinutes() == 10,
+              QStringLiteral("modulo: un idioma o un tiempo que no estan en la lista vuelven al de fabrica"));
+        context.values.remove(QStringLiteral("language"));
+        context.values.remove(QStringLiteral("unloadMinutes"));
+
+        module.start();
+        check(context.fake.registered.value(1) == Shortcut::fromPortableString(QStringLiteral("Meta+H"))
+                  && context.fake.declared.contains(1) && context.fake.registered.size() == 1,
+              QStringLiteral("modulo: prendido registra solo el atajo (con prioridad); Esc todavia no"));
+        check(module.status().tone == ModuleTone::Attention && module.enginePidForQa() == 0,
+              QStringLiteral("modulo: sin el modelo pide descargarlo y no lanza el motor"));
+        context.fake.press(1);
+        context.fake.let(1);
+        check(module.phase() == Phase::Idle && context.fake.registered.size() == 1 && module.history().isEmpty(),
+              QStringLiteral("modulo: el atajo sin el modelo no graba ni registra Esc"));
+        module.download(DictationModels::kModel);
+        const DictationModule::PieceInfo model = module.pieces().value(1);
+        check(model.state == DictationModels::State::Error && model.error == I18n::tr("Downloads are off during automated tests."),
+              QStringLiteral("modulo: en una corrida automatizada el boton de descarga no abre la red"));
+        context.fake.takenByOther = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+D"));
+        QString error;
+        check(!module.setShortcut(context.fake.takenByOther, &error) && error == I18n::tr("Already used by %1.").arg(QStringLiteral("App Toggle"))
+                  && module.shortcut() == Shortcut::fromPortableString(QStringLiteral("Meta+H")),
+              QStringLiteral("modulo: un atajo de otra herramienta se rechaza y queda el anterior"));
+        check(module.setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+J")), &error)
+                  && context.fake.registered.value(1) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+J")),
+              QStringLiteral("modulo: un atajo nuevo se registra en el acto"));
+        module.stop();
+        check(context.fake.registered.isEmpty() && context.fake.declared.isEmpty() && module.enginePidForQa() == 0,
+              QStringLiteral("modulo: apagado no deja atajos ni motor"));
+    }
+    context.values.remove(QStringLiteral("shortcut"));
+    {
+        // Un dictado en curso y la herramienta se apaga: nada queda abierto.
+        QaModule module(context);
+        module.fakeEngine = true;
+        module.start();
+        context.fake.press(1);
+        check(module.phase() == Phase::Recording && module.captureOpen && module.escapeRegisteredForQa()
+                  && context.fake.registered.size() == 2,
+              QStringLiteral("modulo: grabando, el microfono esta abierto y Esc registrado"));
+        context.fake.press(2);
+        check(module.phase() == Phase::Idle && !module.captureOpen && !module.escapeRegisteredForQa()
+                  && context.fake.registered.size() == 1 && module.engineCancels == 1,
+              QStringLiteral("modulo: Esc cancela, cierra el microfono y se retira"));
+        context.fake.press(1);
+        context.fake.let(1); // un toque: sigue grabando
+        module.stop();
+        check(module.phase() == Phase::Idle && !module.captureOpen && context.fake.registered.isEmpty()
+                  && module.engineCancels == 2,
+              QStringLiteral("modulo: apagar con un dictado en curso cierra el microfono, cancela el motor y suelta los atajos"));
+    }
+}
+
+int simulateFlow(const QStringList &args)
+{
+    QString wavPath;
+    QString root;
+    for (const QString &arg : args) {
+        if (arg.endsWith(QLatin1String(".wav"), Qt::CaseInsensitive)) wavPath = arg;
+        else if (root.isEmpty()) root = arg;
+    }
+    if (wavPath.isEmpty()) {
+        std::fprintf(stderr, "uso: dictation:flow <a.wav> [<raiz de modelos>]\n");
+        return 2;
+    }
+    QString error;
+    const QVector<float> wav = loadWav(wavPath, &error);
+    if (wav.isEmpty()) {
+        out(QStringLiteral("ERROR %1: %2").arg(wavPath, error));
+        return 1;
+    }
+    const qint64 wavMs = qint64(wav.size()) * 1000 / 16000;
+    FakeContext context;
+    if (!root.isEmpty()) context.values.insert(QStringLiteral("modelsRoot"), root);
+    QaModule module(context);
+    module.wav = wav;
+    QList<DictationFlow::Entry> entries;
+    QObject::connect(&module.flow(), &DictationFlow::finished, &module, [&](const DictationFlow::Entry &e) { entries << e; });
+    QElapsedTimer clock;
+    clock.start();
+    int failures = 0;
+    const auto report = [&](bool ok, const QString &what) {
+        out(QStringLiteral("%1 %2").arg(ok ? QStringLiteral("ok  ") : QStringLiteral("FAIL"), what));
+        failures += ok ? 0 : 1;
+    };
+    const auto idle = [&]() { return module.phase() == Phase::Idle; };
+    const auto settleMs = [&](qint64 ms) {
+        const qint64 until = clock.elapsed() + ms;
+        waitFor([&]() { return clock.elapsed() >= until; }, int(ms) + 1000);
+    };
+
+    module.start();
+    // Lo que esta sin marcador se verifica en otro hilo: se espera a que cada pieza quede lista o con error.
+    waitFor([&]() {
+        for (const DictationModule::PieceInfo &piece : module.pieces()) {
+            if (piece.state == DictationModels::State::Verifying) return false;
+        }
+        return true;
+    }, 120000);
+    out(QStringLiteral("raiz de modelos: %1 | piezas listas: %2 | motor: %3")
+            .arg(QDir::toNativeSeparators(module.modelsRoot()))
+            .arg(module.piecesReady() ? QStringLiteral("si") : QStringLiteral("no"))
+            .arg(module.engineState() == DictationModule::EngineState::Loading ? QStringLiteral("cargando") : QStringLiteral("otro")));
+    if (!module.piecesReady()) {
+        out(QStringLiteral("ERROR faltan el motor o el modelo en esa raiz"));
+        return 1;
+    }
+
+    // 1) Mantener, apretado ANTES de que el motor este listo: el audio espera en el proceso del motor.
+    const bool loadingAtPress = module.engineState() == DictationModule::EngineState::Loading;
+    context.fake.press(1);
+    settleMs(wavMs + 300);
+    const qint64 releasedAt = clock.elapsed();
+    context.fake.let(1);
+    waitFor([&]() { return idle(); }, 60000);
+    const DictationFlow::Entry hold = entries.value(0);
+    out(QStringLiteral("mantener: final %1 ms despues de soltar: %2 [%3]").arg(clock.elapsed() - releasedAt).arg(hold.text, hold.note));
+    report(loadingAtPress && entries.size() == 1 && hold.text.contains(QLatin1String("Nuke Studio"))
+               && hold.note == I18n::tr("Not typed: automated test run"),
+           QStringLiteral("mantener con el motor cargando: el texto llega entero, con \"Nuke Studio\", y en una corrida automatizada no se escribe"));
+
+    // 2) Tocar: un toque corto empieza, otro termina.
+    context.fake.press(1);
+    settleMs(80);
+    context.fake.let(1);
+    settleMs(wavMs + 300);
+    const bool stillRecording = module.phase() == Phase::Recording;
+    context.fake.press(1);
+    context.fake.let(1);
+    waitFor([&]() { return idle(); }, 60000);
+    report(stillRecording && entries.size() == 2 && !entries.at(1).text.isEmpty(),
+           QStringLiteral("tocar: graba entre dos toques y transcribe: %1").arg(entries.value(1).text));
+
+    // 3) Esc grabando: no se escribe nada.
+    context.fake.press(1);
+    settleMs(1500);
+    context.fake.press(2);
+    report(idle() && !module.captureOpen && !module.escapeRegisteredForQa(),
+           QStringLiteral("Esc: corta, cierra el microfono y retira Esc"));
+
+    // 4) Apagar con un dictado en curso: el proceso del motor no queda.
+    context.fake.press(1);
+    settleMs(1500);
+    const qint64 pid = module.enginePidForQa();
+    module.stop();
+    const bool gone = pid > 0 && waitFor([&]() { return !DictationProcess::processAlive(pid); }, 5000);
+    report(gone && !module.captureOpen && context.fake.registered.isEmpty() && module.enginePidForQa() == 0,
+           QStringLiteral("apagar grabando: el motor (PID %1) ya no existe, microfono cerrado, 0 atajos").arg(pid));
+    out(QStringLiteral("dictation:flow %1: %2 fallas").arg(failures ? QStringLiteral("FALLO") : QStringLiteral("ok")).arg(failures));
+    return failures ? 1 : 0;
+}
+
 } // namespace
 
 namespace DictationQa {
@@ -886,12 +1431,17 @@ void selfTest(const std::function<void(bool ok, const QString &what)> &check)
     testAudio(check);
     testTyping(check);
     testAutomatedRun(check);
+    testFlow(check);
+    testModule(check);
 }
 
 int simulateAction(const QString &action, const QStringList &args)
 {
     if (action == QLatin1String("transcribe")) {
         return simulateTranscribe(args);
+    }
+    if (action == QLatin1String("flow")) {
+        return simulateFlow(args);
     }
     if (action == QLatin1String("models")) {
         return simulateModels(args);

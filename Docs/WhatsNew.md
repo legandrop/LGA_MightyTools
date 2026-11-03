@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new][win] Dictation escribe lo que decís en cualquier campo de texto: tocás Win+H (o lo mantenés mientras hablás), ves el texto en una ventanita mientras hablás y se escribe al terminar, sin pasar por el portapapeles; funciona en tu computadora y el modelo se descarga una sola vez con «Download» desde su página.
 - [improved][win] En General, el tamaño de la interfaz ahora se llama Zoom y muestra 100 %, 110 % y 120 %.
 - [new] La limpieza de Disk Space encuentra las cachés de Nuke, DaVinci Resolve, After Effects, Premiere, Ableton, Topaz Video, REAPER, Unreal y otros programas de video y audio aunque las hayas movido a otro disco, y deja para que decidas lo que cuesta rehacer, como proxies, medios optimizados o modelos.
 - [new][win] La limpieza de Disk Space encuentra copias de instaladores que Windows guarda de programas que ya no están instalados y las manda a la Papelera con permiso de administrador; las de programas instalados nunca aparecen.

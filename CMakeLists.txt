@@ -375,8 +375,11 @@ if(WIN32)
         # Dictation (por ahora solo Windows): el motor corre en otro proceso (--dictation-worker) y carga
         # transcribe.dll en tiempo de ejecucion; la app no enlaza contra el motor.
         src/modules/dictation/DictationEngine.cpp
+        src/modules/dictation/DictationFlow.cpp
         src/modules/dictation/DictationModels.cpp
+        src/modules/dictation/DictationModule.cpp
         src/modules/dictation/DictationOverlay.cpp
+        src/modules/dictation/DictationPanel.cpp
         src/modules/dictation/DictationProtocol.cpp
         src/modules/dictation/DictationQa.cpp
         src/modules/dictation/DictationText.cpp
@@ -414,8 +417,11 @@ if(WIN32)
         src/modules/mousebuttons/MouseButtonsState.h
         src/platform/MouseButtonsSystem.h
         src/modules/dictation/DictationEngine.h
+        src/modules/dictation/DictationFlow.h
         src/modules/dictation/DictationModels.h
+        src/modules/dictation/DictationModule.h
         src/modules/dictation/DictationOverlay.h
+        src/modules/dictation/DictationPanel.h
         src/modules/dictation/DictationProtocol.h
         src/modules/dictation/DictationQa.h
         src/modules/dictation/DictationText.h

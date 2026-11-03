@@ -1,0 +1,82 @@
+#ifndef MIGHTYTOOLS_DICTATIONPANEL_H
+#define MIGHTYTOOLS_DICTATIONPANEL_H
+
+#include "platform/AudioCapture.h"
+
+#include <QHash>
+#include <QList>
+#include <QPair>
+#include <QWidget>
+
+#include <functional>
+
+class DictationModule;
+class QLabel;
+class QLineEdit;
+class QPushButton;
+class QStackedLayout;
+class QVBoxLayout;
+class ShortcutRow;
+class StatusCard;
+
+// La página de Dictation, con los materiales de App Toggle y Mouse Buttons: tarjeta de estado, el atajo, idioma
+// y micrófono, palabras propias y reemplazos, el motor y el modelo (descarga con botón) y los últimos dictados.
+class DictationPanel : public QWidget
+{
+public:
+    DictationPanel(DictationModule *module, bool interactive, QWidget *parent = nullptr);
+    void refresh();
+    // Captura de QA: el editor de reemplazos con el segundo par cargado para editar.
+    void showReplacementEditorForCapture();
+
+protected:
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
+private:
+    QWidget *buildShortcutCard();
+    QWidget *buildSpeechCard();
+    QWidget *buildWordsCard();
+    QWidget *buildModelCard();
+    QWidget *buildRecentCard();
+    void refreshStatus();
+    void refreshReplacements();
+    void refreshPieces();
+    void refreshRecent();
+    void showMenu(QPushButton *button, const QList<QPair<QString, QString>> &options, const QString &current,
+                  const std::function<void(const QString &)> &choose);
+    QString microphoneText() const;
+    void saveWords();
+    void saveRoot();
+    void browseRoot();
+    void submitReplacement();
+    void editReplacement(int index);
+    void resetReplacementEditor();
+    void armDelete(const QString &key);
+    void runLater(const std::function<void()> &action);
+
+    DictationModule *m_module = nullptr;
+    bool m_interactive = false;
+    StatusCard *m_status = nullptr;
+    ShortcutRow *m_shortcut = nullptr;
+    QPushButton *m_language = nullptr;
+    QPushButton *m_microphone = nullptr;
+    QLineEdit *m_words = nullptr;
+    QWidget *m_replacementRows = nullptr;
+    QLineEdit *m_from = nullptr;
+    QLineEdit *m_to = nullptr;
+    QPushButton *m_addReplacement = nullptr;
+    QPushButton *m_cancelReplacement = nullptr;
+    QLabel *m_replacementError = nullptr;
+    int m_editing = -1;
+    QLineEdit *m_root = nullptr;
+    QWidget *m_pieceRows = nullptr;
+    QPushButton *m_unload = nullptr;
+    QWidget *m_recentRows = nullptr;
+    QList<AudioCapture::Device> m_devices;
+    QHash<QString, QStackedLayout *> m_deleteSlots; // "r<indice>" reemplazos, "p<id>" piezas
+    QString m_armed;
+};
+
+#endif // MIGHTYTOOLS_DICTATIONPANEL_H

@@ -122,7 +122,8 @@ QString canvasState(const QString &id)
 bool canvasOff(const QString &id)
 {
     return id == QLatin1String("linkRedirector") || id == QLatin1String("windowLayouts")
-        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons") || id == QLatin1String("desktopIcons");
+        || id == QLatin1String("appToggle") || id == QLatin1String("mouseButtons") || id == QLatin1String("desktopIcons")
+        || id == QLatin1String("dictation");
 }
 
 // Prende para captura una herramienta con su estado (vacio = el primero que declara).
@@ -292,7 +293,7 @@ int runUiShot(const QStringList &args)
         return 0;
     }
     if (index < 0 || index + 2 >= args.size()) {
-        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>] [--screen-area <w>x<h>]\n");
+        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>] [--screen-area <w>x<h>] [--scroll <y>]\n");
         return 2;
     }
     const QString outPath = QFileInfo(args.at(index + 2)).absoluteFilePath();
@@ -392,6 +393,14 @@ int runUiShot(const QStringList &args)
     }
     mainWindow.selectPage(page);
     settle(mainWindow);
+    // --scroll <y>: la pagina desplazada (una pagina larga, como la de Dictation, no entra en el alto de la ventana).
+    const int scrollIndex = args.indexOf(QStringLiteral("--scroll"));
+    if (scrollIndex >= 0) {
+        for (QScrollArea *pane : mainWindow.findChildren<QScrollArea *>(QStringLiteral("pane"))) {
+            if (pane->isVisibleTo(&mainWindow)) pane->verticalScrollBar()->setValue(args.value(scrollIndex + 1).toInt());
+        }
+        settle(mainWindow);
+    }
 
     QWidget *root = &mainWindow;
     QScopedPointer<QWidget> canvas;

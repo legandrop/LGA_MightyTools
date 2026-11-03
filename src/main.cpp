@@ -13,7 +13,6 @@
 #include "core/LgaRegistry.h"
 #include "core/UiScale.h"
 #ifdef Q_OS_WIN
-#include "modules/dictation/DictationQa.h"
 #include "modules/dictation/DictationWorker.h"
 #include "modules/diskspace/cleanup/InstallerCleanup.h"
 #include "modules/openinnukex/win/OldClientMigration.h"
@@ -163,16 +162,6 @@ int runSimulateAction(const QStringList &arguments)
             return code;
         }
     }
-#ifdef Q_OS_WIN
-    // Dictation todavia no tiene descriptor: sus acciones de prueba van directo hasta que la herramienta las
-    // enchufe en ModuleDescriptor::simulateAction.
-    if (moduleId == QLatin1String("dictation")) {
-        const int code = DictationQa::simulateAction(action, rest);
-        if (code != 2) {
-            return code;
-        }
-    }
-#endif
     std::fprintf(stderr, "simulate-action: nadie conoce '%s'\n", qPrintable(which));
     return 2;
 }
