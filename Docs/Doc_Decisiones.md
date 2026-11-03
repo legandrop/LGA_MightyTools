@@ -226,7 +226,8 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   **Límite por pantalla** (Lega, mismo día): un tamaño vale solo si la ventana más grande (960×700
   lógicos) entra entera en el área útil de la pantalla principal; si no, se usa el mayor que entra, sin
   tocar lo guardado (en una pantalla grande vuelve solo), y General apaga los que no entran. En 1366×768
-  solo entra el 0.
+  solo entra el 0. Desde el 2026-11-03 (Lega: «tamaño de la interfaz… es medio raro») se llama «Zoom» y
+  muestra 100 %, 110 % y 120 %; se sigue guardando el nivel 0/1/2.
 - **D-36 · Ventana de limpieza estirable y listas ordenables** (2026-10-01, pedido de Lega: «todo está
   muy rígido»). La ventana deja el tamaño fijo del canvas (960×620 sigue siendo el de fábrica): se estira
   desde bordes y esquinas, con mínimo 860×440, y recuerda su tamaño. Las columnas NO se ensanchan a mano

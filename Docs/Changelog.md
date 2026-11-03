@@ -2,6 +2,10 @@
 
 v1.53:
 
+General: «Interface size» con 0, 1 y 2 no decía qué hacía (Lega: «es medio raro»). Pasa a llamarse «Zoom» y cada segmento muestra el factor que aplica (100 %, 110 % y 120 %, de `UiScale::factor`); el texto de abajo y el aviso de pantalla nombran porcentajes. Se sigue guardando el nivel 0/1/2, así que ningún settings cambia. Solo Windows (en mac no hay zoom, D-45).
+
+[ General - Interface size pasa a Zoom con 100, 110 y 120 % ]
+
 App Toggle y Mouse Buttons arrancaban vacíos: quien los prendía no veía cómo se usan, y Win+E del Explorador abría una ventana nueva cada vez. Ahora, la primera vez (sin la clave en settings), App Toggle trae ejemplos apagados: Win+E para XYplorer si está instalado (desinstalador o Program Files) o, si no, para el Explorador, y OBS con Ctrl+Alt+Shift+Win+1 (en mac solo OBS). Mouse Buttons trae la regla de Photoshop apagada. Borrar todo no los vuelve a sembrar, y una corrida automatizada o una captura nunca siembran. El Explorador es un caso propio: su proceso siempre corre, así que solo cuentan sus ventanas de carpetas (`CabinetWClass`) y, sin ninguna visible, se abre una. D-71.
 
 [ App Toggle y Mouse Buttons - Ejemplos apagados la primera vez y el Explorador como toggle ]

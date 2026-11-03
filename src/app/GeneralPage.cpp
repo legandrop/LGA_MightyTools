@@ -186,11 +186,12 @@ QFrame *GeneralPage::buildAppCard()
     // AlignAbsolute: el desplegable va en RightToLeft (la flecha a la derecha) y un AlignLeft comun lo
     // daria vuelta, pegandolo al borde derecho de la columna.
     options->addWidget(m_languageButton, 0, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
-    // Tamano de la interfaz (core/UiScale.h): 0, 1 y 2, como los piensa Lega, en un switch segmentado.
-    // Muestra el de esta sesion.
+    // Zoom (core/UiScale.h): cada nivel multiplica toda la interfaz y se muestra como porcentaje (100, 110 y
+    // 120 %) en un switch segmentado. Se sigue guardando el nivel (0, 1, 2). Muestra el de esta sesion.
+    const auto percent = [](int level) { return I18n::tr("%1%").arg(qRound(UiScale::factor(level) * 100)); };
     QStringList levels;
     for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
-        levels.append(QString::number(level));
+        levels.append(percent(level));
     }
     m_uiSizeSwitch = new SegmentedSwitch(levels, UiScale::sessionLevel(), optionsBox);
     if (!UiScale::supported()) {
@@ -199,7 +200,7 @@ QFrame *GeneralPage::buildAppCard()
         options->setRowMinimumHeight(1, 0);
         layout->addWidget(optionsBox);
     } else {
-        options->addWidget(Ui::label(I18n::tr("Interface size"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
+        options->addWidget(Ui::label(I18n::tr("Zoom"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
         options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
         layout->addWidget(optionsBox);
         // Limite por pantalla (D-35): lo que no entra en la pantalla principal queda apagado. Qt da el area en
@@ -217,13 +218,14 @@ QFrame *GeneralPage::buildAppCard()
         for (int level = 0; level <= UiScale::kMaxLevel; ++level) {
             m_uiSizeSwitch->setSegmentEnabled(level, level <= maxLevel);
         }
-        QLabel *uiSizeCaption = Ui::caption(I18n::tr("1 is the default size. Changing it restarts the app."), card);
+        QLabel *uiSizeCaption = Ui::caption(
+            I18n::tr("%1 is the default. Changing it restarts the app.").arg(percent(UiScale::kDefaultLevel)), card);
         uiSizeCaption->setContentsMargins(0, 3, 0, 0);
         layout->addWidget(uiSizeCaption);
         // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
         if (maxLevel < UiScale::kMaxLevel) {
-            const QString limit = maxLevel == 0 ? I18n::tr("Only 0 fits on this screen.")
-                                                : I18n::tr("Up to %1 fits on this screen.").arg(maxLevel);
+            const QString limit = maxLevel == 0 ? I18n::tr("Only %1 fits on this screen.").arg(percent(0))
+                                                : I18n::tr("Up to %1 fits on this screen.").arg(percent(maxLevel));
             layout->addWidget(Ui::caption(limit, card));
         }
     }
