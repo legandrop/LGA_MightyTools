@@ -28,9 +28,9 @@
 //    `[getenv NUKE_TEMP_DIR]` y `[getenv NUKE_TEMP_DIR]/TimelineCache`. `FC_DISK_CACHE` y
 //    `NUKE_DISK_CACHE` tambien cuentan. Dentro: `ViewerCache`, `audiocache`, `thumbnailcache`, `tilecache`
 //    y `jitCache-<equipo>\BlockCache` (seguras), el timeline y `jitCache-<equipo>\LocalisedFiles` (del
-//    usuario). Del timeline va siempre `timeline_cache.db` y sus carpetas 00..ff solo si estan las 256,
-//    con archivos sueltos y nada de media ni proyectos (auditoria 2026-11-03: una carpeta de trabajo con
-//    "01" y "10" no es una cache). `%APPDATA%\NVIDIA\NukeComputeCache` (CUDA de Nuke).
+//    usuario). El timeline (`timeline_cache.db` y sus carpetas 00..ff) solo si cada carpeta 00..ff tiene
+//    archivos de nombre hexadecimal sin extension y nada mas (si no, nada); las carpetas, solo con las 256
+//    (auditoria 2026-11-03). `%APPDATA%\NVIDIA\NukeComputeCache` (CUDA de Nuke).
 //  - Adobe Media Cache movida: `HKCU\Software\Adobe\Common <N>.0\Media Cache` (Windows) o
 //    `com.Adobe.Common <N>.0.plist` (mac), `FolderPath` y `DatabasePath`. Primero como carpeta madre
 //    (su `Media Cache Files` con `.cfa`/`.pek`); si no, la carpeta misma, solo si TODO lo de adentro
@@ -676,39 +676,24 @@ bool isTileCache(const QString &dir)
         [](const QFileInfo &info) { return info.isFile(); });
 }
 
-// Un archivo que nunca deja una cache: media (imagen, video, audio) o un proyecto.
-bool isMediaOrProject(const QString &name)
+// El timeline de Studio y Hiero en una carpeta: si tiene su forma y, en ese caso, cuales de sus carpetas
+// 00..ff tienen algo.
+struct Timeline
 {
-    static const QStringList suffixes = {
-        // imagen
-        QStringLiteral("exr"), QStringLiteral("dpx"), QStringLiteral("cin"), QStringLiteral("tif"), QStringLiteral("tiff"),
-        QStringLiteral("tga"), QStringLiteral("png"), QStringLiteral("jpg"), QStringLiteral("jpeg"), QStringLiteral("jp2"),
-        QStringLiteral("bmp"), QStringLiteral("gif"), QStringLiteral("psd"), QStringLiteral("psb"), QStringLiteral("hdr"),
-        QStringLiteral("dng"), QStringLiteral("cr2"), QStringLiteral("cr3"), QStringLiteral("arw"), QStringLiteral("nef"),
-        QStringLiteral("heic"), QStringLiteral("webp"), QStringLiteral("avif"),
-        // video
-        QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("m4v"), QStringLiteral("mxf"), QStringLiteral("avi"),
-        QStringLiteral("mkv"), QStringLiteral("webm"), QStringLiteral("mpg"), QStringLiteral("mpeg"), QStringLiteral("mts"),
-        QStringLiteral("m2ts"), QStringLiteral("r3d"), QStringLiteral("braw"), QStringLiteral("ari"), QStringLiteral("arx"),
-        // audio
-        QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("aiff"), QStringLiteral("mp3"), QStringLiteral("m4a"),
-        QStringLiteral("flac"), QStringLiteral("ogg"), QStringLiteral("aac"), QStringLiteral("bwf"),
-        // proyectos y escenas
-        QStringLiteral("nk"), QStringLiteral("nknc"), QStringLiteral("hrox"), QStringLiteral("prproj"), QStringLiteral("aep"),
-        QStringLiteral("aepx"), QStringLiteral("drp"), QStringLiteral("als"), QStringLiteral("blend"), QStringLiteral("hip"),
-        QStringLiteral("hipnc"), QStringLiteral("hiplc"), QStringLiteral("c4d"), QStringLiteral("ma"), QStringLiteral("mb"),
-        QStringLiteral("uproject"), QStringLiteral("rpp"), QStringLiteral("tvai"), QStringLiteral("fbx"), QStringLiteral("abc"),
-        QStringLiteral("usd"), QStringLiteral("usda"), QStringLiteral("usdc"), QStringLiteral("obj"), QStringLiteral("vdb")};
-    const qsizetype dot = name.lastIndexOf(QLatin1Char('.'));
-    return dot >= 0 && suffixes.contains(name.mid(dot + 1), Qt::CaseInsensitive);
-}
+    bool valid = false;  ///< false: no se ofrece nada, ni las carpetas ni timeline_cache.db
+    QStringList buckets; ///< las 00..ff con algo adentro (solo con el juego completo)
+};
 
-// Las carpetas del timeline de Studio y Hiero que tienen algo, solo si la carpeta tiene la forma entera de
-// esa cache: el juego 00..ff COMPLETO (256 carpetas de verdad, no enlaces), cada una con solo archivos
-// sueltos (sin subcarpetas) y ninguno de media ni de proyecto. Si algo no cierra, ninguna: una carpeta de
-// trabajo con "01" y "10" adentro no es una cache. Mira 100000 entradas como mucho.
-QStringList timelineBuckets(const QString &base)
+// Lista de lo PERMITIDO (auditoria 2026-11-03: con una lista de lo prohibido, un .pdf o un .txt del usuario
+// pasaba): cada carpeta 00..ff que haya tiene que ser una carpeta de verdad (no un enlace), sin subcarpetas
+// y solo con archivos de nombre hexadecimal, sin extension, como los de `audiocache`. Un solo archivo que no
+// cumple, en cualquiera de ellas, y la carpeta no es un timeline: no se ofrece nada. Las carpetas solo se
+// vacian con el juego 00..ff COMPLETO (256); si falta alguna, queda solo timeline_cache.db. Las 256 vacias
+// (lo visto en una PC real) dan solo timeline_cache.db. Mira 100000 entradas como mucho; si hay mas, nada.
+// El patron de los archivos es una deduccion: ajustarlo cuando se vea una cache de timeline real con cuadros.
+Timeline timelineBuckets(const QString &base)
 {
+    Timeline result;
     QSet<QString> seen;
     QStringList buckets;
     for (const QString &name : subDirs(base)) {
@@ -717,25 +702,22 @@ QStringList timelineBuckets(const QString &base)
             buckets.append(join(base, name));
         }
     }
-    if (seen.size() != 256 || buckets.size() != 256) {
-        return {};
-    }
     QStringList full;
     int budget = 100000;
     for (const QString &bucket : buckets) {
         if (FileSystemOps::kind(bucket) != FileSystemOps::Kind::Dir) {
-            return {};
+            return result;
         }
         bool any = false;
         QDirIterator it(bucket, QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden | QDir::System);
         while (it.hasNext()) {
             if (--budget < 0) {
-                return {};
+                return result;
             }
             it.next();
             const QFileInfo info = it.fileInfo();
-            if (isLink(info) || !info.isFile() || isMediaOrProject(info.fileName())) {
-                return {};
+            if (isLink(info) || !info.isFile() || !isHexName(info.fileName(), 16, 128)) {
+                return result;
             }
             any = true;
         }
@@ -743,7 +725,11 @@ QStringList timelineBuckets(const QString &base)
             full.append(bucket);
         }
     }
-    return full;
+    result.valid = true;
+    if (seen.size() == 256 && buckets.size() == 256) {
+        result.buckets = full;
+    }
+    return result;
 }
 
 void addNuke(Pending &p, const Context &context, const Fences &f)
@@ -837,9 +823,12 @@ void addNuke(Pending &p, const Context &context, const Fences &f)
         if (FileSystemOps::kind(database) != FileSystemOps::Kind::File) {
             continue;
         }
-        const QStringList buckets = timelineBuckets(base);
-        const QString shown = buckets.isEmpty() ? database : database + QStringLiteral(" + 00–ff");
-        offer(p.nukeWork, I18n::tr("Timeline cache"), base, buckets, {database}, context, nukeBlockers(), label, shown);
+        const Timeline timeline = timelineBuckets(base);
+        if (!timeline.valid) {
+            continue;
+        }
+        const QString shown = timeline.buckets.isEmpty() ? database : database + QStringLiteral(" + 00–ff");
+        offer(p.nukeWork, I18n::tr("Timeline cache"), base, timeline.buckets, {database}, context, nukeBlockers(), label, shown);
     }
 
 #ifdef Q_OS_WIN
@@ -965,8 +954,13 @@ void addAdobeMediaCache(Pending &p, const Context &context, const Fences &f)
         }
     }
     for (qsizetype i = 0; i < parents.size(); ++i) {
+        // Con varias, se ve lo que se borra: "...\Media Cache Files + Media Cache + Peak Files".
+        QStringList inner;
+        for (const QString &dir : dirsByParent.at(i)) {
+            inner.append(QFileInfo(dir).fileName());
+        }
         offer(p.media, QStringLiteral("Adobe Media Cache"), parents.at(i), dirsByParent.at(i), {}, context, AppCacheRules::adobeBlockers(),
-              QStringLiteral("Adobe"));
+              QStringLiteral("Adobe"), join(parents.at(i), inner.join(QStringLiteral(" + "))));
     }
 }
 

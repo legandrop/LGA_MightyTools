@@ -412,29 +412,43 @@ void selfTestAppCaches(const Check &check)
             QDir().mkpath(at(dir, QStringLiteral("%1").arg(i, 2, 16, QLatin1Char('0'))));
         }
     };
+    // Un cuadro del timeline: nombre hexadecimal, sin extension (como los de audiocache).
+    const QString frame = QStringLiteral("0123456789abcdef0123456789abcdef");
     makeBuckets(nukeCache);
-    writeFile(at(nukeCache, QStringLiteral("00/frame.bin")));
+    writeFile(at(nukeCache, QStringLiteral("00/") + frame));
     writeFile(at(nukeCache, QStringLiteral("timeline_cache.db")));
     // Carpetas de trabajo a las que apunta un TimelineDiskCachePath, con un timeline_cache.db: una con solo
     // "01" y "10" (con subcarpetas y media), otra con las 256 pero una con subcarpeta, otra con las 256 pero
-    // una con un .exr. Ninguna carpeta 00..ff de ellas se ofrece.
+    // una con un .exr, y otra con las 256 pero un .txt y un .pdf. De ninguna se ofrece nada. Y una con solo
+    // "01" con un cuadro: tiene la forma, pero sin el juego completo queda solo su timeline_cache.db.
     const QString work1 = at(vol, QStringLiteral("Work1"));
     const QString work2 = at(vol, QStringLiteral("Work2"));
     const QString work3 = at(vol, QStringLiteral("Work3"));
+    const QString work4 = at(vol, QStringLiteral("Work4"));
+    const QString work5 = at(vol, QStringLiteral("Work5"));
     writeFile(at(work1, QStringLiteral("01/plates/plate.0001.exr")));
     writeFile(at(work1, QStringLiteral("10/render_v001.mov")));
     writeFile(at(work1, QStringLiteral("timeline_cache.db")));
     makeBuckets(work2);
-    writeFile(at(work2, QStringLiteral("05/frame.bin")));
+    writeFile(at(work2, QStringLiteral("05/") + frame));
     writeFile(at(work2, QStringLiteral("3a/sub/x.bin")));
     writeFile(at(work2, QStringLiteral("timeline_cache.db")));
     makeBuckets(work3);
-    writeFile(at(work3, QStringLiteral("05/frame.bin")));
+    writeFile(at(work3, QStringLiteral("05/") + frame));
     writeFile(at(work3, QStringLiteral("7f/shot.exr")));
     writeFile(at(work3, QStringLiteral("timeline_cache.db")));
+    makeBuckets(work4);
+    writeFile(at(work4, QStringLiteral("05/") + frame));
+    writeFile(at(work4, QStringLiteral("01/notes.txt")));
+    writeFile(at(work4, QStringLiteral("10/brief.pdf")));
+    writeFile(at(work4, QStringLiteral("timeline_cache.db")));
+    writeFile(at(work5, QStringLiteral("01/") + frame));
+    writeFile(at(work5, QStringLiteral("timeline_cache.db")));
     writeFile(at(dotNuke, QStringLiteral("preferences8.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work1\n").arg(slashVol)));
     writeFile(at(dotNuke, QStringLiteral("preferences7.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work2\n").arg(slashVol)));
     writeFile(at(dotNuke, QStringLiteral("preferences6.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work3\n").arg(slashVol)));
+    writeFile(at(dotNuke, QStringLiteral("preferences5.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work4\n").arg(slashVol)));
+    writeFile(at(dotNuke, QStringLiteral("preferences4.0.nk")), prefsWith(QStringLiteral(" TimelineDiskCachePath %1/Work5\n").arg(slashVol)));
     writeFile(at(nukeCache, QStringLiteral("keep.txt")));
     writeFile(at(nukeCache, QStringLiteral("notes/n.txt")));
     writeFile(at(vol, QStringLiteral("NukeLocalize/x.exr")));
@@ -696,19 +710,27 @@ void selfTestAppCaches(const Check &check)
     check(o.shown.contains(at(nukeCache, QStringLiteral("timeline_cache.db")) + QStringLiteral(" + 00–ff"), Qt::CaseInsensitive),
           QStringLiteral("nuke: el timeline se muestra como lo que se borra (timeline_cache.db + 00–ff), no como su carpeta"));
     {
-        // De cada carpeta de trabajo, como mucho su timeline_cache.db: ninguna carpeta 00..ff.
+        // De las carpetas de trabajo no se ofrece nada: ni sus 00..ff ni su timeline_cache.db.
         QStringList wrong;
-        for (const QString &work : {work1, work2, work3}) {
-            const QString database = at(work, QStringLiteral("timeline_cache.db"));
+        for (const QString &work : {work1, work2, work3, work4}) {
             for (const QString &target : o.targets) {
-                if ((DeleteGuard::isInside(target, work) || DeleteGuard::samePath(target, work)) && !DeleteGuard::samePath(target, database)) {
+                if (DeleteGuard::isInside(target, work) || DeleteGuard::samePath(target, work)) {
                     wrong.append(target);
                 }
             }
         }
-        check(wrong.isEmpty() && o.shown.contains(at(work1, QStringLiteral("timeline_cache.db")), Qt::CaseInsensitive),
-              QStringLiteral("nuke: una carpeta de trabajo con 01 y 10, o con 00..ff pero subcarpetas o media, no ofrece ninguna carpeta (%1)")
+        check(wrong.isEmpty(),
+              QStringLiteral("nuke: una carpeta con 01 y 10, o con 00..ff y una subcarpeta, un .exr, un .txt o un .pdf, no ofrece nada (%1)")
                   .arg(wrong.join(QLatin1String(" | "))));
+        QStringList five;
+        for (const QString &target : o.targets) {
+            if (DeleteGuard::isInside(target, work5)) {
+                five.append(target);
+            }
+        }
+        check(five.size() == 1 && hasPath(five, at(work5, QStringLiteral("timeline_cache.db"))),
+              QStringLiteral("nuke: con cuadros hex sin extension pero sin las 256 carpetas, solo timeline_cache.db (%1)")
+                  .arg(five.join(QLatin1String(" | "))));
     }
     check(!touches(o.targets, at(vol, QStringLiteral("NukeLocalize"))) && !hasPath(o.targets, nukeCache)
               && !touches(o.targets, at(nukeCache, QStringLiteral("notes"))) && !hasPath(o.targets, at(nukeCache, QStringLiteral("keep.txt"))),
@@ -732,6 +754,9 @@ void selfTestAppCaches(const Check &check)
               && hasPath(media, at(adobeMc, QStringLiteral("Peak Files"))) && hasPath(media, adobeMc2) && !touches(o.targets, adobeEmpty)
               && !hasPath(o.targets, adobeMc),
           QStringLiteral("adobe: la Media Cache movida, por la carpeta madre o la propia, solo con .cfa/.pek"));
+    check(o.shown.contains(at(adobeMc, QStringLiteral("Media Cache Files + Media Cache + Peak Files")), Qt::CaseInsensitive)
+              && o.shown.contains(adobeMc2, Qt::CaseInsensitive) && !o.shown.contains(adobeMc, Qt::CaseInsensitive),
+          QStringLiteral("adobe: la Media Cache movida se muestra como lo que se borra, no como su carpeta madre"));
     check(hasPath(media, at(userMc, QStringLiteral("Media Cache Files"))) && !hasPath(o.targets, userMc)
               && !touches(o.targets, at(userMc, QStringLiteral("notes.txt"))) && !touches(o.targets, at(userMc, QStringLiteral("Cuts")))
               && !touches(o.targets, at(vol, QStringLiteral("AdobeForeign"))),
@@ -819,7 +844,7 @@ void selfTestAppCaches(const Check &check)
               && !QFileInfo::exists(at(vol, QStringLiteral("Photoshop Temp123456789"))),
           QStringLiteral("caches de programas: las caches seguras quedan vacias y sus carpetas siguen"));
     check(QFileInfo::exists(at(nukeCache, QStringLiteral("keep.txt"))) && QFileInfo::exists(at(nukeCache, QStringLiteral("notes/n.txt")))
-              && QFileInfo::exists(at(nukeCache, QStringLiteral("timeline_cache.db"))) && QFileInfo::exists(at(nukeCache, QStringLiteral("00/frame.bin")))
+              && QFileInfo::exists(at(nukeCache, QStringLiteral("timeline_cache.db"))) && QFileInfo::exists(at(nukeCache, QStringLiteral("00/") + frame))
               && QFileInfo::exists(at(nukeCache, QStringLiteral("jitCache-host/LocalisedFiles/plate.exr")))
               && QFileInfo::exists(at(vol, QStringLiteral("NukeLocalize/x.exr"))) && QFileInfo::exists(at(vol, QStringLiteral("ViewerCache/00/root.nkc")))
               && QFileInfo::exists(at(profile, QStringLiteral("ViewerCache/00/home.nkc"))) && QFileInfo::exists(at(vol, QStringLiteral("Shots/shot010.nk")))
