@@ -2,6 +2,10 @@
 
 v1.53:
 
+Títulos en Bricolage Grotesque: el rediseño los dejaba en Inter SemiBold porque el firewall bloqueaba la descarga de la fuente. Ahora viajan en `resources.qrc` los tres pesos estáticos (SemiBold, Bold y ExtraBold) que `Theme::apply()` ya buscaba. Se pidieron a Google Fonts con el tamaño óptico por defecto (14): con otro tamaño, cada peso se registra como una familia aparte («Bricolage Grotesque 16pt») y `titleFont()` no la encuentra. La licencia OFL de Bricolage y la de Inter, que faltaba, van completas en `resources/fonts/`, y `LICENSE` nombra a Bricolage entre los componentes de terceros. El índice sigue entrando entero (`nav-fit`: 272/272, 12 px de aire mínimo).
+
+[ UI - Titulos en Bricolage Grotesque ]
+
 Rediseño «Pliego» (D-73): la ventana era la del canvas original, el «?» abría un único cuadro de 2040 px con la ayuda de las diez herramientas y la lista seguía el orden en que se fueron agregando. Lega eligió, entre cinco rediseños, una hoja por herramienta sobre la mesa negra con el índice lateral unido a la hoja, colores con significado (cian funciona, magenta acción, amarillo atención) y switch con perilla en rombo, sin el desregistro en los títulos y sin bajar ningún tamaño de letra. `ModuleRegistry::all()` ordena por nombre; cada página trae su franja «How it works» con los `helpProviders()` de siempre (abierta la primera visita, recordada en `app/howItWorks/<id>`); `HelpDialog` se va y la versión, el autor y la web pasan al pie de General. Ventana de 880×720. Bricolage Grotesque para títulos queda preparada y cae a Inter mientras no esté empaquetada. Como el orden alfabético cambiaba qué herramienta recibe un argumento, Open in NukeX ya no reclama direcciones web: una URL que termina en `.nk` va siempre a Link Redirector.
 
 [ UI - Rediseño Pliego: hoja por herramienta, orden alfabético y ayuda por página ]

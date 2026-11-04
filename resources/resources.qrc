@@ -15,5 +15,8 @@
         <file>fonts/Inter-Regular.ttf</file>
         <file>fonts/Inter-Medium.ttf</file>
         <file>fonts/Inter-SemiBold.ttf</file>
+        <file>fonts/BricolageGrotesque-SemiBold.ttf</file>
+        <file>fonts/BricolageGrotesque-Bold.ttf</file>
+        <file>fonts/BricolageGrotesque-ExtraBold.ttf</file>
     </qresource>
 </RCC>

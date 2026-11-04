@@ -30,3 +30,8 @@ frameworks (macOS), so they can be replaced by the user. The Qt source code is
 available at https://download.qt.io.
 
 Inter (https://rsms.me/inter) is embedded under the SIL Open Font License 1.1.
+
+Bricolage Grotesque (https://github.com/ateliertriay/bricolage) is embedded under
+the SIL Open Font License 1.1.
+
+The full license text of both fonts is in resources/fonts/.

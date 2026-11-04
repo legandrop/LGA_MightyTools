@@ -99,9 +99,10 @@ void apply(QApplication &app)
             qWarning("No se pudo cargar la fuente embebida %s", file);
         }
     }
-    // Bricolage Grotesque (titulos, D-73): los tres pesos estaticos van en resources/resources.qrc como
-    // fonts/BricolageGrotesque-SemiBold.ttf, -Bold.ttf y -ExtraBold.ttf. Se cargan solo si estan: sin ellos
-    // titleFont() y la hoja de estilo caen a Inter SemiBold.
+    // Bricolage Grotesque (titulos, D-73): tres pesos estaticos en resources/resources.qrc. Son instancias
+    // de Google Fonts con el tamano optico por defecto (14): pedidas con otro opsz, cada peso se registra
+    // como otra familia («Bricolage Grotesque 16pt») y titleFont() no las encuentra. Se cargan solo si
+    // estan: sin ellos titleFont() y la hoja de estilo caen a Inter SemiBold.
     for (const char *file : {":/fonts/BricolageGrotesque-SemiBold.ttf", ":/fonts/BricolageGrotesque-Bold.ttf",
                              ":/fonts/BricolageGrotesque-ExtraBold.ttf"}) {
         const QString path = QString::fromLatin1(file);
