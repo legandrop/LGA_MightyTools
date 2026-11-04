@@ -21,6 +21,14 @@ QList<Step> pressSteps(const Rule &rule)
     return steps;
 }
 
+QList<Step> joinSteps(const QList<Step> &earlier, const QList<Step> &now)
+{
+    if (!earlier.isEmpty() && !now.isEmpty() && earlier.last().kind == Step::LeftDown && now.first().kind == Step::LeftUp) {
+        return earlier.mid(0, earlier.size() - 1) + now.mid(1);
+    }
+    return earlier + now;
+}
+
 Machine::Machine(const QList<Rule> &rules)
     : m_rules(rules)
 {
@@ -56,14 +64,22 @@ Result Machine::handle(const Event &event)
         if (!event.overTarget) return {};
         m_held[slot] = true;
         m_pressed[slot] = pressSteps(*rule);
-        return {true, m_pressed[slot]};
+        // Las teclas ya y el clic despues de la pausa (kStepDelayMs).
+        if (m_pressed[slot].size() > 1 && m_pressed[slot].last().kind == Step::LeftDown) {
+            return {true, m_pressed[slot].mid(0, m_pressed[slot].size() - 1), {m_pressed[slot].last()}};
+        }
+        return {true, m_pressed[slot], {}};
     }
     // Soltar sin haber tomado la apretada (fue sobre otra app, o antes del gancho): es de la app que la recibio.
     if (!m_held[slot]) return {};
     m_held[slot] = false;
     const QList<Step> steps = releaseOf(m_pressed[slot]);
     m_pressed[slot].clear();
-    return {true, steps};
+    // Al reves: el clic se suelta ya y las teclas despues de la pausa, cuando Photoshop termino el arrastre.
+    if (steps.size() > 1 && steps.first().kind == Step::LeftUp) {
+        return {true, {steps.first()}, steps.mid(1)};
+    }
+    return {true, steps, {}};
 }
 
 QList<Step> Machine::releaseAll()

@@ -49,14 +49,24 @@ struct Event
     bool overTarget = false;  ///< el puntero esta sobre la app de la regla y esa app esta al frente
 };
 
+// Pausa entre las teclas y el boton izquierdo. Photoshop necesita ver el Espacio antes del clic para pasar a
+// la mano: con los dos en el mismo instante, el clic le llega a la herramienta que estaba (un punto del
+// lazo, un arrastre del Move). El AutoHotkey que reemplaza esta regla mandaba 10 ms entre uno y otro; 30 ms
+// es lo que se usa para Photoshop y no se nota.
+constexpr int kStepDelayMs = 30;
+
 struct Result
 {
     bool swallow = false; ///< el evento no sigue: no le llega a ninguna app
-    QList<Step> steps;    ///< lo que hay que inyectar, en orden
+    QList<Step> steps;    ///< lo que hay que inyectar ya, en orden
+    QList<Step> later;    ///< lo que va kStepDelayMs despues: el clic al apretar, las teclas al soltar
 };
 
 // Lo que se aprieta, en orden: modificadores (Ctrl, Alt, Shift, Win), la tecla y el boton izquierdo.
 QList<Step> pressSteps(const Rule &rule);
+// Lo que quedo demorado (`earlier`) va antes que lo nuevo. Un clic demorado que todavia no salio y que lo
+// nuevo ya suelta no sale nunca: ni el clic ni su soltada.
+QList<Step> joinSteps(const QList<Step> &earlier, const QList<Step> &now);
 
 // Una por gancho; vive en su hilo. Sin estado global.
 class Machine
@@ -68,6 +78,7 @@ public:
     // Suelta todo lo que esta apretado (cambio de frente, regla apagada, gancho que se va).
     QList<Step> releaseAll();
     bool holding() const;
+    bool hasRule(Button button) const { return ruleFor(button) != nullptr; }
 
 private:
     const Rule *ruleFor(Button button) const;
@@ -91,7 +102,8 @@ int liveHooks();
 
 // El gancho de las reglas de UNA app (el proceso `pid`), en su propio hilo con su bucle de mensajes: si la
 // ventana de Mighty Tools se traba, el mouse del sistema sigue andando. Destruirlo retira el gancho y suelta
-// todo lo que quedo apretado (si el escritorio seguro no lo deja, el hilo sigue reintentando por su cuenta).
+// todo lo que quedo apretado (si el escritorio seguro no lo deja, el hilo sigue reintentando por su cuenta)
+// y deja en el log cuantas apretadas tomo, cuantas paso de largo y por que.
 // Nunca se instala en una corrida automatizada (devuelve nullptr).
 class Hook
 {

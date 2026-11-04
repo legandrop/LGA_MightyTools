@@ -152,6 +152,19 @@ public:
 
     DWORD error() const { return m_error; }
 
+    // Para el log, desde el hilo de la ventana: el hilo del gancho no escribe logs. Vacio si no paso nada.
+    QString summary() const
+    {
+        const int taken = m_taken, outside = m_outside, refused = m_refused, restored = m_restored;
+        if (!taken && !outside && !refused && !restored) return {};
+        return QStringLiteral("Mientras estuvo el gancho: %1 apretada(s) tomada(s), %2 fuera de la app, "
+                              "%3 que Windows no dejo inyectar, gancho repuesto %4 vez/veces")
+            .arg(taken)
+            .arg(outside)
+            .arg(refused)
+            .arg(restored);
+    }
+
 protected:
     void run() override
     {
@@ -167,6 +180,10 @@ protected:
             return;
         }
         while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
+            if (msg.message == WM_TIMER && !msg.hwnd && m_laterTimer && msg.wParam == m_laterTimer) {
+                flushLater();
+                continue;
+            }
             if (msg.message == WM_TIMER && !msg.hwnd && msg.wParam == m_watchdog) {
                 watchdog();
                 continue;
@@ -221,14 +238,28 @@ private:
         event.ownInjected = (info->flags & LLMHF_INJECTED) && info->dwExtraInfo == kMightyToolsInputTag;
         if (event.down && !event.ownInjected) event.overTarget = self->overTarget(info->pt);
         const Result result = self->m_machine.handle(event);
-        if (!result.steps.isEmpty()) {
-            if (!sendInputs(result.steps) && event.down) {
-                // Windows no las tomo (UIPI, escritorio seguro): se suelta lo que haya entrado y el clic sigue.
-                self->release();
-                return CallNextHookEx(nullptr, code, message, data);
-            }
-            self->syncWatchdog();
+        if (event.down && !event.ownInjected && !result.swallow && self->m_machine.hasRule(event.button)) {
+            ++self->m_outside; // sobre otra ventana o con otra app al frente: pasa intacto
         }
+        if (result.steps.isEmpty() && result.later.isEmpty()) {
+            return result.swallow ? 1 : CallNextHookEx(nullptr, code, message, data);
+        }
+        // Lo demorado que no salio todavia va antes que lo nuevo (y un clic demorado que ya se suelta, no sale).
+        const QList<Step> earlier = self->takeLater();
+        const QList<Step> now = joinSteps(earlier, result.steps);
+        const bool sent = sendInputs(now);
+        self->setLater(result.later);
+        if (!sent && event.down) {
+            // Windows no las tomo (UIPI, escritorio seguro): se suelta lo que haya entrado y el clic sigue.
+            // Las soltadas demoradas de otra regla tampoco se pierden.
+            ++self->m_refused;
+            self->m_pending += releasesIn(earlier);
+            self->release();
+            return CallNextHookEx(nullptr, code, message, data);
+        }
+        if (!sent) self->m_pending += releasesIn(now); // una soltada que no entro se reintenta: nada queda apretado
+        if (event.down) ++self->m_taken;
+        self->syncWatchdog();
         return result.swallow ? 1 : CallNextHookEx(nullptr, code, message, data);
     }
 
@@ -262,6 +293,7 @@ private:
             release();
             unhook();
             hook(); // de vuelta, para los clics que siguen
+            ++m_restored;
             return;
         }
         // Otra app al frente, la pantalla de bloqueo o un aviso de UAC: el gancho no ve la soltada.
@@ -284,10 +316,48 @@ private:
     }
 
     // Suelta todo lo apretado. Sin logs desde este hilo: el manejador de logs de la app escribe sin cerrojo.
+    // Un clic demorado que todavia no salio se cancela con su soltada: no le llega nada a la app.
     void release()
     {
-        m_pending += m_machine.releaseAll();
+        m_pending += releasesIn(joinSteps(takeLater(), m_machine.releaseAll()));
         retryPending();
+    }
+
+    // Lo demorado (kStepDelayMs) sale con su propio reloj, en este hilo y fuera del callback del gancho.
+    QList<Step> takeLater()
+    {
+        if (m_laterTimer) {
+            KillTimer(nullptr, m_laterTimer);
+            m_laterTimer = 0;
+        }
+        const QList<Step> steps = m_later;
+        m_later.clear();
+        return steps;
+    }
+
+    void setLater(const QList<Step> &steps)
+    {
+        m_later = steps;
+        if (!m_later.isEmpty()) m_laterTimer = SetTimer(nullptr, 0, kStepDelayMs, nullptr);
+        if (!m_later.isEmpty() && !m_laterTimer) flushLater(); // sin reloj, sin pausa: mejor que no mandarlo
+    }
+
+    // Con soltadas pendientes (Windows no deja inyectar) lo demorado va detras de ellas. Un clic demorado que
+    // Windows no tomo no se reintenta: entraria tarde, quiza con el boton ya suelto. Las soltadas si.
+    void flushLater()
+    {
+        const QList<Step> steps = takeLater();
+        if (!m_pending.isEmpty() || !sendInputs(steps)) m_pending += releasesIn(steps);
+        retryPending();
+    }
+
+    static QList<Step> releasesIn(const QList<Step> &steps)
+    {
+        QList<Step> releases;
+        for (const Step &step : steps) {
+            if (step.kind == Step::KeyUp || step.kind == Step::LeftUp) releases.append(step);
+        }
+        return releases;
     }
 
     void retryPending()
@@ -301,7 +371,13 @@ private:
     HHOOK m_hook = nullptr;
     DWORD m_threadId = 0;
     UINT_PTR m_watchdog = 0;
-    QList<Step> m_pending; ///< soltadas que Windows no tomo todavia
+    UINT_PTR m_laterTimer = 0;
+    QList<Step> m_later;   ///< lo que sale kStepDelayMs despues (el clic al apretar, las teclas al soltar)
+    QList<Step> m_pending; ///< soltadas que Windows no tomo todavia (nunca apretadas)
+    std::atomic<int> m_taken{0};
+    std::atomic<int> m_outside{0};
+    std::atomic<int> m_refused{0};
+    std::atomic<int> m_restored{0};
     quint64 m_calls = 0;
     quint64 m_watchCalls = 0;
     POINT m_watchPoint = {};
@@ -369,7 +445,11 @@ Hook::Hook()
 
 Hook::~Hook()
 {
-    if (!d->thread || d->thread->stop()) return;
+    if (!d->thread) return;
+    const bool stopped = d->thread->stop();
+    const QString summary = d->thread->summary();
+    if (!summary.isEmpty()) qInfo().noquote() << "[mouseButtons]" << summary;
+    if (stopped) return;
     // Sigue reintentando soltar (escritorio seguro): termina y se borra solo, sin que la ventana espere.
     qInfo() << "[mouseButtons] Gancho retirado; soltar queda pendiente hasta que Windows lo deje";
     HookThread *draining = d->thread.release();

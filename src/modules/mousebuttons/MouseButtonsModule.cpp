@@ -89,11 +89,14 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     const Rule photoshop; // boton del medio -> Espacio y el boton izquierdo (la regla de fabrica)
     Machine machine({photoshop});
     Result r = machine.handle(event(Button::Middle, true));
-    check(r.swallow && r.steps == QList<Step>{down(Qt::Key_Space), kLeftDown} && machine.holding(),
-          QStringLiteral("maquina: el boton de la regla sobre la app se traga e inyecta Espacio y despues el clic"));
+    check(r.swallow && r.steps == QList<Step>{down(Qt::Key_Space)} && r.later == QList<Step>{kLeftDown} && machine.holding(),
+          QStringLiteral("maquina: el boton de la regla sobre la app se traga e inyecta Espacio ya y el clic despues de la pausa"));
     r = machine.handle(event(Button::Middle, false, false));
-    check(r.swallow && r.steps == QList<Step>{kLeftUp, up(Qt::Key_Space)} && !machine.holding(),
-          QStringLiteral("maquina: soltarlo (aunque el puntero ya este en otra app) suelta en orden inverso"));
+    check(r.swallow && r.steps == QList<Step>{kLeftUp} && r.later == QList<Step>{up(Qt::Key_Space)} && !machine.holding(),
+          QStringLiteral("maquina: soltarlo (aunque el puntero ya este en otra app) suelta el clic ya y Espacio despues de la pausa"));
+    check(MouseButtonsSystem::kStepDelayMs >= 20 && MouseButtonsSystem::kStepDelayMs <= 100,
+          QStringLiteral("maquina: la pausa entre Espacio y el clic deja a Photoshop pasar a la mano (%1 ms)")
+              .arg(MouseButtonsSystem::kStepDelayMs));
     r = machine.handle(event(Button::Middle, true, false));
     check(!r.swallow && r.steps.isEmpty(), QStringLiteral("maquina: sobre otra app (o con otra al frente) el clic pasa intacto"));
     r = machine.handle(event(Button::Middle, false));
@@ -109,8 +112,18 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     r = machine.handle(event(Button::Middle, true));
     r2 = machine.handle(event(Button::Middle, false));
     Result r3 = machine.handle(event(Button::Middle, false));
-    check(r.swallow && r.steps.isEmpty() && r2.swallow && r2.steps.size() == 2 && !r3.swallow,
+    check(r.swallow && r.steps.isEmpty() && r.later.isEmpty() && r2.swallow && r2.steps.size() == 1 && r2.later.size() == 1
+              && !r3.swallow,
           QStringLiteral("maquina: dos apretadas seguidas no aprietan dos veces; una soltada suelta y la siguiente pasa"));
+    // Un clic corto, mas rapido que la pausa: el clic demorado no sale nunca, ni su soltada; Espacio si se suelta.
+    const Result quickDown = machine.handle(event(Button::Middle, true));
+    const Result quickUp = machine.handle(event(Button::Middle, false));
+    check(MouseButtonsSystem::joinSteps(quickDown.later, quickUp.steps).isEmpty() && quickUp.later == QList<Step>{up(Qt::Key_Space)},
+          QStringLiteral("demora: soltar antes de que salga el clic lo cancela con su soltada y suelta Espacio"));
+    machine.handle(event(Button::Middle, true));
+    check(MouseButtonsSystem::joinSteps({kLeftDown}, machine.releaseAll()) == QList<Step>{up(Qt::Key_Space)}
+              && MouseButtonsSystem::joinSteps({up(Qt::Key_Space)}, {down(Qt::Key_Space)}) == QList<Step>{up(Qt::Key_Space), down(Qt::Key_Space)},
+          QStringLiteral("demora: soltar todo con el clic pendiente no lo manda; lo demorado va antes que lo nuevo"));
     machine.handle(event(Button::Middle, true));
     const QList<Step> released = machine.releaseAll();
     r = machine.handle(event(Button::Middle, false));
@@ -127,8 +140,9 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     chord.holdLeft = false;
     Machine two({photoshop, chord});
     r = two.handle(event(Button::Forward, true));
-    check(r.swallow && r.steps == QList<Step>{down(Qt::Key_Control), down(Qt::Key_Shift), down(Qt::Key_Meta), down(Qt::Key_F5)},
-          QStringLiteral("maquina: modificadores primero (Ctrl, Shift, Win), despues la tecla, sin clic si no se pide"));
+    check(r.swallow && r.steps == QList<Step>{down(Qt::Key_Control), down(Qt::Key_Shift), down(Qt::Key_Meta), down(Qt::Key_F5)}
+              && r.later.isEmpty(),
+          QStringLiteral("maquina: modificadores primero (Ctrl, Shift, Win), despues la tecla, sin clic ni pausa si no se pide"));
     two.handle(event(Button::Middle, true));
     const QList<Step> all = two.releaseAll();
     check(all.size() == 6 && all.contains(up(Qt::Key_Meta)) && all.contains(kLeftUp) && !two.holding(),
@@ -305,6 +319,9 @@ int simulateAction(const QString &action, const QStringList &args)
         std::printf("%s: %s\n", what, result.swallow ? "se traga" : "pasa intacto");
         for (const QString &line : MouseButtonsSystem::describeInputs(result.steps)) {
             std::printf("  SendInput %s\n", qPrintable(line));
+        }
+        for (const QString &line : MouseButtonsSystem::describeInputs(result.later)) {
+            std::printf("  a los %d ms: SendInput %s\n", MouseButtonsSystem::kStepDelayMs, qPrintable(line));
         }
     };
     run("apretar sobre la app", event(rule.button, true));

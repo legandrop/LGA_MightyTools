@@ -2,6 +2,10 @@
 
 v1.53:
 
+Mouse Buttons: en Photoshop 2026 el botón del medio no hacía nada. El gancho se instalaba y tomaba el botón, pero Espacio y el clic izquierdo salían en el mismo `SendInput`, y Photoshop necesita ver el Espacio antes del clic para pasar a la mano: el clic le llegaba a la herramienta que estaba. El AutoHotkey que esto reemplaza dejaba 10 ms entre uno y otro. Ahora las teclas salen ya y el clic a los 30 ms (`kStepDelayMs`, con un reloj del hilo del gancho); al soltar, al revés. Un clic más corto que la pausa no manda ni el clic ni su soltada. Una soltada que Windows no tomaba se perdía y podía dejar el Espacio apretado: ahora se reintenta. Al retirar el gancho, el log dice cuántas apretadas tomó, cuántas pasaron fuera de la app y cuántas rechazó Windows.
+
+[ Mouse Buttons - Pausa de 30 ms entre Espacio y el clic para Photoshop ]
+
 Reintentos de red (regla dura de Lega): el chequeo de updates, la descarga del instalador y la del motor y el modelo de Dictation fallaban al primer error, y GateBouncer corta el primer intento de cada programa y destino nuevo. Ahora reintentan 3 veces con 5 s de espera, con cuenta propia para cada servidor de un redirect (GateBouncer pregunta por cada uno) y tope de 10 intentos (`src/core/LgaNetRetry.h`, copia idéntica de la de la Base): conexión, timeout, cortes de HTTP/2, 408, 429 y 5xx, nunca un 4xx ni una cancelación. Una descarga cortada reanuda por `Range` y vuelve a cero si el servidor no lo respeta; el SHA-256 se sigue verificando. General, el diálogo del update y la página de Dictation dicen «Retrying (2 of 4)…» mientras esperan, y el chequeo periódico mantiene su reintento largo después del cuarto intento. Sin conexión, Dictation ya no dice «The server answered 0». Sonda nueva `--ui-probe net-retry` (30 comprobaciones contra servidores en 127.0.0.1 y ::1, con redirect entre los dos y un 416 vacío al pedir el resto).
 
 [ Red - Reintentos de red en el updater y en Dictation ]
