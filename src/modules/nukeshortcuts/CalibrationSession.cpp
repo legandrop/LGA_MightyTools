@@ -69,7 +69,7 @@ void CalibrationBubble::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setPen(QPen(QColor(0x33, 0x33, 0x33), 1.0));
+    painter.setPen(QPen(Theme::color(Theme::kBorder), 1.0));
     painter.setBrush(Theme::color(Theme::kCard));
     painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 8, 8);
 }

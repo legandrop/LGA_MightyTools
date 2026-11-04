@@ -61,6 +61,7 @@ QWidget *AppTogglePanel::createListPage()
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
     m_statusCard = new StatusCard(page);
+    m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73); se ve solo con la lista (ModuleHeader)
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
@@ -227,9 +228,9 @@ void AppTogglePanel::refresh()
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. App Toggle tries to respond first, but priority is not guaranteed."),
+                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. App Toggle tries to respond first, but priority is not guaranteed."),
 #else
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
+                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. The other app may respond too."),
 #endif
                           QString(), QString(), QString());
     } else {

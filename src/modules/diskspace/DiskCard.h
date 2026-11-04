@@ -29,6 +29,8 @@ public:
     // used y mark en fraccion del total (0..1). connected = false: solo el riel, atenuado.
     void set(bool connected, double used, double mark, bool low);
     void setDraggable(bool draggable);
+    // Color de lo ocupado (un token de Theme). Sin llamarla, el gris de los discos; una descarga va en cian.
+    void setFillColor(const char *token) { m_fillToken = token; update(); }
     bool isDragging() const { return m_dragging; }
     // Corta el arrastre sin guardar (avisa con dragCanceled).
     void cancelDrag();
@@ -55,6 +57,7 @@ private:
     double m_used = 0.0;
     double m_mark = 0.0;
     bool m_low = false;
+    const char *m_fillToken = nullptr;
     bool m_draggable = false;
     bool m_dragging = false;
 };
@@ -103,7 +106,7 @@ private:
     DriveInfo m_drive;
     bool m_connected = false;
     int m_dragValue = 0;
-    Chip *m_keycap = nullptr;
+    QLabel *m_letter = nullptr; ///< la letra del disco, grande (`.dl` del Pliego)
     ElidedLabel *m_name = nullptr;
     QLabel *m_missing = nullptr;
     QSpinBox *m_value = nullptr;

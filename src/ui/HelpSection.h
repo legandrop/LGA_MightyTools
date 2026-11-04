@@ -6,8 +6,9 @@
 #include <QString>
 #include <QStringList>
 
-// Una seccion de la ayuda unica (canvas, seccion 6): una por herramienta, prendida o apagada.
-// Los pasos aceptan texto enriquecido; strong() resalta un termino como en el canvas.
+// La ayuda de una herramienta: la franja «How it works» de su pagina (D-73). Los pasos aceptan texto
+// enriquecido; strong() resalta un termino (`.st b` del diseno) y la franja dibuja como teclas los que son
+// atajos.
 struct HelpSection
 {
     QString title;
@@ -16,7 +17,7 @@ struct HelpSection
 
     static QString strong(const QString &text)
     {
-        return QStringLiteral("<span style=\"color:%1;\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
+        return QStringLiteral("<span style=\"color:%1; font-weight:600;\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
     }
 };
 

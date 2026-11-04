@@ -156,14 +156,16 @@ void applyFixture(DiskState &state, const QString &name)
 
 QIcon warnDotIcon()
 {
-    // Punto ambar: el QSS no puede tenir el texto de UNA accion.
+    // Rombo amarillo (la marca del Pliego, D-73): el QSS no puede tenir el texto de UNA accion.
     QPixmap dot(16, 16);
     dot.fill(Qt::transparent);
     QPainter painter(&dot);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setPen(Qt::NoPen);
     painter.setBrush(Theme::color(Theme::kWarn));
-    painter.drawEllipse(QRectF(4, 4, 8, 8));
+    painter.translate(8, 8);
+    painter.rotate(45);
+    painter.drawRoundedRect(QRectF(-3.5, -3.5, 7, 7), 1.2, 1.2);
     painter.end();
     return QIcon(dot);
 }

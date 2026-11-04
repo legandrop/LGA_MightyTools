@@ -45,6 +45,7 @@ FolderSwitchPanel::FolderSwitchPanel(QWidget *parent)
     column->setSpacing(10);
 
     m_status = new StatusCard(this);
+    m_status->setLive(true); // sube al encabezado de la hoja (D-73)
     column->addWidget(m_status);
     connect(m_status->button(), &QPushButton::clicked, this, [this]() {
         if (m_state.needsAccessibility) {

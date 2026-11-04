@@ -31,7 +31,9 @@ namespace {
 
 bool looksLikeNkFile(const QString &argument)
 {
-    return argument.endsWith(QStringLiteral(".nk"), Qt::CaseInsensitive);
+    // Un archivo, nunca una direccion: «https://…/x.nk» es de Link Redirector. Asi el reparto no depende
+    // del orden del registro (que es alfabetico, D-73).
+    return argument.endsWith(QStringLiteral(".nk"), Qt::CaseInsensitive) && !argument.contains(QStringLiteral("://"));
 }
 
 bool isAssociatedWithUs()

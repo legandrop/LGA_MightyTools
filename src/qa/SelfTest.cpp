@@ -39,6 +39,8 @@
 #include <QThread>
 #include <QTimer>
 
+#include <algorithm>
+
 #include <cstdio>
 #include <functional>
 
@@ -371,6 +373,22 @@ void testExternal(const Check &check)
     check(ExternalDispatch::firstPlainArgument({QStringLiteral("app.exe")}).isEmpty(), QStringLiteral("modo corto: sin argumentos, nada"));
     check(ExternalDispatch::claimant(descriptors, QStringLiteral("C:/a.txt")) == nullptr,
           QStringLiteral("modo corto: una entrada que nadie reclama sigue a la instancia unica"));
+    // Con el registro real (orden alfabetico, D-73): una direccion que termina en .nk es de Link Redirector,
+    // un archivo .nk de Open in NukeX, sin depender de quien va primero.
+    {
+        const QList<ModuleDescriptor> real = ModuleRegistry::all();
+        const auto has = [&real](const char *id) {
+            return std::any_of(real.cbegin(), real.cend(), [id](const ModuleDescriptor &d) { return d.id == QLatin1String(id); });
+        };
+        const ModuleDescriptor *web = ExternalDispatch::claimant(real, QStringLiteral("https://example.com/shots/x.nk"));
+        const ModuleDescriptor *file = ExternalDispatch::claimant(real, QStringLiteral("C:/shots/x.nk"));
+        if (has("linkRedirector")) {
+            check(web && web->id == QLatin1String("linkRedirector"), QStringLiteral("modo corto: https://.../x.nk va a Link Redirector"));
+        }
+        if (has("openInNukeX")) {
+            check(file && file->id == QLatin1String("openInNukeX"), QStringLiteral("modo corto: C:/.../x.nk va a Open in NukeX"));
+        }
+    }
 
     ExternalDispatch::Outcome done = ExternalDispatch::run(descriptors, QStringLiteral("test://done"), &store, true, 1000);
     check(done.handled && done.exitCode == 0 && !done.timedOut, QStringLiteral("modo corto: Done sale 0 sin esperar"));
@@ -762,18 +780,18 @@ void testUiScale(const Check &check)
     check(UiScale::clampLevel(-1) == 1 && UiScale::clampLevel(3) == 1 && qFuzzyCompare(UiScale::factor(7), 1.1),
           QStringLiteral("tamano de interfaz: un nivel fuera de rango vale como el de fabrica (1)"));
     check(UiScale::readSavedLevel() == UiScale::kDefaultLevel && UiScale::kDefaultLevel == 1, QStringLiteral("tamano de interfaz: sin settings.ini (en memoria) arranca en 1"));
-    // Limite por pantalla: 960 x 700 por el factor tiene que entrar en el area util.
+    // Limite por pantalla: 960 x 720 por el factor tiene que entrar en el area util.
     check(UiScale::maxFittingLevel(QSize(1920, 1032)) == 2 && UiScale::maxFittingLevel(QSize(3440, 1392)) == 2,
           QStringLiteral("tamano de interfaz: en 1920x1080 y 3440x1440 entran los tres"));
-    check(UiScale::maxFittingLevel(QSize(1400, 780)) == 1, QStringLiteral("tamano de interfaz: con 780 de alto util, hasta el 1"));
+    check(UiScale::maxFittingLevel(QSize(1400, 800)) == 1, QStringLiteral("tamano de interfaz: con 800 de alto util, hasta el 1"));
     check(UiScale::maxFittingLevel(QSize(1366, 728)) == 0 && UiScale::fitLevel(1, QSize(1366, 728)) == 0,
           QStringLiteral("tamano de interfaz: en 1366x768 solo el 0 (ni el 1 de fabrica)"));
-    check(UiScale::fitLevel(2, QSize(1400, 780)) == 1 && UiScale::fitLevel(0, QSize(1366, 728)) == 0,
+    check(UiScale::fitLevel(2, QSize(1400, 800)) == 1 && UiScale::fitLevel(0, QSize(1366, 728)) == 0,
           QStringLiteral("tamano de interfaz: lo guardado se recorta, nunca se agranda"));
     check(UiScale::maxFittingLevel(QSize()) == UiScale::kMaxLevel, QStringLiteral("tamano de interfaz: sin dato de pantalla no se limita"));
-    // Bordes exactos: 960 x 700 por 1,1 = 1056 x 770 y por 1,2 = 1152 x 840.
-    check(UiScale::maxFittingLevel(QSize(1056, 770)) == 1 && UiScale::maxFittingLevel(QSize(1056, 769)) == 0
-              && UiScale::maxFittingLevel(QSize(1152, 840)) == 2 && UiScale::maxFittingLevel(QSize(1151, 840)) == 1,
+    // Bordes exactos: 960 x 720 por 1,1 = 1056 x 792 y por 1,2 = 1152 x 864.
+    check(UiScale::maxFittingLevel(QSize(1056, 792)) == 1 && UiScale::maxFittingLevel(QSize(1056, 791)) == 0
+              && UiScale::maxFittingLevel(QSize(1152, 864)) == 2 && UiScale::maxFittingLevel(QSize(1151, 864)) == 1,
           QStringLiteral("tamano de interfaz: los bordes exactos de cada nivel"));
 #ifdef Q_OS_WIN
     // En Windows siempre hay pantalla (en mac, una sesion sin servidor de ventanas no tiene ninguna).

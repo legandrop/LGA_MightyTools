@@ -39,7 +39,7 @@ struct SizeListRow
     Expander expander = Expander::None;
     QStringList cells; ///< una por columna
     double share = -1.0; ///< 0..1 para la columna Share; negativo: sin barra
-    int tone = 0;        ///< color del peso: 0 normal, 1 crecio (ambar), 2 bajo (verde)
+    int tone = 0;        ///< color del peso: 0 normal, 1 crecio (amarillo), 2 bajo (cian)
     bool selectable = true;
     bool muted = false; ///< fila secundaria, en gris y cursiva ("12,400 smaller files")
     bool heading = false; ///< encabezado de un grupo: fondo de tarjeta, texto claro y en negrita

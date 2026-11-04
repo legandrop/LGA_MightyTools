@@ -2,6 +2,10 @@
 
 v1.53:
 
+Rediseño «Pliego» (D-73): la ventana era la del canvas original, el «?» abría un único cuadro de 2040 px con la ayuda de las diez herramientas y la lista seguía el orden en que se fueron agregando. Lega eligió, entre cinco rediseños, una hoja por herramienta sobre la mesa negra con el índice lateral unido a la hoja, colores con significado (cian funciona, magenta acción, amarillo atención) y switch con perilla en rombo, sin el desregistro en los títulos y sin bajar ningún tamaño de letra. `ModuleRegistry::all()` ordena por nombre; cada página trae su franja «How it works» con los `helpProviders()` de siempre (abierta la primera visita, recordada en `app/howItWorks/<id>`); `HelpDialog` se va y la versión, el autor y la web pasan al pie de General. Ventana de 880×720. Bricolage Grotesque para títulos queda preparada y cae a Inter mientras no esté empaquetada. Como el orden alfabético cambiaba qué herramienta recibe un argumento, Open in NukeX ya no reclama direcciones web: una URL que termina en `.nk` va siempre a Link Redirector.
+
+[ UI - Rediseño Pliego: hoja por herramienta, orden alfabético y ayuda por página ]
+
 Dictation: con la lista de fábrica nueva (32 términos), «Custom words» era un campo de una línea donde casi nada se veía y editarla era incómodo. Ahora es un campo de varias líneas que crece con el texto (de 2 a 8 renglones; la barra aparece solo si pasa de 8), con los mismos materiales de los demás campos. Sigue la regla de la app: Enter guarda y suelta el campo, Escape descarta, un click afuera guarda. Una lista pegada de a un término por renglón también se separa. Además, en el roadmap y en D-72 quedan descartados, por decisión de Lega, Parakeet y Voxtral como modelos opcionales y el ayudante elevado para dictar con una ventana de administrador al frente.
 
 [ Dictation - Custom words en varias lineas y roadmap del dictado ]

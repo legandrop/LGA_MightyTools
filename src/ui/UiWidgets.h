@@ -22,6 +22,8 @@ class QVariantAnimation;
 
 enum class Icon {
     Help, Folder, X, Minimize, Close, Pencil, Plus, ChevronDown, General,
+    // Franja «How it works» de cada pagina (D-73).
+    HelpCircle, ChevronUp, ChevronDownRound,
     // Ventana de limpieza de Disk Space (trazos del canvas, caja de 16).
     TreeClosed, TreeOpen, File, Trash, Reveal, Refresh, Shield, List, Check, Dash,
 };
@@ -49,6 +51,18 @@ private:
 // Label de una linea que recorta con "..." en su propio paintEvent, con SU fuente y SU ancho.
 // Reemplaza el elidedText calculado afuera, que media con una fuente, pintaba con otra y cortaba
 // el path contra el borde de la ventana.
+// El logo de la app (sus planchas C, M y Y) recortado al dibujo: `width` de ancho y el alto en proporcion
+// (892 x 716 del PNG de 1024). Lo usan la barra de titulo y el colofon de General.
+class AppLogo : public QWidget
+{
+public:
+    explicit AppLogo(int width, QWidget *parent = nullptr);
+protected:
+    void paintEvent(QPaintEvent *event) override;
+private:
+    QIcon m_icon;
+};
+
 class ElidedLabel : public QWidget
 {
     Q_OBJECT
@@ -94,8 +108,9 @@ private:
 };
 
 // Texto enriquecido (spans de color) con interlineado fijo, como `line-height` de CSS: cada linea
-// mide `lineHeight` y el texto queda centrado en ella. Lo usa la ayuda (pasos a 18 px por linea).
-// Fuente y color salen de la hoja de estilo (el objectName que se le ponga).
+// mide `lineHeight` y el texto queda centrado en ella. Lo usa la ayuda (pasos a 22 px por linea).
+// Fuente y color salen de la hoja de estilo (el objectName que se le ponga). Las teclas que arma
+// Ui::keycapsHtml() se dibujan como teclas (`.k` del diseno) adentro del texto.
 class RichLineLabel : public QLabel
 {
     Q_OBJECT
@@ -139,8 +154,9 @@ private:
     QString m_url;
 };
 
-// Interruptor de encendido de una herramienta (30 x 17, el `.sw` del canvas). Checkable: toggled()
-// avisa el cambio. No toma foco de teclado (regla de la app).
+// Interruptor de encendido de una herramienta (`.sw` del Pliego, D-73): 30 x 16 con la perilla en rombo,
+// la forma del logo; apagado gris, prendido cian. setLarge() da el del encabezado de la hoja (42 x 22).
+// Checkable: toggled() avisa el cambio. No toma foco de teclado (regla de la app).
 // Animacion «Suave» (D-64): con un click del usuario la perilla desliza 160 ms con frenado al final y
 // el color se funde parejo en el mismo tiempo. Un setChecked() del codigo (reflejar un estado) salta
 // al final sin animar.
@@ -149,6 +165,7 @@ class ToggleSwitch : public QAbstractButton
     Q_OBJECT
 public:
     explicit ToggleSwitch(QWidget *parent = nullptr);
+    void setLarge(bool large);
     QSize sizeHint() const override;
     // Posicion de la perilla que se esta dibujando (0 apagado, 1 prendido). Para QA.
     qreal knobPosition() const { return m_knob; }
@@ -160,6 +177,7 @@ private:
     void animateTo(qreal target);
 
     QVariantAnimation *m_anim = nullptr; // se crea con el primer click
+    bool m_large = false;
     bool m_byUser = false;
     qreal m_target = 0; // hacia donde va la animacion en marcha
     qreal m_knob = 0;  // posicion de la perilla: 0 apagado, 1 prendido (con la curva)
@@ -219,7 +237,8 @@ private:
     int m_current = -1;
 };
 
-// Punto de estado dibujado: lleno con el tono (ok, paused, warn, err) o hueco con borde (off).
+// Marca de estado dibujada: un rombo (la forma del logo) lleno con el tono (ok, paused, warn, err) o hueco
+// con borde (off). `diameter` es el lado de la caja.
 class StatusDot : public QWidget
 {
     Q_OBJECT
@@ -261,9 +280,17 @@ public:
              const QString &buttonVariant, const QString &cardTone, const QString &buttonSize = QString());
     QPushButton *button() const { return m_button; }
     QString title() const;
+    // El estado vivo de la herramienta (`.live` del Pliego): sin caja, y la ventana lo sube al encabezado
+    // de la hoja, arriba de «How it works». Lo marca el panel al crearla.
+    void setLive(bool live);
+    bool isLive() const { return m_live; }
 
 private:
-    QLabel *m_dot = nullptr;
+    void applyLiveMargins();
+
+    StatusDot *m_dot = nullptr;
+    bool m_live = false;
+    QString m_alert; ///< "warn", "err" o vacio: el marco de color del aviso, tambien en el encabezado
     QLabel *m_title = nullptr;
     QLabel *m_text = nullptr;
     QPushButton *m_button = nullptr;
@@ -299,8 +326,11 @@ void setStyleProperty(QWidget *widget, const char *name, const QVariant &value);
 QLabel *label(const QString &text, const char *objectName, QWidget *parent);
 // Texto gris de dos lineas o mas (`.cap` del canvas).
 QLabel *caption(const QString &text, QWidget *parent);
-// Tarjeta vacia (`.card`): fondo, radio 8, sin layout.
+// Tarjeta vacia (`.card`): fondo, radio 10, sin layout.
 QFrame *card(QWidget *parent);
+// Un atajo ("Ctrl+Shift+D", o "⌃⌥⇧⌘D" en mac) como teclas para un RichLineLabel; texto vacio si `text` no
+// es un atajo.
+QString keycapsHtml(const QString &text);
 // Linea divisoria con 8 px de aire arriba y abajo (`.divider`).
 void addDivider(QBoxLayout *layout, QWidget *parent);
 } // namespace Ui

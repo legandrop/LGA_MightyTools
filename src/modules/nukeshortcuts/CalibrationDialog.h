@@ -6,7 +6,7 @@
 // "Calibrate Dope Sheet": los tres pasos y la captura del layout de Nuke con el circulo sobre una
 // zona vacia del Dope Sheet (la misma imagen y las mismas instrucciones que el calibrador de la
 // version AutoHotkey). Start acepta el dialogo; quien lo abrio arranca la CalibrationSession.
-// Mismo lenguaje visual que HelpDialog: sin marco del sistema, su propia caja redondeada.
+// Sin marco del sistema, con su propia caja redondeada (la hoja, D-73).
 class CalibrationDialog : public QDialog
 {
     Q_OBJECT

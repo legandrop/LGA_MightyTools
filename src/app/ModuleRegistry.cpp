@@ -9,6 +9,8 @@
 
 #include <QtGlobal>
 
+#include <algorithm>
+
 #if defined(Q_OS_WIN)
 #include "modules/desktopicons/DesktopIconsModule.h" // solo Windows
 #include "modules/dictation/DictationModule.h"
@@ -18,7 +20,7 @@
 #include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
 #endif
 
-// Una linea por herramienta, en el orden de la lista de la ventana. Cada modulo declara su
+// Una linea por herramienta (all() las devuelve en orden alfabetico). Cada modulo declara su
 // `<modulo>Descriptor()` en su carpeta de src/modules/.
 
 namespace ModuleRegistry {
@@ -53,6 +55,12 @@ QList<ModuleDescriptor> all()
             available << d;
         }
     }
+    // Orden alfabetico por el nombre visible, sin distinguir mayusculas (D-73): lo siguen el indice, la
+    // bandeja, General y el arranque. Los rangos de ids de los atajos salen de esta posicion, pero no se
+    // guardan en ningun lado.
+    std::stable_sort(available.begin(), available.end(), [](const ModuleDescriptor &a, const ModuleDescriptor &b) {
+        return a.title.compare(b.title, Qt::CaseInsensitive) < 0;
+    });
     return available;
 }
 

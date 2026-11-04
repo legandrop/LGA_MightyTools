@@ -8,8 +8,10 @@
 #include <QPointer>
 #include <QString>
 
+class HowItWorksStrip;
 class ModuleHeader;
 class ModuleHost;
+class NavShell;
 class QScrollArea;
 class QStackedWidget;
 class QVBoxLayout;
@@ -17,12 +19,13 @@ class SettingsStore;
 class SidebarItem;
 class TitleBar;
 
-// La ventana de LGA Mighty Tools, forma A del canvas (D-01): barra de titulo propia, barra lateral
-// de 224 px con "General" arriba y una fila por herramienta, y a la derecha la pagina elegida.
+// La ventana de LGA Mighty Tools en el lenguaje «Pliego» (D-73): barra de titulo propia sobre la mesa
+// negra, el indice lateral de 244 px con "General" arriba y una fila por herramienta en orden alfabetico, y
+// a la derecha la hoja de la pagina elegida, unida a su ficha del indice.
 //
-// La pagina de una herramienta es su encabezado (del descriptor) y, debajo, su panel (creado
-// recien al elegirla, ModuleHost::panel) o el panel de apagado que dibuja el host. Cerrar no cierra
-// la app: oculta la ventana a la bandeja.
+// La pagina de una herramienta es su encabezado (del descriptor, con el estado vivo que sube el panel), la
+// franja «How it works» (su ayuda) y, debajo, su panel (creado recien al elegirla, ModuleHost::panel) o el
+// panel de apagado que dibuja el host. Cerrar no cierra la app: oculta la ventana a la bandeja.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -31,11 +34,11 @@ public:
     // Capture: la arma --ui-shot. No lee el sistema ni settings, no guarda la posicion.
     enum class Mode { Normal, Capture };
 
-    static constexpr int kWidth = 780;
-    static constexpr int kHeight = 700;
+    static constexpr int kWidth = 880;
+    static constexpr int kHeight = 720;
     static inline const QString kGeneral = QStringLiteral("general");
 
-    // appStore: donde se guarda la posicion (nullptr en captura).
+    // appStore: donde se guardan la posicion y la ayuda abierta de cada herramienta (nullptr en captura).
     MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWidget *parent = nullptr);
     ~MainWindow() override;
 
@@ -45,6 +48,10 @@ public:
     // "general" o el id de una herramienta.
     void selectPage(const QString &id);
     QString currentPage() const { return m_current; }
+
+    // Abre o cierra la franja «How it works» de la pagina que se ve (el «?» de la barra hace lo mismo).
+    void setHelpOpen(bool open);
+    bool helpOpen() const;
 
     void setFirstRun(bool firstRun);
     void setUpdateState(const UpdateRowState &state);
@@ -56,7 +63,6 @@ public:
     void setOffNoticeCaptureState(const QString &id, const QString &state);
 
 signals:
-    void helpRequested();
     // El usuario prendio o apago una herramienta (fila, encabezado, "Turn on" o la bienvenida).
     void toggleRequested(const QString &id, bool on);
     void releaseRequested(const QString &id);
@@ -75,10 +81,12 @@ private:
     {
         QScrollArea *scroll = nullptr;
         ModuleHeader *header = nullptr;
+        HowItWorksStrip *help = nullptr;
         QWidget *body = nullptr;         ///< contenedor del panel o del panel de apagado
         QVBoxLayout *bodyLayout = nullptr;
         QPointer<QWidget> offPanel;
         QPointer<QWidget> panel;
+        QString helpText; ///< los pasos y la nota que muestra la franja, para no rearmarla si no cambiaron
     };
 
     void buildUi();
@@ -91,6 +99,13 @@ private:
     // Vuelve a repartir el alto de la pagina que se ve (ver la nota en el .cpp).
     void relayoutCurrentPage();
     void refreshOffNotices();
+    // La ayuda de la pagina `id`: texto al dia (lee los atajos configurados) y abierta o cerrada segun
+    // settings (la primera visita la abre).
+    void syncHelp(const QString &id);
+    // Solo el texto de la ayuda de `id`, si cambio (un atajo nuevo): lee settings, no construye nada.
+    void refreshHelpText(const QString &id);
+    void refreshHelpButton();
+    void storeHelpOpen(const QString &id, bool open);
     void restorePosition();
     void savePosition();
     bool m_nativeFrameApplied = false;
@@ -101,6 +116,7 @@ private:
     bool m_positionRestored = false;
 
     TitleBar *m_titleBar = nullptr;
+    NavShell *m_shell = nullptr;
     QStackedWidget *m_stack = nullptr;
     SidebarItem *m_generalItem = nullptr;
     QHash<QString, SidebarItem *> m_items;
@@ -110,6 +126,8 @@ private:
     UpdateRowState m_updateState;
     QString m_current;
     QHash<QString, QString> m_offNoticeStates;
+    // Captura (sin settings): la ayuda abierta o cerrada de cada pagina, en memoria.
+    QHash<QString, bool> m_helpOpen;
 };
 
 #endif // MIGHTYTOOLS_MAINWINDOW_H

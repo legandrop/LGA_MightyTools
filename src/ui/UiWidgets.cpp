@@ -26,7 +26,8 @@
 #include <QVariantAnimation>
 #include <QPointer>
 #include <QEasingCurve>
-#include <QtMath>
+#include <QImage>
+#include <QRegularExpression>
 
 namespace {
 
@@ -47,28 +48,32 @@ IconSpec buildIcon(Icon icon)
     QPainterPath &p = s.strokePath;
     switch (icon) {
     case Icon::Help:
-        // resources/icons/help.svg de LGA_FileManagerS3: signo de pregunta solido, sin circulo.
-        // Relleno y ademas trazado con 26 de grosor y union en punta, como el original.
-        s.viewBox = 512; s.stroke = 26;
-        s.cap = Qt::FlatCap; s.join = Qt::MiterJoin;
-        p.moveTo(215, 324.5);
-        p.cubicTo(215, 271.7, 221.1, 248.6, 276.8, 212.8);
-        p.cubicTo(300.4, 197.9, 314.4, 180.9, 314.4, 158.3);
-        p.cubicTo(314.4, 115.4, 281.1, 103.8, 255.6, 103.8);
-        p.cubicTo(201.1, 103.8, 193.2, 141.2, 190.2, 167.1);
-        p.lineTo(190.2, 167.7);
-        p.lineTo(104.8, 167.7);
-        p.cubicTo(104.8, 72, 184.1, 39, 250.2, 39);
-        p.cubicTo(316.3, 39, 405.3, 48.4, 405.3, 156.2);
-        p.cubicTo(405.3, 264, 378.6, 227.2, 332, 257.4);
-        p.cubicTo(306, 274.5, 295.1, 284.9, 295.1, 324.5);
-        p.closeSubpath();
-        p.moveTo(301, 481);
-        p.lineTo(212.6, 481);
-        p.lineTo(212.6, 403.4);
-        p.lineTo(301, 403.4);
-        p.closeSubpath();
-        s.fillPath = p;
+        // El «?» de la barra de titulo del Pliego: trazo de 1.8 redondo (el arco de la SVG "a2.7 2.7 0 1 1",
+        // con su centro calculado) y el punto relleno.
+        s.viewBox = 16; s.stroke = 1.8;
+        p.moveTo(5.3, 5.6);
+        p.arcTo(QRectF(8.0 - 2.7, 5.581 - 2.7, 5.4, 5.4), 180.4, -244.0);
+        p.cubicTo(8.45, 8.37, 8.0, 8.95, 8.0, 9.8);
+        p.lineTo(8.0, 10.3);
+        s.fillPath.addEllipse(QPointF(8.0, 13.25), 1.0, 1.0);
+        break;
+    case Icon::HelpCircle:
+        // «How it works»: el mismo signo, mas chico, dentro de un circulo.
+        s.viewBox = 16; s.stroke = 1.3;
+        p.addEllipse(QPointF(8, 8), 6.6, 6.6);
+        p.moveTo(6.2, 6.3);
+        p.arcTo(QRectF(8.1 - 1.9, 6.284 - 1.9, 3.8, 3.8), 180.5, -248.9);
+        p.cubicTo(8.3, 8.27, 8.0, 8.65, 8.0, 9.2);
+        p.lineTo(8.0, 9.5);
+        s.fillPath.addEllipse(QPointF(8.0, 11.45), 0.8, 0.8);
+        break;
+    case Icon::ChevronUp:
+        s.viewBox = 12; s.stroke = 1.4;
+        p.moveTo(3, 7.5); p.lineTo(6, 4.5); p.lineTo(9, 7.5);
+        break;
+    case Icon::ChevronDownRound:
+        s.viewBox = 12; s.stroke = 1.4;
+        p.moveTo(3, 4.5); p.lineTo(6, 7.5); p.lineTo(9, 4.5);
         break;
     case Icon::Minimize:
         s.viewBox = 10; s.stroke = 1.2; s.cap = Qt::FlatCap;
@@ -277,6 +282,30 @@ void IconWidget::paintEvent(QPaintEvent *)
     Icons::paint(painter, m_icon, rect(), m_color);
 }
 
+// ------------------------------------------------------------------ AppLogo
+
+AppLogo::AppLogo(int width, QWidget *parent)
+    : QWidget(parent)
+    , m_icon(QStringLiteral(":/icons/LGA_MightyTools.png"))
+{
+    setFixedSize(width, qRound(width * 716.0 / 892.0));
+    setAttribute(Qt::WA_TransparentForMouseEvents);
+}
+
+void AppLogo::paintEvent(QPaintEvent *)
+{
+    // Recorte "64 156 892 716" del PNG de 1024. QIcon::pixmap lo reduce con filtro de area al cuadrado que
+    // contiene el recorte; despues solo se recorta y se dibuja casi al mismo tamano. Un drawPixmap directo
+    // del PNG grande muestrea de a puntos y se come trazos finos del logo.
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    const qreal scale = width() / 892.0;
+    const int side = qCeil(1024.0 * scale * devicePixelRatioF());
+    const QPixmap square = m_icon.pixmap(QSize(side, side));
+    const qreal k = square.width() / 1024.0;
+    painter.drawPixmap(QRectF(rect()), square, QRectF(64 * k, 156 * k, 892 * k, 716 * k));
+}
+
 // ------------------------------------------------------------------ ElidedLabel
 
 ElidedLabel::ElidedLabel(QWidget *parent)
@@ -379,6 +408,9 @@ int CaptionLabel::lineCount(int width) const
 
 int CaptionLabel::heightForWidth(int width) const
 {
+    // El layout pregunta con el ancho de la columna, sin recortarlo al maximo del widget: con un ancho
+    // maximo (la descripcion del encabezado, 470) el texto se parte en mas lineas que las pedidas.
+    width = qMin(width, maximumWidth());
     const QMargins m = contentsMargins();
     return lineCount(width - m.left() - m.right()) * m_lineHeight + m.top() + m.bottom();
 }
@@ -432,10 +464,60 @@ RichLineLabel::RichLineLabel(const QString &html, int lineHeight, QWidget *paren
     setSizePolicy(policy);
 }
 
+namespace {
+
+constexpr int kKeycapHeight = 20;
+const QString kKeycapScheme = QStringLiteral("lgakey:");
+
+QFont keycapFont()
+{
+    return Theme::uiFont(11.5, QFont::DemiBold);
+}
+
+int keycapWidth(const QString &key)
+{
+    // `.k`: 6 de relleno a cada lado y 1 de borde.
+    return qCeil(QFontMetricsF(keycapFont()).horizontalAdvance(key)) + 14;
+}
+
+// La tecla dibujada (`.k` del diseno): relleno de tecla, borde de 1 y borde inferior de 3 mas oscuro.
+QImage keycapImage(const QString &key, qreal dpr)
+{
+    const QSize size(keycapWidth(key), kKeycapHeight);
+    QImage image(size * dpr, QImage::Format_ARGB32_Premultiplied);
+    image.setDevicePixelRatio(dpr);
+    image.fill(Qt::transparent);
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QRectF outer(0, 0, size.width(), size.height());
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(Theme::color(Theme::kKeyBottom));
+    painter.drawRoundedRect(outer, 4, 4);
+    painter.setBrush(Theme::color(Theme::kKeyBorder));
+    painter.drawRoundedRect(outer.adjusted(0, 0, 0, -2), 4, 4);
+    painter.setBrush(Theme::color(Theme::kTile));
+    painter.drawRoundedRect(outer.adjusted(1, 1, -1, -3), 3, 3);
+    painter.setFont(keycapFont());
+    painter.setPen(Theme::color(Theme::kTextStrong));
+    painter.drawText(outer.adjusted(1, 1, -1, -3), Qt::AlignCenter, key);
+    return image;
+}
+
+} // namespace
+
 void RichLineLabel::layoutDocument(QTextDocument &document, int width) const
 {
     document.setDefaultFont(font());
     document.setDocumentMargin(0);
+    // Las teclas de Ui::keycapsHtml(): una imagen por tecla (el nombre va en hexadecimal: "⌘" no tiene que
+    // pasar por la codificacion de una URL), a la densidad de la pantalla.
+    static const QRegularExpression keycap(QStringLiteral("src=\"lgakey:([0-9a-f]+)\""));
+    const qreal dpr = qMax<qreal>(2.0, devicePixelRatioF());
+    for (auto it = keycap.globalMatch(text()); it.hasNext();) {
+        const QString hex = it.next().captured(1);
+        document.addResource(QTextDocument::ImageResource, QUrl(kKeycapScheme + hex),
+                             keycapImage(QString::fromUtf8(QByteArray::fromHex(hex.toLatin1())), dpr));
+    }
     document.setHtml(text());
     QTextCursor cursor(&document);
     cursor.select(QTextCursor::Document);
@@ -621,12 +703,19 @@ ToggleSwitch::ToggleSwitch(QWidget *parent)
     setCheckable(true);
     setFocusPolicy(Qt::NoFocus);
     setCursor(Qt::PointingHandCursor);
-    setFixedSize(30, 17);
+    setFixedSize(sizeHint());
+}
+
+void ToggleSwitch::setLarge(bool large)
+{
+    m_large = large;
+    setFixedSize(sizeHint());
+    update();
 }
 
 QSize ToggleSwitch::sizeHint() const
 {
-    return QSize(30, 17);
+    return m_large ? QSize(42, 22) : QSize(30, 16);
 }
 
 void ToggleSwitch::nextCheckState()
@@ -702,9 +791,10 @@ void ToggleSwitch::animateTo(qreal target)
 
 void ToggleSwitch::paintEvent(QPaintEvent *)
 {
-    // Medidas del canvas: caja 30 x 17 con borde de 1 y radio 9; perilla de 11 a 2 px del borde
-    // interno (left 2 apagado, left 15 prendido). Durante la animacion los colores se mezclan por
-    // m_tint y la perilla va por m_knob; quieto, son los tokens de siempre.
+    // Medidas del Pliego (`.sw`): caja de 30 x 16 (42 x 22 la grande) con borde de 1 y radio de media
+    // altura; la perilla es un rombo (un cuadrado de 7, o 10, con esquinas de 1.5, girado 45 grados) cuyo
+    // centro va de 8 a 22 (de 11 a 31 en la grande). Durante la animacion los colores se mezclan por m_tint
+    // y la perilla va por m_knob; quieto, son los tokens de siempre.
     const auto mix = [this](const char *off, const char *on) {
         const QColor a = Theme::color(off);
         const QColor b = Theme::color(on);
@@ -715,13 +805,18 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     const QRectF box = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
-    painter.setPen(QPen(mix(Theme::kSwitchOffBorder, Theme::kPrimaryBorder), 1.0));
-    painter.setBrush(mix(Theme::kSwitchOff, Theme::kPrimary));
-    painter.drawRoundedRect(box, 8.5, 8.5);
+    const qreal radius = box.height() / 2.0;
+    painter.setPen(QPen(mix(Theme::kSwitchOffBorder, Theme::kSwitchOnBorder), 1.0));
+    painter.setBrush(mix(Theme::kSwitchOff, Theme::kSwitchOn));
+    painter.drawRoundedRect(box, radius, radius);
     painter.setPen(Qt::NoPen);
     painter.setBrush(mix(Theme::kSwitchKnobOff, Theme::kSwitchKnobOn));
-    const qreal left = 1 + 2 + 13 * m_knob;
-    painter.drawEllipse(QRectF(left, 1 + 2, 11, 11));
+    const qreal side = m_large ? 10.0 : 7.0;
+    const qreal from = height() / 2.0;
+    const qreal to = width() - height() / 2.0;
+    painter.translate(from + (to - from) * m_knob, height() / 2.0);
+    painter.rotate(45);
+    painter.drawRoundedRect(QRectF(-side / 2, -side / 2, side, side), m_large ? 2.0 : 1.5, m_large ? 2.0 : 1.5);
 }
 
 // ------------------------------------------------------------------ SwitchRow
@@ -878,12 +973,15 @@ void StatusDot::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    const QRectF r = QRectF(rect());
+    // Rombo (`.dia` del Pliego): un cuadrado de lado/raiz de 2 girado 45 grados, centrado en la caja.
+    const qreal side = qMin(width(), height()) / M_SQRT2;
+    painter.translate(width() / 2.0, height() / 2.0);
+    painter.rotate(45);
+    const QRectF r(-side / 2, -side / 2, side, side);
     if (m_tone == QLatin1String("off")) {
-        // Hueco con borde de 1.5 px, como `.dot.off` del canvas.
-        painter.setPen(QPen(Theme::color(Theme::kDotOffBorder), 1.5));
+        painter.setPen(QPen(Theme::color(Theme::kDotOffBorder), 1.3));
         painter.setBrush(Qt::NoBrush);
-        painter.drawEllipse(r.adjusted(0.75, 0.75, -0.75, -0.75));
+        painter.drawRoundedRect(r.adjusted(0.65, 0.65, -0.65, -0.65), 1, 1);
         return;
     }
     const char *hex = Theme::kOk;
@@ -893,10 +991,12 @@ void StatusDot::paintEvent(QPaintEvent *)
         hex = Theme::kWarn;
     } else if (m_tone == QLatin1String("err")) {
         hex = Theme::kError;
+    } else if (m_tone == QLatin1String("accent")) {
+        hex = Theme::kAccent; // lo que hace el usuario: grabando un atajo
     }
     painter.setPen(Qt::NoPen);
     painter.setBrush(Theme::color(hex));
-    painter.drawEllipse(r);
+    painter.drawRoundedRect(r, 1, 1);
 }
 
 // ------------------------------------------------------------------ StatusCard
@@ -910,7 +1010,7 @@ StatusCard::StatusCard(QWidget *parent)
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(14, 10, 14, 10);
     row->setSpacing(12);
-    m_dot = Ui::label(QString(), "statusDot", this);
+    m_dot = new StatusDot(12, this);
     row->addWidget(m_dot, 0, Qt::AlignVCenter);
     auto *texts = new QVBoxLayout();
     texts->setSpacing(2);
@@ -930,8 +1030,17 @@ StatusCard::StatusCard(QWidget *parent)
 void StatusCard::set(const QString &dot, const QString &title, const QString &text, const QString &button,
                      const QString &buttonVariant, const QString &cardTone, const QString &buttonSize)
 {
-    Ui::setStyleProperty(m_dot, "state", dot);
+    m_dot->setTone(dot == QLatin1String("on")      ? QStringLiteral("ok")
+                   : dot == QLatin1String("error") ? QStringLiteral("err")
+                                                   : dot);
     Ui::setStyleProperty(this, "tone", cardTone);
+    // Un aviso (amarillo) o un error (rojo) llevan el marco de color tambien subidos al encabezado: llaman la
+    // misma atencion en todas las herramientas (D-73).
+    m_alert = dot == QLatin1String("warn")                                         ? QStringLiteral("warn")
+              : (dot == QLatin1String("error") || dot == QLatin1String("err")) ? QStringLiteral("err")
+                                                                                 : QString();
+    Ui::setStyleProperty(this, "alert", m_alert);
+    applyLiveMargins();
     m_title->setText(title);
     m_text->setText(text);
     m_button->setText(button);
@@ -945,6 +1054,24 @@ void StatusCard::set(const QString &dot, const QString &title, const QString &te
 QString StatusCard::title() const
 {
     return m_title->text();
+}
+
+void StatusCard::setLive(bool live)
+{
+    // `.live`: sin caja ni relleno, el titulo a 14 y la descripcion debajo; el rombo y el boton, igual.
+    m_live = live;
+    Ui::setStyleProperty(this, "live", live);
+    m_title->setObjectName(live ? QStringLiteral("liveTitle") : QStringLiteral("cardTitle"));
+    Ui::repolish(m_title);
+    setMinimumHeight(live ? 0 : 58);
+    applyLiveMargins();
+}
+
+void StatusCard::applyLiveMargins()
+{
+    // Vivo y en calma, sin caja; vivo con aviso o error, el relleno de la tarjeta para su marco.
+    const bool boxed = !m_live || !m_alert.isEmpty();
+    layout()->setContentsMargins(boxed ? QMargins(14, 10, 14, 10) : QMargins(0, 0, 0, 0));
 }
 
 // ------------------------------------------------------------------ Ui
@@ -1044,6 +1171,46 @@ QFrame *card(QWidget *parent)
     auto *frame = new QFrame(parent);
     frame->setObjectName(QStringLiteral("card"));
     return frame;
+}
+
+QString keycapsHtml(const QString &text)
+{
+    QStringList keys;
+#ifdef Q_OS_MACOS
+    // "⌃⌥⇧⌘D": los simbolos de los modificadores adelante y la tecla al final.
+    static const QString kModifiers = QStringLiteral("⌃⌥⇧⌘");
+    int i = 0;
+    while (i < text.size() && kModifiers.contains(text.at(i))) {
+        keys << text.at(i);
+        ++i;
+    }
+    if (keys.isEmpty() || i >= text.size()) {
+        return QString();
+    }
+    keys << text.mid(i);
+#else
+    // "Ctrl+Shift+D": modificadores conocidos y la tecla al final.
+    static const QStringList kModifiers = {QStringLiteral("Ctrl"), QStringLiteral("Alt"), QStringLiteral("Shift"),
+                                           QStringLiteral("Win")};
+    keys = text.split(QLatin1Char('+'));
+    if (keys.size() < 2 || keys.constLast().isEmpty()) {
+        return QString();
+    }
+    for (int i = 0; i + 1 < keys.size(); ++i) {
+        if (!kModifiers.contains(keys.at(i))) {
+            return QString();
+        }
+    }
+#endif
+    QStringList images;
+    for (const QString &key : std::as_const(keys)) {
+        images << QStringLiteral("<img src=\"lgakey:%1\" width=\"%2\" height=\"%3\" style=\"vertical-align: middle;\">")
+                      .arg(QString::fromLatin1(key.toUtf8().toHex()))
+                      .arg(keycapWidth(key))
+                      .arg(kKeycapHeight);
+    }
+    // Teclas separadas por un espacio fino que no corta la linea: el atajo nunca se parte.
+    return QStringLiteral("<span style=\"white-space: nowrap;\">%1</span>").arg(images.join(QStringLiteral("&#8239;")));
 }
 
 void addDivider(QBoxLayout *layout, QWidget *parent)

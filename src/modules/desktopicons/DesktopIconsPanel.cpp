@@ -44,7 +44,7 @@ protected:
         const QRectF inner = QRectF(rect()).adjusted(4, 4, -5, -5);
         painter.setRenderHint(QPainter::Antialiasing, true);
         painter.setPen(Qt::NoPen);
-        painter.setBrush(Theme::color(Theme::kLink));
+        painter.setBrush(Theme::color(Theme::kTextMuted)); // datos, no una accion: gris (D-73)
         painter.setClipRect(inner.adjusted(0, 0, 1, 1));
         for (const DesktopIconView::Icon &icon : m_layout.icons) {
             const QPointF at(inner.left() + inner.width() * icon.position.x() / m_layout.screen.width(),

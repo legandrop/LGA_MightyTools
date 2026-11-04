@@ -426,9 +426,9 @@ void SizeListView::paintEvent(QPaintEvent *)
             }
         }
         if (selected) {
-            painter.fillRect(rowRect, Theme::color(Theme::kSideSelected));
+            painter.fillRect(rowRect, Theme::color(Theme::kListSelected));
         } else if (index == m_hovered && !row.muted) {
-            painter.fillRect(rowRect, Theme::color(Theme::kSideHover));
+            painter.fillRect(rowRect, Theme::color(Theme::kListHover));
         }
 
         // -- Nombre: flecha, icono, texto, aclaracion, etiqueta, ruta.

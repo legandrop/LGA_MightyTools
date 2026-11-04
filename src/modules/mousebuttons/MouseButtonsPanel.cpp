@@ -48,6 +48,7 @@ QWidget *MouseButtonsPanel::createListPage()
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
     m_statusCard = new StatusCard(page);
+    m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73); se ve solo con la lista (ModuleHeader)
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);

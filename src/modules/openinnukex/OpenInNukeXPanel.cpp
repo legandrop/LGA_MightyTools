@@ -396,7 +396,7 @@ void OpenInNukeXPanel::rebuildVersionButtons()
 void OpenInNukeXPanel::updateChosenVersionHighlight()
 {
     // Canvas "Preferred Nuke version": el boton de la version cuya ruta coincide con la cargada
-    // queda resaltado (--chk-bg/--chk-border, ver Theme::kChosenBg/kChosenBorder/kChosenText).
+    // queda resaltado en magenta, como todo lo que elige el usuario (Theme::kChosenBg/kChosenBorder/kChosenText).
     // Insensible a mayusculas y a / vs \: la ruta puede venir del escaneo (QFileInfo, con /) o de
     // lo que el usuario escribio o eligio con Browse (nativa, con \ en Windows).
     const QString current = QDir::toNativeSeparators(m_pathField->text().trimmed());

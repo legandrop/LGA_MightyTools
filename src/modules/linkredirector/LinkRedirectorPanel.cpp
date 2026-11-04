@@ -147,6 +147,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
 
     // ---- Tarjeta de estado (canvas, seccion 2: "routing" / "Make Default").
     m_statusCard = new StatusCard(this);
+    m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73)
     column->addWidget(m_statusCard);
     connect(m_statusCard->button(), &QPushButton::clicked, this, [this]() {
         // Guardar cual era el default del sistema ANTES de pedir el cambio, para sincronizarlo como
@@ -242,11 +243,12 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // placeholder se ve igual de brillante que una palabra real.
     m_matchWords->setStyleSheet(QStringLiteral(
                                     "QTextEdit#linkRedirectorMatchWords { background-color:%1; "
-                                    "border:1px solid %2; border-radius:3px; padding:6px 8px; "
-                                    "selection-background-color:#393455; selection-color:%3; } "
+                                    "border:1px solid %2; border-radius:6px; padding:6px 8px; "
+                                    "selection-background-color:%5; selection-color:%3; } "
                                     "QTextEdit#linkRedirectorMatchWords:focus { border-color:%4; }")
                                     .arg(QLatin1String(Theme::kField), QLatin1String(Theme::kFieldBorder),
-                                         QLatin1String(Theme::kTextBright), QLatin1String(Theme::kAccent)));
+                                         QLatin1String(Theme::kTextBright), QLatin1String(Theme::kAccent),
+                                         QLatin1String(Theme::kSelectionBg)));
     wordsLayout->addWidget(m_matchWords);
     column->addWidget(wordsCard);
 

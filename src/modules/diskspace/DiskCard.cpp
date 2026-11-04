@@ -58,8 +58,8 @@ double fraction(qint64 part, qint64 total)
 UsageBar::UsageBar(QWidget *parent)
     : QWidget(parent)
 {
-    // 10 px de alto: el riel mide 4 y la marca del umbral sobresale 3 arriba y 3 abajo.
-    setFixedHeight(10);
+    // 16 px de alto (`.bar` del Pliego): el riel mide 8 y la marca del umbral sobresale 4 arriba y 4 abajo.
+    setFixedHeight(16);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
     setAttribute(Qt::WA_TransparentForMouseEvents);
 }
@@ -170,27 +170,30 @@ void UsageBar::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setPen(Qt::NoPen);
-    const QRectF track(0, 3, width(), 4);
+    // Barra plana del Pliego: riel de 8, lo ocupado en gris (amarillo si el disco esta bajo), radio 1.
+    const QRectF track(0, 4, width(), 8);
     painter.setOpacity(m_connected ? 1.0 : 0.4);
     painter.setBrush(Theme::color(Theme::kTile));
-    painter.drawRoundedRect(track, 2, 2);
+    painter.drawRoundedRect(track, 1, 1);
     if (!m_connected) {
         return;
     }
     if (m_used > 0.0) {
         QRectF fill = track;
         fill.setWidth(qMax(4.0, track.width() * m_used));
-        painter.setBrush(Theme::color(m_low ? Theme::kWarn : Theme::kBarFill));
-        painter.drawRoundedRect(fill, 2, 2);
+        painter.setBrush(Theme::color(m_low ? Theme::kWarn : m_fillToken ? m_fillToken : Theme::kBarFill));
+        painter.drawRoundedRect(fill, 1, 1);
     }
     // Sin marca (un disco que no se vigila, en la ventana de limpieza).
     if (m_mark < 0.0) {
         return;
     }
-    // Marca del umbral: 2 x 10, dentro del ancho aunque el umbral caiga en un extremo.
-    const double x = qBound(1.0, track.width() * m_mark, track.width() - 1.0);
-    painter.setBrush(Theme::color(m_low ? Theme::kWarnMark : Theme::kTextMuted));
-    painter.drawRoundedRect(QRectF(x - 1.0, 0, 2, 10), 1, 1);
+    // Marca del umbral: 4 x 16 clara con borde del color de la tarjeta, dentro del ancho aunque el umbral
+    // caiga en un extremo.
+    const double x = qBound(2.0, track.width() * m_mark, track.width() - 2.0);
+    painter.setPen(QPen(Theme::color(Theme::kCard), 1.0));
+    painter.setBrush(Theme::color(Theme::kWarnMark));
+    painter.drawRoundedRect(QRectF(x - 2.0, 0.5, 4, 15), 1, 1);
 }
 
 // ------------------------------------------------------------------ DriveRow
@@ -202,13 +205,15 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     setObjectName(QStringLiteral("driveRow"));
     auto *column = new QVBoxLayout(this);
     column->setContentsMargins(0, 0, 0, 0);
-    column->setSpacing(5);
+    column->setSpacing(0);
 
     auto *top = new QHBoxLayout();
     top->setContentsMargins(0, 0, 0, 0);
     top->setSpacing(8);
-    m_keycap = new Chip(this);
-    top->addWidget(m_keycap, 0, Qt::AlignVCenter);
+    // `.dl`: la letra en grande, en una columna de 30; la barra y la linea de abajo arrancan debajo del nombre.
+    m_letter = label(QString(), "driveLetter", this);
+    m_letter->setFixedSize(30, 26);
+    top->addWidget(m_letter, 0, Qt::AlignVCenter);
     // El nombre ocupa lo que mide (y se recorta con "..." si no entra): "Not connected" va pegado a
     // el, y el aire sobrante queda antes de los controles.
     m_name = new ElidedLabel(this);
@@ -218,9 +223,9 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_missing = label(I18n::tr("Not connected"), "meta", this);
     top->addWidget(m_missing, 0, Qt::AlignVCenter);
     top->addStretch(1);
-    // Fila de 26 de alto como la del canvas (`.row` con min-height 26).
+    // Fila de 30 de alto (`.dt` del Pliego).
     auto *topStrut = new QWidget(this);
-    topStrut->setFixedSize(0, 26);
+    topStrut->setFixedSize(0, 30);
     top->addWidget(topStrut);
 
     auto *controls = new QHBoxLayout();
@@ -234,7 +239,7 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     m_value->setButtonSymbols(QAbstractSpinBox::NoButtons);
     m_value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_value->setKeyboardTracking(false);
-    m_value->setFixedSize(52, 24);
+    m_value->setFixedSize(58, 28);
     CustomTooltip::instance()->setToolTip(m_value, I18n::tr("Warn when free space is under this"));
     controls->addWidget(m_value, 0, Qt::AlignVCenter);
 
@@ -273,14 +278,20 @@ DriveRow::DriveRow(const QString &root, QWidget *parent)
     top->addLayout(controls);
     column->addLayout(top);
 
+    // `.bar`: 10 debajo de la fila (el widget mide 16 y el riel empieza en 4) y 38 a la izquierda.
+    column->addSpacing(6);
+    auto *barRow = new QHBoxLayout();
+    barRow->setContentsMargins(38, 0, 0, 0);
     m_bar = new UsageBar(this);
-    column->addWidget(m_bar);
+    barRow->addWidget(m_bar);
+    column->addLayout(barRow);
+    column->addSpacing(4);
     connect(m_bar, &UsageBar::markDragged, this, &DriveRow::onMarkDragged);
     connect(m_bar, &UsageBar::markReleased, this, &DriveRow::onMarkReleased);
     connect(m_bar, &UsageBar::dragCanceled, this, &DriveRow::showSavedValue);
 
     auto *foot = new QHBoxLayout();
-    foot->setContentsMargins(0, 0, 0, 0);
+    foot->setContentsMargins(38, 0, 0, 0);
     foot->setSpacing(8);
     m_free = label(QString(), "caption", this);
     m_free->setTextFormat(Qt::RichText);
@@ -412,9 +423,9 @@ void DriveRow::update(const DiskWatch &watch, const DriveInfo *drive)
     m_connected = connected;
     m_drive = connected ? *drive : DriveInfo();
 
-    // Desenchufado: el keycap punteado y gris (`.kc.dim` del canvas).
-    m_keycap->set(connected ? QStringLiteral("key") : QStringLiteral("keyDim"),
-                  connected ? drive->label : DiskSpace::labelForRoot(watch.root, watch.name));
+    // Desenchufado: la letra en gris.
+    m_letter->setText(connected ? drive->label : DiskSpace::labelForRoot(watch.root, watch.name));
+    Ui::setStyleProperty(m_letter, "dim", !connected);
     const QString name = connected ? drive->name : watch.name;
     m_name->setText(DiskSpace::displayName(name));
     Ui::setStyleProperty(m_name, "dim", !connected);

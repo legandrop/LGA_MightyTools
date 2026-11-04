@@ -61,24 +61,9 @@ TrayMenuActions fillTrayMenu(QMenu *menu, ModuleHost *host)
     header->setEnabled(false);
     menu->addSeparator();
 
-    // Una seccion por herramienta prendida; una sin entradas no aparece. El orden es el del canvas
-    // (seccion 4): primero lo que se aprieta (pausar, calibrar) y al final las lineas de disco bajo.
-    // Una herramienta que no esta en la lista va despues, en el orden del registro.
-    static const QStringList kCanvasOrder = {QStringLiteral("nukeShortcuts"), QStringLiteral("folderSwitch"),
-                                             QStringLiteral("openInNukeX"), QStringLiteral("linkRedirector"),
-                                             QStringLiteral("diskSpace")};
-    QStringList ordered;
-    for (const QString &id : kCanvasOrder) {
-        if (host->isRunning(id)) {
-            ordered.append(id);
-        }
-    }
+    // Una seccion por herramienta prendida, en el orden alfabetico del registro (D-73); una sin entradas no
+    // aparece.
     for (const QString &id : host->runningIds()) {
-        if (!ordered.contains(id)) {
-            ordered.append(id);
-        }
-    }
-    for (const QString &id : ordered) {
         Module *module = host->module(id);
         QAction *title = sectionTitle(menu, host->descriptor(id)->title);
         const int before = int(menu->actions().size());

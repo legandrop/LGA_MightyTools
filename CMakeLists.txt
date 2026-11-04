@@ -174,7 +174,6 @@ set(SOURCES
     src/qa/Measure.cpp
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
-    src/ui/HelpDialog.cpp
     src/ui/ShortcutRow.cpp
     src/ui/Theme.cpp
     src/ui/TitleBar.cpp
@@ -294,7 +293,6 @@ set(HEADERS
     src/qa/Measure.h
     src/qa/SelfTest.h
     src/qa/UiShot.h
-    src/ui/HelpDialog.h
     src/ui/HelpSection.h
     src/ui/ShortcutRow.h
     src/ui/Theme.h

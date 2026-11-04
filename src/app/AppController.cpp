@@ -15,7 +15,6 @@
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
 #include "platform/WindowActivation.h"
-#include "ui/HelpDialog.h"
 
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "updates/UpdateService.h"
@@ -81,19 +80,6 @@ AppController::AppController(const Options &options, QObject *parent)
     m_window = new MainWindow(m_host, MainWindow::Mode::Normal, m_options.measurement ? nullptr : m_store.get());
     connect(m_window, &MainWindow::toggleRequested, this, &AppController::onToggleRequested);
     connect(m_window, &MainWindow::releaseRequested, this, &AppController::onReleaseRequested);
-    connect(m_window, &MainWindow::helpRequested, this, [this]() {
-        const auto providers = ModuleRegistry::helpProviders();
-        QList<HelpSection> sections;
-        for (const ModuleDescriptor &d : m_host->descriptors()) {
-            if (providers.contains(d.id)) {
-                sections.append(providers.value(d.id)(m_host->reader(d.id)));
-            } else {
-                sections.append(HelpSection{d.title, {}, d.description});
-            }
-        }
-        HelpDialog dialog(sections, m_window);
-        dialog.execOver(m_window);
-    });
     connect(m_window, &MainWindow::rebuilt, this, &AppController::wireGeneralPage);
 #ifdef Q_OS_MACOS
     // Cmd+Q con la ventana al frente sale de la app, como en cualquier app de mac (no hay barra de menu

@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 
 #include "app/ModuleHost.h"
+#include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
 #include "app/WindowParts.h"
 #include "core/I18n.h"
@@ -24,8 +25,6 @@
 
 namespace {
 
-constexpr int kSidebarWidth = 224;
-
 QString toneName(ModuleTone tone)
 {
     switch (tone) {
@@ -40,6 +39,12 @@ QString toneName(ModuleTone tone)
         break;
     }
     return QString();
+}
+
+// La ayuda abierta de cada herramienta, en la seccion [app] (D-73): una clave por herramienta.
+QString helpKey(const QString &id)
+{
+    return QStringLiteral("app/howItWorks/%1").arg(id);
 }
 
 } // namespace
@@ -59,6 +64,15 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
 
     connect(m_host, &ModuleHost::moduleToggled, this, &MainWindow::onModuleToggled);
     connect(m_host, &ModuleHost::moduleStatusChanged, this, &MainWindow::refreshItem);
+    // La franja de la pagina que se ve sigue a la herramienta: un atajo cambiado o un estado nuevo rearman sus
+    // pasos. Solo la pagina actual (las otras se rearman al elegirlas).
+    const auto followHelp = [this](const QString &id) {
+        if (id == m_current) {
+            refreshHelpText(id);
+        }
+    };
+    connect(m_host, &ModuleHost::moduleStatusChanged, this, followHelp);
+    connect(m_host, &ModuleHost::moduleSettingsChanged, this, followHelp);
     selectPage(kGeneral);
 }
 
@@ -71,17 +85,18 @@ MainWindow::~MainWindow()
 
 QScrollArea *MainWindow::makePage(QWidget **content, QVBoxLayout **layout)
 {
-    // `.pane`: 14 / 16 / 18 de relleno y 10 entre bloques; scroll vertical si no entra.
+    // `.pg` del Pliego: 24 arriba y abajo, 28 a los lados, 12 entre bloques; scroll vertical si no entra.
     auto *scroll = new QScrollArea(m_stack);
     scroll->setObjectName(QStringLiteral("pane"));
     scroll->setFrameShape(QFrame::NoFrame);
     scroll->setWidgetResizable(true);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    scroll->viewport()->setAutoFillBackground(false);
     auto *inner = new QWidget(scroll);
     inner->setObjectName(QStringLiteral("paneContent"));
     auto *column = new QVBoxLayout(inner);
-    column->setContentsMargins(16, 14, 16, 18);
-    column->setSpacing(10);
+    column->setContentsMargins(28, 24, 28, 24);
+    column->setSpacing(12);
     scroll->setWidget(inner);
     m_stack->addWidget(scroll);
     *content = inner;
@@ -99,36 +114,45 @@ void MainWindow::buildUi()
 
     m_titleBar = new TitleBar(central);
     root->addWidget(m_titleBar);
-    connect(m_titleBar, &TitleBar::helpClicked, this, &MainWindow::helpRequested);
+    connect(m_titleBar, &TitleBar::helpClicked, this, [this]() { setHelpOpen(!helpOpen()); });
 
-    auto *shell = new QHBoxLayout();
+    // La mesa: el indice a la izquierda y la hoja (las paginas) a la derecha. NavShell pinta la hoja y la
+    // ficha elegida; el indice y las paginas son transparentes encima.
+    m_shell = new NavShell(central);
+    root->addWidget(m_shell, 1);
+    auto *shell = new QHBoxLayout(m_shell);
     shell->setContentsMargins(0, 0, 0, 0);
     shell->setSpacing(0);
-    root->addLayout(shell, 1);
 
-    // ---------- Barra lateral (`.side`): 224 px, 10 x 8 de relleno, 2 entre filas.
-    auto *sidebar = new QFrame(central);
+    // ---------- Indice (`.nav`): 244 px, 8 arriba, General y el rotulo TOOLS, una fila por herramienta.
+    auto *sidebar = new QWidget(m_shell);
     sidebar->setObjectName(QStringLiteral("sidebar"));
-    sidebar->setFixedWidth(kSidebarWidth);
+    sidebar->setFixedWidth(NavShell::kNavWidth);
     auto *side = new QVBoxLayout(sidebar);
-    side->setContentsMargins(8, 10, 8, 10);
-    side->setSpacing(2);
+    side->setContentsMargins(0, 8, 0, 8);
+    side->setSpacing(0);
     m_generalItem = new SidebarItem(
         kGeneral, QStringLiteral("General"),
         [](QPainter &p, const QRectF &r, const QColor &c) { Icons::paint(p, Icon::General, r, c); }, false, sidebar);
     side->addWidget(m_generalItem);
     connect(m_generalItem, &SidebarItem::picked, this, &MainWindow::selectPage);
 
+    // `.nlabel`: 30 de alto, el texto 12 abajo del borde y alineado con los nombres (42).
     QLabel *toolsLabel = Ui::label(QStringLiteral("TOOLS"), "sideLabel", sidebar);
-    toolsLabel->setContentsMargins(8, 10, 8, 6);
+    toolsLabel->setFixedHeight(30);
+    toolsLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+    toolsLabel->setContentsMargins(42, 11, 0, 0);
     toolsLabel->ensurePolished();
     QFont spaced = toolsLabel->font();
-    spaced.setLetterSpacing(QFont::AbsoluteSpacing, 0.66); // .06em a 11 px
+    spaced.setLetterSpacing(QFont::AbsoluteSpacing, 1.1); // .1em a 11 px
     toolsLabel->setFont(spaced);
     side->addWidget(toolsLabel);
 
-    m_stack = new QStackedWidget(central);
+    auto *sheet = new QVBoxLayout();
+    sheet->setContentsMargins(0, 4, 10, 10); // NavShell::sheetRect()
+    m_stack = new QStackedWidget(m_shell);
     m_stack->setObjectName(QStringLiteral("pages"));
+    sheet->addWidget(m_stack);
 
     // ---------- Pagina General
     {
@@ -136,14 +160,20 @@ void MainWindow::buildUi()
         QVBoxLayout *column = nullptr;
         m_generalScroll = makePage(&content, &column);
         m_general = new GeneralPage(m_host, content);
-        column->addWidget(m_general);
-        column->addStretch(1);
+        column->addWidget(m_general, 1);
         connect(m_general, &GeneralPage::toolToggleRequested, this, &MainWindow::toggleRequested);
     }
 
-    // ---------- Una fila y una pagina por herramienta
+    // ---------- Una fila y una pagina por herramienta (el registro ya viene en orden alfabetico). La inicial
+    // va al margen solo en la primera herramienta de cada letra.
+    QChar lastLetter;
     for (const ModuleDescriptor &d : m_host->descriptors()) {
         auto *item = new SidebarItem(d.id, d.title, d.paintIcon, true, sidebar);
+        const QChar letter = d.title.isEmpty() ? QChar() : d.title.at(0).toUpper();
+        if (letter != lastLetter) {
+            item->setLetter(QString(letter));
+            lastLetter = letter;
+        }
         side->addWidget(item);
         m_items.insert(d.id, item);
         connect(item, &SidebarItem::picked, this, &MainWindow::selectPage);
@@ -157,15 +187,24 @@ void MainWindow::buildUi()
         QWidget *content = nullptr;
         QVBoxLayout *column = nullptr;
         page.scroll = makePage(&content, &column);
-        page.header = new ModuleHeader(d.title, platformsText(d.platforms), d.description, d.paintIcon, true, content);
+        page.header = new ModuleHeader(d.title, platformsText(d.platforms), d.description, true, content);
         column->addWidget(page.header);
         const QString id = d.id;
         connect(page.header, &ModuleHeader::toggleRequested, this, [this, id](bool on) { emit toggleRequested(id, on); });
+        // `.how`: 14 debajo del encabezado (12 del layout + 2).
+        column->addSpacing(2);
+        page.help = new HowItWorksStrip(content);
+        column->addWidget(page.help);
+        connect(page.help, &HowItWorksStrip::toggledByUser, this, [this, id](bool open) {
+            storeHelpOpen(id, open);
+            refreshHelpButton();
+            relayoutCurrentPage();
+        });
         page.body = new QWidget(content);
         page.body->setObjectName(QStringLiteral("moduleBody"));
         page.bodyLayout = new QVBoxLayout(page.body);
         page.bodyLayout->setContentsMargins(0, 0, 0, 0);
-        page.bodyLayout->setSpacing(10);
+        page.bodyLayout->setSpacing(12);
         column->addWidget(page.body);
         column->addStretch(1);
         m_pages.insert(d.id, page);
@@ -173,7 +212,7 @@ void MainWindow::buildUi()
     }
     side->addStretch(1);
     shell->addWidget(sidebar);
-    shell->addWidget(m_stack, 1);
+    shell->addLayout(sheet, 1);
     refreshGeneralItem();
 
     setCentralWidget(central);
@@ -194,6 +233,7 @@ void MainWindow::rebuildUi()
     m_general = nullptr;
     m_generalScroll = nullptr;
     m_stack = nullptr;
+    m_shell = nullptr;
     m_titleBar = nullptr;
     delete takeCentralWidget();
     buildUi();
@@ -211,16 +251,102 @@ void MainWindow::selectPage(const QString &id)
     for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
         it.value()->setSelected(it.key() == target);
     }
+    m_shell->setSelectedItem(target == kGeneral ? m_generalItem : m_items.value(target));
     if (target == kGeneral) {
         m_stack->setCurrentWidget(m_generalScroll);
+        refreshHelpButton();
         relayoutCurrentPage();
         return;
     }
     syncBody(target);
+    syncHelp(target);
     // Elegir una herramienta en la barra lateral tambien relee su estado.
     refreshItem(target);
     m_stack->setCurrentWidget(m_pages.value(target).scroll);
+    refreshHelpButton();
     relayoutCurrentPage();
+}
+
+void MainWindow::refreshHelpText(const QString &id)
+{
+    auto it = m_pages.find(id);
+    if (it == m_pages.end()) {
+        return;
+    }
+    const ModuleDescriptor *d = m_host->descriptor(id);
+    const auto providers = ModuleRegistry::helpProviders();
+    // Los pasos muestran los atajos configurados: se leen de settings cada vez y la franja se rearma solo
+    // si el texto cambio.
+    const HelpSection section = providers.contains(id) ? providers.value(id)(m_host->reader(id))
+                                                       : HelpSection{d ? d->title : id, {}, QString()};
+    const QString text = section.steps.join(QChar(0x1F)) + QChar(0x1E) + section.note;
+    if (text == it->helpText) {
+        return;
+    }
+    it->helpText = text;
+    it->help->setSection(section);
+    it->help->setVisible(!section.steps.isEmpty());
+    if (id == m_current) {
+        refreshHelpButton();
+        relayoutCurrentPage();
+    }
+}
+
+void MainWindow::syncHelp(const QString &id)
+{
+    auto it = m_pages.find(id);
+    if (it == m_pages.end()) {
+        return;
+    }
+    refreshHelpText(id);
+    bool open = false;
+    if (m_mode == Mode::Normal && m_appStore) {
+        // Se abre sola la primera vez que se visita la herramienta; despues queda como la dejo el usuario.
+        const QVariant stored = m_appStore->value(helpKey(id));
+        open = stored.isValid() ? stored.toBool() : true;
+        if (!stored.isValid()) {
+            m_appStore->setValue(helpKey(id), true);
+        }
+    } else {
+        open = m_helpOpen.value(id, false);
+    }
+    it->help->setOpen(open);
+}
+
+void MainWindow::storeHelpOpen(const QString &id, bool open)
+{
+    if (m_mode == Mode::Normal && m_appStore) {
+        m_appStore->setValue(helpKey(id), open);
+    } else {
+        m_helpOpen.insert(id, open);
+    }
+}
+
+bool MainWindow::helpOpen() const
+{
+    const auto it = m_pages.constFind(m_current);
+    return it != m_pages.constEnd() && !it->help->isHidden() && it->help->isOpen();
+}
+
+void MainWindow::setHelpOpen(bool open)
+{
+    auto it = m_pages.find(m_current);
+    if (it == m_pages.end() || it->help->stepCount() == 0) {
+        return;
+    }
+    it->help->setOpen(open);
+    storeHelpOpen(m_current, open);
+    refreshHelpButton();
+    relayoutCurrentPage();
+}
+
+void MainWindow::refreshHelpButton()
+{
+    // El «?» abre o cierra la franja de la pagina que se ve. En General no hay franja: queda apagado.
+    const auto it = m_pages.constFind(m_current);
+    const bool available = it != m_pages.constEnd() && it->help->stepCount() > 0;
+    m_titleBar->setHelpEnabled(available);
+    m_titleBar->setHelpActive(available && it->help->isOpen());
 }
 
 void MainWindow::relayoutCurrentPage()
@@ -237,6 +363,9 @@ void MainWindow::relayoutCurrentPage()
         layout->invalidate();
     }
     QCoreApplication::postEvent(scroll, new QEvent(QEvent::LayoutRequest));
+    if (m_shell) {
+        m_shell->update();
+    }
 }
 
 void MainWindow::syncBody(const QString &id)
@@ -260,6 +389,12 @@ void MainWindow::syncBody(const QString &id)
             if (page.panel) {
                 page.bodyLayout->addWidget(page.panel);
                 page.panel->show();
+                // El estado vivo del panel («Shortcuts are on» + Pause) sube al encabezado, arriba de la ayuda.
+                for (StatusCard *card : page.panel->findChildren<StatusCard *>()) {
+                    if (card->isLive()) {
+                        page.header->adoptLiveStatus(card, page.panel);
+                    }
+                }
             }
         }
         return;
@@ -285,6 +420,7 @@ void MainWindow::syncBody(const QString &id)
         page.offPanel = off;
     }
 }
+
 
 void MainWindow::setOffNoticeCaptureState(const QString &id, const QString &state)
 {

@@ -11,6 +11,9 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [improved] Mighty Tools tiene un diseño nuevo: cada herramienta es una hoja sobre fondo negro, la lista de la izquierda marca con la inicial dónde empieza cada letra, y los colores dicen algo: cian es lo que está funcionando, magenta lo que podés tocar y amarillo lo que pide atención; la letra es igual de grande que antes.
+- [improved] Las herramientas aparecen en orden alfabético en la ventana, en el menú de la bandeja y en General.
+- [improved] El «?» ya no abre una ayuda de todas las herramientas juntas: cada página tiene su «How it works» con los pasos de esa herramienta, que se abre sola la primera vez y que el «?» abre o cierra; la versión, el autor y la web están al pie de General.
 - [new][win] Dictation escribe lo que decís en cualquier campo de texto: tocás Win+H (o lo mantenés mientras hablás), ves el texto en una ventanita mientras hablás y se escribe al terminar sin tocar lo que tenías copiado ni dejar rastro en el historial de Win+V; escribe bien términos de VFX y de desarrollo (Nuke Studio, compo, DMP, comitear, pushear) y podés sumar los tuyos en «Custom words»; funciona en tu computadora y el modelo se descarga una sola vez con «Download» desde su página.
 - [improved][win] En General, el tamaño de la interfaz ahora se llama Zoom y muestra 100 %, 110 % y 120 %.
 - [new] La limpieza de Disk Space encuentra las cachés de Nuke, DaVinci Resolve, After Effects, Premiere, Ableton, Topaz Video, REAPER, Unreal y otros programas de video y audio aunque las hayas movido a otro disco, y deja para que decidas lo que cuesta rehacer, como proxies, medios optimizados o modelos.
@@ -20,7 +23,7 @@ platforms: [win, mac]
 - [improved][win] Al soltar las teclas de un atajo de Window Layouts o App Toggle ya no se abre el menú Inicio ni la app de Office (Ctrl+Alt+Shift+Win, la combinación que mandan el Stream Deck y otros teclados programables), y Win más una letra (como Win+E) se puede grabar para reemplazar el atajo de Windows.
 - [new][win] Desktop Icons guarda dónde están los íconos del escritorio, una vez por día o cuando quieras con un nombre, y los vuelve a su lugar con un clic cuando Windows los desordena, con «Undo» para deshacer.
 - [improved] La ventana es un poco más alta y ninguna página corta textos ni botones: si algo no entra, aparece la barra de scroll.
-- [improved] La barra de scroll es más finita y General ya no tiene la sección «About».
+- [improved] La barra de scroll es más finita.
 - [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas, y el switch se desliza suave al tocarlo.
 - [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» arriba de su panel.
 - [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.

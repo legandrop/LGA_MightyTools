@@ -108,6 +108,8 @@ signals:
     void moduleToggled(const QString &id, bool running);
     // Cambio el status(), el tooltip o la pausa de un modulo prendido.
     void moduleStatusChanged(const QString &id);
+    // Un modulo escribio o borro algo de su seccion de settings (un atajo nuevo, por ejemplo).
+    void moduleSettingsChanged(const QString &id);
     // Se borro el objeto del modulo: recien ahi el menu de la bandeja se puede rearmar.
     void moduleDestroyed(const QString &id);
 

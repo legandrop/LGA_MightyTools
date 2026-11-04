@@ -266,6 +266,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     column->addWidget(adminCard);
 #endif
     m_statusCard = new StatusCard(page);
+    m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73); se ve solo con la lista (ModuleHeader)
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
@@ -309,15 +310,26 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     form->setContentsMargins(14, 12, 14, 12);
     form->setSpacing(6);
     form->addWidget(Ui::label(I18n::tr("Window shortcut"), "cardTitle", card));
-    form->addWidget(Ui::caption(I18n::tr("Name"), card));
+    // Nombre y ajuste rapido lado a lado, como Horizontal y Vertical: con el encabezado grande del Pliego
+    // (D-73), apilados empujaban Cancel / Save fuera de la ventana en espanol.
+    auto *nameRow = new QHBoxLayout();
+    nameRow->setSpacing(9);
+    auto *nameColumn = new QVBoxLayout();
+    nameColumn->setSpacing(5);
+    nameColumn->addWidget(Ui::caption(I18n::tr("Name"), card));
     m_name = new QLineEdit(card);
     m_name->setFocusPolicy(Qt::ClickFocus);
     m_name->setObjectName(QStringLiteral("ruleField"));
-    form->addWidget(m_name);
-    form->addWidget(Ui::caption(I18n::tr("Quick preset"), card));
+    nameColumn->addWidget(m_name);
+    nameRow->addLayout(nameColumn, 1);
+    auto *presetColumn = new QVBoxLayout();
+    presetColumn->setSpacing(5);
+    presetColumn->addWidget(Ui::caption(I18n::tr("Quick preset"), card));
     m_preset = dropdown(card);
     m_preset->setAccessibleName(I18n::tr("Quick preset"));
-    form->addWidget(m_preset);
+    presetColumn->addWidget(m_preset);
+    nameRow->addLayout(presetColumn, 1);
+    form->addLayout(nameRow);
     auto *axes = new QHBoxLayout();
     axes->setSpacing(9);
     for (int which = 0; which < 2; ++which) {
@@ -473,9 +485,9 @@ void WindowLayoutsPanel::refresh()
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
+                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
 #else
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
+                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. The other app may respond too."),
 #endif
                           QString(), QString(), QString());
     } else {

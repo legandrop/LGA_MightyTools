@@ -282,7 +282,7 @@ protected:
         const int segment = int(width() * 0.38);
         const int travel = width() + segment;
         const int x = m_frozen ? 0 : int((m_clock.elapsed() % 1600) / 1600.0 * travel) - segment;
-        painter.fillRect(QRect(x, 0, segment, height()), Theme::color(Theme::kAccent));
+        painter.fillRect(QRect(x, 0, segment, height()), Theme::color(Theme::kOk)); // trabajando: cian (D-73)
     }
 
 private:
@@ -321,17 +321,21 @@ protected:
     {
         QPainter painter(this);
         painter.setRenderHint(QPainter::Antialiasing, true);
-        painter.setPen(QPen(underMouse() ? QColor(0x3d, 0x3d, 0x3d) : Theme::color(Theme::kFieldBorder), 1.0));
-        painter.setBrush(underMouse() ? QColor(0x1f, 0x1f, 0x1f) : Theme::color(Theme::kField));
+        painter.setPen(QPen(Theme::color(underMouse() ? Theme::kBorderStrong : Theme::kFieldBorder), 1.0));
+        painter.setBrush(Theme::color(underMouse() ? Theme::kListHover : Theme::kField));
         painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 4, 4);
-        // Keycap (`.kc`): 20 de alto, borde y fondo propios.
-        const QRectF keycap(6.5, (height() - 20) / 2.0 + 0.5, keycapWidth() - 1, 19);
-        painter.setPen(QPen(QColor(0x38, 0x38, 0x38), 1.0));
-        painter.setBrush(QColor(0x2b, 0x2b, 0x2b));
+        // Tecla (`.kc` del Pliego): 20 de alto, borde de 1 y borde inferior grueso mas oscuro.
+        const QRectF keycap(6, (height() - 20) / 2.0, keycapWidth(), 20);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(Theme::color(Theme::kKeyBottom));
         painter.drawRoundedRect(keycap, 4, 4);
+        painter.setBrush(Theme::color(Theme::kKeyBorder));
+        painter.drawRoundedRect(keycap.adjusted(0, 0, 0, -2), 4, 4);
+        painter.setBrush(Theme::color(Theme::kTile));
+        painter.drawRoundedRect(keycap.adjusted(1, 1, -1, -3), 3, 3);
         painter.setFont(Theme::uiFont(11.5, QFont::DemiBold));
-        painter.setPen(QColor(0xc5, 0xc8, 0xc7));
-        painter.drawText(keycap, Qt::AlignCenter, m_label);
+        painter.setPen(Theme::color(Theme::kTextStrong));
+        painter.drawText(keycap.adjusted(1, 1, -1, -3), Qt::AlignCenter, m_label);
         int x = 6 + keycapWidth() + 8;
         if (!m_name.isEmpty()) {
             painter.setFont(Theme::uiFont(13, QFont::Medium));
@@ -1318,7 +1322,9 @@ void CleanupWindow::refreshChanges()
     m_changesList->setSort(m_changeSort.column, m_changeSort.descending);
 
     QList<ChangeShareBar::Part> parts;
-    const QList<QColor> partColors = {Theme::color(Theme::kWarn), Theme::color(Theme::kLink), Theme::color(Theme::kOk)};
+    // Todo lo de la barra crecio: amarillo, de mas a menos intenso (cian es lo que bajo, en la lista).
+    const QList<QColor> partColors = {Theme::color(Theme::kGrowthStrong), Theme::color(Theme::kGrowthMid),
+                                      Theme::color(Theme::kGrowthSoft)};
     qint64 zonesDelta = 0;
     qint64 otherGrowth = 0;
     QList<const ScanSnapshot::Zone *> byGrowth;

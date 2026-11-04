@@ -62,16 +62,18 @@ GeneralPage::GeneralPage(ModuleHost *host, QWidget *parent)
     column->setSpacing(10);
 
     const QString description = I18n::tr("Settings for the whole app and an overview of your tools.");
-    m_header = new ModuleHeader(
-        QStringLiteral("General"), QString(), description,
-        [](QPainter &p, const QRectF &r, const QColor &c) { Icons::paint(p, Icon::General, r, c); }, false, this);
+    m_header = new ModuleHeader(QStringLiteral("General"), QString(), description, false, this);
     column->addWidget(m_header);
+    column->addSpacing(4);
 
     buildWelcome();
     column->addWidget(m_welcome);
     column->addWidget(buildAppCard());
     m_toolsCard = buildToolsCard();
     column->addWidget(m_toolsCard);
+    // El colofon va al pie de la hoja: la pagina le da a General todo el alto que sobra.
+    column->addStretch(1);
+    column->addWidget(buildColophon());
 
     setFirstRun(false);
     refreshTools();
@@ -152,9 +154,12 @@ QFrame *GeneralPage::buildAppCard()
     m_checkUpdates = new SwitchRow(I18n::tr("Check for updates at startup"),
                                    I18n::tr("Installed version: v%1").arg(QStringLiteral(MIGHTYTOOLS_VERSION)), card);
     m_updateResult = Ui::label(QString(), "meta", card);
+    // Un update disponible pide atencion: badge en amarillo lleno (D-73).
+    m_updateBadge = new Chip(card);
     m_updateButton = Ui::button(I18n::tr("Check now"), QString(), QStringLiteral("sm"), card);
     m_updateButton->setObjectName(QStringLiteral("checkNowButton"));
     m_checkUpdates->addTrailingWidget(m_updateResult);
+    m_checkUpdates->addTrailingWidget(m_updateBadge);
     m_checkUpdates->addTrailingWidget(m_updateButton);
     Ui::addDivider(layout, card);
     layout->addWidget(m_checkUpdates);
@@ -265,6 +270,53 @@ QFrame *GeneralPage::buildAppCard()
     return card;
 }
 
+QWidget *GeneralPage::buildColophon()
+{
+    // Colofon de imprenta del Pliego (D-73, reemplaza al «About» del Help viejo): una linea y, debajo, el logo
+    // con el nombre y la version, el autor con el sitio y la linea de la bandeja.
+    auto *box = new QWidget(this);
+    box->setObjectName(QStringLiteral("colophon"));
+    auto *column = new QVBoxLayout(box);
+    column->setContentsMargins(0, 10, 0, 0);
+    column->setSpacing(14);
+    auto *rule = new QFrame(box);
+    rule->setObjectName(QStringLiteral("colophonRule"));
+    column->addWidget(rule);
+    auto *row = new QHBoxLayout();
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(14);
+    row->addWidget(new AppLogo(40, box), 0, Qt::AlignTop);
+    auto *texts = new QVBoxLayout();
+    texts->setContentsMargins(0, 0, 0, 0);
+    texts->setSpacing(2);
+    auto *nameRow = new QHBoxLayout();
+    nameRow->setContentsMargins(0, 0, 0, 0);
+    nameRow->setSpacing(8);
+    nameRow->addWidget(Ui::label(QStringLiteral("LGA Mighty Tools"), "colophonName", box), 0, Qt::AlignBaseline);
+    nameRow->addWidget(Ui::label(QStringLiteral("v" MIGHTYTOOLS_VERSION), "colophonText", box), 0, Qt::AlignBaseline);
+    nameRow->addStretch(1);
+    texts->addLayout(nameRow);
+    auto *byRow = new QHBoxLayout();
+    byRow->setContentsMargins(0, 0, 0, 0);
+    byRow->setSpacing(6);
+    byRow->addWidget(Ui::label(I18n::tr("Developed by Lega Pugliese"), "colophonText", box));
+    byRow->addWidget(Ui::label(QStringLiteral("·"), "colophonText", box));
+    byRow->addWidget(new LinkLabel(QStringLiteral("lega.com.ar"), QStringLiteral("https://lega.com.ar"), box));
+    byRow->addStretch(1);
+    texts->addLayout(byRow);
+#ifdef Q_OS_MACOS
+    const QString closeNote = I18n::tr("Closing the window keeps LGA Mighty Tools running in the menu bar.");
+#else
+    const QString closeNote = I18n::tr("Closing the window keeps LGA Mighty Tools running in the tray.");
+#endif
+    QLabel *note = Ui::label(closeNote, "colophonText", box);
+    note->setWordWrap(true);
+    texts->addWidget(note);
+    row->addLayout(texts, 1);
+    column->addLayout(row);
+    return box;
+}
+
 QFrame *GeneralPage::buildToolsCard()
 {
     QFrame *card = Ui::card(this);
@@ -351,14 +403,16 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
         tone = QStringLiteral("ok");
         break;
     case UpdateRowState::Kind::Available:
-        text = I18n::tr("v%1 is available").arg(state.version);
-        tone = QStringLiteral("warn");
         break;
     }
+    const bool available = state.kind == UpdateRowState::Kind::Available;
     m_updateResult->setText(text);
     Ui::setStyleProperty(m_updateResult, "tone", tone);
     m_updateResult->setVisible(!text.isEmpty());
-    const bool available = state.kind == UpdateRowState::Kind::Available;
+    if (available) {
+        m_updateBadge->set(QStringLiteral("warn"), I18n::tr("v%1 is available").arg(state.version));
+    }
+    m_updateBadge->setVisible(available);
     // Mientras dice "Checking…" no se puede pedir otro chequeo.
     m_updateButton->setEnabled(state.kind != UpdateRowState::Kind::Checking);
     m_updateButton->setText(available ? I18n::tr("Update") : I18n::tr("Check now"));

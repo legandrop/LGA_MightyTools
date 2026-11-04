@@ -172,6 +172,7 @@ DictationPanel::DictationPanel(DictationModule *module, bool interactive, QWidge
     column->setContentsMargins(0, 0, 0, 0);
     column->setSpacing(10);
     m_status = new StatusCard(this);
+    m_status->setLive(true); // sube al encabezado de la hoja (D-73)
     column->addWidget(m_status);
     column->addWidget(buildShortcutCard());
     column->addWidget(buildSpeechCard());
@@ -577,6 +578,7 @@ void DictationPanel::refreshPieces()
         case State::Verifying: {
             auto *bar = new UsageBar(row);
             bar->setFixedWidth(90);
+            bar->setFillColor(Theme::kOk);
             bar->set(true, piece.progress / 100.0, -1.0, false);
             line->addWidget(bar, 0, Qt::AlignVCenter);
             auto *percent = Ui::label(piece.state == State::Verifying ? I18n::trc("dictation", "Checking…") : I18n::tr("%1%").arg(piece.progress),

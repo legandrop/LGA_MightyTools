@@ -79,6 +79,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
 
     // ---------- Tarjeta 1: estado ----------
     m_statusCard = new StatusCard(this);
+    m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73)
     layout->addWidget(m_statusCard);
 
     // ---------- Tarjeta 2: atajos ----------

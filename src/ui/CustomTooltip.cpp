@@ -58,7 +58,7 @@ public:
           m_triangleWidth(TRIANGLE_WIDTH),
           m_borderRadius(6),
           m_shadowPadding(6),
-          m_backgroundColor(QColor("#242424")),
+          m_backgroundColor(Theme::color(Theme::kTooltipBg)),
           m_triangleOffset(0),
           m_triangleDirection(Up)
     {
@@ -267,11 +267,11 @@ protected:
         painter.drawPath(fillPath);
 
         // 3) Dibujar el BORDER como outline exterior continuo (trazado a mano en
-        //    `borderPath`), 1px `#3a3a3a`. NO trazamos la base del triángulo — el
+        //    `borderPath`), 1px de Theme::kTooltipBorder. NO trazamos la base del triángulo — el
         //    outline sube al pico y baja, unificado con el top del rect. Así no hay
         //    dependencia del overlap para tapar un border interno.
         //    ⚠️ El "hueco" macOS lo arregla Qt::NoDropShadowWindowHint aparte.
-        painter.setPen(QPen(QColor("#3a3a3a"), 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.setPen(QPen(Theme::color(Theme::kTooltipBorder), 1, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
         painter.setBrush(Qt::NoBrush);
         painter.drawPath(borderPath);
         
@@ -310,7 +310,7 @@ CustomTooltip::CustomTooltip()
       m_triangleWidth(TRIANGLE_WIDTH),
       m_borderRadius(6),
       m_shadowPadding(6),
-      m_backgroundColor(QColor("#242424")),
+      m_backgroundColor(Theme::color(Theme::kTooltipBg)),
       m_showDelayTimer(new QTimer(this)),
       m_directDelayTimer(new QTimer(this)),
       m_hideWatchdogTimer(new QTimer(this))

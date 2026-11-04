@@ -24,7 +24,7 @@ struct UpdateRowState
 };
 
 // Pagina "General" (canvas, secciones 2 y 7): inicio con el sistema, updates, version y las
-// herramientas cargadas (sin "About", D-62). En el primer arranque (nada prendido todavia) muestra la
+// herramientas cargadas, con el colofon al pie (D-73). En el primer arranque (nada prendido todavia) muestra la
 // bienvenida con una tarjeta por herramienta y solo la tarjeta "App".
 //
 // No escribe nada por su cuenta: avisa con senales y quien la arma (MainWindow/AppController)
@@ -64,6 +64,7 @@ private:
     void buildWelcome();
     QFrame *buildAppCard();
     QFrame *buildToolsCard();
+    QWidget *buildColophon();
 
     ModuleHost *m_host = nullptr;
     bool m_firstRun = false;
@@ -77,6 +78,7 @@ private:
     QLabel *m_firstRunCaption = nullptr;
     SwitchRow *m_checkUpdates = nullptr;
     QLabel *m_updateResult = nullptr;
+    Chip *m_updateBadge = nullptr;
     QPushButton *m_updateButton = nullptr;
     QPushButton *m_languageButton = nullptr;
     SegmentedSwitch *m_uiSizeSwitch = nullptr;

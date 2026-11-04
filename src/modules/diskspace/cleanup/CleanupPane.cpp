@@ -155,16 +155,16 @@ void TriBox::setState(int state)
 
 void TriBox::paintEvent(QPaintEvent *)
 {
-    // `.box` del canvas: 14 x 14, radio 3; tildada o a medias con el violeta de "elegido".
+    // `.box` del canvas: 14 x 14, radio 3; tildada o a medias en magenta, la eleccion del usuario (D-73).
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     painter.setOpacity(isEnabled() ? 1.0 : 0.35);
     const bool on = m_state != 0;
-    painter.setPen(QPen(Theme::color(on ? Theme::kChosenBorder : Theme::kCheckOffBorder), 1.0));
-    painter.setBrush(Theme::color(on ? Theme::kChosenBg : Theme::kCheckOffBg));
+    painter.setPen(QPen(Theme::color(on ? Theme::kPrimaryBorder : Theme::kCheckOffBorder), 1.0));
+    painter.setBrush(Theme::color(on ? Theme::kPrimary : Theme::kCheckOffBg));
     painter.drawRoundedRect(QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5), 3, 3);
     if (on) {
-        Icons::paint(painter, m_state == 1 ? Icon::Dash : Icon::Check, QRectF(2, 2, 10, 10), Theme::color(Theme::kChosenText));
+        Icons::paint(painter, m_state == 1 ? Icon::Dash : Icon::Check, QRectF(2, 2, 10, 10), Theme::color(Theme::kTextOnAccent));
     }
 }
 

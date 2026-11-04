@@ -7,6 +7,7 @@
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
 #include "app/TrayMenu.h"
+#include "app/WindowParts.h"
 #include "core/I18n.h"
 #include "core/UiScale.h"
 #ifdef Q_OS_WIN
@@ -18,10 +19,10 @@
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
+#include "modules/nukeshortcuts/NukeShortcutsState.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsPanel.h"
 #include "ui/CustomTooltip.h"
-#include "ui/HelpDialog.h"
 #include "ui/ShortcutRow.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
@@ -88,9 +89,8 @@ const QStringList kHostStates = {
     QStringLiteral("general-latest"),    // "vX is the latest version"
     QStringLiteral("general-available"), // "vX is available" con "Update"
     QStringLiteral("first-run"),         // primer arranque: todo apagado, bienvenida
-    QStringLiteral("help"),              // ayuda unica entera
-    QStringLiteral("help-capped"),       // ayuda acotada a 480: scroll interno, Close a la vista
-    QStringLiteral("help-over-window"),  // ayuda sobre el velo, acotada a la ventana
+    QStringLiteral("help-open"),         // Nuke Shortcuts con «How it works» abierta (D-73)
+    QStringLiteral("help-closed"),       // Nuke Shortcuts con «How it works» cerrada
     QStringLiteral("hover-help"),
     QStringLiteral("hover-close"),
     QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
@@ -195,7 +195,7 @@ QWidget *makeCanvas()
     auto *canvas = new QWidget;
     canvas->setObjectName(QStringLiteral("central"));
     canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
-    canvas->setStyleSheet(QStringLiteral("QWidget#central { background-color: #101010; }"));
+    canvas->setStyleSheet(QStringLiteral("QWidget#central { background-color: %1; }").arg(QLatin1String(Theme::kDesk)));
     return canvas;
 }
 
@@ -249,20 +249,6 @@ DriveInfo probeDrive()
     return drive;
 }
 
-QList<HelpSection> helpSections(const ModuleHost &host)
-{
-    const auto providers = ModuleRegistry::helpProviders();
-    QList<HelpSection> sections;
-    for (const ModuleDescriptor &d : host.descriptors()) {
-        if (providers.contains(d.id)) {
-            sections.append(providers.value(d.id)(host.reader(d.id)));
-        } else {
-            sections.append(HelpSection{d.title, {}, d.description});
-        }
-    }
-    return sections;
-}
-
 } // namespace
 
 int runUiShot(const QStringList &args)
@@ -293,7 +279,7 @@ int runUiShot(const QStringList &args)
         return 0;
     }
     if (index < 0 || index + 2 >= args.size()) {
-        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>] [--screen-area <w>x<h>] [--scroll <y>]\n");
+        fprintf(stderr, "usage: --ui-shot <state|list> <out.png> [--dpr <1..3>] [--ui-scale <0..2>] [--screen-area <w>x<h>] [--scroll <y>] [--help-open]\n");
         return 2;
     }
     const QString outPath = QFileInfo(args.at(index + 2)).absoluteFilePath();
@@ -383,7 +369,10 @@ int runUiShot(const QStringList &args)
     }
 
     QString page = MainWindow::kGeneral;
-    if (state == QLatin1String("window") && !host.descriptors().isEmpty()) {
+    // El «?» solo se enciende en la pagina de una herramienta (en General no hay franja).
+    const bool helpState = state == QLatin1String("help-open") || state == QLatin1String("help-closed")
+                           || state == QLatin1String("hover-help");
+    if ((state == QLatin1String("window") || helpState) && !host.descriptors().isEmpty()) {
         page = host.descriptor(QStringLiteral("nukeShortcuts")) ? QStringLiteral("nukeShortcuts") : host.descriptors().first().id;
     } else if (!offId.isEmpty()) {
         page = offId;
@@ -392,6 +381,11 @@ int runUiShot(const QStringList &args)
         page = moduleId;
     }
     mainWindow.selectPage(page);
+    // En captura la franja «How it works» arranca cerrada; "help-open" o --help-open (con cualquier estado de
+    // herramienta) la abren.
+    if (state == QLatin1String("help-open") || args.contains(QStringLiteral("--help-open"))) {
+        mainWindow.setHelpOpen(true);
+    }
     settle(mainWindow);
     // --scroll <y>: la pagina desplazada (una pagina larga, como la de Dictation, no entra en el alto de la ventana).
     const int scrollIndex = args.indexOf(QStringLiteral("--scroll"));
@@ -429,31 +423,6 @@ int runUiShot(const QStringList &args)
                 button->update();
             }
         }
-        settle(mainWindow);
-    } else if (state == QLatin1String("help") || state == QLatin1String("help-capped")) {
-        // El dialogo solo, sobre el lienzo oscuro: "help" entero (sin tope), "help-capped" acotado a
-        // 480 como en una pantalla baja (el cuerpo scrollea, encabezado y Close a la vista).
-        canvas.reset(makeCanvas());
-        auto *layout = new QVBoxLayout(canvas.data());
-        layout->setContentsMargins(20, 20, 20, 20);
-        auto *help = new HelpDialog(helpSections(host), canvas.data());
-        help->setWindowFlags(Qt::Widget);
-        help->fitHeight(state == QLatin1String("help-capped") ? 480 : 0);
-        layout->addWidget(help);
-        root = canvas.data();
-        settle(*root);
-        root->adjustSize();
-        settle(*root);
-    } else if (state == QLatin1String("help-over-window")) {
-        // Velo y dialogo como hijos comunes de la ventana, no ventanas propias: se dibujan con el
-        // mismo render. Acotado al alto de la ventana, como se acota a la pantalla en la app.
-        auto *scrim = new Scrim(mainWindow.centralWidget());
-        scrim->setVisible(true);
-        auto *help = new HelpDialog(helpSections(host), mainWindow.centralWidget());
-        help->setWindowFlags(Qt::Widget);
-        help->fitHeight(mainWindow.height() - 48);
-        help->move((mainWindow.width() - help->width()) / 2, qMax(0, (mainWindow.height() - help->height()) / 2));
-        help->setVisible(true);
         settle(mainWindow);
     } else if (state.startsWith(QLatin1String("tray-menu"))) {
         canvas.reset(makeCanvas());
@@ -1996,6 +1965,164 @@ int runWindowLayoutsEditorScrollProbe()
     return ok ? 0 : 1;
 }
 
+// Indice lateral: el estado de cada herramienta, en cada estado de captura y en los dos idiomas, entra
+// entero y deja al menos 8 px hasta el switch (en General, hasta el borde de la ficha). Tambien «Off».
+int runNavFitProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    int tightest = 1000;
+    const I18n::Language before = I18n::language();
+    for (const I18n::Language language : {I18n::Language::English, I18n::Language::Spanish}) {
+        I18n::setLanguage(language);
+        const QString lang = language == I18n::Language::Spanish ? QStringLiteral("es") : QStringLiteral("en");
+        MemorySettingsStore store;
+        HostOptions options;
+        options.captureMode = true;
+        ModuleHost host(ModuleRegistry::all(), &store, options);
+        if (!canvasFixture(host, QString())) {
+            fprintf(stderr, "nav-fit: no se pudo preparar la ventana\n");
+            return 1;
+        }
+        for (const ModuleDescriptor &d : host.descriptors()) {
+            if (canvasOff(d.id) && !enable(host, d.id, QString())) {
+                fprintf(stderr, "nav-fit: %s no se pudo prender\n", qPrintable(d.id));
+                return 1;
+            }
+        }
+        MainWindow window(&host, MainWindow::Mode::Capture, nullptr);
+        window.setAttribute(Qt::WA_DontShowOnScreen, true);
+        settle(window);
+        const auto measure = [&](SidebarItem *item, const QString &text, const QString &where) {
+            const int slack = item->statusSlack(text);
+            tightest = qMin(tightest, slack);
+            ++checks;
+            if (slack < 8) {
+                ++failures;
+                fprintf(stdout, "FAIL %s %s '%s' aire=%d\n", qPrintable(lang), qPrintable(where), qPrintable(text), slack);
+            }
+        };
+        SidebarItem *general = nullptr;
+        for (SidebarItem *item : window.findChildren<SidebarItem *>()) {
+            if (item->id() == MainWindow::kGeneral) general = item;
+        }
+        for (const UpdateRowState &update : {UpdateRowState{UpdateRowState::Kind::Latest, QStringLiteral(MIGHTYTOOLS_VERSION)},
+                                             UpdateRowState{UpdateRowState::Kind::Available, QStringLiteral("10.99")}}) {
+            window.setUpdateState(update);
+            settle(window);
+            if (general) measure(general, general->statusText(), QStringLiteral("general"));
+        }
+        for (const ModuleDescriptor &d : host.descriptors()) {
+            SidebarItem *item = nullptr;
+            for (SidebarItem *candidate : window.findChildren<SidebarItem *>()) {
+                if (candidate->id() == d.id) item = candidate;
+            }
+            if (!item) continue;
+            measure(item, I18n::trc("tool", "Off"), d.id + QStringLiteral(":off"));
+            Module *module = host.module(d.id);
+            for (const QString &state : module->captureStates()) {
+                if (!module->applyCaptureState(state)) continue;
+                emit host.moduleStatusChanged(d.id);
+                settle(window);
+                measure(item, item->statusText(), d.id + QLatin1Char(':') + state);
+            }
+        }
+    }
+    I18n::setLanguage(before);
+    fprintf(stdout, "nav-fit: %d/%d estados entran (aire minimo %d px)\n%s\n", checks - failures, checks, tightest,
+            failures ? "nav-fit FALLO" : "nav-fit ok");
+    return failures ? 1 : 0;
+}
+
+// «How it works» (D-73): la primera visita la abre sola y lo guarda; cerrada por el usuario queda cerrada al
+// volver; el «?» la abre y la cierra; en General el «?» esta deshabilitado; cambiar un atajo rearma el paso
+// con las teclas nuevas sin cerrarla. Settings en memoria: nunca toca settings.ini.
+int runHowItWorksProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&](bool ok, const char *what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "  %s %s\n", ok ? "ok  " : "FAIL", what);
+    };
+    MemorySettingsStore store;
+    MemorySettingsStore appStore;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!canvasFixture(host, QString())) {
+        fprintf(stderr, "how-it-works: no se pudo preparar la ventana\n");
+        return 1;
+    }
+    const QString nuke = QStringLiteral("nukeShortcuts");
+    MainWindow window(&host, MainWindow::Mode::Normal, &appStore);
+    window.setAttribute(Qt::WA_DontShowOnScreen, true);
+    settle(window);
+    QAbstractButton *help = window.titleBar()->helpButton();
+    check(help && !help->isEnabled(), "en General el «?» esta deshabilitado");
+    if (!help) return 1;
+
+    window.selectPage(nuke);
+    settle(window);
+    check(window.helpOpen(), "la primera visita la abre sola");
+    check(appStore.value(QStringLiteral("app/howItWorks/") + nuke).toBool(), "y lo guarda en la seccion de la app");
+    check(help->isEnabled(), "en una herramienta el «?» esta habilitado");
+
+    HowItWorksStrip *strip = nullptr;
+    for (HowItWorksStrip *candidate : window.findChildren<HowItWorksStrip *>()) {
+        if (candidate->isVisibleTo(&window)) strip = candidate;
+    }
+    QAbstractButton *header = strip ? strip->findChild<QAbstractButton *>() : nullptr;
+    check(header != nullptr, "la franja de la pagina se encuentra");
+    if (!header) return 1;
+    header->click();
+    settle(window);
+    check(!window.helpOpen(), "un click en la franja la cierra");
+    window.selectPage(MainWindow::kGeneral);
+    window.selectPage(nuke);
+    settle(window);
+    check(!window.helpOpen() && !appStore.value(QStringLiteral("app/howItWorks/") + nuke).toBool(),
+          "cerrada por el usuario, queda cerrada al volver");
+
+    help->click();
+    settle(window);
+    check(window.helpOpen(), "el «?» la abre");
+    help->click();
+    settle(window);
+    check(!window.helpOpen(), "el «?» la cierra");
+    help->click();
+    settle(window);
+
+    const auto firstStep = [&]() {
+        for (QLabel *label : strip->findChildren<QLabel *>(QStringLiteral("howStep"))) {
+            if (label->isVisibleTo(strip)) return label->text();
+        }
+        return QString();
+    };
+    const QString before = firstStep();
+    // El atajo se guarda como lo guarda la herramienta prendida: por su contexto (en captura el modulo no
+    // escribe settings), que avisa al host y la ventana rearma la franja.
+    {
+        ModuleContextImpl context(&host, nuke, QStringLiteral("Nuke Shortcuts"), 0);
+        context.setValue(NukeShortcutsState::shortcutKey(ShortcutAction::AddKeyframe), QStringLiteral("Ctrl+Alt+K"));
+    }
+    settle(window);
+    const QString after = firstStep();
+    // Las teclas van como imagenes "lgakey:<nombre en hex>" (Ui::keycapsHtml).
+    const auto key = [](const char *name) { return QStringLiteral("lgakey:") + QString::fromLatin1(QByteArray(name).toHex()) + QLatin1Char('"'); };
+    check(before.contains(key("Shift")) && after.contains(key("Alt")) && after.contains(key("K")) && !after.contains(key("Shift")),
+          "cambiar el atajo rearma el paso con las teclas nuevas");
+    check(window.helpOpen(), "rearmar el texto no la cierra");
+
+    window.selectPage(MainWindow::kGeneral);
+    settle(window);
+    check(!help->isEnabled(), "de vuelta en General, el «?» se apaga");
+    fprintf(stdout, "how-it-works: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "how-it-works FALLO" : "how-it-works ok");
+    return failures ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2039,6 +2166,12 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("cleanup-sort")) {
         return runCleanupSortProbe();
+    }
+    if (probe == QLatin1String("nav-fit")) {
+        return runNavFitProbe();
+    }
+    if (probe == QLatin1String("how-it-works")) {
+        return runHowItWorksProbe();
     }
     if (probe != QLatin1String("threshold-focus")) {
         fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));

@@ -49,11 +49,13 @@ QVariant ModuleContextImpl::value(const QString &k, const QVariant &defaultValue
 void ModuleContextImpl::setValue(const QString &k, const QVariant &value)
 {
     m_host->store()->setValue(key(k), value);
+    emit m_host->moduleSettingsChanged(m_id);
 }
 
 void ModuleContextImpl::removeValue(const QString &k)
 {
     m_host->store()->remove(key(k));
+    emit m_host->moduleSettingsChanged(m_id);
 }
 
 bool ModuleContextImpl::captureMode() const
