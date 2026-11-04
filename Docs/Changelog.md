@@ -2,6 +2,10 @@
 
 v1.53:
 
+Reintentos de red (regla dura de Lega): el chequeo de updates, la descarga del instalador y la del motor y el modelo de Dictation fallaban al primer error, y GateBouncer corta el primer intento de cada programa y destino nuevo. Ahora reintentan 3 veces con 5 s de espera, con cuenta propia para cada servidor de un redirect (GateBouncer pregunta por cada uno) y tope de 10 intentos (`src/core/LgaNetRetry.h`, copia idéntica de la de la Base): conexión, timeout, cortes de HTTP/2, 408, 429 y 5xx, nunca un 4xx ni una cancelación. Una descarga cortada reanuda por `Range` y vuelve a cero si el servidor no lo respeta; el SHA-256 se sigue verificando. General, el diálogo del update y la página de Dictation dicen «Retrying (2 of 4)…» mientras esperan, y el chequeo periódico mantiene su reintento largo después del cuarto intento. Sin conexión, Dictation ya no dice «The server answered 0». Sonda nueva `--ui-probe net-retry` (30 comprobaciones contra servidores en 127.0.0.1 y ::1, con redirect entre los dos y un 416 vacío al pedir el resto).
+
+[ Red - Reintentos de red en el updater y en Dictation ]
+
 Títulos en Bricolage Grotesque: el rediseño los dejaba en Inter SemiBold porque el firewall bloqueaba la descarga de la fuente. Ahora viajan en `resources.qrc` los tres pesos estáticos (SemiBold, Bold y ExtraBold) que `Theme::apply()` ya buscaba. Se pidieron a Google Fonts con el tamaño óptico por defecto (14): con otro tamaño, cada peso se registra como una familia aparte («Bricolage Grotesque 16pt») y `titleFont()` no la encuentra. La licencia OFL de Bricolage y la de Inter, que faltaba, van completas en `resources/fonts/`, y `LICENSE` nombra a Bricolage entre los componentes de terceros. El índice sigue entrando entero (`nav-fit`: 272/272, 12 px de aire mínimo).
 
 [ UI - Titulos en Bricolage Grotesque ]

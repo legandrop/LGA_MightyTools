@@ -7,6 +7,7 @@
 #include "core/AutomatedRun.h"
 #include "core/DebugFlags.h"
 #include "core/I18n.h"
+#include "core/LgaNetRetry.h"
 #include "platform/UpdateInstaller.h"
 
 #include <QApplication>
@@ -23,6 +24,7 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QScopedPointer>
 #include <QStandardPaths>
@@ -59,6 +61,12 @@ constexpr int kPeriodicTickMs = 5 * 60 * 1000;
 constexpr int kSnoozeDays = 1;
 const QString kSnoozeKey = QStringLiteral("updates/snoozeUntil");
 
+// Log del intento que sale: el primero todavia no tiene un servidor en el que haya fallado.
+QString sendingLabel(const LgaNetRetry::Budget &budget)
+{
+    return budget.attempt() == 1 ? LgaNetRetry::attemptLabel(1) : budget.label();
+}
+
 // URL de un flag de debug, solo si apunta a ESTA maquina (UpdateManifest::loopbackUrl).
 QUrl loopbackDebugUrl(const QString &flag)
 {
@@ -67,7 +75,7 @@ QUrl loopbackDebugUrl(const QString &flag)
 
 // El manifiesto oficial, salvo en una prueba del updater contra un servidor local
 // (updateManifestUrl de config/debug_flags.txt).
-QUrl manifestUrl()
+QUrl configuredManifestUrl()
 {
     const QUrl debugUrl = loopbackDebugUrl(QStringLiteral("updateManifestUrl"));
     return debugUrl.isValid() ? debugUrl : QUrl(kOfficialManifestUrl);
@@ -81,7 +89,7 @@ bool usingDebugManifest()
 // URL de descarga del asset, DERIVADA del slug/tag/nombre en vez de venir en el
 // manifiesto: es publica y estable, y guardarla seria un segundo lugar donde
 // quedar vieja.
-QUrl assetDownloadUrl(const QString &tag, const QString &name)
+QUrl configuredAssetDownloadUrl(const QString &tag, const QString &name)
 {
     if (usingDebugManifest()) {
         const QUrl base = loopbackDebugUrl(QStringLiteral("updateDownloadBase"));
@@ -91,6 +99,24 @@ QUrl assetDownloadUrl(const QString &tag, const QString &name)
     }
     return QUrl(QStringLiteral("https://github.com/%1/releases/download/%2/%3")
                     .arg(kRepoSlug, tag, name));
+}
+
+// En una corrida automatizada el updater solo habla con ESTA maquina: nunca con la red de verdad.
+bool refusedInAutomatedRun(const QUrl &url)
+{
+    if (!AutomatedRun::active() || UpdateManifest::loopbackUrl(url.toString()).isValid()) {
+        return false;
+    }
+    qDebug() << "[UpdateService] Corrida automatizada: no se sale a la red (" << url.host() << ")";
+    return true;
+}
+
+// Primer byte de "Content-Range: bytes <inicio>-<fin>/<total>"; -1 si no viene o no se entiende.
+qint64 contentRangeStart(const QNetworkReply *reply)
+{
+    static const QRegularExpression pattern(QStringLiteral("^\\s*bytes\\s+(\\d+)-"));
+    const QRegularExpressionMatch match = pattern.match(QString::fromLatin1(reply->rawHeader("Content-Range")));
+    return match.hasMatch() ? match.captured(1).toLongLong() : -1;
 }
 
 } // namespace
@@ -134,6 +160,27 @@ UpdateService::~UpdateService()
 QWidget *UpdateService::parentWindow() const
 {
     return m_parentWindow.data();
+}
+
+bool UpdateService::setEndpointsForTests(const QUrl &manifestUrl, const QUrl &downloadBase, const QString &downloadDir)
+{
+    if (!AutomatedRun::active()) {
+        return false;
+    }
+    m_testManifestUrl = UpdateManifest::loopbackUrl(manifestUrl.toString());
+    m_testDownloadBase = UpdateManifest::loopbackUrl(downloadBase.toString());
+    m_testDownloadDir = downloadDir;
+    return m_testManifestUrl.isValid() && m_testDownloadBase.isValid() && !m_testDownloadDir.isEmpty();
+}
+
+QUrl UpdateService::manifestUrl() const
+{
+    return m_testManifestUrl.isValid() ? m_testManifestUrl : configuredManifestUrl();
+}
+
+QUrl UpdateService::assetDownloadUrl(const QString &tag, const QString &name) const
+{
+    return m_testDownloadBase.isValid() ? m_testDownloadBase.resolved(QUrl(name)) : configuredAssetDownloadUrl(tag, name);
 }
 
 QWidget *UpdateService::dialogParent() const
@@ -286,7 +333,22 @@ void UpdateService::startCheckRequest(Mode mode)
     if (m_checkReply) {
         return;
     }
+    if (refusedInAutomatedRun(manifestUrl())) {
+        m_periodicCheckActive = false;
+        m_busy = false;
+        emit checkFailed();
+        return;
+    }
 
+    m_checkMode = mode;
+    m_checkBudget.reset();
+    ++m_checkGeneration;
+    emit checking();
+    sendCheckRequest();
+}
+
+void UpdateService::sendCheckRequest()
+{
     QNetworkRequest request{manifestUrl()};
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("LGA_MightyTools/%1").arg(QApplication::applicationVersion()));
@@ -298,19 +360,19 @@ void UpdateService::startCheckRequest(Mode mode)
     request.setTransferTimeout(kCheckTimeoutMs);
 
     m_checkReply = m_network->get(request);
-    connect(m_checkReply, &QNetworkReply::finished, this, [this, mode]() { onCheckFinished(mode); });
-    emit checking();
+    connect(m_checkReply, &QNetworkReply::finished, this, &UpdateService::onCheckFinished);
 
-    qDebug() << "[UpdateService] Chequeando updates, modo=" << int(mode);
+    qDebug().noquote() << QStringLiteral("[UpdateService] Chequeando updates, modo=%1, %2 (%3)")
+                              .arg(int(m_checkMode))
+                              .arg(sendingLabel(m_checkBudget), manifestUrl().host());
 }
 
-void UpdateService::onCheckFinished(Mode mode)
+void UpdateService::onCheckFinished()
 {
     // Manual (menu) e Inline ("Check now" de General) muestran los errores en cartel; el automatico
     // se calla en todo lo que no sea "hay version nueva".
+    const Mode mode = m_checkMode;
     const bool manual = mode != Mode::Automatic;
-    const bool periodic = m_periodicCheckActive;
-    m_periodicCheckActive = false;
     QNetworkReply *reply = m_checkReply;
     m_checkReply = nullptr;
 
@@ -318,6 +380,7 @@ void UpdateService::onCheckFinished(Mode mode)
         // Defensivo: no deberia poder pasar (ver comentario del guard en
         // startCheckRequest), pero si pasa no hay nada mas que vaya a liberar
         // m_busy, asi que se libera aca para no dejar el servicio trabado.
+        m_periodicCheckActive = false;
         m_busy = false;
         emit checkFailed();
         return;
@@ -326,11 +389,44 @@ void UpdateService::onCheckFinished(Mode mode)
     const QNetworkReply::NetworkError error = reply->error();
     const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const QByteArray payload = reply->readAll();
+    const QString failedHost = reply->url().host();
+    // Nadie aborta el chequeo a proposito (solo el destructor, ya desconectado): un OperationCanceled es
+    // el timeout de setTransferTimeout y se reintenta. allowRetry() va ultimo porque ya cuenta el intento,
+    // en el servidor donde fallo (reply->url() es la URL final, despues de los redirects).
+    const bool failed = error != QNetworkReply::NoError || httpStatus != 200;
+    const bool retry = failed && LgaNetRetry::shouldRetry(reply, /*cancelledOnPurpose=*/false)
+                       && m_checkBudget.allowRetry(reply);
     reply->deleteLater();
+
+    if (retry) {
+        qDebug().noquote() << QStringLiteral("[UpdateService] Chequeo fallo en %1, networkError=%2 httpStatus=%3; "
+                                             "%4 en %5 ms")
+                                  .arg(failedHost)
+                                  .arg(int(error))
+                                  .arg(httpStatus)
+                                  .arg(m_checkBudget.label())
+                                  .arg(LgaNetRetry::delayMs());
+        const int generation = ++m_checkGeneration;
+        emit retrying(m_checkBudget.attemptOnHost(), LgaNetRetry::kRetries + 1);
+        // m_busy sigue en true durante la espera: nada pisa este chequeo. Si el servicio se destruye,
+        // el timer muere con el (objeto de contexto).
+        QTimer::singleShot(LgaNetRetry::delayMs(), this, [this, generation]() {
+            if (generation != m_checkGeneration || m_checkReply) {
+                return;
+            }
+            sendCheckRequest();
+        });
+        return;
+    }
+
+    // Recien con el resultado final: el reintento largo del periodico va despues de los cuatro intentos.
+    const bool periodic = m_periodicCheckActive;
+    m_periodicCheckActive = false;
 
     if (error != QNetworkReply::NoError) {
         qDebug() << "[UpdateService] Chequeo fallo, networkError=" << error
-                 << "httpStatus=" << httpStatus;
+                 << "httpStatus=" << httpStatus << "intentos=" << m_checkBudget.attempt()
+                 << "servidor=" << failedHost;
         if (periodic) {
             schedulePeriodicCheckIn(kPeriodicCheckRetryMs, /*withJitter=*/false);
         }
@@ -533,15 +629,20 @@ bool UpdateService::blockedHere()
 void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
                                          const QString &sha256Digest, const QString &version)
 {
-    if (!m_network || m_downloadReply) {
+    if (!m_network || m_downloadReply || m_downloadRetryPending) {
+        return;
+    }
+    if (refusedInAutomatedRun(downloadUrl)) {
+        m_busy = false;
         return;
     }
 
     // Carpeta temporal, no el cache: el instalador descargado es de un solo uso y no
     // hay motivo para que sobreviva a un reinicio del sistema.
-    const QString updateDir =
-        QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
-            .filePath(QStringLiteral("LGA_MightyTools_updates"));
+    const QString updateDir = !m_testDownloadDir.isEmpty()
+        ? m_testDownloadDir
+        : QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+              .filePath(QStringLiteral("LGA_MightyTools_updates"));
     if (!QDir().mkpath(updateDir)) {
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
             I18n::tr("The update cache directory could not be created."));
@@ -571,67 +672,131 @@ void UpdateService::downloadAndRunUpdate(const QUrl &downloadUrl, const QString 
         return;
     }
     m_downloadHash = new QCryptographicHash(QCryptographicHash::Sha256);
+    m_downloadUrl = downloadUrl;
+    m_downloadBudget.reset();
+    m_downloadReceived = 0;
+    m_downloadShowingRetry = false;
 
-    m_progressDialog = new QProgressDialog(
-        I18n::tr("Downloading %1 %2...").arg(kDisplayName, version), I18n::tr("Cancel"), 0, 0, dialogParent());
-    m_progressDialog->setWindowTitle(I18n::tr("Downloading Update"));
-    m_progressDialog->setWindowModality(dialogParent() ? Qt::WindowModal : Qt::NonModal);
-    m_progressDialog->setMinimumDuration(0);
-    m_progressDialog->setAutoClose(false);
-    m_progressDialog->setAutoReset(false);
+    m_progressDialog = createUpdateProgressDialog(dialogParent(), kDisplayName, version);
     m_progressDialog->show();
+    connect(m_progressDialog, &QProgressDialog::canceled, this, [this]() {
+        m_downloadUserCancelled = true;
+        if (m_downloadReply) {
+            m_downloadReply->abort(); // finished() en el acto: onDownloadFinished limpia
+        } else if (m_downloadRetryPending) {
+            finishCancelledDownload();
+        }
+    });
 
-    QNetworkRequest request{downloadUrl};
+    m_busy = true;
+    sendDownloadRequest();
+}
+
+void UpdateService::sendDownloadRequest()
+{
+    QNetworkRequest request{m_downloadUrl};
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("LGA_MightyTools/%1").arg(QApplication::applicationVersion()));
     // Timeout de INACTIVIDAD, no total: una descarga lenta no se corta mientras
     // sigan llegando bytes.
     request.setTransferTimeout(kDownloadTimeoutMs);
+    // Con bytes ya escritos se pide el resto. Si el servidor no lo acepta (contesta 200), se empieza de cero.
+    if (m_downloadReceived > 0) {
+        request.setRawHeader("Range", "bytes=" + QByteArray::number(m_downloadReceived) + '-');
+    }
+    m_downloadResumeOffset = m_downloadReceived;
+    m_downloadResponseChecked = false;
+    m_downloadAccepted = false;
+    m_downloadAbortedOnPurpose = false;
+    m_downloadRestartFromZero = false;
 
-    m_busy = true;
     m_downloadReply = m_network->get(request);
     connect(m_downloadReply, &QNetworkReply::readyRead, this, &UpdateService::onDownloadReadyRead);
     connect(m_downloadReply, &QNetworkReply::downloadProgress, this,
             [this](qint64 bytesReceived, qint64 bytesTotal) {
-                if (!m_progressDialog) {
+                if (!m_progressDialog || !m_downloadAccepted) {
                     return;
                 }
                 if (bytesTotal > 0) {
-                    m_progressDialog->setMaximum(static_cast<int>(bytesTotal / 1024));
-                    m_progressDialog->setValue(static_cast<int>(bytesReceived / 1024));
+                    // Con Range, Qt cuenta solo lo de este pedido: se le suma lo que ya estaba.
+                    m_progressDialog->setMaximum(static_cast<int>((m_downloadResumeOffset + bytesTotal) / 1024));
+                    m_progressDialog->setValue(static_cast<int>((m_downloadResumeOffset + bytesReceived) / 1024));
                 }
             });
     connect(m_downloadReply, &QNetworkReply::finished, this, &UpdateService::onDownloadFinished);
-    connect(m_progressDialog, &QProgressDialog::canceled, this, [this]() {
-        m_downloadUserCancelled = true;
-        if (m_downloadReply) {
-            m_downloadReply->abort();
+
+    qDebug().noquote() << QStringLiteral("[UpdateService] Bajando el instalador, %1 (%2, desde el byte %3)")
+                              .arg(sendingLabel(m_downloadBudget), m_downloadUrl.host())
+                              .arg(m_downloadReceived);
+}
+
+void UpdateService::abortDownloadLater(QNetworkReply *reply)
+{
+    // Diferido: abort() emite finished() sincronicamente, y llamarlo desde aca anidaria
+    // onDownloadFinished (con su cartel) dentro de este handler. Solo si sigue siendo el mismo pedido:
+    // nunca el de un reintento posterior.
+    const QPointer<QNetworkReply> target(reply);
+    QTimer::singleShot(0, this, [this, target]() {
+        if (target && target == m_downloadReply) {
+            target->abort();
         }
     });
 }
 
+bool UpdateService::restartPartialDownload()
+{
+    // QSaveFile no se trunca: se descarta el temporal y se abre otro.
+    if (m_downloadFile) {
+        m_downloadFile->cancelWriting();
+        delete m_downloadFile;
+    }
+    m_downloadFile = new QSaveFile(m_downloadTargetPath);
+    if (m_downloadHash) {
+        m_downloadHash->reset();
+    }
+    m_downloadReceived = 0;
+    m_downloadResumeOffset = 0;
+    return m_downloadFile->open(QIODevice::WriteOnly);
+}
+
 void UpdateService::onDownloadReadyRead()
 {
-    if (!m_downloadReply || !m_downloadFile) {
+    if (!m_downloadReply || !m_downloadFile || m_downloadAbortedOnPurpose || m_downloadWriteFailed) {
         return;
     }
 
-    // Se valida el status UNA vez, al primer dato: escribir el cuerpo de una
+    // Se valida el status UNA vez por intento, al primer dato: escribir el cuerpo de una
     // respuesta de error al disco lo haria pasar por instalador valido.
     if (!m_downloadResponseChecked) {
         m_downloadResponseChecked = true;
         const int status =
             m_downloadReply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (status != 200) {
-            // Diferido: abort() emite finished() sincronicamente, y llamarlo desde
-            // aca anidaria onDownloadFinished (con su cartel) dentro de este handler.
-            QTimer::singleShot(0, this, [this]() {
-                if (m_downloadReply) {
-                    m_downloadReply->abort();
+        const bool askedRange = m_downloadResumeOffset > 0;
+        if (askedRange && status == 206 && contentRangeStart(m_downloadReply) == m_downloadReceived) {
+            qDebug() << "[UpdateService] El servidor sigue desde el byte" << m_downloadReceived;
+        } else if (status == 200) {
+            if (m_downloadReceived > 0) {
+                // No acepto el Range: manda todo de nuevo. Se empieza de cero, sin mezclar.
+                qDebug() << "[UpdateService] El servidor no siguio desde el byte" << m_downloadReceived
+                         << ": se baja de cero";
+                if (!restartPartialDownload()) {
+                    m_downloadWriteFailed = true;
+                    abortDownloadLater(m_downloadReply);
+                    return;
                 }
-            });
+            }
+        } else if (askedRange && (status == 206 || status == 416)) {
+            // Otro rango, o no reconoce el pedido: lo ya bajado no sirve para seguir.
+            m_downloadRestartFromZero = true;
+            m_downloadAbortedOnPurpose = true;
+            abortDownloadLater(m_downloadReply);
+            return;
+        } else {
+            m_downloadAbortedOnPurpose = true;
+            abortDownloadLater(m_downloadReply);
             return;
         }
+        m_downloadAccepted = true;
     }
 
     // Se drena el reply en cada senal: sin esto Qt acumula todo el cuerpo en su
@@ -640,52 +805,27 @@ void UpdateService::onDownloadReadyRead()
     if (chunk.isEmpty()) {
         return;
     }
+    // Volvieron a llegar datos: el dialogo deja de decir que esta reintentando.
+    if (m_downloadShowingRetry && m_progressDialog) {
+        m_downloadShowingRetry = false;
+        m_progressDialog->setLabelText(updateProgressText(kDisplayName, m_downloadVersion, 0, 0));
+    }
 
     const qint64 written = m_downloadFile->write(chunk);
     if (written != chunk.size()) {
         // Escritura corta o fallida (disco lleno, permisos, etc.): cortar ya, no
         // seguir bajando bytes que no se van a poder guardar completos. Diferido
-        // por el mismo motivo que el chequeo de status: abort() emite finished()
-        // sincronicamente y anidaria onDownloadFinished dentro de este handler.
+        // por el mismo motivo que el chequeo de status.
         m_downloadWriteFailed = true;
-        QTimer::singleShot(0, this, [this]() {
-            if (m_downloadReply) {
-                m_downloadReply->abort();
-            }
-        });
+        abortDownloadLater(m_downloadReply);
         return;
     }
     m_downloadHash->addData(chunk);
+    m_downloadReceived += chunk.size();
 }
 
-void UpdateService::onDownloadFinished()
+void UpdateService::closeProgressDialog()
 {
-    QNetworkReply *reply = m_downloadReply;
-    m_downloadReply = nullptr;
-    m_busy = false;
-
-    if (!reply) {
-        return;
-    }
-
-    // finished() puede llegar con bytes sin drenar en el buffer.
-    if (m_downloadFile && reply->bytesAvailable() > 0) {
-        const QByteArray tail = reply->readAll();
-        if (!tail.isEmpty()) {
-            const qint64 written = m_downloadFile->write(tail);
-            if (written != tail.size()) {
-                m_downloadWriteFailed = true;
-            } else {
-                m_downloadHash->addData(tail);
-            }
-        }
-    }
-
-    const QNetworkReply::NetworkError error = reply->error();
-    const QString errorString = reply->errorString();
-    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    reply->deleteLater();
-
     if (m_progressDialog) {
         // QProgressDialog::closeEvent() emite canceled(); desconectar antes de cerrar
         // evita que una descarga que termino bien se marque como cancelada por el
@@ -695,6 +835,90 @@ void UpdateService::onDownloadFinished()
         m_progressDialog->deleteLater();
         m_progressDialog = nullptr;
     }
+}
+
+void UpdateService::finishCancelledDownload()
+{
+    // La espera queda sin efecto: el timer pendiente ve otra generacion y no manda nada.
+    m_downloadRetryPending = false;
+    ++m_downloadGeneration;
+    qDebug() << "[UpdateService] Descarga cancelada por el usuario mientras esperaba otro intento.";
+    closeProgressDialog();
+    discardPartialDownload();
+    m_busy = false;
+}
+
+void UpdateService::onDownloadFinished()
+{
+    QNetworkReply *reply = m_downloadReply;
+    m_downloadReply = nullptr;
+
+    if (!reply) {
+        m_busy = false;
+        return;
+    }
+
+    // finished() puede llegar con bytes sin drenar en el buffer (o con el primer dato del intento): pasan
+    // por la misma validacion que los de readyRead, que necesita el pedido como el de la descarga. Una
+    // respuesta SIN cuerpo (un 416 al pedir el resto) no emite readyRead: se valida igual si trajo status,
+    // para que vuelva a cero. Sin status (no conecto, timeout antes de los headers) no se valida: quedaria
+    // marcada como abort propio y dejaria de reintentarse.
+    const bool unvalidatedStatus = !m_downloadResponseChecked
+                                   && reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).isValid();
+    if (m_downloadFile && !m_downloadUserCancelled && (reply->bytesAvailable() > 0 || unvalidatedStatus)) {
+        m_downloadReply = reply;
+        onDownloadReadyRead();
+        m_downloadReply = nullptr;
+    }
+
+    const QNetworkReply::NetworkError error = reply->error();
+    const QString errorString = reply->errorString();
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString failedHost = reply->url().host();
+    const bool failed = error != QNetworkReply::NoError || m_downloadRestartFromZero;
+    // La cancelacion del usuario y la escritura fallida se miran ANTES de shouldRetry(), que pone el status
+    // primero (un abort propio sobre un 5xx se reintenta). allowRetry() va ultimo porque ya cuenta el
+    // intento, en el servidor donde fallo: reply->url() es la URL final, despues del redirect de GitHub.
+    const bool retry = failed && !m_downloadWriteFailed && !m_downloadUserCancelled
+                       && (m_downloadRestartFromZero || LgaNetRetry::shouldRetry(reply, m_downloadAbortedOnPurpose))
+                       && m_downloadBudget.allowRetry(reply);
+    reply->deleteLater();
+
+    if (retry) {
+        qDebug().noquote() << QStringLiteral("[UpdateService] La descarga fallo en %1, networkError=%2 httpStatus=%3, "
+                                             "%4 bytes guardados; %5 en %6 ms")
+                                  .arg(failedHost)
+                                  .arg(int(error))
+                                  .arg(httpStatus)
+                                  .arg(m_downloadReceived)
+                                  .arg(m_downloadBudget.label())
+                                  .arg(LgaNetRetry::delayMs());
+        if (m_downloadRestartFromZero && !restartPartialDownload()) {
+            m_downloadWriteFailed = true;
+        } else {
+            m_downloadRetryPending = true;
+            const int generation = ++m_downloadGeneration;
+            if (m_progressDialog) {
+                m_downloadShowingRetry = true;
+                m_progressDialog->setLabelText(updateProgressText(kDisplayName, m_downloadVersion,
+                                                                  m_downloadBudget.attemptOnHost(),
+                                                                  LgaNetRetry::kRetries + 1));
+            }
+            // m_busy sigue en true y el dialogo abierto. Cancel durante la espera la corta
+            // (finishCancelledDownload); si el servicio se destruye, el timer muere con el.
+            QTimer::singleShot(LgaNetRetry::delayMs(), this, [this, generation]() {
+                if (generation != m_downloadGeneration || !m_downloadRetryPending) {
+                    return;
+                }
+                m_downloadRetryPending = false;
+                sendDownloadRequest();
+            });
+            return;
+        }
+    }
+
+    m_busy = false;
+    closeProgressDialog();
 
     // Escritura a disco fallida: se chequea ANTES que la cancelacion del usuario y
     // que el error de red generico, porque el abort() diferido que dispara esto
@@ -716,9 +940,10 @@ void UpdateService::onDownloadFinished()
     }
 
     if (error != QNetworkReply::NoError) {
-        const QString detail = QStringLiteral("httpStatus=%1\nnetworkError=%2 (%3)")
+        const QString detail = QStringLiteral("httpStatus=%1\nnetworkError=%2 (%3)\nattempts=%4\nhost=%5")
                                    .arg(QString::number(httpStatus),
-                                        QString::number(static_cast<int>(error)), errorString);
+                                        QString::number(static_cast<int>(error)), errorString,
+                                        QString::number(m_downloadBudget.attempt()), failedHost);
         qDebug() << "[UpdateService] La descarga fallo:" << detail;
         discardPartialDownload();
         QMessageBox::warning(parentWindow(), I18n::tr("Update Failed"),
@@ -765,6 +990,7 @@ void UpdateService::onDownloadFinished()
     m_downloadFile = nullptr;
     delete m_downloadHash;
     m_downloadHash = nullptr;
+    emit downloadReady(installerPath);
 
     // Un borrado de Disk Space pudo empezar mientras bajaba: instalar cierra la app.
     if (refuseWhileBusyElsewhere()) {
@@ -824,4 +1050,11 @@ void UpdateService::discardPartialDownload()
     m_downloadUserCancelled = false;
     m_downloadWriteFailed = false;
     m_downloadResponseChecked = false;
+    m_downloadAccepted = false;
+    m_downloadAbortedOnPurpose = false;
+    m_downloadRestartFromZero = false;
+    m_downloadRetryPending = false;
+    m_downloadShowingRetry = false;
+    m_downloadReceived = 0;
+    m_downloadResumeOffset = 0;
 }

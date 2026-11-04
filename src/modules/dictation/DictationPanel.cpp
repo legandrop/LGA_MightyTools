@@ -38,6 +38,15 @@ namespace {
 
 using State = DictationModels::State;
 
+// Al lado de la barra de una pieza que baja: el porcentaje, o que esta reintentando (regla de red).
+QString downloadingText(const DictationModule::PieceInfo &piece)
+{
+    if (piece.retryAttempt > 0) {
+        return I18n::tr("Retrying (%1 of %2)…").arg(piece.retryAttempt).arg(DictationModels::kAttempts);
+    }
+    return I18n::tr("%1%").arg(piece.progress);
+}
+
 // El desplegable de la app (`fieldButton`): la rueda no lo cambia (un QPushButton no la usa) y la opción se
 // elige en su menú.
 QPushButton *dropdown(QWidget *parent)
@@ -412,6 +421,7 @@ void DictationPanel::refreshStatus()
     qint64 missingBytes = 0;
     qint64 downloadingBytes = 0;
     int progress = 0;
+    int retryAttempt = 0;
     bool downloading = false;
     bool verifying = false;
     QString pieceError;
@@ -422,6 +432,7 @@ void DictationPanel::refreshStatus()
             downloading = true;
             progress = piece.progress;
             downloadingBytes = piece.size;
+            retryAttempt = qMax(retryAttempt, piece.retryAttempt);
         }
         if (piece.state == State::Verifying) verifying = true;
     }
@@ -434,11 +445,15 @@ void DictationPanel::refreshStatus()
         m_status->set(QStringLiteral("error"), I18n::tr("Download the model to start"), pieceError, I18n::tr("Try again"),
                       QStringLiteral("primary"), QStringLiteral("err"), sm);
     } else if (downloading) {
-        m_status->set(QStringLiteral("on"), I18n::tr("Downloading the model"),
-                      I18n::tr("%1% of %2. You can keep working while it downloads.")
-                          .arg(progress)
-                          .arg(DiskSpace::formatBytes(downloadingBytes)),
-                      I18n::tr("Cancel"), QString(), QString(), sm);
+        // Reintentando (regla de red): el pedido se corto y sale otra vez en unos segundos.
+        const QString text = retryAttempt > 0 ? I18n::tr("The download was interrupted. Retrying (%1 of %2)…")
+                                                    .arg(retryAttempt)
+                                                    .arg(DictationModels::kAttempts)
+                                              : I18n::tr("%1% of %2. You can keep working while it downloads.")
+                                                    .arg(progress)
+                                                    .arg(DiskSpace::formatBytes(downloadingBytes));
+        m_status->set(QStringLiteral("on"), I18n::tr("Downloading the model"), text, I18n::tr("Cancel"), QString(),
+                      QString(), sm);
     } else if (verifying) {
         m_status->set(QStringLiteral("on"), I18n::tr("Checking the download"),
                       I18n::tr("Making sure the files are complete."), QString(), QString(), QString(), sm);
@@ -532,7 +547,7 @@ void DictationPanel::refreshPieces()
         for (const DictationModule::PieceInfo &piece : pieces) {
             const PieceProgress view = m_progress.value(piece.id);
             if (view.bar) view.bar->set(true, piece.progress / 100.0, -1.0, false);
-            if (view.percent && piece.state == State::Downloading) view.percent->setText(I18n::tr("%1%").arg(piece.progress));
+            if (view.percent && piece.state == State::Downloading) view.percent->setText(downloadingText(piece));
         }
         return;
     }
@@ -581,7 +596,7 @@ void DictationPanel::refreshPieces()
             bar->setFillColor(Theme::kOk);
             bar->set(true, piece.progress / 100.0, -1.0, false);
             line->addWidget(bar, 0, Qt::AlignVCenter);
-            auto *percent = Ui::label(piece.state == State::Verifying ? I18n::trc("dictation", "Checking…") : I18n::tr("%1%").arg(piece.progress),
+            auto *percent = Ui::label(piece.state == State::Verifying ? I18n::trc("dictation", "Checking…") : downloadingText(piece),
                                       "meta", row);
             line->addWidget(percent, 0, Qt::AlignVCenter);
             m_progress.insert(id, {bar, percent});

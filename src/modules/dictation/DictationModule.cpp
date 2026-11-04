@@ -573,6 +573,7 @@ QList<DictationModule::PieceInfo> DictationModule::pieces() const
         if (m_models) {
             info.state = m_models->state(piece.id);
             info.progress = m_models->progress(piece.id);
+            info.retryAttempt = m_models->retryAttempt(piece.id);
             info.error = m_models->errorText(piece.id);
         }
         list << info;
@@ -644,6 +645,10 @@ ModuleStatus DictationModule::status() const
         if (piece.state == DictationModels::State::Error) return {ModuleTone::Error, I18n::tr("Download failed")};
     }
     for (const PieceInfo &piece : pieces()) {
+        if (piece.state == DictationModels::State::Downloading && piece.retryAttempt > 0) {
+            // Corto: es el estado de la barra lateral (nav-fit). La pagina lo dice entero.
+            return {ModuleTone::Active, I18n::tr("Retrying %1/%2").arg(piece.retryAttempt).arg(DictationModels::kAttempts)};
+        }
         if (piece.state == DictationModels::State::Downloading) {
             return {ModuleTone::Active, I18n::tr("Downloading %1%").arg(piece.progress)};
         }
@@ -670,8 +675,8 @@ QWidget *DictationModule::createPanel(QWidget *parent)
 QStringList DictationModule::captureStates() const
 {
     return {QStringLiteral("ready"),  QStringLiteral("missing"), QStringLiteral("downloading"),
-            QStringLiteral("error"),  QStringLiteral("recent"),  QStringLiteral("replacements-edit"),
-            QStringLiteral("confirm-delete")};
+            QStringLiteral("retrying"), QStringLiteral("error"),  QStringLiteral("recent"),
+            QStringLiteral("replacements-edit"), QStringLiteral("confirm-delete")};
 }
 
 bool DictationModule::applyCaptureState(const QString &state)
@@ -703,6 +708,12 @@ bool DictationModule::applyCaptureState(const QString &state)
     } else if (state == QLatin1String("downloading")) {
         model.state = DictationModels::State::Downloading;
         model.progress = 42;
+        m_engineState = EngineState::Off;
+    } else if (state == QLatin1String("retrying")) {
+        // Se corto a la mitad y espera el segundo intento (regla de red).
+        model.state = DictationModels::State::Downloading;
+        model.progress = 42;
+        model.retryAttempt = 2;
         m_engineState = EngineState::Off;
     } else if (state == QLatin1String("error")) {
         model.state = DictationModels::State::Error;

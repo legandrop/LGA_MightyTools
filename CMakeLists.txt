@@ -172,6 +172,7 @@ set(SOURCES
     src/platform/ToastActivationCommon.cpp
     src/platform/WindowPlacementCommon.cpp
     src/qa/Measure.cpp
+    src/qa/NetRetryProbe.cpp
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
     src/ui/ShortcutRow.cpp
@@ -208,6 +209,7 @@ set(HEADERS
     src/core/AutomatedRun.h
     src/core/BuildTree.h
     src/core/DebugFlags.h
+    src/core/LgaNetRetry.h
     src/core/LgaRegistry.h
     src/core/NukePlugin.h
     src/core/Shortcut.h
@@ -291,6 +293,7 @@ set(HEADERS
     src/platform/WindowFrame.h
     src/platform/WindowPlacement.h
     src/qa/Measure.h
+    src/qa/NetRetryProbe.h
     src/qa/SelfTest.h
     src/qa/UiShot.h
     src/ui/HelpSection.h

@@ -1,6 +1,8 @@
 #ifndef MIGHTYTOOLS_DICTATIONMODELS_H
 #define MIGHTYTOOLS_DICTATIONMODELS_H
 
+#include "core/LgaNetRetry.h"
+
 #include <QByteArray>
 #include <QList>
 #include <QObject>
@@ -35,9 +37,15 @@ class QProcess;
 // (checkEngineFiles) contra la tabla fija del paquete (Piece::files), no contra el marcador: son codigo
 // que se ejecuta, y el marcador es un archivo que cualquiera puede reescribir.
 //
-// En una corrida automatizada no se baja nada ni se abre la red: solo se aceptan URL file:// (el
-// self-test con archivos chicos), y borrar lo que ya estaba solo actua dentro de la carpeta de pruebas
-// (AutomatedRun).
+// Red (regla de Lega, core/LgaNetRetry.h): una descarga que falla se reintenta 3 veces con 5 s entre
+// intentos. Durante la espera la pieza sigue "bajando" con retryAttempt() > 0, sin pedido en vuelo; cancelar,
+// borrar la pieza o destruir este objeto (apagar la herramienta, cambiar la carpeta) corta el reintento
+// pendiente. Cortada a mitad, sigue con Range desde lo ya escrito al .part si el servidor contesta 206 con
+// ese mismo inicio; si contesta 200 se vacia el .part y se empieza de cero, sin mezclar.
+//
+// En una corrida automatizada no se baja nada de la red: solo se aceptan URL file:// (el self-test con
+// archivos chicos) y http a una IP de loopback (la sonda net-retry, con su propio servidor), y borrar lo
+// que ya estaba solo actua dentro de la carpeta de pruebas (AutomatedRun).
 class DictationModels : public QObject
 {
     Q_OBJECT
@@ -87,6 +95,10 @@ public:
 
     State state(const QString &id) const;
     int progress(const QString &id) const; ///< 0..100, bajando o verificando
+    // Bajando: el pedido anterior fallo y se espera (o ya salio, sin datos todavia) el intento N de
+    // kAttempts en el servidor donde fallo (LgaNetRetry::Budget::attemptOnHost). 0 mientras llegan datos.
+    int retryAttempt(const QString &id) const;
+    static constexpr int kAttempts = LgaNetRetry::kRetries + 1;
     QString errorText(const QString &id) const;
     bool allReady() const;
 
@@ -120,9 +132,18 @@ private:
         QNetworkReply *reply = nullptr;
         QFile *file = nullptr;
         QCryptographicHash *hash = nullptr;
-        qint64 received = 0;
+        qint64 received = 0;  // bytes en el .part (y en el hash)
         bool cancelled = false;
         QString failure; // motivo del abort, si no lo pidio el usuario
+        // Reintentos (core/LgaNetRetry.h): 4 intentos por servidor en el que falla (GitHub y Hugging
+        // Face redirigen a su servidor de archivos), con el tope total de LgaNetRetry::kMaxAttempts.
+        LgaNetRetry::Budget budget;
+        int retryAttempt = 0;     // ver retryAttempt()
+        bool retryPending = false; // esperando el proximo intento, sin pedido en vuelo
+        int generation = 0;       // cada espera lleva su numero: una vencida que ya no vale no manda nada
+        bool responseChecked = false; // el status de este intento ya se miro
+        bool sentRange = false;   // este intento pidio el resto con Range
+        bool restartFromZero = false; // el servidor no siguio desde donde se corto: se vacia el .part
         QProcess *tar = nullptr;
         QString extractDir;
         std::thread verifier;
@@ -136,6 +157,13 @@ private:
     void startVerify(const Piece &piece);
     void onVerified(const QString &id, bool stopped, bool match);
     void stopVerifier(Job &job);
+    // Un intento de la descarga (el primero o un reintento).
+    void sendRequest(const Piece &piece);
+    void scheduleRetry(const QString &id);
+    // Vacia el .part y el hash (el servidor mando todo de nuevo, u otro rango).
+    bool restartPart(Job &job);
+    // Cierra y borra el .part y libera el hash.
+    void dropPart(const Piece &piece, Job &job);
     void onData(const QString &id);
     void onDownloaded(const QString &id);
     void install(const Piece &piece);

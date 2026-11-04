@@ -1,6 +1,8 @@
 #ifndef MIGHTYTOOLS_UPDATESERVICE_H
 #define MIGHTYTOOLS_UPDATESERVICE_H
 
+#include "core/LgaNetRetry.h"
+
 #include <QDateTime>
 #include <QObject>
 #include <QPointer>
@@ -31,6 +33,14 @@ class SettingsStore;
 // Lo que SI se porta tal cual son las decisiones finas: comparacion de version via
 // VersionCompare, verificacion de digest, descarga por streaming a QSaveFile, y
 // manejo de errores HTTP con detalle crudo.
+//
+// Red (regla de Lega, core/LgaNetRetry.h): el chequeo del manifiesto y la descarga se reintentan 3 veces
+// con 5 s entre intentos, cada uno con su propia cuenta (LgaNetRetry::Budget: cada servidor en el que
+// falla, por ejemplo el de los archivos al que redirige GitHub, tiene sus 3). Durante la espera no hay
+// pedido en vuelo, m_busy sigue en true y la fila de General (senal retrying) o el dialogo de la descarga
+// dicen que esta reintentando. La descarga cortada a mitad sigue con Range desde lo ya escrito si el servidor lo acepta
+// (206); si contesta 200 se empieza de cero, sin mezclar. El reintento largo del chequeo periodico
+// (10 min) va DESPUES de los cuatro intentos.
 class UpdateService : public QObject
 {
     Q_OBJECT
@@ -63,18 +73,32 @@ public:
     // "Update" de la fila: baja e instala la version que encontro el ultimo chequeo.
     void installAvailable();
 
+    // Solo pruebas automatizadas (--ui-probe net-retry): de donde se lee el manifiesto, de donde se baja el
+    // paquete (base + nombre del asset) y en que carpeta se guarda. Con las reglas de los flags de debug:
+    // solo http a 127.0.0.1 o localhost. Fuera de una corrida automatizada no hace nada y devuelve false.
+    bool setEndpointsForTests(const QUrl &manifestUrl, const QUrl &downloadBase, const QString &downloadDir);
+
 signals:
     void checking();
+    // El chequeo fallo y se vuelve a mandar en unos segundos: `attempt` de `attempts` (2 de 4...) en el
+    // servidor que fallo (LgaNetRetry::Budget::attemptOnHost).
+    void retrying(int attempt, int attempts);
     void upToDate(const QString &latestVersion);
     void updateAvailable(const QString &version);
     // El chequeo termino sin resultado para la fila (error ya mostrado, o sin release).
     void checkFailed();
+    // Lo descargado paso el SHA-256 y quedo guardado en `installerPath`, justo antes de instalarlo.
+    void downloadReady(const QString &installerPath);
 
 private:
     enum class Mode { Automatic, Manual, Inline };
 
     void startCheckRequest(Mode mode);
-    void onCheckFinished(Mode mode);
+    // Un intento del chequeo (el primero o un reintento): manda el pedido del manifiesto.
+    void sendCheckRequest();
+    void onCheckFinished();
+    QUrl manifestUrl() const;
+    QUrl assetDownloadUrl(const QString &tag, const QString &name) const;
 
     // Tick del chequeo periodico: si ya vencio el proximo chequeo, lo corre.
     void onPeriodicTick();
@@ -95,8 +119,18 @@ private:
     QWidget *dialogParent() const;
     void downloadAndRunUpdate(const QUrl &downloadUrl, const QString &assetName,
                               const QString &sha256Digest, const QString &version);
+    // Un intento de la descarga: con bytes ya escritos pide el resto con Range.
+    void sendDownloadRequest();
     void onDownloadReadyRead();
     void onDownloadFinished();
+    // Aborta el pedido `reply` en la vuelta siguiente del event loop, si sigue siendo el de la descarga.
+    void abortDownloadLater(QNetworkReply *reply);
+    // Vuelve el archivo parcial y el hash a cero (el servidor no siguio desde donde se corto).
+    bool restartPartialDownload();
+    // Cancel con la descarga esperando el proximo intento: no hay pedido que abortar.
+    void finishCancelledDownload();
+    // Cierra el dialogo de progreso sin que su closeEvent se tome como un Cancel.
+    void closeProgressDialog();
     // Cierra el archivo parcial y libera el hash, sin commitear. Se llama al
     // cancelar, al fallar, y antes de arrancar una descarga nueva.
     void discardPartialDownload();
@@ -113,6 +147,19 @@ private:
 
     bool m_busy = false;
     bool m_automaticCheckScheduled = false;
+
+    // ------------------------------------------------------ reintentos del chequeo
+    Mode m_checkMode = Mode::Automatic;
+    // Intentos del chequeo en curso: 4 por servidor (el de Pages, y otro si un redirect lo manda a otro
+    // lado y falla ahi), con el tope total de LgaNetRetry::kMaxAttempts.
+    LgaNetRetry::Budget m_checkBudget;
+    // Cada espera lleva su numero: un reintento que vence despues de otra cosa no manda nada.
+    int m_checkGeneration = 0;
+
+    // Solo pruebas automatizadas (setEndpointsForTests).
+    QUrl m_testManifestUrl;
+    QUrl m_testDownloadBase;
+    QString m_testDownloadDir;
 
     // ------------------------------------------------------ chequeo periodico
     // Tick corto que compara el reloj contra m_nextPeriodicCheckUtc: al volver de una
@@ -146,9 +193,24 @@ private:
     // Escritura a disco corta o fallida (disco lleno, permisos, etc.): se corta la
     // descarga y se reporta como fallo de escritura, no como error de red generico.
     bool m_downloadWriteFailed = false;
-    // Se valida el status HTTP una sola vez, al llegar el primer dato: sin esto se
+    // Se valida el status HTTP una sola vez por intento, al llegar el primer dato: sin esto se
     // escribiria al disco (y se firmaria como instalador valido) una pagina de error.
     bool m_downloadResponseChecked = false;
+    // El intento en curso paso esa validacion: recien ahi se escribe lo que llega.
+    bool m_downloadAccepted = false;
+    // El intento en curso lo aborto este servicio por el status (no la red, no el usuario).
+    bool m_downloadAbortedOnPurpose = false;
+    // El servidor no siguio desde donde se corto (206 de otro rango, 416): se vuelve a cero.
+    bool m_downloadRestartFromZero = false;
+
+    // ------------------------------------------------------ reintentos de la descarga
+    QUrl m_downloadUrl;
+    LgaNetRetry::Budget m_downloadBudget; // como m_checkBudget
+    int m_downloadGeneration = 0;    // como m_checkGeneration
+    bool m_downloadRetryPending = false; // esperando el proximo intento, sin pedido en vuelo
+    bool m_downloadShowingRetry = false; // el dialogo dice "Retrying" hasta que vuelvan a llegar datos
+    qint64 m_downloadReceived = 0;   // bytes ya escritos al parcial (y sumados al hash)
+    qint64 m_downloadResumeOffset = 0; // desde donde sigue el intento en curso (para la barra)
 };
 
 #endif // MIGHTYTOOLS_UPDATESERVICE_H

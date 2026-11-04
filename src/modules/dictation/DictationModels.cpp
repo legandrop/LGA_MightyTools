@@ -14,10 +14,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QHash>
+#include <QHostAddress>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QPointer>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QTimer>
 #include <QUuid>
@@ -30,6 +33,32 @@ constexpr qint64 kHashChunk = 4 * 1024 * 1024;
 QString native(const QString &path)
 {
     return QDir::toNativeSeparators(path);
+}
+
+// Log de un intento: el primero todavia no tiene un servidor en el que haya fallado.
+QString attemptText(const LgaNetRetry::Budget &budget)
+{
+    return budget.attempt() == 1 ? LgaNetRetry::attemptLabel(1) : budget.label();
+}
+
+bool isHttp(const QUrl &url)
+{
+    return url.scheme() == QLatin1String("https") || url.scheme() == QLatin1String("http");
+}
+
+// En una corrida automatizada solo se baja de ESTE equipo: file:// (el self-test) o http a una IP de
+// loopback escrita tal cual (la sonda net-retry). Un nombre (aunque sea localhost) no vale.
+bool allowedInAutomatedRun(const QUrl &url)
+{
+    return url.isLocalFile() || (url.scheme() == QLatin1String("http") && QHostAddress(url.host()).isLoopback());
+}
+
+// Primer byte de "Content-Range: bytes <inicio>-<fin>/<total>"; -1 si no viene o no se entiende.
+qint64 contentRangeStart(const QNetworkReply *reply)
+{
+    static const QRegularExpression pattern(QStringLiteral("^\\s*bytes\\s+(\\d+)-"));
+    const QRegularExpressionMatch match = pattern.match(QString::fromLatin1(reply->rawHeader("Content-Range")));
+    return match.hasMatch() ? match.captured(1).toLongLong() : -1;
 }
 
 QString markerPath(const DictationModels::Piece &piece, const QString &target)
@@ -276,6 +305,12 @@ int DictationModels::progress(const QString &id) const
     return it == m_jobs.end() ? 0 : it->second.progress;
 }
 
+int DictationModels::retryAttempt(const QString &id) const
+{
+    const auto it = m_jobs.find(id);
+    return it == m_jobs.end() ? 0 : it->second.retryAttempt;
+}
+
 QString DictationModels::errorText(const QString &id) const
 {
     const auto it = m_jobs.find(id);
@@ -490,7 +525,7 @@ void DictationModels::download(const QString &id)
         return;
     }
     // Segunda guarda, ademas de la de quien llama: una corrida automatizada no abre la red.
-    if (AutomatedRun::active() && !p->url.isLocalFile()) {
+    if (AutomatedRun::active() && !allowedInAutomatedRun(p->url)) {
         setState(id, State::Error, 0, I18n::tr("Downloads are off during automated tests."));
         return;
     }
@@ -508,49 +543,122 @@ void DictationModels::download(const QString &id)
     job.received = 0;
     job.cancelled = false;
     job.failure.clear();
+    job.budget.reset();
+    job.retryAttempt = 0;
+    job.retryPending = false;
+    sendRequest(*p);
+    setState(id, State::Downloading, 0);
+}
+
+void DictationModels::sendRequest(const Piece &piece)
+{
+    Job &job = m_jobs[piece.id];
     // Recien aca: con la herramienta sin bajar nada no hay ni red ni objetos de red.
     if (!m_network) {
         m_network = new QNetworkAccessManager(this);
     }
-    QNetworkRequest request(p->url);
+    QNetworkRequest request(piece.url);
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("LGA_MightyTools/%1").arg(QCoreApplication::applicationVersion()));
     request.setTransferTimeout(kTransferTimeoutMs);
+    // Con bytes en el .part se pide el resto; si el servidor no lo acepta se empieza de cero (onData).
+    job.sentRange = isHttp(piece.url) && job.received > 0;
+    if (job.sentRange) {
+        request.setRawHeader("Range", "bytes=" + QByteArray::number(job.received) + '-');
+    }
+    job.responseChecked = false;
+    job.restartFromZero = false;
+    job.failure.clear();
     job.reply = m_network->get(request);
+    const QString id = piece.id;
     connect(job.reply, &QNetworkReply::readyRead, this, [this, id]() { onData(id); });
     connect(job.reply, &QNetworkReply::finished, this, [this, id]() { onDownloaded(id); });
-    qInfo() << "[Dictado] Bajando" << p->title << "a" << native(part);
-    setState(id, State::Downloading, 0);
+    qInfo().noquote() << QStringLiteral("[Dictado] Bajando %1 a %2, %3 (%4, desde el byte %5)")
+                             .arg(piece.title, native(partPath(piece)), attemptText(job.budget),
+                                  piece.url.host().isEmpty() ? piece.url.scheme() : piece.url.host())
+                             .arg(job.received);
+}
+
+bool DictationModels::restartPart(Job &job)
+{
+    job.hash->reset();
+    job.received = 0;
+    return job.file->resize(0) && job.file->seek(0);
+}
+
+void DictationModels::dropPart(const Piece &piece, Job &job)
+{
+    if (job.file) {
+        job.file->close();
+        delete job.file;
+        job.file = nullptr;
+    }
+    delete job.hash;
+    job.hash = nullptr;
+    QFile::remove(partPath(piece));
 }
 
 void DictationModels::onData(const QString &id)
 {
     Job &job = m_jobs[id];
     const Piece *p = piece(id);
-    if (!job.reply || !job.file || !p || !job.failure.isEmpty()) {
+    if (!job.reply || !job.file || !p || !job.failure.isEmpty() || job.restartFromZero) {
         return;
     }
-    const auto fail = [this, id](const QString &why) {
-        m_jobs[id].failure = why;
-        // Diferido: abort() emite finished() en el acto y anidaria onDownloaded aca adentro.
-        QTimer::singleShot(0, this, [this, id]() {
-            if (m_jobs[id].reply) {
-                m_jobs[id].reply->abort();
+    const auto abortLater = [this, id](QNetworkReply *reply) {
+        // Diferido: abort() emite finished() en el acto y anidaria onDownloaded aca adentro. Solo si
+        // sigue siendo el mismo pedido: nunca el de un reintento posterior.
+        const QPointer<QNetworkReply> target(reply);
+        QTimer::singleShot(0, this, [this, id, target]() {
+            if (target && m_jobs[id].reply == target) {
+                target->abort();
             }
         });
     };
-    const QString scheme = p->url.scheme();
-    if (job.received == 0 && (scheme == QLatin1String("https") || scheme == QLatin1String("http"))) {
-        const int status = job.reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        if (status != 200) {
-            fail(I18n::tr("The server answered %1.").arg(status));
+    const auto fail = [&job, &abortLater](const QString &why) {
+        job.failure = why;
+        abortLater(job.reply);
+    };
+    if (!job.responseChecked) {
+        const QVariant statusAttribute = job.reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+        if (isHttp(p->url) && !statusAttribute.isValid()) {
+            // Sin respuesta HTTP (no conecto, o se corto antes de los headers): no hay status que mirar, lo
+            // dice el error de red al terminar ("The server answered 0." no le sirve a nadie).
             return;
+        }
+        job.responseChecked = true;
+        if (isHttp(p->url)) {
+            const int status = statusAttribute.toInt();
+            if (job.sentRange && status == 206 && contentRangeStart(job.reply) == job.received) {
+                qInfo() << "[Dictado]" << p->title << ": el servidor sigue desde el byte" << job.received;
+            } else if (status == 200) {
+                if (job.received > 0) {
+                    // No acepto el Range: manda todo de nuevo. Se vacia el .part, sin mezclar.
+                    qInfo() << "[Dictado]" << p->title << ": el servidor no siguio desde el byte" << job.received
+                            << ", se baja de cero";
+                    if (!restartPart(job)) {
+                        fail(I18n::tr("Could not save the download: %1").arg(job.file->errorString()));
+                        return;
+                    }
+                }
+            } else if (job.sentRange && (status == 206 || status == 416)) {
+                // Otro rango, o no reconoce el pedido: lo ya bajado no sirve para seguir.
+                job.restartFromZero = true;
+                abortLater(job.reply);
+                return;
+            } else {
+                fail(I18n::tr("The server answered %1.").arg(status));
+                return;
+            }
         }
     }
     const QByteArray chunk = job.reply->readAll();
     if (chunk.isEmpty()) {
         return;
     }
+    // Volvieron a llegar datos: la fila deja de decir que esta reintentando.
+    const bool wasRetrying = job.retryAttempt > 0;
+    job.retryAttempt = 0;
     if (job.file->write(chunk) != chunk.size()) {
         fail(I18n::tr("Could not save the download: %1").arg(job.file->errorString()));
         return;
@@ -562,6 +670,9 @@ void DictationModels::onData(const QString &id)
         return;
     }
     setState(id, State::Downloading, int(job.received * 100 / qMax<qint64>(1, p->size)));
+    if (wasRetrying) {
+        emit changed(id); // setState no avisa si el porcentaje no se movio
+    }
 }
 
 void DictationModels::onDownloaded(const QString &id)
@@ -572,13 +683,39 @@ void DictationModels::onDownloaded(const QString &id)
     if (!reply || !p) {
         return;
     }
-    if (job.failure.isEmpty() && !job.cancelled) {
+    if (job.failure.isEmpty() && !job.cancelled && !job.restartFromZero) {
         onData(id); // lo que quedo en el buffer al terminar
     }
     job.reply = nullptr;
     const QNetworkReply::NetworkError error = reply->error();
     const QString errorString = reply->errorString();
+    const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString failedHost = reply->url().host();
+    const bool failed = !job.failure.isEmpty() || error != QNetworkReply::NoError || job.restartFromZero;
+    // La cancelacion del usuario se mira ANTES de shouldRetry(), que pone el status primero: un abort propio
+    // (status, disco, tamano) no se reintenta, salvo que el status sea transitorio (5xx, 429). allowRetry()
+    // va ultimo porque ya cuenta el intento, en el servidor donde fallo (reply->url(), despues del redirect).
+    const bool retry = failed && !job.cancelled
+                       && (job.restartFromZero || LgaNetRetry::shouldRetry(reply, !job.failure.isEmpty()))
+                       && job.budget.allowRetry(reply);
     reply->deleteLater();
+
+    if (retry) {
+        qWarning().noquote() << QStringLiteral("[Dictado] Descarga de %1 fallida en %2: networkError=%3 httpStatus=%4, "
+                                               "%5 bytes en el .part; %6 en %7 ms")
+                                    .arg(p->title, failedHost.isEmpty() ? p->url.scheme() : failedHost)
+                                    .arg(int(error))
+                                    .arg(httpStatus)
+                                    .arg(job.received)
+                                    .arg(job.budget.label())
+                                    .arg(LgaNetRetry::delayMs());
+        if (!job.restartFromZero || restartPart(job)) {
+            scheduleRetry(id);
+            return;
+        }
+        job.failure = I18n::tr("Could not save the download: %1").arg(job.file->errorString());
+    }
+    job.retryAttempt = 0;
     job.file->close();
     delete job.file;
     job.file = nullptr;
@@ -595,6 +732,10 @@ void DictationModels::onDownloaded(const QString &id)
     }
     if (!job.failure.isEmpty()) {
         why = job.failure;
+    } else if (job.restartFromZero) {
+        // Se agotaron los intentos con un servidor que no sigue desde el byte pedido: el error de Qt
+        // («Operation canceled») seria el del abort propio y no explica nada.
+        why = I18n::tr("The server could not continue the download from where it stopped.");
     } else if (error != QNetworkReply::NoError) {
         why = I18n::tr("The download failed: %1").arg(errorString);
     } else if (job.received != p->size) {
@@ -603,7 +744,8 @@ void DictationModels::onDownloaded(const QString &id)
         why = I18n::tr("The download is damaged (its checksum does not match).");
     }
     if (!why.isEmpty()) {
-        qWarning() << "[Dictado] Descarga de" << p->title << "fallida:" << why;
+        qWarning().noquote() << QStringLiteral("[Dictado] Descarga de %1 fallida: %2 (%3, sin mas reintentos)")
+                                    .arg(p->title, why, attemptText(job.budget));
         QFile::remove(part);
         setState(id, State::Error, 0, why);
         return;
@@ -613,6 +755,26 @@ void DictationModels::onDownloaded(const QString &id)
     } else {
         extract(*p);
     }
+}
+
+void DictationModels::scheduleRetry(const QString &id)
+{
+    Job &job = m_jobs[id];
+    job.retryAttempt = job.budget.attemptOnHost(); // allowRetry() ya conto este intento
+    job.retryPending = true;
+    const int generation = ++job.generation;
+    emit changed(id);
+    // Sin pedido en vuelo hasta que venza. Cancelar o borrar la pieza cambian la generacion; destruir este
+    // objeto (apagar la herramienta, cambiar la carpeta) mata el timer con el.
+    QTimer::singleShot(LgaNetRetry::delayMs(), this, [this, id, generation]() {
+        Job &job = m_jobs[id];
+        const Piece *p = piece(id);
+        if (!job.retryPending || job.generation != generation || !p || !job.file) {
+            return;
+        }
+        job.retryPending = false;
+        sendRequest(*p);
+    });
 }
 
 void DictationModels::install(const Piece &piece)
@@ -723,6 +885,17 @@ void DictationModels::cancel(const QString &id)
     if (job.reply) {
         job.cancelled = true;
         job.reply->abort(); // finished() en el acto: onDownloaded limpia
+    } else if (job.retryPending) {
+        // Esperando otro intento: no hay pedido que abortar. La espera queda sin efecto.
+        const Piece *p = piece(id);
+        job.retryPending = false;
+        job.retryAttempt = 0;
+        ++job.generation;
+        if (p) {
+            dropPart(*p, job);
+        }
+        qInfo() << "[Dictado] Descarga cancelada mientras esperaba otro intento:" << (p ? p->title : id);
+        setState(id, State::Missing);
     } else if (job.tar) {
         job.cancelled = true;
         job.tar->kill(); // finished(): onExtracted limpia
@@ -736,7 +909,7 @@ bool DictationModels::remove(const QString &id, QString *error)
         return false;
     }
     Job &job = m_jobs[id];
-    if (job.reply || job.tar) {
+    if (job.reply || job.tar || job.retryPending) {
         cancel(id);
         return true;
     }

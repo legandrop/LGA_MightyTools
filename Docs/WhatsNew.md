@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [improved] Si falla la conexión, la búsqueda de actualizaciones, la descarga de una versión nueva y la del modelo de Dictation lo vuelven a intentar solas, cada cinco segundos y hasta tres veces por cada servidor, y avisan «Retrying (2 of 4)…» mientras esperan; una descarga cortada sigue desde donde quedó.
 - [improved] Mighty Tools tiene un diseño nuevo: cada herramienta es una hoja sobre fondo negro, la lista de la izquierda marca con la inicial dónde empieza cada letra, y los colores dicen algo: cian es lo que está funcionando, magenta lo que podés tocar y amarillo lo que pide atención; la letra es igual de grande que antes.
 - [improved] Las herramientas aparecen en orden alfabético en la ventana, en el menú de la bandeja y en General.
 - [improved] El «?» ya no abre una ayuda de todas las herramientas juntas: cada página tiene su «How it works» con los pasos de esa herramienta, que se abre sola la primera vez y que el «?» abre o cierra; la versión, el autor y la web están al pie de General.

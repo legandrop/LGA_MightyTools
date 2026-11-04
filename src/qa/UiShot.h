@@ -16,6 +16,8 @@ int runUiShot(const QStringList &args);
 //    suelta con Enter (guardando), con Escape (sin guardar) y con un click afuera (guardando).
 //  - cleanup-sort: la ventana de Disk Space se estira (minimo, barra de abajo entera al minimo en los dos
 //    idiomas) y sus tres listas se ordenan con un click en el titulo de una columna.
+//  - net-retry [--work <carpeta>]: los reintentos de red del updater y del dictado contra un servidor
+//    propio en 127.0.0.1 (qa/NetRetryProbe.h).
 int runUiProbe(const QStringList &args);
 
 #endif // MIGHTYTOOLS_UISHOT_H

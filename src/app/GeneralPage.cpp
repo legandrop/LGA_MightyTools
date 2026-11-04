@@ -398,6 +398,9 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
     case UpdateRowState::Kind::Checking:
         text = I18n::tr("Checking…");
         break;
+    case UpdateRowState::Kind::Retrying:
+        text = I18n::tr("Retrying (%1 of %2)…").arg(state.attempt).arg(state.attempts);
+        break;
     case UpdateRowState::Kind::Latest:
         text = I18n::tr("v%1 is the latest version").arg(state.version);
         tone = QStringLiteral("ok");
@@ -413,8 +416,8 @@ void GeneralPage::setUpdateState(const UpdateRowState &state)
         m_updateBadge->set(QStringLiteral("warn"), I18n::tr("v%1 is available").arg(state.version));
     }
     m_updateBadge->setVisible(available);
-    // Mientras dice "Checking…" no se puede pedir otro chequeo.
-    m_updateButton->setEnabled(state.kind != UpdateRowState::Kind::Checking);
+    // Mientras dice "Checking…" (o que esta reintentando) no se puede pedir otro chequeo.
+    m_updateButton->setEnabled(state.kind != UpdateRowState::Kind::Checking && state.kind != UpdateRowState::Kind::Retrying);
     m_updateButton->setText(available ? I18n::tr("Update") : I18n::tr("Check now"));
     Ui::setStyleProperty(m_updateButton, "variant", available ? QStringLiteral("primary") : QString());
 }

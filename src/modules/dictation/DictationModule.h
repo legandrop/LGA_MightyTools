@@ -40,6 +40,7 @@ public:
         qint64 size = 0;
         DictationModels::State state = DictationModels::State::Missing;
         int progress = 0;
+        int retryAttempt = 0; ///< bajando: reintentando, intento N de DictationModels::kAttempts (0 = no)
         QString error;
     };
 

@@ -150,6 +150,9 @@ AppController::AppController(const Options &options, QObject *parent)
         connect(m_updates, &UpdateService::checking, this, [this]() {
             m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
         });
+        connect(m_updates, &UpdateService::retrying, this, [this](int attempt, int attempts) {
+            m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Retrying, QString(), attempt, attempts});
+        });
         connect(m_updates, &UpdateService::upToDate, this, [this](const QString &version) {
             m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Latest, version});
         });

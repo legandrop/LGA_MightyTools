@@ -18,9 +18,12 @@ class ToggleSwitch;
 // Resultado del chequeo de updates en la fila (D-13): los errores siguen saliendo en cartel.
 struct UpdateRowState
 {
-    enum class Kind { Idle, Checking, Latest, Available };
+    // Retrying: el chequeo fallo y se vuelve a mandar (regla de red, core/LgaNetRetry.h).
+    enum class Kind { Idle, Checking, Retrying, Latest, Available };
     Kind kind = Kind::Idle;
     QString version; ///< la ultima publicada (Latest y Available)
+    int attempt = 0;  ///< Retrying: el intento que sigue (2 de 4...)
+    int attempts = 0; ///< Retrying: cuantos intentos hay en total
 };
 
 // Pagina "General" (canvas, secciones 2 y 7): inicio con el sistema, updates, version y las

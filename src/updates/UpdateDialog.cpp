@@ -6,6 +6,7 @@
 #include <QDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -54,5 +55,25 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
     QObject::connect(later, &QPushButton::clicked, dialog, &QDialog::reject);
 
     dialog->setFixedWidth(380);
+    return dialog;
+}
+
+QString updateProgressText(const QString &displayName, const QString &version, int retryAttempt, int attempts)
+{
+    const QString text = I18n::tr("Downloading %1 %2...").arg(displayName, version);
+    if (retryAttempt <= 0) {
+        return text;
+    }
+    return text + QLatin1Char('\n') + I18n::tr("Retrying (%1 of %2)…").arg(retryAttempt).arg(attempts);
+}
+
+QProgressDialog *createUpdateProgressDialog(QWidget *parent, const QString &displayName, const QString &version)
+{
+    auto *dialog = new QProgressDialog(updateProgressText(displayName, version, 0, 0), I18n::tr("Cancel"), 0, 0, parent);
+    dialog->setWindowTitle(I18n::tr("Downloading Update"));
+    dialog->setWindowModality(parent ? Qt::WindowModal : Qt::NonModal);
+    dialog->setMinimumDuration(0);
+    dialog->setAutoClose(false);
+    dialog->setAutoReset(false);
     return dialog;
 }

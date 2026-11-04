@@ -1,4 +1,5 @@
 #include "qa/UiShot.h"
+#include "qa/NetRetryProbe.h"
 
 #include "app/GeneralPage.h"
 #include "app/MainWindow.h"
@@ -55,6 +56,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPixmap>
+#include <QProgressDialog>
 #include <QSaveFile>
 #include <QScopedPointer>
 #include <QScrollArea>
@@ -66,6 +68,7 @@
 #include <QWheelEvent>
 #include <qpa/qwindowsysteminterface.h>
 
+#include <climits>
 #include <cstdio>
 
 // Modelo: src/qa/UiShot.cpp de LGA_FolderSwitch (que viene de LGA_VideoDownloader). Nunca se llama
@@ -86,6 +89,7 @@ const QStringList kHostStates = {
     QStringLiteral("tooltip-long"),      // el tooltip propio, con dos acciones y un atajo
     QStringLiteral("general"),           // General con herramientas prendidas
     QStringLiteral("general-checking"),  // "Check now" en curso (D-13)
+    QStringLiteral("general-retrying"),  // el chequeo fallo y se reintenta (2 de 4)
     QStringLiteral("general-latest"),    // "vX is the latest version"
     QStringLiteral("general-available"), // "vX is available" con "Update"
     QStringLiteral("first-run"),         // primer arranque: todo apagado, bienvenida
@@ -96,6 +100,7 @@ const QStringList kHostStates = {
     QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
     QStringLiteral("tray-menu-empty"),   // menu con todo apagado
     QStringLiteral("update-dialog"),
+    QStringLiteral("update-download-retrying"), // la descarga del update se corto y se reintenta (2 de 4)
 };
 
 // Estado de cada herramienta en la ventana del canvas (seccion 1 A): Nuke Shortcuts prendida, un
@@ -364,6 +369,8 @@ int runUiShot(const QStringList &args)
     mainWindow.setFirstRun(firstRun);
     if (state == QLatin1String("general-checking")) {
         mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
+    } else if (state == QLatin1String("general-retrying")) {
+        mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Retrying, QString(), 2, 4});
     } else if (state == QLatin1String("general-available")) {
         mainWindow.setUpdateState(UpdateRowState{UpdateRowState::Kind::Available, QStringLiteral("1.01")});
     }
@@ -474,6 +481,20 @@ int runUiShot(const QStringList &args)
         canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"),
                                                  QStringLiteral(MIGHTYTOOLS_VERSION)));
         canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
+        root = canvas.data();
+        settle(*root);
+        root->adjustSize();
+        settle(*root);
+    } else if (state == QLatin1String("update-download-retrying")) {
+        // El dialogo de la descarga como lo deja UpdateService al cortarse a la mitad: barra en 42 % y el
+        // texto del segundo intento. Sin show(): no se muestra ni arranca la descarga.
+        QProgressDialog *progress = createUpdateProgressDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"));
+        progress->setAttribute(Qt::WA_DontShowOnScreen, true);
+        progress->setMinimumDuration(INT_MAX); // que su timer interno no lo muestre solo
+        progress->setMaximum(100);
+        progress->setValue(42);
+        progress->setLabelText(updateProgressText(QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"), 2, 4));
+        canvas.reset(progress);
         root = canvas.data();
         settle(*root);
         root->adjustSize();
@@ -2172,6 +2193,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("how-it-works")) {
         return runHowItWorksProbe();
+    }
+    if (probe == QLatin1String("net-retry")) {
+        return runNetRetryProbe(args);
     }
     if (probe != QLatin1String("threshold-focus")) {
         fprintf(stderr, "ui-probe: unknown case '%s' (threshold-focus)\n", qPrintable(probe));
