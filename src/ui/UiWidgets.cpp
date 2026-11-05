@@ -792,9 +792,9 @@ void ToggleSwitch::animateTo(qreal target)
 void ToggleSwitch::paintEvent(QPaintEvent *)
 {
     // Medidas del Pliego (`.sw`): caja de 30 x 16 (42 x 22 la grande) con borde de 1 y radio de media
-    // altura; la perilla es un rombo (un cuadrado de 7, o 10, con esquinas de 1.5, girado 45 grados) cuyo
-    // centro va de 8 a 22 (de 11 a 31 en la grande). Durante la animacion los colores se mezclan por m_tint
-    // y la perilla va por m_knob; quieto, son los tokens de siempre.
+    // altura; la perilla es un circulo de 10 (14 en la grande, pedido de Lega: sin rombo) cuyo centro va de 8
+    // a 22 (de 11 a 31 en la grande). Durante la animacion los colores se mezclan por m_tint y la perilla va
+    // por m_knob; quieto, son los tokens de siempre.
     const auto mix = [this](const char *off, const char *on) {
         const QColor a = Theme::color(off);
         const QColor b = Theme::color(on);
@@ -811,12 +811,10 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     painter.drawRoundedRect(box, radius, radius);
     painter.setPen(Qt::NoPen);
     painter.setBrush(mix(Theme::kSwitchKnobOff, Theme::kSwitchKnobOn));
-    const qreal side = m_large ? 10.0 : 7.0;
+    const qreal knob = m_large ? 7.0 : 5.0;
     const qreal from = height() / 2.0;
     const qreal to = width() - height() / 2.0;
-    painter.translate(from + (to - from) * m_knob, height() / 2.0);
-    painter.rotate(45);
-    painter.drawRoundedRect(QRectF(-side / 2, -side / 2, side, side), m_large ? 2.0 : 1.5, m_large ? 2.0 : 1.5);
+    painter.drawEllipse(QPointF(from + (to - from) * m_knob, height() / 2.0), knob, knob);
 }
 
 // ------------------------------------------------------------------ SwitchRow
@@ -973,15 +971,13 @@ void StatusDot::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    // Rombo (`.dia` del Pliego): un cuadrado de lado/raiz de 2 girado 45 grados, centrado en la caja.
-    const qreal side = qMin(width(), height()) / M_SQRT2;
-    painter.translate(width() / 2.0, height() / 2.0);
-    painter.rotate(45);
-    const QRectF r(-side / 2, -side / 2, side, side);
+    // Un circulo del tamano de la caja (pedido de Lega: sin rombo, como antes del Pliego).
+    const QRectF r = QRectF(rect());
     if (m_tone == QLatin1String("off")) {
-        painter.setPen(QPen(Theme::color(Theme::kDotOffBorder), 1.3));
+        // Hueco con borde de 1.5 px.
+        painter.setPen(QPen(Theme::color(Theme::kDotOffBorder), 1.5));
         painter.setBrush(Qt::NoBrush);
-        painter.drawRoundedRect(r.adjusted(0.65, 0.65, -0.65, -0.65), 1, 1);
+        painter.drawEllipse(r.adjusted(0.75, 0.75, -0.75, -0.75));
         return;
     }
     const char *hex = Theme::kOk;
@@ -996,7 +992,7 @@ void StatusDot::paintEvent(QPaintEvent *)
     }
     painter.setPen(Qt::NoPen);
     painter.setBrush(Theme::color(hex));
-    painter.drawRoundedRect(r, 1, 1);
+    painter.drawEllipse(r);
 }
 
 // ------------------------------------------------------------------ StatusCard
@@ -1010,7 +1006,7 @@ StatusCard::StatusCard(QWidget *parent)
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(14, 10, 14, 10);
     row->setSpacing(12);
-    m_dot = new StatusDot(12, this);
+    m_dot = new StatusDot(10, this); // el punto de 10 de antes del Pliego
     row->addWidget(m_dot, 0, Qt::AlignVCenter);
     auto *texts = new QVBoxLayout();
     texts->setSpacing(2);
@@ -1058,7 +1054,7 @@ QString StatusCard::title() const
 
 void StatusCard::setLive(bool live)
 {
-    // `.live`: sin caja ni relleno, el titulo a 14 y la descripcion debajo; el rombo y el boton, igual.
+    // `.live`: sin caja ni relleno, el titulo a 14 y la descripcion debajo; el punto y el boton, igual.
     m_live = live;
     Ui::setStyleProperty(this, "live", live);
     m_title->setObjectName(live ? QStringLiteral("liveTitle") : QStringLiteral("cardTitle"));

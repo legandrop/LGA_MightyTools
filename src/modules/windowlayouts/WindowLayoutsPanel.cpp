@@ -485,9 +485,9 @@ void WindowLayoutsPanel::refresh()
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
 #else
-                          I18n::tr("Yellow diamonds mark shortcuts also used elsewhere. The other app may respond too."),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
 #endif
                           QString(), QString(), QString());
     } else {

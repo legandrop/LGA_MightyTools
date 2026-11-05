@@ -92,7 +92,6 @@ inline constexpr const char *kCheckOffBorder = "#3A3A43";
 
 // Indice lateral (mesa) y filas de listas.
 inline constexpr const char *kNavHover = "#131317";       ///< ficha del indice con el mouse encima
-inline constexpr const char *kNavLetter = "#7E7E86";      ///< inicial al margen
 inline constexpr const char *kListSelected = "#2B1424";   ///< fila elegida de una lista (seleccion: magenta)
 inline constexpr const char *kListHover = "#222227";      ///< fila de una lista con el mouse encima
 inline constexpr const char *kToolIconOn = "#CFCDD4";     ///< icono de una herramienta prendida

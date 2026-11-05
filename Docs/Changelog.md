@@ -2,6 +2,10 @@
 
 v1.53:
 
+Ajustes del Pliego (pedido de Lega): la ficha de General arrancaba 4 px más abajo que la hoja y dejaba un escalón chico que parecía un error. El índice ahora empieza a la altura de la hoja (`NavShell::kSheetTop`) y la ficha queda pareja con su borde. Fuera la columna de iniciales: el índice baja de 244 a 224 px, la ficha mide lo mismo y la hoja gana 20. La perilla del switch y todas las marcas (`StatusDot`, el aviso de Disk Space, la ventanita de Dictation, las viñetas del panel apagado) vuelven a ser círculos. «How it works» arranca cerrada cada vez que se entra a una herramienta y no se recuerda; las claves viejas `app/howItWorks/<id>` se borran al abrir la ventana. `--ui-probe how-it-works` cubre el comportamiento nuevo.
+
+[ UI - Ajustes del Pliego: switch circular, sin iniciales, ficha pareja y ayuda cerrada ]
+
 Mouse Buttons: en Photoshop 2026 el botón del medio no hacía nada. El gancho se instalaba y tomaba el botón, pero Espacio y el clic izquierdo salían en el mismo `SendInput`, y Photoshop necesita ver el Espacio antes del clic para pasar a la mano: el clic le llegaba a la herramienta que estaba. El AutoHotkey que esto reemplaza dejaba 10 ms entre uno y otro. Ahora las teclas salen ya y el clic a los 30 ms (`kStepDelayMs`, con un reloj del hilo del gancho); al soltar, al revés. Un clic más corto que la pausa no manda ni el clic ni su soltada. Una soltada que Windows no tomaba se perdía y podía dejar el Espacio apretado: ahora se reintenta. Al retirar el gancho, el log dice cuántas apretadas tomó, cuántas pasaron fuera de la app y cuántas rechazó Windows.
 
 [ Mouse Buttons - Pausa de 30 ms entre Espacio y el clic para Photoshop ]

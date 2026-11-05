@@ -41,21 +41,19 @@ private:
     int m_glyph = 16;
 };
 
-// Una fila del indice lateral (`.nrow`): la inicial al margen (solo la primera herramienta de cada letra),
-// y la ficha con el icono, el nombre, la linea de estado y, en las herramientas, el interruptor. Un click en
-// la fila la elige; el interruptor prende o apaga. La ficha elegida no se pinta aca: la dibuja NavShell,
-// unida a la hoja.
+// Una fila del indice lateral (`.nrow`): la ficha con el icono, el nombre, la linea de estado y, en las
+// herramientas, el interruptor. Un click en la fila la elige; el interruptor prende o apaga. La ficha elegida
+// no se pinta aca: la dibuja NavShell, unida a la hoja.
 class SidebarItem : public QWidget
 {
     Q_OBJECT
 public:
-    // La columna de la inicial; la ficha empieza ahi.
-    static constexpr int kLetterColumn = 30;
+    // Lo que hay entre el borde de la ventana y la ficha: el mismo margen que la hoja deja a la derecha y abajo.
+    static constexpr int kTabInset = 10;
 
     SidebarItem(const QString &id, const QString &title, IconPainter icon, bool withSwitch, QWidget *parent = nullptr);
 
     QString id() const { return m_id; }
-    void setLetter(const QString &letter);
     void setSelected(bool selected);
     bool isSelected() const { return m_selected; }
     // Estado de la fila: prendida o no, texto y tono ("ok", "warn", "err" o vacio = gris).
@@ -65,7 +63,7 @@ public:
     // borde de la ficha en General). Negativo = no entra.
     QString statusText() const { return m_statusText; }
     int statusSlack(const QString &text) const;
-    // La ficha (sin la columna de la inicial), en coordenadas de la fila.
+    // La ficha (sin el margen de la izquierda), en coordenadas de la fila.
     QRect tabRect() const;
 
 signals:
@@ -86,7 +84,6 @@ private:
     bool m_selected = false;
     bool m_on = true;
     bool m_withSwitch = false;
-    QLabel *m_letter = nullptr;
     ToolIcon *m_icon = nullptr;
     QLabel *m_name = nullptr;
     QLabel *m_status = nullptr;
@@ -100,9 +97,14 @@ class NavShell : public QWidget
 {
     Q_OBJECT
 public:
-    static constexpr int kNavWidth = 244;
+    // 244 del Pliego menos la columna de iniciales (30) mas el margen de la ficha (10): la ficha mide lo mismo.
+    static constexpr int kNavWidth = 224;
+    // La hoja empieza 4 abajo de la barra de titulo, y el indice tambien: la ficha de arriba (General) queda
+    // pareja con el borde de la hoja, sin el escalon de 4 px que se veia (pedido de Lega).
+    static constexpr int kSheetTop = 4;
+    static constexpr int kSheetMargin = 10;
     explicit NavShell(QWidget *parent = nullptr);
-    // La hoja: lo que queda a la derecha del indice, con 4 arriba y 10 a la derecha y abajo.
+    // La hoja: lo que queda a la derecha del indice, con kSheetTop arriba y kSheetMargin a la derecha y abajo.
     QRect sheetRect() const;
     void setSelectedItem(SidebarItem *item);
 

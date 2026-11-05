@@ -22,7 +22,7 @@ constexpr int kShadow = 8;     // margen alrededor de la tarjeta para la sombra
 constexpr int kPadX = 14;
 constexpr int kPadY = 11;
 constexpr int kRadius = 10;    // el de las tarjetas de la app (QFrame#card, Pliego D-73)
-constexpr int kDot = 10;       // la caja del rombo de estado
+constexpr int kDot = 8;        // el punto de estado
 constexpr int kDotGap = 7;
 constexpr int kBars = 4;
 constexpr int kBarWidth = 3;
@@ -230,7 +230,7 @@ void DictationOverlay::paintEvent(QPaintEvent * /*event*/)
     painter.setBrush(Theme::color(Theme::kCard));
     painter.drawPath(shape);
 
-    // Rombo de estado (la forma del logo) y medidor, centrados en el alto de la tarjeta. Las tintas tienen
+    // Punto de estado (pedido de Lega: sin rombo) y medidor, centrados en el alto de la tarjeta. Las tintas tienen
     // significado: magenta mientras graba (lo que hace el usuario), cian mientras la app trabaja (carga el
     // modelo o transcribe), rojo en un error.
     const qreal middle = card.center().y();
@@ -239,12 +239,7 @@ void DictationOverlay::paintEvent(QPaintEvent * /*event*/)
     painter.setBrush(Theme::color(m_state == State::Error                                         ? Theme::kError
                                   : (m_state == State::Transcribing || m_state == State::Loading) ? Theme::kOk
                                                                                                    : Theme::kAccent));
-    painter.save();
-    painter.translate(x + kDot / 2.0, middle);
-    painter.rotate(45);
-    const qreal side = kDot / std::sqrt(2.0);
-    painter.drawRoundedRect(QRectF(-side / 2, -side / 2, side, side), 1.5, 1.5);
-    painter.restore();
+    painter.drawEllipse(QPointF(x + kDot / 2.0, middle), kDot / 2.0, kDot / 2.0);
     x += kDot + kDotGap;
     if (m_state != State::Error) {
         painter.setBrush(Theme::color(recording() ? Theme::kTextStrong : Theme::kBorderStrong));

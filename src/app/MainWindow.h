@@ -20,11 +20,11 @@ class SidebarItem;
 class TitleBar;
 
 // La ventana de LGA Mighty Tools en el lenguaje «Pliego» (D-73): barra de titulo propia sobre la mesa
-// negra, el indice lateral de 244 px con "General" arriba y una fila por herramienta en orden alfabetico, y
+// negra, el indice lateral de 224 px con "General" arriba y una fila por herramienta en orden alfabetico, y
 // a la derecha la hoja de la pagina elegida, unida a su ficha del indice.
 //
 // La pagina de una herramienta es su encabezado (del descriptor, con el estado vivo que sube el panel), la
-// franja «How it works» (su ayuda) y, debajo, su panel (creado recien al elegirla, ModuleHost::panel) o el
+// franja «How it works» (su ayuda, cerrada al entrar) y, debajo, su panel (creado recien al elegirla, ModuleHost::panel) o el
 // panel de apagado que dibuja el host. Cerrar no cierra la app: oculta la ventana a la bandeja.
 class MainWindow : public QMainWindow
 {
@@ -38,7 +38,7 @@ public:
     static constexpr int kHeight = 720;
     static inline const QString kGeneral = QStringLiteral("general");
 
-    // appStore: donde se guardan la posicion y la ayuda abierta de cada herramienta (nullptr en captura).
+    // appStore: donde se guarda la posicion de la ventana (nullptr en captura).
     MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWidget *parent = nullptr);
     ~MainWindow() override;
 
@@ -99,13 +99,12 @@ private:
     // Vuelve a repartir el alto de la pagina que se ve (ver la nota en el .cpp).
     void relayoutCurrentPage();
     void refreshOffNotices();
-    // La ayuda de la pagina `id`: texto al dia (lee los atajos configurados) y abierta o cerrada segun
-    // settings (la primera visita la abre).
-    void syncHelp(const QString &id);
+    // La ayuda de la pagina `id`: texto al dia (lee los atajos configurados) y, si se esta entrando a la
+    // pagina, cerrada.
+    void syncHelp(const QString &id, bool entering);
     // Solo el texto de la ayuda de `id`, si cambio (un atajo nuevo): lee settings, no construye nada.
     void refreshHelpText(const QString &id);
     void refreshHelpButton();
-    void storeHelpOpen(const QString &id, bool open);
     void restorePosition();
     void savePosition();
     bool m_nativeFrameApplied = false;
@@ -126,8 +125,6 @@ private:
     UpdateRowState m_updateState;
     QString m_current;
     QHash<QString, QString> m_offNoticeStates;
-    // Captura (sin settings): la ayuda abierta o cerrada de cada pagina, en memoria.
-    QHash<QString, bool> m_helpOpen;
 };
 
 #endif // MIGHTYTOOLS_MAINWINDOW_H

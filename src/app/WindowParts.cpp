@@ -55,23 +55,17 @@ SidebarItem::SidebarItem(const QString &id, const QString &title, IconPainter ic
     , m_id(id)
     , m_withSwitch(withSwitch)
 {
-    // Medidas del Pliego (`.nrow`): 42 de alto (46 General), la inicial en una columna de 30, la ficha con
-    // 12 de aire a la izquierda y 8 a la derecha (14 en el diseno: con 14, Â«Old client still installedÂ» no
-    // entraba entero), 11 entre icono y textos, 8 hasta el switch. Lo controla --ui-probe nav-fit.
+    // Medidas del Pliego (`.nrow`): 42 de alto (46 General), la ficha a 10 del borde (sin la columna de
+    // iniciales: pedido de Lega), con 12 de aire a la izquierda y 8 a la derecha (14 en el diseno: con 14,
+    // «Old client still installed» no entraba entero), 11 entre icono y textos, 8 hasta el switch. Lo
+    // controla --ui-probe nav-fit.
     setObjectName(QStringLiteral("sideItem"));
     setFixedHeight(withSwitch ? 42 : 46);
     setAttribute(Qt::WA_Hover);
     setCursor(Qt::PointingHandCursor);
     auto *row = new QHBoxLayout(this);
-    row->setContentsMargins(0, 0, 8, 0);
+    row->setContentsMargins(kTabInset + 12, 0, 8, 0);
     row->setSpacing(0);
-    // La inicial va a la altura del nombre: la caja de los dos renglones (18 + 15) queda centrada en la fila.
-    m_letter = Ui::label(QString(), "navLetter", this);
-    m_letter->setFixedSize(kLetterColumn, height());
-    m_letter->setAlignment(Qt::AlignHCenter | Qt::AlignTop);
-    m_letter->setContentsMargins(0, (height() - 33) / 2, 0, 0);
-    row->addWidget(m_letter, 0, Qt::AlignTop);
-    row->addSpacing(12);
     m_icon = new ToolIcon(std::move(icon), 16, this);
     row->addWidget(m_icon, 0, Qt::AlignVCenter);
     row->addSpacing(11);
@@ -98,14 +92,9 @@ SidebarItem::SidebarItem(const QString &id, const QString &title, IconPainter ic
     refreshColors();
 }
 
-void SidebarItem::setLetter(const QString &letter)
-{
-    m_letter->setText(letter);
-}
-
 QRect SidebarItem::tabRect() const
 {
-    return rect().adjusted(kLetterColumn, 0, 0, 0);
+    return rect().adjusted(kTabInset, 0, 0, 0);
 }
 
 void SidebarItem::setSelected(bool selected)
@@ -190,8 +179,6 @@ void SidebarItem::mousePressEvent(QMouseEvent *event)
 // ------------------------------------------------------------------ NavShell
 
 namespace {
-constexpr int kSheetTop = 4;
-constexpr int kSheetMargin = 10;
 constexpr qreal kSheetRadius = 12;
 constexpr qreal kTabRadius = 10;
 constexpr qreal kFillet = 10;
@@ -584,10 +571,10 @@ OffPanel::OffPanel(const ModuleDescriptor &descriptor, const ModuleOffNotice &no
             auto *row = new QHBoxLayout();
             row->setContentsMargins(0, 0, 0, 0);
             row->setSpacing(10);
-            // Un rombo chico al margen, a la altura de la primera linea.
+            // Un punto chico al margen, a la altura de la primera linea.
             auto *markBox = new QVBoxLayout();
-            markBox->setContentsMargins(4, 6, 0, 0);
-            auto *mark = new StatusDot(8, view);
+            markBox->setContentsMargins(5, 7, 1, 0);
+            auto *mark = new StatusDot(6, view);
             mark->setTone(QStringLiteral("paused"));
             markBox->addWidget(mark);
             markBox->addStretch(1);

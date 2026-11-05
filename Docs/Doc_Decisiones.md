@@ -7,17 +7,21 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 - **D-73 · Rediseño «Pliego», Help por pantalla y herramientas en orden alfabético** (2026-11-03, Lega
   eligió entre cinco rediseños de la app entera). Cada herramienta es una hoja más clara sobre la mesa
-  negra; la ficha elegida del índice lateral se une a la hoja; el índice va en orden alfabético con la
-  inicial al margen y cada fila conserva ícono, estado y switch. Los colores tienen significado: cian =
+  negra; la ficha elegida del índice lateral se une a la hoja; el índice va en orden alfabético y cada
+  fila conserva ícono, estado y switch. Los colores tienen significado: cian =
   funciona, magenta = lo que hace el usuario (botón principal, links, ayuda abierta), amarillo = pide
-  atención, rojo = error. Switch con perilla en rombo, teclas con borde inferior grueso, títulos en
+  atención, rojo = error. Switch con perilla circular, teclas con borde inferior grueso, títulos en
   Bricolage Grotesque y el resto en Inter. Pedidos de Lega sobre el mockup: los títulos van en texto
   liso, **sin** el desregistro de colores (el logo de la barra de título sí lo conserva), y **los
   tamaños de letra no bajan** respecto de los de hoy con la UI al 100 % (como mucho medio punto). La
   ayuda deja de ser un cuadro con las diez herramientas: cada página trae su franja «How it works»
-  plegable (opción B de la ronda 1), que se abre sola la primera vez y que el «?» abre o cierra; la
+  plegable (opción B de la ronda 1), que el «?» abre o cierra; la
   versión, el autor y la web pasan al pie de General. Canvas con las opciones descartadas: link en
-  `LGA_RepoTools/RepoRules_Shared/repos/LGA_MightyTools/DISENO.md`.
+  `LGA_RepoTools/RepoRules_Shared/repos/LGA_MightyTools/DISENO.md`. **Ajustes de Lega del 2026-11-04,
+  sobre la app ya armada:** la perilla del switch y todas las marcas vuelven a ser círculos (nada de
+  rombos); sin la columna de iniciales en el índice; la ficha de arriba queda pareja con el borde de la
+  hoja (una diferencia chica se ve como un error: o ninguna o una bien notoria); «How it works» arranca
+  cerrada cada vez que se entra a una herramienta y no se recuerda.
 - **D-72 · Dictation** (2026-11-03, Lega: dictado por voz propio en lugar del de Windows). Herramienta
   propia con su página. Motor transcribe.cpp 0.4.1 (CPU + Vulkan) y modelo Whisper large-v3 turbo Q8_0,
   los dos con licencia MIT: los baja el usuario con un botón que muestra antes tamaño y licencia, se

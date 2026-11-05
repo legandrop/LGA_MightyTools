@@ -180,7 +180,7 @@ QFrame#card[live="true"][alert="err"] { background-color: @card; border: 1px sol
 QLabel#liveTitle { color: @textBright; font-size: @fs14; font-weight: 600; }
 
 /* Fila de un atajo: nombre, teclas y el lapiz. Grabando, las teclas se reemplazan por el campo
-   con borde magenta y un rombo magenta (StatusDot). */
+   con borde magenta y un punto magenta (StatusDot). */
 QLabel#shortcutName { color: @textStrong; font-size: @fs14; font-weight: 500; }
 QFrame#recorder { background-color: @field; border: 1px solid @accent; border-radius: 5px; min-height: 26px; max-height: 26px; }
 QLabel#recorderText { color: @textStrong; font-size: @fs12_5; }
@@ -317,7 +317,6 @@ QFrame#howRule { background-color: @border; border: none; min-height: 1px; max-h
 
 /* Ventana: indice lateral sobre la mesa y la hoja de cada pagina. */
 QLabel#sideLabel { color: @textFaint; font-size: @fs11; font-weight: 600; }
-QLabel#navLetter { color: @navLetter; font-family: "@titleFamily"; font-size: @fs13; font-weight: @tw800; }
 QLabel#sideName { color: #A3A2A9; font-family: "@titleFamily"; font-size: @fs14; font-weight: @tw600; }
 QLabel#sideName[on="true"] { color: #DCDAD3; }
 QLabel#sideName[sel="true"] { color: #F3F0E9; }
@@ -410,7 +409,7 @@ QPlainTextEdit#ruleArea:focus { border-color: @accent; }
         {"@titleFamily", titleFamily()},
         {"@tw600", QString::number(titleWeight(600))}, {"@tw700", QString::number(titleWeight(700))},
         {"@tw800", QString::number(titleWeight(800))},
-        {"@statusOk", kStatusOk}, {"@listSelected", kListSelected}, {"@listHover", kListHover}, {"@navLetter", kNavLetter},
+        {"@statusOk", kStatusOk}, {"@listSelected", kListSelected}, {"@listHover", kListHover},
         {"@platBorder", kPlatBorder}, {"@miniCard", kMiniCard},
         {"@chosenBg", kChosenBg}, {"@chosenHover", kChosenHover}, {"@chosenBorder", kChosenBorder}, {"@chosenText", kChosenText},
         {"@okBg", kOkBg}, {"@okBorder", kOkBorder}, {"@errBg", kErrBg}, {"@errBorder", kErrBorder},

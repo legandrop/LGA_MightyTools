@@ -154,8 +154,8 @@ private:
     QString m_url;
 };
 
-// Interruptor de encendido de una herramienta (`.sw` del Pliego, D-73): 30 x 16 con la perilla en rombo,
-// la forma del logo; apagado gris, prendido cian. setLarge() da el del encabezado de la hoja (42 x 22).
+// Interruptor de encendido de una herramienta (`.sw` del Pliego, D-73): 30 x 16 con la perilla circular;
+// apagado gris, prendido cian. setLarge() da el del encabezado de la hoja (42 x 22).
 // Checkable: toggled() avisa el cambio. No toma foco de teclado (regla de la app).
 // Animacion «Suave» (D-64): con un click del usuario la perilla desliza 160 ms con frenado al final y
 // el color se funde parejo en el mismo tiempo. Un setChecked() del codigo (reflejar un estado) salta
@@ -237,8 +237,8 @@ private:
     int m_current = -1;
 };
 
-// Marca de estado dibujada: un rombo (la forma del logo) lleno con el tono (ok, paused, warn, err) o hueco
-// con borde (off). `diameter` es el lado de la caja.
+// Marca de estado dibujada: un circulo lleno con el tono (ok, paused, warn, err, accent) o hueco
+// con borde (off). `diameter` es el de la caja.
 class StatusDot : public QWidget
 {
     Q_OBJECT

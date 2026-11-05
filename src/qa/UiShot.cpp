@@ -2055,9 +2055,11 @@ int runNavFitProbe()
     return failures ? 1 : 0;
 }
 
-// «How it works» (D-73): la primera visita la abre sola y lo guarda; cerrada por el usuario queda cerrada al
-// volver; el «?» la abre y la cierra; en General el «?» esta deshabilitado; cambiar un atajo rearma el paso
-// con las teclas nuevas sin cerrarla. Settings en memoria: nunca toca settings.ini.
+// «How it works» (D-73, pedido de Lega del 2026-11-04): cerrada cada vez que se entra a una herramienta y
+// sin guardar nada (lo que guardaba v1.52 se borra); un click en la franja o el «?» la abren y la cierran;
+// volver a elegir la pagina que se ve o rearmar la ventana no la cierran; en General el «?» esta
+// deshabilitado; cambiar un atajo rearma el paso con las teclas nuevas sin cerrarla. Settings en memoria:
+// nunca toca settings.ini.
 int runHowItWorksProbe()
 {
     int failures = 0;
@@ -2077,17 +2079,24 @@ int runHowItWorksProbe()
         return 1;
     }
     const QString nuke = QStringLiteral("nukeShortcuts");
+    // Lo que dejaba v1.52: la ayuda de cada herramienta visitada guardada como abierta.
+    const QString oldKey = QStringLiteral("app/howItWorks/") + nuke;
+    appStore.setValue(oldKey, true);
+    appStore.setValue(QStringLiteral("app/howItWorks/diskSpace"), false);
+    appStore.setValue(QStringLiteral("window/x"), 100);
     MainWindow window(&host, MainWindow::Mode::Normal, &appStore);
     window.setAttribute(Qt::WA_DontShowOnScreen, true);
     settle(window);
+    check(!appStore.value(oldKey).isValid() && !appStore.value(QStringLiteral("app/howItWorks/diskSpace")).isValid()
+              && appStore.value(QStringLiteral("window/x")).toInt() == 100,
+          "lo que guardaba v1.52 se borra, y nada mas");
     QAbstractButton *help = window.titleBar()->helpButton();
     check(help && !help->isEnabled(), "en General el «?» esta deshabilitado");
     if (!help) return 1;
 
     window.selectPage(nuke);
     settle(window);
-    check(window.helpOpen(), "la primera visita la abre sola");
-    check(appStore.value(QStringLiteral("app/howItWorks/") + nuke).toBool(), "y lo guarda en la seccion de la app");
+    check(!window.helpOpen(), "al entrar a una herramienta esta cerrada");
     check(help->isEnabled(), "en una herramienta el «?» esta habilitado");
 
     HowItWorksStrip *strip = nullptr;
@@ -2099,12 +2108,18 @@ int runHowItWorksProbe()
     if (!header) return 1;
     header->click();
     settle(window);
-    check(!window.helpOpen(), "un click en la franja la cierra");
+    check(window.helpOpen(), "un click en la franja la abre");
+    window.selectPage(nuke);
+    settle(window);
+    check(window.helpOpen(), "volver a elegir la pagina que se ve no la cierra");
+    header->click();
+    settle(window);
+    check(!window.helpOpen(), "otro click en la franja la cierra");
+    header->click();
     window.selectPage(MainWindow::kGeneral);
     window.selectPage(nuke);
     settle(window);
-    check(!window.helpOpen() && !appStore.value(QStringLiteral("app/howItWorks/") + nuke).toBool(),
-          "cerrada por el usuario, queda cerrada al volver");
+    check(!window.helpOpen() && !appStore.value(oldKey).isValid(), "abierta por el usuario, al volver a entrar esta cerrada y no se guardo");
 
     help->click();
     settle(window);
@@ -2135,6 +2150,12 @@ int runHowItWorksProbe()
     check(before.contains(key("Shift")) && after.contains(key("Alt")) && after.contains(key("K")) && !after.contains(key("Shift")),
           "cambiar el atajo rearma el paso con las teclas nuevas");
     check(window.helpOpen(), "rearmar el texto no la cierra");
+
+    // Otro idioma rearma toda la ventana: la franja y el «?» son objetos nuevos.
+    window.rebuildUi();
+    settle(window);
+    help = window.titleBar()->helpButton();
+    check(window.helpOpen() && help->isEnabled(), "rearmar la ventana no la cierra");
 
     window.selectPage(MainWindow::kGeneral);
     settle(window);

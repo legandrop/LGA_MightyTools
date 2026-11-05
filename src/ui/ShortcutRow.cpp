@@ -98,7 +98,7 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_recorderText = new QLabel(m_recorder);
     m_recorderText->setObjectName(QStringLiteral("recorderText"));
     recorderLayout->addWidget(m_recorderText, 1);
-    // Grabando: el rombo magenta del Pliego (lo que esta haciendo el usuario), como el resto de las marcas.
+    // Grabando: el punto magenta (lo que esta haciendo el usuario), como el resto de las marcas.
     auto *dot = new StatusDot(9, m_recorder);
     dot->setObjectName(QStringLiteral("recorderDot"));
     dot->setTone(QStringLiteral("accent"));

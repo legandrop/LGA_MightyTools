@@ -41,11 +41,9 @@ QString toneName(ModuleTone tone)
     return QString();
 }
 
-// La ayuda abierta de cada herramienta, en la seccion [app] (D-73): una clave por herramienta.
-QString helpKey(const QString &id)
-{
-    return QStringLiteral("app/howItWorks/%1").arg(id);
-}
+// Hasta v1.52 la franja de ayuda de cada herramienta se recordaba abierta o cerrada aca (una clave por
+// herramienta). Ya no se guarda: se borra lo que haya quedado.
+const QString kOldHelpGroup = QStringLiteral("app/howItWorks");
 
 } // namespace
 
@@ -73,6 +71,15 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
     };
     connect(m_host, &ModuleHost::moduleStatusChanged, this, followHelp);
     connect(m_host, &ModuleHost::moduleSettingsChanged, this, followHelp);
+    if (m_mode == Mode::Normal && m_appStore) {
+        // Solo lecturas si no quedo nada: el .ini se reescribe una sola vez.
+        for (const ModuleDescriptor &d : m_host->descriptors()) {
+            if (m_appStore->value(kOldHelpGroup + QLatin1Char('/') + d.id).isValid()) {
+                m_appStore->remove(kOldHelpGroup);
+                break;
+            }
+        }
+    }
     selectPage(kGeneral);
 }
 
@@ -124,12 +131,13 @@ void MainWindow::buildUi()
     shell->setContentsMargins(0, 0, 0, 0);
     shell->setSpacing(0);
 
-    // ---------- Indice (`.nav`): 244 px, 8 arriba, General y el rotulo TOOLS, una fila por herramienta.
+    // ---------- Indice (`.nav`): General arriba, a la altura del borde de la hoja (ver NavShell::kSheetTop),
+    // el rotulo TOOLS y una fila por herramienta.
     auto *sidebar = new QWidget(m_shell);
     sidebar->setObjectName(QStringLiteral("sidebar"));
     sidebar->setFixedWidth(NavShell::kNavWidth);
     auto *side = new QVBoxLayout(sidebar);
-    side->setContentsMargins(0, 8, 0, 8);
+    side->setContentsMargins(0, NavShell::kSheetTop, 0, 8);
     side->setSpacing(0);
     m_generalItem = new SidebarItem(
         kGeneral, QStringLiteral("General"),
@@ -137,11 +145,11 @@ void MainWindow::buildUi()
     side->addWidget(m_generalItem);
     connect(m_generalItem, &SidebarItem::picked, this, &MainWindow::selectPage);
 
-    // `.nlabel`: 30 de alto, el texto 12 abajo del borde y alineado con los nombres (42).
+    // `.nlabel`: 30 de alto, el texto 12 abajo del borde y alineado con los iconos de las fichas.
     QLabel *toolsLabel = Ui::label(QStringLiteral("TOOLS"), "sideLabel", sidebar);
     toolsLabel->setFixedHeight(30);
     toolsLabel->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-    toolsLabel->setContentsMargins(42, 11, 0, 0);
+    toolsLabel->setContentsMargins(SidebarItem::kTabInset + 12, 11, 0, 0);
     toolsLabel->ensurePolished();
     QFont spaced = toolsLabel->font();
     spaced.setLetterSpacing(QFont::AbsoluteSpacing, 1.1); // .1em a 11 px
@@ -149,7 +157,7 @@ void MainWindow::buildUi()
     side->addWidget(toolsLabel);
 
     auto *sheet = new QVBoxLayout();
-    sheet->setContentsMargins(0, 4, 10, 10); // NavShell::sheetRect()
+    sheet->setContentsMargins(0, NavShell::kSheetTop, NavShell::kSheetMargin, NavShell::kSheetMargin); // sheetRect()
     m_stack = new QStackedWidget(m_shell);
     m_stack->setObjectName(QStringLiteral("pages"));
     sheet->addWidget(m_stack);
@@ -164,16 +172,9 @@ void MainWindow::buildUi()
         connect(m_general, &GeneralPage::toolToggleRequested, this, &MainWindow::toggleRequested);
     }
 
-    // ---------- Una fila y una pagina por herramienta (el registro ya viene en orden alfabetico). La inicial
-    // va al margen solo en la primera herramienta de cada letra.
-    QChar lastLetter;
+    // ---------- Una fila y una pagina por herramienta (el registro ya viene en orden alfabetico).
     for (const ModuleDescriptor &d : m_host->descriptors()) {
         auto *item = new SidebarItem(d.id, d.title, d.paintIcon, true, sidebar);
-        const QChar letter = d.title.isEmpty() ? QChar() : d.title.at(0).toUpper();
-        if (letter != lastLetter) {
-            item->setLetter(QString(letter));
-            lastLetter = letter;
-        }
         side->addWidget(item);
         m_items.insert(d.id, item);
         connect(item, &SidebarItem::picked, this, &MainWindow::selectPage);
@@ -195,8 +196,7 @@ void MainWindow::buildUi()
         column->addSpacing(2);
         page.help = new HowItWorksStrip(content);
         column->addWidget(page.help);
-        connect(page.help, &HowItWorksStrip::toggledByUser, this, [this, id](bool open) {
-            storeHelpOpen(id, open);
+        connect(page.help, &HowItWorksStrip::toggledByUser, this, [this]() {
             refreshHelpButton();
             relayoutCurrentPage();
         });
@@ -222,6 +222,8 @@ void MainWindow::rebuildUi()
 {
     const QString current = m_current.isEmpty() ? kGeneral : m_current;
     const bool firstRun = m_general && m_general->firstRun();
+    // Rearmar no es entrar a la pagina: la ayuda queda como estaba.
+    const bool helpWasOpen = helpOpen();
     if (QWidget *focused = focusWidget()) {
         focused->clearFocus();
     }
@@ -240,12 +242,17 @@ void MainWindow::rebuildUi()
     m_general->setFirstRun(firstRun);
     m_general->setUpdateState(m_updateState);
     selectPage(current);
+    if (helpWasOpen) {
+        setHelpOpen(true);
+    }
     emit rebuilt();
 }
 
 void MainWindow::selectPage(const QString &id)
 {
     const QString target = (id == kGeneral || m_pages.contains(id)) ? id : kGeneral;
+    // Volver a elegir la pagina que ya se ve (un click en su fila, su switch del indice) no es entrar.
+    const bool entering = target != m_current;
     m_current = target;
     m_generalItem->setSelected(target == kGeneral);
     for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
@@ -259,7 +266,7 @@ void MainWindow::selectPage(const QString &id)
         return;
     }
     syncBody(target);
-    syncHelp(target);
+    syncHelp(target, entering);
     // Elegir una herramienta en la barra lateral tambien relee su estado.
     refreshItem(target);
     m_stack->setCurrentWidget(m_pages.value(target).scroll);
@@ -292,33 +299,17 @@ void MainWindow::refreshHelpText(const QString &id)
     }
 }
 
-void MainWindow::syncHelp(const QString &id)
+void MainWindow::syncHelp(const QString &id, bool entering)
 {
     auto it = m_pages.find(id);
     if (it == m_pages.end()) {
         return;
     }
     refreshHelpText(id);
-    bool open = false;
-    if (m_mode == Mode::Normal && m_appStore) {
-        // Se abre sola la primera vez que se visita la herramienta; despues queda como la dejo el usuario.
-        const QVariant stored = m_appStore->value(helpKey(id));
-        open = stored.isValid() ? stored.toBool() : true;
-        if (!stored.isValid()) {
-            m_appStore->setValue(helpKey(id), true);
-        }
-    } else {
-        open = m_helpOpen.value(id, false);
-    }
-    it->help->setOpen(open);
-}
-
-void MainWindow::storeHelpOpen(const QString &id, bool open)
-{
-    if (m_mode == Mode::Normal && m_appStore) {
-        m_appStore->setValue(helpKey(id), open);
-    } else {
-        m_helpOpen.insert(id, open);
+    // Cada vez que se entra a una herramienta la franja esta cerrada (pedido de Lega): quien la quiere ver
+    // la abre con un click o con el «?». No se recuerda.
+    if (entering) {
+        it->help->setOpen(false);
     }
 }
 
@@ -335,7 +326,6 @@ void MainWindow::setHelpOpen(bool open)
         return;
     }
     it->help->setOpen(open);
-    storeHelpOpen(m_current, open);
     refreshHelpButton();
     relayoutCurrentPage();
 }
