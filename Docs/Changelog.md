@@ -2,6 +2,10 @@
 
 v1.53:
 
+Link Redirector en macOS: el login de Google de DayTrace (y cualquier OAuth con redirect a `127.0.0.1`) terminaba en «Error 400: invalid_request». El link llega como `QFileOpenEvent` y se despachaba con `QUrl::toString()`, que decodifica `%20` a un espacio; con un solo carácter inválido, `open -a` (NSURL desde macOS 14) vuelve a codificar TODOS los `%` de la URL, y Google recibía `redirect_uri=http%253A%252F…`. Medido de punta a punta con la 1.52 instalada y un `nc` en 127.0.0.1. Ahora `ExternalDispatch::fileOpenArgument()` (en `main.cpp` y `AppController::eventFilter`) despacha la URL codificada tal como llegó y codifica lo que una URL no admite (espacios, corchetes fuera del host, un segundo `#`) sin tocar los `%XX`. El self-test prueba que una URL con `%3A %2F %20 %2B %3D` sale idéntica. Windows no cambia: ahí el link llega por argumento, sin decodificar.
+
+[ Link Redirector - En mac las URLs llegan al navegador sin recodificar ]
+
 Ajustes del Pliego (pedido de Lega): la ficha de General arrancaba 4 px más abajo que la hoja y dejaba un escalón chico que parecía un error. El índice ahora empieza a la altura de la hoja (`NavShell::kSheetTop`) y la ficha queda pareja con su borde. Fuera la columna de iniciales: el índice baja de 244 a 224 px, la ficha mide lo mismo y la hoja gana 20. La perilla del switch y todas las marcas (`StatusDot`, el aviso de Disk Space, la ventanita de Dictation, las viñetas del panel apagado) vuelven a ser círculos. «How it works» arranca cerrada cada vez que se entra a una herramienta y no se recuerda; las claves viejas `app/howItWorks/<id>` se borran al abrir la ventana. `--ui-probe how-it-works` cubre el comportamiento nuevo.
 
 [ UI - Ajustes del Pliego: switch circular, sin iniciales, ficha pareja y ayuda cerrada ]

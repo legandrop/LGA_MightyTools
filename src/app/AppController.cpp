@@ -506,7 +506,7 @@ bool AppController::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::FileOpen) {
         // mac: un .nk o un link que llega a la app residente.
         auto *open = static_cast<QFileOpenEvent *>(event);
-        if (openExternal(open->url().isLocalFile() ? open->file() : open->url().toString())) {
+        if (openExternal(ExternalDispatch::fileOpenArgument(open->url()))) {
             return true;
         }
     }

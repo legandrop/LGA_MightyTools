@@ -193,7 +193,7 @@ public:
     {
         if (event->type() == QEvent::FileOpen) {
             auto *open = static_cast<QFileOpenEvent *>(event);
-            pending << (open->url().isLocalFile() ? open->file() : open->url().toString());
+            pending << ExternalDispatch::fileOpenArgument(open->url());
             return true;
         }
         return QObject::eventFilter(watched, event);

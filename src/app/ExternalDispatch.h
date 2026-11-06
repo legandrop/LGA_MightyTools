@@ -5,6 +5,7 @@
 
 #include <QList>
 #include <QString>
+#include <QUrl>
 
 class SettingsStore;
 
@@ -14,6 +15,12 @@ namespace ExternalDispatch {
 
 // El primer argumento que no es un flag (--algo), o vacio.
 QString firstPlainArgument(const QStringList &arguments);
+
+// mac: el texto que se despacha para un QFileOpenEvent. Un archivo local va como ruta; una URL, con su
+// codificacion intacta y sin un caracter que una URL no admita. Nunca QUrl::toString() a secas: decodifica
+// %20 a un espacio, y con un solo caracter invalido macOS (open -a, NSURL desde macOS 14) vuelve a
+// codificar TODOS los % de la URL (%3A -> %253A), lo que rompia los logins OAuth (redirect_uri=http%253A...).
+QString fileOpenArgument(const QUrl &url);
 
 // El descriptor que reclama `argument` (claimsExternal, sin efectos), o nullptr.
 const ModuleDescriptor *claimant(const QList<ModuleDescriptor> &descriptors, const QString &argument);

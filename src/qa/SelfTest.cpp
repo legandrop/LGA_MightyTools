@@ -38,6 +38,7 @@
 #include <QPointer>
 #include <QThread>
 #include <QTimer>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -371,6 +372,25 @@ void testExternal(const Check &check)
               == QLatin1String("C:/a.nk"),
           QStringLiteral("modo corto: el primer argumento que no es un flag"));
     check(ExternalDispatch::firstPlainArgument({QStringLiteral("app.exe")}).isEmpty(), QStringLiteral("modo corto: sin argumentos, nada"));
+    // mac: un link que llega por QFileOpenEvent (Qt arma el QUrl con el texto del Apple Event) sale hacia
+    // el navegador byte por byte igual: el login OAuth de Google fallaba con %20 decodificado a espacio.
+    {
+        const QString oauth = QStringLiteral(
+            "https://accounts.google.com/o/oauth2/v2/auth?response_type=code&client_id=123-abc.apps.googleusercontent.com"
+            "&redirect_uri=http%3A%2F%2F127.0.0.1%3A65494&scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fcalendar.readonly%20openid"
+            "&code_challenge=Ab-_9z&code_challenge_method=S256&state=a%2Bb%2Fc%3D%3D&access_type=offline&prompt=consent");
+        check(ExternalDispatch::fileOpenArgument(QUrl(oauth)) == oauth,
+              QStringLiteral("link de mac: una URL con %3A %2F %20 %2B %3D sale identica"));
+        const QString plain = QStringLiteral("https://example.com/a/b?x=1&y=a+b;c#top");
+        check(ExternalDispatch::fileOpenArgument(QUrl(plain)) == plain, QStringLiteral("link de mac: una URL comun sale identica"));
+        const QString odd = ExternalDispatch::fileOpenArgument(
+            QUrl(QStringLiteral("https://[::1]:8080/a b?q=a[0]{x}|\"y\"&r=café&s=%2B#f#g")));
+        check(odd == QLatin1String("https://[::1]:8080/a%20b?q=a%5B0%5D%7Bx%7D%7C%22y%22&r=caf%C3%A9&s=%2B#f%23g"),
+              QStringLiteral("link de mac: espacios, corchetes y otros caracteres invalidos se codifican sin tocar los %XX"));
+        const QUrl local = QUrl::fromLocalFile(QStringLiteral("/tmp/a b/x.nk"));
+        check(ExternalDispatch::fileOpenArgument(local) == QLatin1String("/tmp/a b/x.nk"),
+              QStringLiteral("link de mac: un archivo local va como ruta"));
+    }
     check(ExternalDispatch::claimant(descriptors, QStringLiteral("C:/a.txt")) == nullptr,
           QStringLiteral("modo corto: una entrada que nadie reclama sigue a la instancia unica"));
     // Con el registro real (orden alfabetico, D-73): una direccion que termina en .nk es de Link Redirector,

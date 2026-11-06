@@ -23,6 +23,49 @@ QString firstPlainArgument(const QStringList &arguments)
     return QString();
 }
 
+QString fileOpenArgument(const QUrl &url)
+{
+    if (url.isLocalFile()) {
+        return url.toLocalFile();
+    }
+    // FullyEncoded deja los %XX como llegaron (salvo los de letras y numeros, que son la misma URL) y
+    // codifica espacios y caracteres fuera de ASCII. Igual deja "[" y "]" fuera del host y algun otro que
+    // RFC 3986 no admite: esos se codifican aca, y un "#" despues del primero tambien.
+    const QByteArray encoded = url.toEncoded(QUrl::FullyEncoded);
+    static const QByteArray allowed = QByteArrayLiteral(
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~:/?#[]@!$&'()*+,;=%");
+    qsizetype authorityEnd = 0;
+    const qsizetype schemeEnd = encoded.indexOf("://");
+    if (schemeEnd >= 0) {
+        authorityEnd = schemeEnd + 3;
+        while (authorityEnd < encoded.size() && encoded.at(authorityEnd) != '/' && encoded.at(authorityEnd) != '?'
+               && encoded.at(authorityEnd) != '#') {
+            ++authorityEnd;
+        }
+    }
+    QByteArray out;
+    out.reserve(encoded.size() + 16);
+    bool sawHash = false;
+    for (qsizetype i = 0; i < encoded.size(); ++i) {
+        const char c = encoded.at(i);
+        bool keep = allowed.contains(c);
+        if (i >= authorityEnd && (c == '[' || c == ']')) {
+            keep = false;
+        }
+        if (c == '#') {
+            keep = !sawHash;
+            sawHash = true;
+        }
+        if (keep) {
+            out += c;
+        } else {
+            out += '%';
+            out += QByteArray::number(static_cast<uchar>(c), 16).rightJustified(2, '0').toUpper();
+        }
+    }
+    return QString::fromLatin1(out);
+}
+
 const ModuleDescriptor *claimant(const QList<ModuleDescriptor> &descriptors, const QString &argument)
 {
     if (argument.isEmpty()) {
