@@ -2,6 +2,10 @@
 
 v1.53:
 
+Meet Frame (herramienta nueva, D-74): Teams y Meet solo comparten la pantalla entera o una ventana, y no había forma de compartir una región sin que se vieran los avisos o un chat. Ahora un marco (`Ctrl+Alt+M`) marca la región y la app la dibuja en una ventana propia, «Meet Frame», que es la que se comparte. Antes de dibujarla tapa en gris liso las ventanas de las apps elegidas (Mensajería, Contraseñas, Correo, apps propias; WhatsApp y Telegram web por el título), los avisos, el escritorio, Alt+Tab y las ventanas de la propia app, recorriendo las ventanas en orden Z (`MeetFrameRules::computeMask`, que ante la duda tapa de más). Windows captura con DXGI Desktop Duplication (GDI de respaldo); mac, con ScreenCaptureKit y un filtro sin esas apps. Pausa (`Ctrl+Alt+P`) congela la imagen. El self-test suma 27 casos.
+
+[ Meet Frame - Herramienta nueva para compartir una región sin chats ni avisos ]
+
 Link Redirector en macOS: el login de Google de DayTrace (y cualquier OAuth con redirect a `127.0.0.1`) terminaba en «Error 400: invalid_request». El link llega como `QFileOpenEvent` y se despachaba con `QUrl::toString()`, que decodifica `%20` a un espacio; con un solo carácter inválido, `open -a` (NSURL desde macOS 14) vuelve a codificar TODOS los `%` de la URL, y Google recibía `redirect_uri=http%253A%252F…`. Medido de punta a punta con la 1.52 instalada y un `nc` en 127.0.0.1. Ahora `ExternalDispatch::fileOpenArgument()` (en `main.cpp` y `AppController::eventFilter`) despacha la URL codificada tal como llegó y codifica lo que una URL no admite (espacios, corchetes fuera del host, un segundo `#`) sin tocar los `%XX`. El self-test prueba que una URL con `%3A %2F %20 %2B %3D` sale idéntica. Windows no cambia: ahí el link llega por argumento, sin decodificar. Efecto lateral, igual que en Windows: «Match words» se compara contra la URL codificada (una palabra con tilde o espacio ya no coincide con `%C3%A9` o `%20`; las de dominio en ASCII, sí).
 
 [ Link Redirector - En mac las URLs llegan al navegador sin recodificar ]

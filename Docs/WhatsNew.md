@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new] Meet Frame: con Ctrl+Alt+M aparece un marco para compartir solo esa parte de la pantalla en Teams, Meet o Zoom; los avisos, el escritorio, WhatsApp, Telegram y las apps que elijas salen tapados para los demás, y Pause congela la imagen.
 - [fixed][mac] Link Redirector ya no altera los links que reenvía al navegador: los inicios de sesión con Google y otros servicios que antes terminaban en «Error 400: invalid_request» vuelven a funcionar.
 - [improved] Si falla la conexión, la búsqueda de actualizaciones, la descarga de una versión nueva y la del modelo de Dictation lo vuelven a intentar solas, cada cinco segundos y hasta tres veces por cada servidor, y avisan «Retrying (2 of 4)…» mientras esperan; una descarga cortada sigue desde donde quedó.
 - [improved] Mighty Tools tiene un diseño nuevo: cada herramienta es una hoja sobre fondo negro unida a su lugar en la lista de la izquierda, y los colores dicen algo: cian es lo que está funcionando, magenta lo que podés tocar y amarillo lo que pide atención; la letra es igual de grande que antes.

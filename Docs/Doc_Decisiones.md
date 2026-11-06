@@ -5,6 +5,23 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-74 · Meet Frame** (2026-11-06, Lega: «Meet Frame se va a llamar, implementalo»). Herramienta para
+  compartir una parte de la pantalla, como Region to Share (GPL-3.0: solo se tomó la idea, ninguna línea
+  de código), tapando en lo compartido los avisos, el escritorio y las apps elegidas. Investigación en
+  `Docs/Investigacion_Compartir_Region.md`. Windows y macOS. Supuestos tomados sin preguntar, reversibles:
+  - **Motor B en Windows** (captura del monitor con DXGI Desktop Duplication, GDI de respaldo, y lo
+    tapado pintado liso), no las miniaturas de DWM: es el que funciona seguro sin el prototipo P1. La
+    ventana compartida queda al fondo del orden Z (si queda debajo del escritorio, mejor: nadie la ve).
+  - **Atajos** `Ctrl+Alt+M` (mostrar u ocultar el marco) y `Ctrl+Alt+P` (pausa, registrado solo con el
+    marco abierto). En mac son `⌘⌥M` y `⌘⌥P`.
+  - **Vienen prendidos** los avisos, el escritorio, Mensajería y Contraseñas; Correo viene apagado (se
+    suele compartir el correo a propósito). WhatsApp y Telegram en el navegador se reconocen por el
+    título y se tapa la ventana entera del navegador mientras esa pestaña está al frente.
+  - **Ante la duda se tapa de más:** una ventana semitransparente o excluida de captura no cuenta como que
+    tapa lo de abajo. En mac, una app que se abre después se suma al filtro en el siguiente segundo, y
+    hasta entonces no sale.
+  - Sin «No molestar» de Windows ni Focus de mac (no tienen API pública): los avisos se tapan en lo
+    compartido, que es lo que importa.
 - **D-73 · Rediseño «Pliego», Help por pantalla y herramientas en orden alfabético** (2026-11-03, Lega
   eligió entre cinco rediseños de la app entera). Cada herramienta es una hoja más clara sobre la mesa
   negra; la ficha elegida del índice lateral se une a la hoja; el índice va en orden alfabético y cada

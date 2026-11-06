@@ -164,6 +164,11 @@ set(SOURCES
     src/modules/apptoggle/AppTogglePanel.cpp
     src/modules/apptoggle/AppToggleState.cpp
     src/platform/AppToggleSystemCommon.cpp
+    # Meet Frame: la logica, el modulo, el panel y el marco son comunes; la captura es de cada plataforma.
+    src/modules/meetframe/MeetFrameModule.cpp
+    src/modules/meetframe/MeetFrameOverlay.cpp
+    src/modules/meetframe/MeetFramePanel.cpp
+    src/modules/meetframe/MeetFrameRules.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
@@ -272,6 +277,11 @@ set(HEADERS
     src/modules/apptoggle/AppTogglePanel.h
     src/modules/apptoggle/AppToggleState.h
     src/platform/AppToggleSystem.h
+    src/modules/meetframe/MeetFrameModule.h
+    src/modules/meetframe/MeetFrameOverlay.h
+    src/modules/meetframe/MeetFramePanel.h
+    src/modules/meetframe/MeetFrameRules.h
+    src/platform/MeetFrameSystem.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
     src/platform/DirEnumerator.h
@@ -322,6 +332,7 @@ if(WIN32)
         # Ayudante elevado de Window Layouts para ventanas de administrador.
         src/platform/win/AdminWindowHelperWin.cpp
         src/platform/win/AppToggleSystemWin.cpp
+        src/platform/win/MeetFrameSystemWin.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
         src/platform/win/DirEnumeratorWin.cpp
@@ -451,6 +462,7 @@ elseif(APPLE)
         src/modules/folderswitch/mac/FolderSwitchMacModule.cpp
         src/modules/folderswitch/mac/MacFileDialogs.mm
         src/platform/mac/AppToggleSystemMac.mm
+        src/platform/mac/MeetFrameSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
         src/platform/mac/DirEnumeratorMac.cpp
@@ -517,6 +529,9 @@ if(WIN32)
         version
         # Disk Space: que instaladores de %WINDIR%\Installer reclama Windows Installer (solo lectura).
         msi
+        # Meet Frame: captura del monitor con DXGI Desktop Duplication.
+        d3d11
+        dxgi
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -527,11 +542,16 @@ elseif(APPLE)
         # UTType (Open in NukeX, MacFileAssociation.mm). El QtCore de Homebrew lo traia de arrastre; el
         # oficial no.
         "-framework UniformTypeIdentifiers"
+        # Meet Frame: captura de la region (ScreenCaptureKit) y sus cuadros.
+        "-framework ScreenCaptureKit"
+        "-framework CoreMedia"
+        "-framework CoreVideo"
     )
     # Los .mm con ARC: sin retain/release a mano.
     set_source_files_properties(
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AppToggleSystemMac.mm
+        src/platform/mac/MeetFrameSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ForegroundWatcherMac.mm
         src/platform/mac/NukeWatcherMac.mm

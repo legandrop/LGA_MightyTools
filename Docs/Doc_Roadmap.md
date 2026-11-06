@@ -20,9 +20,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    4. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
       prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
       «Organizar automáticamente» prendido, y Undo.
-   5. **Compartir una región** (Windows y macOS, pedido de Lega 2026-11-06): como Region to Share pero
-      escondiendo apps elegidas, avisos y escritorio, con atajo global. Investigación en
-      `Docs/Investigacion_Compartir_Region.md`; falta que Lega elija nombre y atajo, y el prototipo P1-P4.
+   5. **Meet Frame** (Windows y macOS, D-74): hecha en la v1.53. Falta la prueba real de Lega: compartir
+      la ventana «Meet Frame» en Teams, Meet y Zoom (también con la ventana debajo del escritorio), que un
+      aviso de Windows y WhatsApp/Telegram salgan tapados, el consumo con 30 y 60 fps, y probarla en la
+      Mac (el CI la compila; el permiso de Grabación de pantalla y el filtro de ScreenCaptureKit no se
+      probaron). Pendientes posibles: «ver a través» de lo tapado en lugar del gris liso; motor de
+      miniaturas de DWM si P1 sale bien (más liviano); atajo para encajar la ventana activa en el marco.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); probar de verdad los instaladores huérfanos (D-69: el UAC, el paso
    elevado y la Papelera; en la PC de Lega hoy no aparece ninguno porque las 6 copias sueltas son de

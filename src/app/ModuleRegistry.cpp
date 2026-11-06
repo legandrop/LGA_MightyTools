@@ -4,6 +4,7 @@
 #include "modules/nukeshortcuts/NukeShortcutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/apptoggle/AppToggleModule.h"
+#include "modules/meetframe/MeetFrameModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -38,6 +39,7 @@ QList<ModuleDescriptor> all()
     list << linkRedirectorDescriptor();
     list << windowLayoutsDescriptor();
     list << appToggleDescriptor();
+    list << meetFrameDescriptor();
 #if defined(Q_OS_WIN)
     list << mouseButtonsDescriptor();
     list << dictationDescriptor();
@@ -76,6 +78,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("linkRedirector"), &linkRedirectorHelp);
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
+    providers.insert(QStringLiteral("meetFrame"), &meetFrameHelp);
 #if defined(Q_OS_WIN)
     providers.insert(QStringLiteral("mouseButtons"), &mouseButtonsHelp);
     providers.insert(QStringLiteral("dictation"), &dictationHelp);

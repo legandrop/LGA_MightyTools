@@ -1,6 +1,7 @@
 # Investigación: compartir una región de la pantalla (herramienta nueva)
 
-Fecha: 2026-11-06. Estado: investigación, sin código. Las preguntas para Lega están al final.
+Fecha: 2026-11-06. Estado: **implementada como Meet Frame** (D-74, v1.53) con el motor B en Windows y
+ScreenCaptureKit en mac; las pruebas P1 a P4 quedan para la prueba real de Lega.
 
 ## 1. Qué hace Region to Share y qué se puede usar
 
