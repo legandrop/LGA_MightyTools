@@ -20,6 +20,9 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
    4. **Desktop Icons** (Windows): hecha en la v1.53 (D-66, `Docs/Roadmap_Desktop_Icons.md`). Falta la
       prueba real de Lega: restaurar un snapshot (las pruebas automáticas nunca mueven íconos), también con
       «Organizar automáticamente» prendido, y Undo.
+   5. **Compartir una región** (Windows y macOS, pedido de Lega 2026-11-06): como Region to Share pero
+      escondiendo apps elegidas, avisos y escritorio, con atajo global. Investigación en
+      `Docs/Investigacion_Compartir_Region.md`; falta que Lega elija nombre y atajo, y el prototipo P1-P4.
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); probar de verdad los instaladores huérfanos (D-69: el UAC, el paso
    elevado y la Papelera; en la PC de Lega hoy no aparece ninguno porque las 6 copias sueltas son de
