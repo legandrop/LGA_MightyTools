@@ -895,6 +895,11 @@ void trackFrameMouse(QWidget *, std::function<bool(const QPoint &)>) {}
 
 void syncFrameMouse(QWidget *) {}
 
+int takeFrameDragEvents()
+{
+    return -1;
+}
+
 QString takeFrameMouseStats()
 {
     return QString();

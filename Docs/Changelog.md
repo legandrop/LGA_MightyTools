@@ -2,6 +2,10 @@
 
 v1.53:
 
+Meet Frame, cuarta prueba de Lega en mac: mover y estirar seguían lentos. Los logs mostraron pocos pasos por segundo (18 en 658 ms al mover) con el trabajo propio en 0,1 ms por paso, y que durante el arrastre la captura se reconfiguraba 10 veces por segundo (cambia el recorte al mover y el tamaño al estirar), con respuestas de ScreenCaptureKit de hasta cientos de ms y la ventana compartida cambiando de tamaño a la par. Eso carga al sistema que dibuja las ventanas y entrega el mouse. Ahora, mientras se mueve o se estira, la captura y la ventana compartida no se tocan: la región se aplica una vez al soltar (`dragFinished`). El resumen de cada arrastre suma pasos por segundo, cuántos eventos de arrastre mandó macOS (para separar si el lento es el sistema o la app), la pausa más larga entre pasos y cuánto tarda dibujar el marco.
+
+[ Meet Frame - La captura no se reconfigura mientras se mueve o se estira el marco ]
+
 Meet Frame, tercera prueba de Lega en mac: el estirado seguía pesado, la franja para estirar era angosta y el cursor titilaba; además pidió fijar la proporción (16:9 por defecto). Los logs mostraron que el trabajo propio era ~1 ms por paso pero llegaban solo 40 pasos por segundo con el hilo atrasado ~25 ms: cambiar el tamaño de una ventana translúcida obliga a Qt a crear una superficie nueva y redibujarla entera. Ahora, en mac, la ventana del marco es un lienzo más grande que el marco (320 px de holgura, dentro de la pantalla) y el marco se dibuja adentro: mover o estirar solo repinta las franjas que cambian, y el lienzo se rearma solo si el marco se le sale. La franja pasa de 8 a 12 px con esquinas más generosas, y un reloj re-pone el cursor mientras el mouse está en el borde. Ajuste nuevo «Frame shape»: 16:9 (de fábrica), 4:3 o libre; al estirar se mantiene la forma de la región sin salirse de la pantalla (en Windows, con forma fija, se estira a mano), y «Size» la respeta.
 
 [ Meet Frame - Lienzo fijo en mac, franja mas ancha, cursor estable y forma 16:9 ]

@@ -45,6 +45,7 @@ public:
     // Lo llama mouseMoveEvent y, en mac, MeetFrameSystem::trackFrameMouse (con la app inactiva Qt no avisa).
     bool hoverAt(const QPoint &pos);
     Qt::CursorShape cursorShape() const { return m_cursor; }
+    bool dragging() const { return m_dragging; }
     QMenu *sizeMenu() const { return m_sizeMenu; }
 
 signals:
@@ -56,6 +57,8 @@ signals:
     void regionChanged();
     // Termino el arrastre: se guarda.
     void regionSettled();
+    // Se solto el mouse despues de mover o estirar (antes de regionSettled, que espera 400 ms).
+    void dragFinished();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -71,7 +74,9 @@ private:
     Qt::CursorShape cursorAt(const QPoint &pos) const;
     void applyCursor(Qt::CursorShape shape);
     void hoverChild(const QPoint &pos);
-    void dragTo(const QPoint &global);
+    void dragTo(const QPoint &global, bool measureGap = true);
+    // Cierra un arrastre propio: log y dragFinished (la captura se aplica ahi). Tambien si no llego el release.
+    void finishDrag();
     void setFrameGlobal(const QRect &frame);
     QRegion frameArea() const;
     QRect keepAspect(const QRect &frame);
@@ -113,6 +118,10 @@ private:
     int m_dragSteps = 0;
     double m_dragStepMs = 0;
     double m_dragStepMaxMs = 0;
+    QElapsedTimer m_dragGapClock; // la pausa mas larga entre dos pasos (si es grande, el sistema no entrego eventos)
+    qint64 m_dragGapMaxMs = 0;
+    int m_dragPaints = 0;
+    double m_dragPaintMs = 0;
     // Lo que muestra la barrita: si no cambia, no se rearma.
     bool m_stateSet = false;
     int m_hiddenCount = 0;

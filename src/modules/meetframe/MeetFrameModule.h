@@ -118,6 +118,7 @@ private:
     // kRegionMs (antes: en cada pixel, dos veces). Corre solo con el marco a la vista.
     QTimer m_regionTimer;
     int m_regionRequests = 0;
+    bool m_regionPending = false;
     int m_regionApplied = 0;
     // Para el log, con el marco a la vista: cuanto se atrasa el hilo principal (un reloj cada 100 ms) y un
     // resumen cada kStatsMs.

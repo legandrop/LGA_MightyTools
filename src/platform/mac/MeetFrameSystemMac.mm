@@ -702,6 +702,7 @@ struct FrameMouseStats
     int clicksInside = 0;  // clicks adentro de la region que igual recibio el marco (no deberia pasar)
     double handlerMaxMs = 0;
 };
+int g_dragEvents = 0; // arrastres (LeftMouseDragged) que el sistema le mando al marco
 FrameMouseStats g_mouseStats;
 // La decision del marco abierto (hay uno solo a la vez); nil sin marco. Con evento nil decide con el mouse donde esta.
 void (^g_frameUpdate)(NSEvent *) = nil;
@@ -772,9 +773,13 @@ void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMo
     };
     const NSEventMask moves = NSEventMaskMouseMoved | NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp;
     id global = [NSEvent addGlobalMonitorForEventsMatchingMask:moves handler:update];
-    id local = [NSEvent addLocalMonitorForEventsMatchingMask:moves | NSEventMaskLeftMouseDown
+    id local = [NSEvent addLocalMonitorForEventsMatchingMask:moves | NSEventMaskLeftMouseDown | NSEventMaskLeftMouseDragged
                                                      handler:^NSEvent *(NSEvent *event) {
                                                          NSView *view = weakView;
+                                                         if (event.type == NSEventTypeLeftMouseDragged) {
+                                                             if (view && event.window == view.window) ++g_dragEvents;
+                                                             return event;
+                                                         }
                                                          if (event.type == NSEventTypeLeftMouseDown) {
                                                              if (view && event.window == view.window) {
                                                                  const QPoint pos = locate();
@@ -802,6 +807,13 @@ void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMo
         [[NSCursor arrowCursor] set]; // antes de apagar la propiedad: si no, con la app inactiva se ignora
         setsCursorInBackground(false);
     });
+}
+
+int takeFrameDragEvents()
+{
+    const int events = g_dragEvents;
+    g_dragEvents = 0;
+    return events;
 }
 
 void syncFrameMouse(QWidget *)

@@ -490,6 +490,9 @@ void MeetFrameModule::showFrame()
     connect(overlay, &MeetFrameOverlay::sizeRequested, this, &MeetFrameModule::resizeRegion);
     connect(overlay, &MeetFrameOverlay::regionChanged, this, &MeetFrameModule::onRegionChanged);
     connect(overlay, &MeetFrameOverlay::regionSettled, this, &MeetFrameModule::saveRegion);
+    connect(overlay, &MeetFrameOverlay::dragFinished, this, [this]() {
+        if (m_regionPending) applyRegion();
+    });
     overlay->show();
     QString error;
     m_session = MeetFrameSystem::start(kWindowTitle, MeetFrameSystem::captureRegion(overlay, overlay->region()), options(), &error);
@@ -529,6 +532,7 @@ void MeetFrameModule::hideFrame()
     }
     if (m_overlay) saveRegion();
     m_regionTimer.stop();
+    m_regionPending = false;
     if (m_watch.isActive()) {
         m_watch.stop();
         logStats("al cerrar");
@@ -566,14 +570,21 @@ void MeetFrameModule::syncOverlay()
 void MeetFrameModule::onRegionChanged()
 {
     if (!m_overlay || !m_session) return;
-    // Mover o estirar manda un cambio por pixel (y dos, moveEvent y resizeEvent): se juntan.
     ++m_regionRequests;
+    m_regionPending = true;
+    // Mientras se mueve o se estira, la captura y la ventana compartida no se tocan: reconfigurar ScreenCaptureKit
+    // 10 veces por segundo le encolaba pedidos (hasta 450 ms de respuesta) y cargaba al sistema que dibuja las
+    // ventanas y entrega el mouse; el marco iba a los tirones. Se aplica una vez, al soltar (dragFinished).
+    if (m_overlay->dragging()) return;
+    // Fuera de un arrastre (Size, la forma, otra pantalla), los cambios seguidos se juntan.
     if (!m_regionTimer.isActive()) m_regionTimer.start();
 }
 
 void MeetFrameModule::applyRegion()
 {
     if (!m_overlay || !m_session) return;
+    m_regionTimer.stop();
+    m_regionPending = false;
     ++m_regionApplied;
     m_session->setRegion(MeetFrameSystem::captureRegion(m_overlay, m_overlay->region()));
     syncOverlay();

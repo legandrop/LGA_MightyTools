@@ -342,8 +342,13 @@ void MeetFrameOverlay::mousePressEvent(QMouseEvent *event)
     }
     m_dragging = true;
     m_dragClock.start();
+    m_dragGapClock.invalidate(); // la espera entre el click y el primer movimiento es del usuario: no cuenta
+    m_dragGapMaxMs = 0;
+    m_dragPaints = 0;
+    m_dragPaintMs = 0;
     m_dragSteps = 0;
     m_dragStepMs = m_dragStepMaxMs = 0;
+    MeetFrameSystem::takeFrameDragEvents();
     m_dragEdges = edges;
     m_aspectAxis = 0;
     m_pressGlobal = event->globalPosition().toPoint();
@@ -358,7 +363,7 @@ void MeetFrameOverlay::mouseMoveEvent(QMouseEvent *event)
             dragTo(event->globalPosition().toPoint());
             return;
         }
-        m_dragging = false; // se solto afuera sin que llegara el release
+        finishDrag(); // se solto afuera sin que llegara el release
     }
     hoverAt(event->position().toPoint());
 }
@@ -366,20 +371,32 @@ void MeetFrameOverlay::mouseMoveEvent(QMouseEvent *event)
 void MeetFrameOverlay::mouseReleaseEvent(QMouseEvent *event)
 {
     if (m_dragging && event->button() == Qt::LeftButton) {
-        dragTo(event->globalPosition().toPoint());
-        m_dragging = false;
-        qInfo().noquote() << QStringLiteral("[meetFrame] %1: %2 pasos en %3 ms, cada paso med %4 ms max %5 ms; region %6x%7")
-                                 .arg(m_dragEdges ? QStringLiteral("Estirar") : QStringLiteral("Mover"))
-                                 .arg(m_dragSteps).arg(m_dragClock.elapsed())
-                                 .arg(m_dragSteps ? m_dragStepMs / m_dragSteps : 0.0, 0, 'f', 2).arg(m_dragStepMaxMs, 0, 'f', 1)
-                                 .arg(region().width()).arg(region().height());
+        dragTo(event->globalPosition().toPoint(), false);
+        finishDrag();
         m_cursor = Qt::BitmapCursor; // fuerza a elegir de nuevo el cursor donde quedo el mouse
         hoverAt(event->position().toPoint());
     }
     QWidget::mouseReleaseEvent(event);
 }
 
-void MeetFrameOverlay::dragTo(const QPoint &global)
+void MeetFrameOverlay::finishDrag()
+{
+    m_dragging = false;
+    const qint64 elapsed = std::max<qint64>(1, m_dragClock.elapsed());
+    const int systemEvents = MeetFrameSystem::takeFrameDragEvents();
+    qInfo().noquote() << QStringLiteral("[meetFrame] %1: %2 pasos en %3 ms (%4 por segundo; el sistema mando %5 eventos), pausa max entre "
+                                        "pasos %6 ms; cada paso med %7 ms max %8 ms; dibujar %9 veces med %10 ms; region %11x%12")
+                             .arg(m_dragEdges ? QStringLiteral("Estirar") : QStringLiteral("Mover"))
+                             .arg(m_dragSteps).arg(elapsed).arg(m_dragSteps * 1000 / elapsed)
+                             .arg(systemEvents < 0 ? QStringLiteral("?") : QString::number(systemEvents))
+                             .arg(m_dragGapMaxMs)
+                             .arg(m_dragSteps ? m_dragStepMs / m_dragSteps : 0.0, 0, 'f', 2).arg(m_dragStepMaxMs, 0, 'f', 1)
+                             .arg(m_dragPaints).arg(m_dragPaints ? m_dragPaintMs / m_dragPaints : 0.0, 0, 'f', 2)
+                             .arg(region().width()).arg(region().height());
+    emit dragFinished();
+}
+
+void MeetFrameOverlay::dragTo(const QPoint &global, bool measureGap)
 {
     // Lo que tarda cada paso (mover o estirar la ventana y todo lo que eso dispara), para el log.
     QElapsedTimer clock;
@@ -396,6 +413,11 @@ void MeetFrameOverlay::dragTo(const QPoint &global)
             self->m_dragStepMaxMs = std::max(self->m_dragStepMaxMs, ms);
         }
     } count{this, &clock};
+    // La pausa entre dos movimientos (no la del click ni la del soltar): si es grande, el sistema no mando eventos.
+    if (measureGap) {
+        if (m_dragGapClock.isValid()) m_dragGapMaxMs = std::max(m_dragGapMaxMs, m_dragGapClock.elapsed());
+        m_dragGapClock.start();
+    }
     const QPoint delta = global - m_pressGlobal;
     QRect next = m_pressGeometry;
     if (!m_dragEdges) {
@@ -538,6 +560,19 @@ void MeetFrameOverlay::updateMask()
 
 void MeetFrameOverlay::paintEvent(QPaintEvent *)
 {
+    QElapsedTimer clock;
+    clock.start();
+    struct Count
+    {
+        MeetFrameOverlay *self;
+        QElapsedTimer *clock;
+        ~Count()
+        {
+            if (!self->m_dragging) return;
+            ++self->m_dragPaints;
+            self->m_dragPaintMs += clock->nsecsElapsed() / 1e6;
+        }
+    } count{this, &clock};
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing, true);
     const QRect frame = frameRect();

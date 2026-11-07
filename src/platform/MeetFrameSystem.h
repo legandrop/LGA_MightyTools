@@ -87,6 +87,10 @@ void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMo
 // Decide de nuevo con el mouse quieto (al abrir el marco o al moverlo por codigo): si no, recien con el primer
 // movimiento, y el primer click adentro podria quedar en el marco.
 void syncFrameMouse(QWidget *frame);
+// Para el log: eventos de arrastre que el sistema le mando al marco desde la llamada anterior, y reinicia la
+// cuenta; -1 si la plataforma no los cuenta. Comparados con los pasos que hizo el marco dicen si el lento es el
+// sistema (manda pocos) o la app (los junta porque no da abasto).
+int takeFrameDragEvents();
 // Para el log: lo que paso con el mouse sobre el marco desde la llamada anterior, y reinicia la cuenta.
 QString takeFrameMouseStats();
 // Pone el cursor aunque la app no este activa (mac). Windows: no hace nada (alcanza con QWidget::setCursor).
