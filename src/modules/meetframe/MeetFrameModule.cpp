@@ -211,6 +211,13 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
         context.fake.fire(MeetFrameModule::ToggleShortcut);
         check(!module.frameShown() && !module.paused() && !context.fake.registered.contains(MeetFrameModule::PauseShortcut),
               QStringLiteral("modulo: cerrar el marco quita la pausa y su atajo"));
+#ifdef Q_OS_MACOS
+        check(module.shortcut(MeetFrameModule::ToggleShortcut) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+M")),
+              QStringLiteral("modulo: de fabrica en mac el marco es Cmd+Option+Shift+M (Cmd+Option+M minimiza todo en macOS)"));
+#else
+        check(module.shortcut(MeetFrameModule::ToggleShortcut) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+M")),
+              QStringLiteral("modulo: de fabrica en Windows el marco es Ctrl+Alt+M"));
+#endif
         QString error;
         context.fake.other = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+D"));
         check(!module.setShortcut(MeetFrameModule::ToggleShortcut, context.fake.other, &error) && error.contains(QStringLiteral("Dictation")),
@@ -324,7 +331,14 @@ void MeetFrameModule::stop()
 
 Shortcut MeetFrameModule::defaultShortcut(int id)
 {
-    return Shortcut::fromPortableString(id == PauseShortcut ? QStringLiteral("Ctrl+Alt+P") : QStringLiteral("Ctrl+Alt+M"));
+    // En mac Ctrl es ⌘: ⌘⌥M es «minimizar todas las ventanas» de macOS, asi que el marco va con ⌘⌥⇧M (el que eligio
+    // Lega, 2026-11-07). La pausa solo se registra con el marco abierto y queda ⌘⌥P.
+#ifdef Q_OS_MACOS
+    const QString toggle = QStringLiteral("Ctrl+Alt+Shift+M");
+#else
+    const QString toggle = QStringLiteral("Ctrl+Alt+M");
+#endif
+    return Shortcut::fromPortableString(id == PauseShortcut ? QStringLiteral("Ctrl+Alt+P") : toggle);
 }
 
 Shortcut MeetFrameModule::shortcut(int id) const
