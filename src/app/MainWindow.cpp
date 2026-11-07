@@ -6,21 +6,29 @@
 #include "app/WindowParts.h"
 #include "core/I18n.h"
 #include "platform/WindowFrame.h"
+#include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
 
+#include <QAbstractSpinBox>
+#include <QApplication>
 #include <QCloseEvent>
 #include <QDebug>
 #include <QEvent>
 #include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QScreen>
 #include <QScrollArea>
+#include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
+#include <QTextEdit>
 #include <QVBoxLayout>
 
 namespace {
@@ -72,6 +80,26 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
     };
     connect(m_host, &ModuleHost::moduleStatusChanged, this, followHelp);
     connect(m_host, &ModuleHost::moduleSettingsChanged, this, followHelp);
+    // Ctrl+Alt+← → (⌘⌥ en mac: en Qt/mac Control es la tecla Cmd) pasan de una pagina a la otra en el orden del
+    // indice, como en DayTrace. Atajo de la ventana: tambien con el foco en un campo, que no usa esas teclas.
+    for (const int direction : {-1, 1}) {
+        const Qt::Key arrow = direction < 0 ? Qt::Key_Left : Qt::Key_Right;
+        auto *shortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::ALT | arrow), this);
+        shortcut->setContext(Qt::WindowShortcut);
+        shortcut->setAutoRepeat(false);
+        connect(shortcut, &QShortcut::activated, this, [this, direction, arrow]() {
+            // Un ShortcutRow grabando toma el teclado con grabKeyboard(), que el mapa de atajos de Qt no mira: la
+            // combinacion es para el, que la puede querer como atajo. Se le entrega con event() y no con sendEvent():
+            // QApplication::notify vuelve a probar los atajos con cada KeyPress y este se dispararia sin fin.
+            if (QObject *grabber = QWidget::keyboardGrabber()) {
+                CustomTooltip::instance()->hideToolTip(); // event() saltea el filtro que lo cierra con cada tecla
+                QKeyEvent press(QEvent::KeyPress, arrow, Qt::ControlModifier | Qt::AltModifier);
+                grabber->event(&press);
+                return;
+            }
+            stepPage(direction);
+        });
+    }
     if (m_mode == Mode::Normal && m_appStore) {
         // Solo lecturas si no quedo nada: el .ini se reescribe una sola vez.
         for (const ModuleDescriptor &d : m_host->descriptors()) {
@@ -578,6 +606,45 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // No se cierra la app: se oculta a la bandeja. Salir solo desde "Quit" del menu (mac: el boton Quit de General, D-39).
     hide();
     event->ignore();
+}
+
+// Escape cierra la ventana y la app vuelve a la bandeja (Windows) o a la barra de menu (mac), por el mismo camino
+// que la cruz (closeEvent), como en DayTrace. Llega aca solo el Escape que nadie de adentro uso: un campo que
+// descarta lo escrito, un atajo grabandose o un menu abierto se lo quedan. Si el foco esta en un campo que no lo
+// usa, el primer Escape solo lo suelta y el segundo cierra.
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape && event->modifiers() == Qt::NoModifier) {
+        // Escape mantenido: un campo se queda con la primera pulsacion (descarta y suelta el foco) y las repeticiones
+        // llegarian aca sin foco; no cierran.
+        if (event->isAutoRepeat()) {
+            event->accept();
+            return;
+        }
+        QWidget *focus = QApplication::focusWidget();
+        if (focus && isAncestorOf(focus)
+            && (qobject_cast<QLineEdit *>(focus) || qobject_cast<QTextEdit *>(focus)
+                || qobject_cast<QPlainTextEdit *>(focus) || qobject_cast<QAbstractSpinBox *>(focus))) {
+            focus->clearFocus();
+        } else {
+            close();
+        }
+        event->accept();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::stepPage(int direction)
+{
+    QStringList order{kGeneral};
+    for (const ModuleDescriptor &d : m_host->descriptors()) {
+        if (m_pages.contains(d.id)) {
+            order << d.id;
+        }
+    }
+    const int at = qMax(0, order.indexOf(m_current));
+    selectPage(order.at((at + direction + order.size()) % order.size()));
 }
 
 bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr *result)

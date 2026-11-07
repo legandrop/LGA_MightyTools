@@ -11,6 +11,7 @@ platforms: [win, mac]
 ## Unreleased
 
 ## v1.53
+- [new] Escape cierra la ventana de Mighty Tools y la deja en la bandeja (en Mac, en la barra de menú), y Ctrl+Alt con las flechas izquierda y derecha (⌘⌥ en Mac) pasa a la herramienta anterior o siguiente de la lista.
 - [new] Meet Frame: con Ctrl+Alt+M aparece un marco para compartir solo esa parte de la pantalla en Teams, Meet o Zoom; los avisos, el escritorio, WhatsApp, Telegram y las apps que elijas salen tapados para los demás, Pause congela la imagen, y al estirarlo mantiene la forma 16:9 (o 4:3, o libre, en «Frame shape»).
 - [fixed][mac] La ventana de Mighty Tools tiene las esquinas redondeadas como las del sistema y se mueve arrastrando desde cualquier parte libre de la barra de arriba, no solo desde algunas.
 - [fixed][mac] Link Redirector ya no altera los links que reenvía al navegador: los inicios de sesión con Google y otros servicios que antes terminaban en «Error 400: invalid_request» vuelven a funcionar.
