@@ -2326,7 +2326,7 @@ int runMeetFrameDragProbe()
     const int band = m.left() / 2;
     const auto shapeAt = [&](const QPoint &pos) {
         frame.hoverAt(pos);
-        return frame.cursor().shape();
+        return frame.cursorShape();
     };
     const auto name = [](Qt::CursorShape shape) { return QString::number(int(shape)); };
     const auto expect = [&](const QPoint &pos, Qt::CursorShape want, const char *what) {
@@ -2352,6 +2352,13 @@ int runMeetFrameDragProbe()
     expect(QPoint(outer.right() - band, inner.top() - band), Qt::SizeBDiagCursor, "esquina de arriba a la derecha");
     expect(QPoint(band, outer.bottom() - band), Qt::SizeBDiagCursor, "esquina de abajo a la izquierda");
     expect(inner.center(), Qt::ArrowCursor, "adentro de la region");
+    // Donde el marco quiere el mouse (en mac, donde la ventana no lo deja pasar): borde y barrita, nunca adentro.
+    check(!frame.hoverAt(inner.center()), QStringLiteral("adentro de la region el mouse pasa a la app de abajo"));
+    check(!frame.hoverAt(QPoint(inner.left() + 2, inner.top() + 2)), QStringLiteral("en la esquina de adentro de la region, tambien"));
+    check(frame.hoverAt(QPoint(band, inner.center().y())), QStringLiteral("en el borde, el marco toma el mouse"));
+    check(frame.hoverAt(onBar), QStringLiteral("en la barrita, el marco toma el mouse"));
+    check(!frame.hoverAt(QPoint(outer.right() - 2, 6)), QStringLiteral("en el aire al costado de la barrita, pasa"));
+    check(!frame.hoverAt(QPoint(-1, -1)), QStringLiteral("afuera del marco, pasa"));
     expect(QPoint(band, inner.center().y()), Qt::SizeHorCursor, "borde izquierdo otra vez");
     expect(QPoint(-1, -1), Qt::ArrowCursor, "afuera del marco");
     // Con la app inactiva (offscreen: nunca activa) el boton bajo el mouse recibe la entrada y la salida.
@@ -2407,7 +2414,7 @@ int runMeetFrameDragProbe()
     expectRegion(want, "un click adentro de la region no mueve el marco");
     // Durante el arrastre de la barrita, la mano cerrada; al soltar, vuelve el cursor de donde quedo el mouse.
     drag(onBar, QPoint(0, 0));
-    check(frame.cursor().shape() == Qt::SizeAllCursor, QStringLiteral("al soltar en la barrita, el cursor de mover (no la mano cerrada)"));
+    check(frame.cursorShape() == Qt::SizeAllCursor, QStringLiteral("al soltar en la barrita, el cursor de mover (no la mano cerrada)"));
 
     fprintf(stdout, "meetframe-drag: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
             failures ? "meetframe-drag FALLO" : "meetframe-drag ok");

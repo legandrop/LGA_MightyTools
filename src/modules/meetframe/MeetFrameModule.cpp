@@ -1,6 +1,7 @@
 #include "modules/meetframe/MeetFrameModule.h"
 
 #include "app/ModuleContext.h"
+#include "core/DebugFlags.h"
 #include "core/I18n.h"
 #include "modules/meetframe/MeetFrameOverlay.h"
 #include "modules/meetframe/MeetFramePanel.h"
@@ -278,9 +279,21 @@ int simulateAction(const QString &action, const QStringList &args)
 
 // ------------------------------------------------------------------ Vida
 
+namespace {
+constexpr int kRegionMs = 100;   // la captura sigue al marco como mucho 10 veces por segundo mientras se arrastra
+constexpr int kWatchMs = 100;    // reloj para medir cuanto se atrasa el hilo principal
+constexpr int kStatsMs = 15000;  // un resumen en el log cada 15 s con el marco a la vista
+} // namespace
+
 MeetFrameModule::MeetFrameModule(ModuleContext &context)
     : Module(context)
 {
+    m_regionTimer.setSingleShot(true);
+    m_regionTimer.setInterval(kRegionMs);
+    connect(&m_regionTimer, &QTimer::timeout, this, &MeetFrameModule::applyRegion);
+    m_watch.setInterval(kWatchMs);
+    m_watch.setTimerType(Qt::PreciseTimer);
+    connect(&m_watch, &QTimer::timeout, this, &MeetFrameModule::watchTick);
 }
 
 MeetFrameModule::~MeetFrameModule()
@@ -465,7 +478,7 @@ void MeetFrameModule::showFrame()
     MeetFrameSystem::prepareFrame(overlay);
     QPointer<MeetFrameOverlay> hover(overlay);
     MeetFrameSystem::trackFrameMouse(overlay, [hover](const QPoint &pos) {
-        if (hover) hover->hoverAt(pos);
+        return hover ? hover->hoverAt(pos) : false;
     });
     MeetFrameSystem::excludeFromCapture(overlay->sizeMenu());
     overlay->setRegion(savedRegion());
@@ -496,6 +509,14 @@ void MeetFrameModule::showFrame()
     syncPauseShortcut();
     syncOverlay();
     qInfo().noquote() << "[meetFrame] Marco abierto, captura" << m_session->engine();
+    m_regionRequests = m_regionApplied = 0;
+    m_watchMaxLateMs = 0;
+    m_watchLate = 0;
+    m_watchClock.start();
+    m_statsClock.start();
+    // El reloj que mide el atraso despierta el hilo principal 10 veces por segundo: solo con el log prendido.
+    if (DebugFlags::isOn(QStringLiteral("log"))) m_watch.start();
+    MeetFrameSystem::syncFrameMouse(overlay);
     changed();
 }
 
@@ -505,6 +526,11 @@ void MeetFrameModule::hideFrame()
         return;
     }
     if (m_overlay) saveRegion();
+    m_regionTimer.stop();
+    if (m_watch.isActive()) {
+        m_watch.stop();
+        logStats("al cerrar");
+    }
     m_session.reset();
     delete m_overlay.data();
     m_shown = false;
@@ -538,8 +564,45 @@ void MeetFrameModule::syncOverlay()
 void MeetFrameModule::onRegionChanged()
 {
     if (!m_overlay || !m_session) return;
+    // Mover o estirar manda un cambio por pixel (y dos, moveEvent y resizeEvent): se juntan.
+    ++m_regionRequests;
+    if (!m_regionTimer.isActive()) m_regionTimer.start();
+}
+
+void MeetFrameModule::applyRegion()
+{
+    if (!m_overlay || !m_session) return;
+    ++m_regionApplied;
     m_session->setRegion(MeetFrameSystem::captureRegion(m_overlay, MeetFrameOverlay::frameMargins()));
     syncOverlay();
+}
+
+void MeetFrameModule::watchTick()
+{
+    const qint64 late = m_watchClock.restart() - kWatchMs;
+    if (late > m_watchMaxLateMs) m_watchMaxLateMs = late;
+    if (late > 50) ++m_watchLate;
+    if (m_statsClock.elapsed() >= kStatsMs) logStats("cada 15 s");
+}
+
+void MeetFrameModule::logStats(const char *when)
+{
+    // Una linea con lo que paso desde la anterior: si el hilo principal se atrasa (lag), cuanto trabajo hizo
+    // la captura y que paso con el mouse sobre el marco.
+    qInfo().noquote() << QStringLiteral("[meetFrame] Resumen (%1, %2 s): hilo principal atrasado max %3 ms, %4 veces mas de 50 ms; "
+                                        "region %5 cambios pedidos, %6 aplicados")
+                             .arg(QLatin1String(when)).arg(m_statsClock.elapsed() / 1000)
+                             .arg(m_watchMaxLateMs).arg(m_watchLate).arg(m_regionRequests).arg(m_regionApplied);
+    if (m_session) {
+        const QString capture = m_session->takeStats();
+        if (!capture.isEmpty()) qInfo().noquote() << "[meetFrame]   captura:" << capture;
+    }
+    const QString mouse = MeetFrameSystem::takeFrameMouseStats();
+    if (!mouse.isEmpty()) qInfo().noquote() << "[meetFrame]  " << mouse;
+    m_regionRequests = m_regionApplied = 0;
+    m_watchMaxLateMs = 0;
+    m_watchLate = 0;
+    m_statsClock.restart();
 }
 
 QRect MeetFrameModule::savedRegion() const
@@ -593,6 +656,7 @@ void MeetFrameModule::resizeRegion(const QSize &pixels)
     m_overlay->setRegion(region);
     onRegionChanged();
     saveRegion();
+    MeetFrameSystem::syncFrameMouse(m_overlay);
 }
 
 // ------------------------------------------------------------------ Ajustes

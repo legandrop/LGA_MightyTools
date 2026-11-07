@@ -7,6 +7,7 @@
 #include "ui/UiWidgets.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QEnterEvent>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -130,6 +131,11 @@ void MeetFrameOverlay::setRegion(const QRect &region)
 
 void MeetFrameOverlay::setState(bool paused, int hiddenWindows, const QSize &pixels, const QString &error)
 {
+    // Se llama en cada cambio de la region: si lo que se ve no cambio, no se rearma la barrita ni sus tooltips.
+    if (m_stateSet && paused == m_paused && hiddenWindows == m_hiddenCount && pixels == m_pixels && error == m_error) return;
+    m_stateSet = true;
+    m_hiddenCount = hiddenWindows;
+    m_pixels = pixels;
     m_paused = paused;
     m_error = error;
     m_dot->setTone(!error.isEmpty() ? QStringLiteral("err") : paused ? QStringLiteral("warn") : QStringLiteral("ok"));
@@ -138,12 +144,14 @@ void MeetFrameOverlay::setState(bool paused, int hiddenWindows, const QSize &pix
     m_hidden->setVisible(hiddenWindows > 0);
     m_pause->setText(paused ? I18n::tr("Resume") : I18n::tr("Pause"));
     updateTips();
-    m_bar->adjustSize();
+    layoutBar();
+    updateMask();
     update();
 }
 
 void MeetFrameOverlay::setShortcuts(const QString &toggle, const QString &pause)
 {
+    if (toggle == m_toggleKeys && pause == m_pauseKeys) return;
     m_toggleKeys = toggle;
     m_pauseKeys = pause;
     updateTips();
@@ -194,14 +202,15 @@ void MeetFrameOverlay::applyCursor(Qt::CursorShape shape)
     if (!m_capture) MeetFrameSystem::setFrameCursor(this, shape);
 }
 
-void MeetFrameOverlay::hoverAt(const QPoint &pos)
+bool MeetFrameOverlay::hoverAt(const QPoint &pos)
 {
-    if (m_dragging) return;
+    if (m_dragging) return true;
     const Qt::CursorShape shape = cursorAt(pos);
     // Solo al cambiar: adentro de la region (que deja pasar el mouse) el cursor de la app de abajo se pisa una
     // sola vez, con la flecha, al pasar del borde al hueco o al salir del marco.
     if (shape != m_cursor) applyCursor(shape);
     if (QGuiApplication::applicationState() != Qt::ApplicationActive) hoverChild(pos);
+    return rect().contains(pos) && (m_bar->geometry().contains(pos) || edgesAt(pos));
 }
 
 void MeetFrameOverlay::hoverChild(const QPoint &pos)
@@ -245,6 +254,9 @@ void MeetFrameOverlay::mousePressEvent(QMouseEvent *event)
         return;
     }
     m_dragging = true;
+    m_dragClock.start();
+    m_dragSteps = 0;
+    m_dragStepMs = m_dragStepMaxMs = 0;
     m_dragEdges = edges;
     m_pressGlobal = event->globalPosition().toPoint();
     m_pressGeometry = geometry();
@@ -268,6 +280,11 @@ void MeetFrameOverlay::mouseReleaseEvent(QMouseEvent *event)
     if (m_dragging && event->button() == Qt::LeftButton) {
         dragTo(event->globalPosition().toPoint());
         m_dragging = false;
+        qInfo().noquote() << QStringLiteral("[meetFrame] %1: %2 pasos en %3 ms, cada paso med %4 ms max %5 ms; region %6x%7")
+                                 .arg(m_dragEdges ? QStringLiteral("Estirar") : QStringLiteral("Mover"))
+                                 .arg(m_dragSteps).arg(m_dragClock.elapsed())
+                                 .arg(m_dragSteps ? m_dragStepMs / m_dragSteps : 0.0, 0, 'f', 2).arg(m_dragStepMaxMs, 0, 'f', 1)
+                                 .arg(region().width()).arg(region().height());
         m_cursor = Qt::BitmapCursor; // fuerza a elegir de nuevo el cursor donde quedo el mouse
         hoverAt(event->position().toPoint());
     }
@@ -276,6 +293,21 @@ void MeetFrameOverlay::mouseReleaseEvent(QMouseEvent *event)
 
 void MeetFrameOverlay::dragTo(const QPoint &global)
 {
+    // Lo que tarda cada paso (mover o estirar la ventana y todo lo que eso dispara), para el log.
+    QElapsedTimer clock;
+    clock.start();
+    struct Count
+    {
+        MeetFrameOverlay *self;
+        QElapsedTimer *clock;
+        ~Count()
+        {
+            const double ms = clock->nsecsElapsed() / 1e6;
+            ++self->m_dragSteps;
+            self->m_dragStepMs += ms;
+            self->m_dragStepMaxMs = std::max(self->m_dragStepMaxMs, ms);
+        }
+    } count{this, &clock};
     const QPoint delta = global - m_pressGlobal;
     QRect next = m_pressGeometry;
     if (!m_dragEdges) {
@@ -311,11 +343,15 @@ void MeetFrameOverlay::moveEvent(QMoveEvent *event)
 void MeetFrameOverlay::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    m_bar->adjustSize();
-    m_bar->setGeometry(kBand - kLine, 0, m_bar->sizeHint().width(), kBarH - 4);
+    layoutBar();
     updateMask();
     emit regionChanged();
     m_settle.start();
+}
+
+void MeetFrameOverlay::layoutBar()
+{
+    m_bar->setGeometry(kBand - kLine, 0, m_bar->sizeHint().width(), kBarH - 4);
 }
 
 void MeetFrameOverlay::updateMask()

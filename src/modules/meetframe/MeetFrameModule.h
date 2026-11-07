@@ -5,7 +5,9 @@
 #include "platform/MeetFrameSystem.h"
 #include "ui/HelpSection.h"
 
+#include <QElapsedTimer>
 #include <QPointer>
+#include <QTimer>
 
 #include <memory>
 
@@ -90,6 +92,9 @@ private:
     void applyOptions();
     void syncOverlay();
     void onRegionChanged();
+    void applyRegion();
+    void watchTick();
+    void logStats(const char *when);
     void saveRegion();
     QRect savedRegion() const;
     void resizeRegion(const QSize &pixels);
@@ -104,6 +109,18 @@ private:
     QString m_shortcutError;
     QPointer<MeetFrameOverlay> m_overlay;
     std::unique_ptr<MeetFrameSystem::Session> m_session;
+    // Mientras se mueve o se estira el marco, la captura y la ventana compartida se actualizan como mucho cada
+    // kRegionMs (antes: en cada pixel, dos veces). Corre solo con el marco a la vista.
+    QTimer m_regionTimer;
+    int m_regionRequests = 0;
+    int m_regionApplied = 0;
+    // Para el log, con el marco a la vista: cuanto se atrasa el hilo principal (un reloj cada 100 ms) y un
+    // resumen cada kStatsMs.
+    QTimer m_watch;
+    QElapsedTimer m_watchClock;
+    QElapsedTimer m_statsClock;
+    qint64 m_watchMaxLateMs = 0;
+    int m_watchLate = 0;
     QString m_captureState;
     int m_captureHidden = 0;
 };

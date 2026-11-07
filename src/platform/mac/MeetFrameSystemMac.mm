@@ -5,6 +5,7 @@
 #include <QCloseEvent>
 #include <QDebug>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
@@ -45,34 +46,16 @@
 // El marco (prepareFrame) no activa la app al hacerle click, como WS_EX_NOACTIVATE en Windows. Con la app
 // inactiva Qt descarta el movimiento del mouse y no pone cursores, y en mac no implementa startSystemResize: el
 // marco se estira y se mueve a mano (MeetFrameOverlay) y el cursor lo pone trackFrameMouse/setFrameCursor.
+// trackFrameMouse mira el mouse con monitores de eventos (los del resto de las apps y los propios) y, adentro de
+// la region, pone ignoresMouseEvents: la ventana del marco cubre toda la region y asi ningun click ni arrastre
+// queda en ella, pasa entero a la app de abajo. En el borde y la barrita lo vuelve a sacar.
+//
+// Para el log (takeStats, takeFrameMouseStats): cuadros que llegan, se descartan y se dibujan, cuanto tarda
+// cada cosa en el hilo principal, y cuantas veces se reconfigura la captura.
 
 @interface LGAMeetFrameSink : NSObject <SCStreamOutput, SCStreamDelegate>
 @property(nonatomic, copy) void (^onFrame)(CVPixelBufferRef buffer);
 @property(nonatomic, copy) void (^onStop)(NSError *error);
-@end
-
-// Avisa el movimiento del mouse sobre el marco aunque la app no este activa (el area de Qt lo descarta).
-@interface LGAMeetFrameMouse : NSObject
-@property(nonatomic, weak) NSView *view;
-@property(nonatomic, copy) void (^onMove)(NSPoint point);
-@end
-
-@implementation LGAMeetFrameMouse
-- (void)report:(NSEvent *)event inside:(BOOL)inside
-{
-    NSView *view = self.view;
-    if (!view || !self.onMove) return;
-    if (!inside) {
-        self.onMove(NSMakePoint(-1, -1));
-        return;
-    }
-    NSPoint point = [view convertPoint:event.locationInWindow fromView:nil];
-    if (!view.isFlipped) point.y = view.bounds.size.height - point.y;
-    self.onMove(point);
-}
-- (void)mouseMoved:(NSEvent *)event { [self report:event inside:YES]; }
-- (void)mouseEntered:(NSEvent *)event { [self report:event inside:YES]; }
-- (void)mouseExited:(NSEvent *)event { [self report:event inside:NO]; }
 @end
 
 @implementation LGAMeetFrameSink
@@ -117,20 +100,44 @@ public:
     void setFrame(const QImage &image)
     {
         m_image = image;
+        // El cuadro viene en pixeles reales: si coincide con la ventana en la densidad de su pantalla, se dibuja
+        // 1:1 sin escalar (lo comun). Si no (otra pantalla, o mientras se estira), se escala suavizado.
+        const qreal dpr = devicePixelRatioF();
+        m_exact = m_image.size() == QSize(qRound(width() * dpr), qRound(height() * dpr));
+        if (m_exact) m_image.setDevicePixelRatio(dpr);
         update();
     }
     void setFill(const QColor &fill) { m_fill = fill; }
     std::function<void()> onClose;
+    // Para el log: dibujos, ms en total y el mas lento desde la llamada anterior.
+    void takePaintStats(int *count, double *totalMs, double *maxMs)
+    {
+        *count = m_paints;
+        *totalMs = m_paintMs;
+        *maxMs = m_paintMaxMs;
+        m_paints = 0;
+        m_paintMs = m_paintMaxMs = 0;
+    }
 
 protected:
     void paintEvent(QPaintEvent *) override
     {
+        QElapsedTimer clock;
+        clock.start();
         QPainter painter(this);
-        painter.fillRect(rect(), m_fill);
-        if (!m_image.isNull()) {
+        const bool exact = m_exact && !m_image.isNull();
+        if (!exact) painter.fillRect(rect(), m_fill);
+        if (exact) {
+            painter.drawImage(QPointF(0, 0), m_image);
+        } else if (!m_image.isNull()) {
+            // Mientras se estira, el cuadro todavia es del tamaño anterior.
             painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
             painter.drawImage(QRectF(rect()), m_image);
         }
+        const double ms = clock.nsecsElapsed() / 1e6;
+        ++m_paints;
+        m_paintMs += ms;
+        m_paintMaxMs = std::max(m_paintMaxMs, ms);
     }
     void closeEvent(QCloseEvent *event) override
     {
@@ -140,7 +147,20 @@ protected:
 
 private:
     QImage m_image;
+    bool m_exact = false;
     QColor m_fill = Qt::black;
+    int m_paints = 0;
+    double m_paintMs = 0;
+    double m_paintMaxMs = 0;
+};
+
+// Contadores que tocan los hilos de ScreenCaptureKit (atomicos) y el principal.
+struct SinkStats
+{
+    std::atomic<int> arrived{0};
+    std::atomic<int> dropped{0};
+    std::atomic<long long> copyUs{0};
+    std::atomic<long long> copyMaxUs{0};
 };
 
 QString lower(NSString *text)
@@ -210,9 +230,10 @@ public:
         m_region = region;
         if (resized) placeShared();
         const CGRect next = CGRectMake(region.x(), region.y(), region.width(), region.height());
+        ++m_regionCalls;
         if (m_stream && CGRectContainsRect(m_displayFrame, next)) {
             // Mismo monitor: solo cambia el recorte. El filtro (que apps salen) sigue con su refresco propio.
-            [m_stream updateConfiguration:configuration() completionHandler:nil];
+            reconfigure();
             return;
         }
         m_filterKey.clear(); // otro monitor: se rearma con el proximo contenido
@@ -228,13 +249,35 @@ public:
         if (m_shared) static_cast<SharedWindow *>(m_shared.data())->setFill(options.fill);
         m_filterKey.clear();
         if (restart && m_stream) {
-            [m_stream updateConfiguration:configuration() completionHandler:nil];
+            reconfigure();
         }
         refreshContent();
     }
 
     void setIgnoredWindows(const QList<QWidget *> &) override {} // las ventanas propias ya estan fuera del filtro
     int hiddenWindows() const override { return m_hidden; }
+
+    QString takeStats() override
+    {
+        int paints = 0;
+        double paintMs = 0, paintMaxMs = 0;
+        if (m_shared) static_cast<SharedWindow *>(m_shared.data())->takePaintStats(&paints, &paintMs, &paintMaxMs);
+        const int arrived = m_sinkStats->arrived.exchange(0);
+        const int dropped = m_sinkStats->dropped.exchange(0);
+        const long long copyUs = m_sinkStats->copyUs.exchange(0);
+        const long long copyMaxUs = m_sinkStats->copyMaxUs.exchange(0);
+        const int copied = std::max(1, arrived - dropped);
+        const QString text = QStringLiteral("cuadros %1 llegaron, %2 descartados (el hilo principal seguia con el anterior), %3 mostrados; "
+                                            "copiar med %4 ms max %5 ms (hilo de captura); dibujar %6 veces, med %7 ms max %8 ms; "
+                                            "region %9 cambios, %10 reconfiguraciones (respuesta max %11 ms), %12 filtros nuevos, %13 arranques")
+                                 .arg(arrived).arg(dropped).arg(m_shown)
+                                 .arg(copyUs / 1000.0 / copied, 0, 'f', 2).arg(copyMaxUs / 1000.0, 0, 'f', 1)
+                                 .arg(paints).arg(paints ? paintMs / paints : 0.0, 0, 'f', 2).arg(paintMaxMs, 0, 'f', 1)
+                                 .arg(m_regionCalls).arg(m_reconfigs).arg(m_reconfigMaxMs, 0, 'f', 0).arg(m_filterUpdates).arg(m_starts);
+        m_shown = m_regionCalls = m_reconfigs = m_filterUpdates = m_starts = 0;
+        m_reconfigMaxMs = 0;
+        return text;
+    }
     QString error() const override { return m_error; }
     QString engine() const override { return QStringLiteral("screencapturekit"); }
 
@@ -291,6 +334,27 @@ private:
         if (m_background) m_oldBackgrounds.append(m_background);
         const QColor fill = m_options.fill.isValid() ? m_options.fill : QColor(Qt::black);
         m_background = CGColorCreateGenericRGB(fill.redF(), fill.greenF(), fill.blueF(), 1.0);
+    }
+
+    // Cambia el recorte o el tamaño de la captura y mide cuanto tarda ScreenCaptureKit en aceptarlo.
+    void reconfigure()
+    {
+        if (!m_stream) return;
+        ++m_reconfigs;
+        auto alive = m_alive;
+        SessionMac *raw = this;
+        QElapsedTimer clock;
+        clock.start();
+        [m_stream updateConfiguration:configuration()
+                    completionHandler:^(NSError *error) {
+                        const double ms = clock.nsecsElapsed() / 1e6;
+                        NSString *message = error ? error.localizedDescription : nil;
+                        dispatch_async(dispatch_get_main_queue(), ^{
+                            if (!*alive) return;
+                            raw->m_reconfigMaxMs = std::max(raw->m_reconfigMaxMs, ms);
+                            if (message) qWarning().noquote() << "[meetFrame] updateConfiguration fallo:" << QString::fromNSString(message);
+                        });
+                    }];
     }
 
     void stopStream()
@@ -415,7 +479,8 @@ private:
         m_filterKey = filterKey;
         if (sameDisplay) {
             [m_stream updateContentFilter:filter completionHandler:nil];
-            [m_stream updateConfiguration:configuration() completionHandler:nil];
+            ++m_filterUpdates;
+            reconfigure();
             return;
         }
         stopStream();
@@ -430,10 +495,18 @@ private:
         // principal, que es donde se destruye la sesion.
         auto alive = m_alive;
         auto pending = m_pending;
+        auto stats = m_sinkStats;
         SessionMac *raw = this;
         sink.onFrame = ^(CVPixelBufferRef buffer) {
+            if (!*alive) return;
+            ++stats->arrived;
             // Un cuadro por vez: si el hilo principal todavia no dibujo el anterior, este se descarta.
-            if (!*alive || pending->exchange(true)) return;
+            if (pending->exchange(true)) {
+                ++stats->dropped;
+                return;
+            }
+            QElapsedTimer copyClock;
+            copyClock.start();
             CVPixelBufferLockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
             const int width = int(CVPixelBufferGetWidth(buffer));
             const int height = int(CVPixelBufferGetHeight(buffer));
@@ -443,6 +516,11 @@ private:
                 image = QImage(static_cast<const uchar *>(base), width, height, stride, QImage::Format_RGB32).copy();
             }
             CVPixelBufferUnlockBaseAddress(buffer, kCVPixelBufferLock_ReadOnly);
+            const long long us = copyClock.nsecsElapsed() / 1000;
+            stats->copyUs += us;
+            long long seen = stats->copyMaxUs.load();
+            while (us > seen && !stats->copyMaxUs.compare_exchange_weak(seen, us)) {
+            }
             if (image.isNull()) {
                 *pending = false;
                 return;
@@ -471,6 +549,7 @@ private:
         }
         m_stream = stream;
         m_sink = sink;
+        ++m_starts;
         [stream startCaptureWithCompletionHandler:^(NSError *error) {
             if (!error) return;
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -488,6 +567,7 @@ private:
     {
         if (m_options.paused) return; // se queda la ultima imagen
         if (!m_error.isEmpty()) setError(QString());
+        ++m_shown;
         if (m_shared) static_cast<SharedWindow *>(m_shared.data())->setFrame(image);
     }
 
@@ -509,6 +589,13 @@ private:
     CGColorRef m_background = nullptr;
     QList<CGColorRef> m_oldBackgrounds;
     std::shared_ptr<std::atomic<bool>> m_pending = std::make_shared<std::atomic<bool>>(false);
+    std::shared_ptr<SinkStats> m_sinkStats = std::make_shared<SinkStats>();
+    int m_shown = 0;
+    int m_regionCalls = 0;
+    int m_reconfigs = 0;
+    double m_reconfigMaxMs = 0;
+    int m_filterUpdates = 0;
+    int m_starts = 0;
 };
 
 NSWindow *nativeWindow(QWidget *widget)
@@ -604,27 +691,105 @@ void prepareFrame(QWidget *frame)
     ns.collectionBehavior |= NSWindowCollectionBehaviorCanJoinAllSpaces;
 }
 
-void trackFrameMouse(QWidget *frame, std::function<void(const QPoint &pos)> onMove)
+namespace {
+
+// Lo que paso con el mouse sobre el marco, para el log.
+struct FrameMouseStats
 {
-    NSView *view = frame ? (__bridge NSView *)reinterpret_cast<void *>(frame->winId()) : nil;
-    if (!view || !onMove) return;
-    LGAMeetFrameMouse *mouse = [[LGAMeetFrameMouse alloc] init];
-    mouse.view = view;
-    mouse.onMove = ^(NSPoint point) { onMove(QPoint(int(std::floor(point.x)), int(std::floor(point.y)))); };
-    NSTrackingArea *area = [[NSTrackingArea alloc] initWithRect:NSZeroRect
-                                                        options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways
-                                                                | NSTrackingInVisibleRect
-                                                          owner:mouse
-                                                       userInfo:nil];
-    [view addTrackingArea:area];
-    // El area no retiene a su dueño: vive pegado a la vista y se va con ella.
-    static char key;
-    objc_setAssociatedObject(view, &key, mouse, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    int passThrough = 0;   // veces que la ventana paso a dejar pasar el mouse (entro a la region)
+    int takeBack = 0;      // veces que lo volvio a tomar (borde o barrita)
+    int clicksFrame = 0;   // clicks que recibio el marco en el borde o la barrita
+    int clicksInside = 0;  // clicks adentro de la region que igual recibio el marco (no deberia pasar)
+    double handlerMaxMs = 0;
+};
+FrameMouseStats g_mouseStats;
+// La decision del marco abierto (hay uno solo a la vez); nil sin marco. Con evento nil decide con el mouse donde esta.
+void (^g_frameUpdate)(NSEvent *) = nil;
+
+} // namespace
+
+void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMove)
+{
+    NSView *strongView = frame ? (__bridge NSView *)reinterpret_cast<void *>(frame->winId()) : nil;
+    if (!strongView || !onMove) return;
+    __weak NSView *weakView = strongView;
+    // Donde esta el mouse ahora, en coordenadas del marco; (-1, -1) fuera de el.
+    QPoint (^locate)(void) = ^QPoint {
+        NSView *view = weakView;
+        if (!view || !view.window) return QPoint(-1, -1);
+        NSPoint point = [view convertPoint:[view.window convertPointFromScreen:[NSEvent mouseLocation]] fromView:nil];
+        if (!view.isFlipped) point.y = view.bounds.size.height - point.y;
+        if (!NSPointInRect(point, view.bounds)) return QPoint(-1, -1);
+        return QPoint(int(std::floor(point.x)), int(std::floor(point.y)));
+    };
+    // Elige el cursor y decide si la ventana toma el mouse. Nunca cambia con un boton apretado: un arrastre
+    // (propio o de la app de abajo) termina donde empezo.
+    void (^update)(NSEvent *) = ^(NSEvent *event) {
+        NSView *view = weakView;
+        if (!view || !view.window) return;
+        if (event && event.type == NSEventTypeLeftMouseUp && event.window == view.window) {
+            // Al soltar un arrastre del propio marco, este monitor corre antes que mouseReleaseEvent (el marco
+            // todavia se cree arrastrando): se decide despues, con el arrastre ya terminado.
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (g_frameUpdate) g_frameUpdate(nil);
+            });
+            return;
+        }
+        if ((!event || event.type != NSEventTypeLeftMouseUp) && NSEvent.pressedMouseButtons != 0) return;
+        QElapsedTimer clock;
+        clock.start();
+        const bool wants = onMove(locate());
+        NSWindow *window = view.window;
+        if (window.ignoresMouseEvents == wants) {
+            window.ignoresMouseEvents = !wants;
+            ++(wants ? g_mouseStats.takeBack : g_mouseStats.passThrough);
+        }
+        g_mouseStats.handlerMaxMs = std::max(g_mouseStats.handlerMaxMs, clock.nsecsElapsed() / 1e6);
+    };
+    const NSEventMask moves = NSEventMaskMouseMoved | NSEventMaskLeftMouseUp | NSEventMaskRightMouseUp;
+    id global = [NSEvent addGlobalMonitorForEventsMatchingMask:moves handler:update];
+    id local = [NSEvent addLocalMonitorForEventsMatchingMask:moves | NSEventMaskLeftMouseDown
+                                                     handler:^NSEvent *(NSEvent *event) {
+                                                         NSView *view = weakView;
+                                                         if (event.type == NSEventTypeLeftMouseDown) {
+                                                             if (view && event.window == view.window) {
+                                                                 const QPoint pos = locate();
+                                                                 if (onMove(pos)) {
+                                                                     ++g_mouseStats.clicksFrame;
+                                                                 } else if (++g_mouseStats.clicksInside <= 5) {
+                                                                     qWarning().noquote() << "[meetFrame] Un click adentro de la region lo recibio el marco en"
+                                                                                          << pos.x() << pos.y() << "(tendria que pasar a la app de abajo)";
+                                                                 }
+                                                             }
+                                                             return event;
+                                                         }
+                                                         update(event);
+                                                         return event;
+                                                     }];
     setsCursorInBackground(true);
-    QObject::connect(frame, &QObject::destroyed, []() {
+    g_mouseStats = FrameMouseStats();
+    g_frameUpdate = update;
+    QObject::connect(frame, &QObject::destroyed, [global, local]() {
+        g_frameUpdate = nil;
+        [NSEvent removeMonitor:global];
+        [NSEvent removeMonitor:local];
         [[NSCursor arrowCursor] set]; // antes de apagar la propiedad: si no, con la app inactiva se ignora
         setsCursorInBackground(false);
     });
+}
+
+void syncFrameMouse(QWidget *)
+{
+    if (g_frameUpdate) g_frameUpdate(nil);
+}
+
+QString takeFrameMouseStats()
+{
+    const FrameMouseStats s = g_mouseStats;
+    g_mouseStats = FrameMouseStats();
+    return QStringLiteral("mouse: dejo pasar %1 veces, lo tomo %2, clicks en borde o barrita %3, clicks adentro tomados %4, "
+                          "atender un movimiento max %5 ms")
+        .arg(s.passThrough).arg(s.takeBack).arg(s.clicksFrame).arg(s.clicksInside).arg(s.handlerMaxMs, 0, 'f', 2);
 }
 
 void setFrameCursor(QWidget *, Qt::CursorShape shape)

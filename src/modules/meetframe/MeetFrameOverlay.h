@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_MEETFRAMEOVERLAY_H
 #define MIGHTYTOOLS_MEETFRAMEOVERLAY_H
 
+#include <QElapsedTimer>
 #include <QMargins>
 #include <QPointer>
 #include <QTimer>
@@ -32,9 +33,11 @@ public:
 
     void setState(bool paused, int hiddenWindows, const QSize &pixels, const QString &error);
     void setShortcuts(const QString &toggle, const QString &pause);
-    // El mouse sin botones en `pos` (coordenadas del marco; fuera, cualquier punto afuera): elige el cursor.
+    // El mouse sin botones en `pos` (coordenadas del marco; fuera, cualquier punto afuera): elige el cursor y
+    // contesta si el marco quiere el mouse ahi (borde o barrita); adentro de la region, no.
     // Lo llama mouseMoveEvent y, en mac, MeetFrameSystem::trackFrameMouse (con la app inactiva Qt no avisa).
-    void hoverAt(const QPoint &pos);
+    bool hoverAt(const QPoint &pos);
+    Qt::CursorShape cursorShape() const { return m_cursor; }
     QMenu *sizeMenu() const { return m_sizeMenu; }
 
 signals:
@@ -63,6 +66,7 @@ private:
     void hoverChild(const QPoint &pos);
     void dragTo(const QPoint &global);
     void updateMask();
+    void layoutBar();
     void updateTips();
 
     bool m_capture = false;
@@ -86,6 +90,15 @@ private:
     QPoint m_pressGlobal;
     QRect m_pressGeometry;
     Qt::CursorShape m_cursor = Qt::ArrowCursor;
+    // Para el log de cada arrastre.
+    QElapsedTimer m_dragClock;
+    int m_dragSteps = 0;
+    double m_dragStepMs = 0;
+    double m_dragStepMaxMs = 0;
+    // Lo que muestra la barrita: si no cambia, no se rearma.
+    bool m_stateSet = false;
+    int m_hiddenCount = 0;
+    QSize m_pixels;
     QPointer<QWidget> m_hoverChild; // el control de la barrita bajo el mouse con la app inactiva
 };
 

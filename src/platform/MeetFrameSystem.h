@@ -54,6 +54,9 @@ public:
     virtual QString error() const = 0;
     // Para el log: "dxgi", "gdi", "screencapturekit".
     virtual QString engine() const = 0;
+    // Para el log: lo que hizo la captura desde la llamada anterior (cuadros, tiempos, reconfiguraciones), y
+    // reinicia la cuenta. Vacio si la plataforma no lo mide.
+    virtual QString takeStats() { return QString(); }
 
 signals:
     // Cambio hiddenWindows() o error().
@@ -77,8 +80,15 @@ void prepareFrame(QWidget *frame);
 
 // El mouse sobre el marco sin botones apretados. En mac el marco no activa la app y Qt descarta el movimiento
 // y los cursores de una app inactiva: esto avisa la posicion (coordenadas del marco; fuera del marco, (-1, -1))
-// para que el marco elija el cursor. Windows: no hace nada (llega mouseMoveEvent).
-void trackFrameMouse(QWidget *frame, std::function<void(const QPoint &pos)> onMove);
+// para que el marco elija el cursor, y el marco contesta si quiere el mouse ahi (borde o barrita). Donde no lo
+// quiere (adentro de la region), la ventana deja pasar todo a la app de abajo. Windows: no hace nada (llega
+// mouseMoveEvent y lo transparente ya deja pasar los clicks).
+void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMove);
+// Decide de nuevo con el mouse quieto (al abrir el marco o al moverlo por codigo): si no, recien con el primer
+// movimiento, y el primer click adentro podria quedar en el marco.
+void syncFrameMouse(QWidget *frame);
+// Para el log: lo que paso con el mouse sobre el marco desde la llamada anterior, y reinicia la cuenta.
+QString takeFrameMouseStats();
 // Pone el cursor aunque la app no este activa (mac). Windows: no hace nada (alcanza con QWidget::setCursor).
 void setFrameCursor(QWidget *frame, Qt::CursorShape shape);
 // Un menu o popup del marco: no sale en ninguna captura.
