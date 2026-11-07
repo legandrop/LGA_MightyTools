@@ -48,6 +48,8 @@ public:
     // "general" o el id de una herramienta.
     void selectPage(const QString &id);
     QString currentPage() const { return m_current; }
+    // La pagina siguiente (+1) o la anterior (-1) en el orden del indice; despues de la ultima vuelve a General.
+    void stepPage(int direction);
 
     // Abre o cierra la franja «How it works» de la pagina que se ve (el «?» de la barra hace lo mismo).
     void setHelpOpen(bool open);
@@ -71,6 +73,7 @@ signals:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;
     void changeEvent(QEvent *event) override;

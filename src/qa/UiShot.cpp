@@ -2476,6 +2476,122 @@ int runMeetFrameDragProbe()
     return failures ? 1 : 0;
 }
 
+// --ui-probe window-keys: Escape cierra la ventana (a la bandeja o a la barra de menu) y Ctrl+Alt+← → (⌘⌥ en mac)
+// pasan de una pagina a la otra. Las teclas entran por la ruta del sistema (QWindowSystemInterface), con el mapa de
+// atajos de Qt, como las del teclado real.
+int runWindowKeysProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&](bool ok, const QString &what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "  %s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+    };
+    MemorySettingsStore store;
+    MemorySettingsStore appStore;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    MainWindow window(&host, MainWindow::Mode::Normal, &appStore);
+    window.setAttribute(Qt::WA_DontShowOnScreen, true);
+    const auto open = [&window]() {
+        window.show();
+        settle(window);
+        window.activateWindow();
+        if (window.windowHandle()) {
+            QWindowSystemInterface::handleWindowActivated(window.windowHandle(), Qt::ActiveWindowFocusReason);
+            QWindowSystemInterface::flushWindowSystemEvents();
+        }
+        QCoreApplication::processEvents();
+    };
+    open();
+    QWindow *native = window.windowHandle();
+    const QList<ModuleDescriptor> tools = host.descriptors();
+    if (!native || tools.size() < 2) {
+        fprintf(stderr, "window-keys: no hay ventana o faltan herramientas\n");
+        return 1;
+    }
+    check(QApplication::activeWindow() == &window, QStringLiteral("la ventana queda activa"));
+    // Una tecla como la manda el sistema: en mac el plugin de Cocoa prueba los atajos antes de mandar la tecla
+    // (QGuiApplication no lo hace ahi); en Windows lo hace processKeyEvent. Se hace igual en los dos.
+    const auto key = [native](int k, Qt::KeyboardModifiers mods) {
+        if (!QWindowSystemInterface::handleShortcutEvent(native, 0, k, mods, 0, 0, 0)) {
+            QWindowSystemInterface::handleKeyEvent<QWindowSystemInterface::SynchronousDelivery>(native, QEvent::KeyPress,
+                                                                                              k, mods);
+        }
+        QWindowSystemInterface::handleKeyEvent<QWindowSystemInterface::SynchronousDelivery>(native, QEvent::KeyRelease,
+                                                                                          k, mods);
+        QCoreApplication::processEvents();
+    };
+    const Qt::KeyboardModifiers ctrlAlt = Qt::ControlModifier | Qt::AltModifier;
+
+    check(window.currentPage() == MainWindow::kGeneral, QStringLiteral("arranca en General"));
+    key(Qt::Key_Right, ctrlAlt);
+    check(window.currentPage() == tools.first().id,
+          QStringLiteral("Ctrl+Alt+Right: General -> %1 (%2)").arg(tools.first().id, window.currentPage()));
+    key(Qt::Key_Right, ctrlAlt);
+    check(window.currentPage() == tools.at(1).id,
+          QStringLiteral("Ctrl+Alt+Right: -> %1 (%2)").arg(tools.at(1).id, window.currentPage()));
+    key(Qt::Key_Left, ctrlAlt);
+    key(Qt::Key_Left, ctrlAlt);
+    check(window.currentPage() == MainWindow::kGeneral,
+          QStringLiteral("Ctrl+Alt+Left dos veces vuelve a General (%1)").arg(window.currentPage()));
+    key(Qt::Key_Left, ctrlAlt);
+    check(window.currentPage() == tools.last().id,
+          QStringLiteral("Ctrl+Alt+Left desde General da la vuelta a la ultima (%1)").arg(window.currentPage()));
+    key(Qt::Key_Right, ctrlAlt);
+    check(window.currentPage() == MainWindow::kGeneral,
+          QStringLiteral("Ctrl+Alt+Right desde la ultima vuelve a General (%1)").arg(window.currentPage()));
+    key(Qt::Key_Right, Qt::AltModifier);
+    key(Qt::Key_Right, Qt::ControlModifier);
+    key(Qt::Key_Right, Qt::NoModifier);
+    check(window.currentPage() == MainWindow::kGeneral, QStringLiteral("Alt, Ctrl o la flecha sola no cambian de pagina"));
+
+    // Un atajo grabandose (grabKeyboard): la combinacion es suya, no cambia de pagina, y Escape lo cancela sin cerrar.
+    auto *row = new ShortcutRow(QStringLiteral("Probe"), QStringLiteral("Probe description."), window.centralWidget());
+    row->show();
+    Shortcut recorded;
+    QObject::connect(row, &ShortcutRow::shortcutRecorded, [&recorded](const Shortcut &s) { recorded = s; });
+    row->startRecording();
+    key(Qt::Key_Right, ctrlAlt);
+    check(window.currentPage() == MainWindow::kGeneral && !row->isRecording()
+              && recorded == Shortcut{ctrlAlt, Qt::Key_Right},
+          QStringLiteral("grabando, Ctrl+Alt+Right queda como atajo y no cambia de pagina (%1, %2)")
+              .arg(window.currentPage(), recorded.toPortableString()));
+    row->startRecording();
+    key(Qt::Key_Escape, Qt::NoModifier);
+    check(!row->isRecording() && window.isVisible(), QStringLiteral("grabando, Escape cancela la grabacion y no cierra"));
+    delete row;
+
+    // Un campo con foco: el primer Escape lo suelta, el segundo cierra.
+    auto *field = new QLineEdit(window.centralWidget());
+    field->show();
+    field->setFocus(Qt::OtherFocusReason);
+    QCoreApplication::processEvents();
+    check(QApplication::focusWidget() == field, QStringLiteral("el campo de prueba tiene el foco"));
+    key(Qt::Key_Escape, Qt::NoModifier);
+    check(window.isVisible() && !field->hasFocus(), QStringLiteral("Escape en un campo solo le saca el foco"));
+    key(Qt::Key_Escape, Qt::NoModifier);
+    check(!window.isVisible(), QStringLiteral("el segundo Escape cierra la ventana"));
+    delete field;
+
+    open();
+    check(window.isVisible(), QStringLiteral("la ventana vuelve a abrirse"));
+    key(Qt::Key_Escape, Qt::ShiftModifier);
+    check(window.isVisible(), QStringLiteral("Shift+Escape no cierra"));
+    QWindowSystemInterface::handleKeyEvent<QWindowSystemInterface::SynchronousDelivery>(
+        native, QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier, QString(), true);
+    QCoreApplication::processEvents();
+    check(window.isVisible(), QStringLiteral("la repeticion de un Escape mantenido no cierra"));
+    key(Qt::Key_Escape, Qt::NoModifier);
+    check(!window.isVisible(), QStringLiteral("Escape sin foco en un campo cierra la ventana"));
+
+    fprintf(stdout, "window-keys: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "window-keys FALLO" : "window-keys ok");
+    return failures ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2528,6 +2644,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("titlebar-drag")) {
         return runTitleBarDragProbe();
+    }
+    if (probe == QLatin1String("window-keys")) {
+        return runWindowKeysProbe();
     }
     if (probe == QLatin1String("meetframe-drag")) {
         return runMeetFrameDragProbe();
