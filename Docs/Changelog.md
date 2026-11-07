@@ -10,6 +10,10 @@ Dictation en macOS (D-75, rama `dictado-mac`): el dictado existía solo en Windo
 
 [ Dictation - Version para macOS con microfono, escritura sin portapapeles y motor Metal ]
 
+Meet Frame en mac (Lega, 07/11): la pausa seguía de fábrica en `⌘⌥P` mientras el marco ya había pasado a `⌘⌥⇧M`. Para que hagan juego, la pausa pasa a `⌘⌥⇧P` (`Ctrl+Alt+Shift+P` en Qt/mac). Windows sigue con `Ctrl+Alt+P`. El self-test comprueba los dos atajos de fábrica en cada plataforma; D-74 al día.
+
+[ Meet Frame - En mac la pausa de fabrica pasa a Cmd+Option+Shift+P ]
+
 Meet Frame en mac (Lega, 07/11): el atajo de fábrica para mostrar u ocultar el marco era `⌘⌥M` (en Qt/mac Ctrl es ⌘), que en macOS es «minimizar todas las ventanas» y lo usan otras apps; Lega lo había cambiado a mano por `⌘⌥⇧M`. Ahora `MeetFrameModule::defaultShortcut` da `Ctrl+Alt+Shift+M` en mac; Windows sigue con `Ctrl+Alt+M` y la pausa (solo con el marco abierto) sigue `Ctrl+Alt+P` / `⌘⌥P`. Quien ya tenía un atajo guardado lo conserva. D-74, README y WhatsNew al día.
 
 [ Meet Frame - En mac el atajo de fabrica pasa a Cmd+Option+Shift+M ]
