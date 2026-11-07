@@ -66,6 +66,10 @@ public:
     void setHideDesktop(bool hide);
     bool showCursor() const;
     void setShowCursor(bool show);
+    // Proporcion de la region al estirar: "16:9" (por defecto, lo que espera una reunion), "4:3" o "free".
+    QString aspect() const;
+    void setAspect(const QString &aspect);
+    static QSize aspectRatio(const QString &aspect);
     int fps() const;
     void setFps(int fps);
     QList<CustomApp> customApps() const;
@@ -93,6 +97,7 @@ private:
     void syncOverlay();
     void onRegionChanged();
     void applyRegion();
+    void fitAspect();
     void watchTick();
     void logStats(const char *when);
     void saveRegion();

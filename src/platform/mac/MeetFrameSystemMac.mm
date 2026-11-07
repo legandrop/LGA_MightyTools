@@ -620,9 +620,9 @@ std::unique_ptr<Session> start(const QString &windowTitle, const QRect &region, 
     return session;
 }
 
-QRect captureRegion(QWidget *frame, const QMargins &margins)
+QRect captureRegion(QWidget *, const QRect &region)
 {
-    return frame ? frame->geometry().marginsRemoved(margins) : QRect();
+    return region; // en mac la captura usa puntos, como Qt
 }
 
 QSize pixelSize(QWidget *frame, const QRect &region)
@@ -705,6 +705,29 @@ struct FrameMouseStats
 FrameMouseStats g_mouseStats;
 // La decision del marco abierto (hay uno solo a la vez); nil sin marco. Con evento nil decide con el mouse donde esta.
 void (^g_frameUpdate)(NSEvent *) = nil;
+// El cursor del marco. Con la app inactiva, la app de adelante (o el sistema, al pasar el mouse de una ventana a
+// otra) vuelve a poner el suyo y el cursor titilaba: mientras el mouse esta en el borde o la barrita, un reloj lo
+// vuelve a poner 30 veces por segundo. Afuera, el reloj no corre.
+NSCursor *g_frameCursor = nil;
+NSTimer *g_cursorTimer = nil;
+
+void keepFrameCursor(bool on)
+{
+    if (!on) {
+        [g_cursorTimer invalidate];
+        g_cursorTimer = nil;
+        return;
+    }
+    if (g_cursorTimer) return;
+    g_cursorTimer = [NSTimer timerWithTimeInterval:1.0 / 30.0
+                                           repeats:YES
+                                             block:^(NSTimer *) {
+                                                 // Vuelve a mirar donde esta el mouse (si salio del borde, se apaga solo).
+                                                 if (g_frameUpdate) g_frameUpdate(nil);
+                                                 if (g_frameCursor) [g_frameCursor set];
+                                             }];
+    [[NSRunLoop mainRunLoop] addTimer:g_cursorTimer forMode:NSRunLoopCommonModes];
+}
 
 } // namespace
 
@@ -739,6 +762,7 @@ void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMo
         QElapsedTimer clock;
         clock.start();
         const bool wants = onMove(locate());
+        keepFrameCursor(wants && g_frameCursor);
         NSWindow *window = view.window;
         if (window.ignoresMouseEvents == wants) {
             window.ignoresMouseEvents = !wants;
@@ -771,6 +795,8 @@ void trackFrameMouse(QWidget *frame, std::function<bool(const QPoint &pos)> onMo
     g_frameUpdate = update;
     QObject::connect(frame, &QObject::destroyed, [global, local]() {
         g_frameUpdate = nil;
+        keepFrameCursor(false);
+        g_frameCursor = nil;
         [NSEvent removeMonitor:global];
         [NSEvent removeMonitor:local];
         [[NSCursor arrowCursor] set]; // antes de apagar la propiedad: si no, con la app inactiva se ignora
@@ -795,6 +821,8 @@ QString takeFrameMouseStats()
 void setFrameCursor(QWidget *, Qt::CursorShape shape)
 {
     if (QGuiApplication::platformName() != QLatin1String("cocoa")) return; // pruebas sin pantalla
+    g_frameCursor = shape == Qt::ArrowCursor ? nil : nsCursor(shape);
+    if (!g_frameCursor) keepFrameCursor(false);
     [nsCursor(shape) set];
 }
 

@@ -482,6 +482,8 @@ void MeetFrameModule::showFrame()
     });
     MeetFrameSystem::excludeFromCapture(overlay->sizeMenu());
     overlay->setRegion(savedRegion());
+    overlay->setAspectRatio(aspectRatio(aspect()));
+    fitAspect(); // antes de la captura: la ventana compartida nace con la forma elegida
     m_overlay = overlay;
     connect(overlay, &MeetFrameOverlay::closeClicked, this, &MeetFrameModule::hideFrame);
     connect(overlay, &MeetFrameOverlay::pauseClicked, this, &MeetFrameModule::togglePause);
@@ -490,7 +492,7 @@ void MeetFrameModule::showFrame()
     connect(overlay, &MeetFrameOverlay::regionSettled, this, &MeetFrameModule::saveRegion);
     overlay->show();
     QString error;
-    m_session = MeetFrameSystem::start(kWindowTitle, MeetFrameSystem::captureRegion(overlay, MeetFrameOverlay::frameMargins()), options(), &error);
+    m_session = MeetFrameSystem::start(kWindowTitle, MeetFrameSystem::captureRegion(overlay, overlay->region()), options(), &error);
     if (!m_session) {
         qWarning().noquote() << "[meetFrame] No se pudo empezar a compartir:" << error;
         delete m_overlay.data();
@@ -556,7 +558,7 @@ void MeetFrameModule::syncOverlay()
     if (!m_overlay) return;
     const QString sessionError = m_session ? m_session->error() : QString();
     QSize pixels;
-    if (m_session) pixels = MeetFrameSystem::pixelSize(m_overlay, MeetFrameSystem::captureRegion(m_overlay, MeetFrameOverlay::frameMargins()));
+    if (m_session) pixels = MeetFrameSystem::pixelSize(m_overlay, MeetFrameSystem::captureRegion(m_overlay, m_overlay->region()));
     m_overlay->setState(m_paused, hiddenWindows(), pixels, sessionError.isEmpty() ? QString() : I18n::tr("Could not capture the screen."));
     m_overlay->setShortcuts(shortcut(ToggleShortcut).displayText(), shortcut(PauseShortcut).displayText());
 }
@@ -573,7 +575,7 @@ void MeetFrameModule::applyRegion()
 {
     if (!m_overlay || !m_session) return;
     ++m_regionApplied;
-    m_session->setRegion(MeetFrameSystem::captureRegion(m_overlay, MeetFrameOverlay::frameMargins()));
+    m_session->setRegion(MeetFrameSystem::captureRegion(m_overlay, m_overlay->region()));
     syncOverlay();
 }
 
@@ -656,6 +658,7 @@ void MeetFrameModule::resizeRegion(const QSize &pixels)
     m_overlay->setRegion(region);
     onRegionChanged();
     saveRegion();
+    if (pixels.isValid()) fitAspect(); // los tamaños del menu son 16:9: con otra forma, se corrige el alto
     MeetFrameSystem::syncFrameMouse(m_overlay);
 }
 
@@ -732,6 +735,53 @@ void MeetFrameModule::setShowCursor(bool show)
     context().setValue(QStringLiteral("showCursor"), show);
     applyOptions();
     changed();
+}
+
+QString MeetFrameModule::aspect() const
+{
+    const QString value = context().value(QStringLiteral("aspect"), QStringLiteral("16:9")).toString();
+    return (value == QLatin1String("4:3") || value == QLatin1String("free")) ? value : QStringLiteral("16:9");
+}
+
+QSize MeetFrameModule::aspectRatio(const QString &aspect)
+{
+    if (aspect == QLatin1String("free")) return QSize();
+    return aspect == QLatin1String("4:3") ? QSize(4, 3) : QSize(16, 9);
+}
+
+void MeetFrameModule::setAspect(const QString &value)
+{
+    context().setValue(QStringLiteral("aspect"), value);
+    if (m_overlay) {
+        m_overlay->setAspectRatio(aspectRatio(aspect()));
+        fitAspect();
+    }
+    changed();
+}
+
+void MeetFrameModule::fitAspect()
+{
+    // Con una proporcion fija, la region la toma ya (no recien al estirar): mismo ancho y mismo centro; si no
+    // entra en la pantalla, se achica.
+    const QSize ratio = aspectRatio(aspect());
+    if (!m_overlay || !ratio.isValid()) return;
+    QRect region = m_overlay->region();
+    QScreen *screen = m_overlay->screen();
+    const QRect area = screen ? screen->availableGeometry().marginsRemoved(MeetFrameOverlay::frameMargins()) : region;
+    QSize size(region.width(), qRound(region.width() * double(ratio.height()) / ratio.width()));
+    if (size.height() > area.height()) size = QSize(qRound(area.height() * double(ratio.width()) / ratio.height()), area.height());
+    if (size.width() > area.width()) size = QSize(area.width(), qRound(area.width() * double(ratio.height()) / ratio.width()));
+    if (qAbs(size.height() - region.height()) <= 1 && size.width() == region.width()) return;
+    const QPoint center = region.center();
+    region.setSize(size);
+    region.moveCenter(center);
+    if (region.bottom() > area.bottom()) region.moveBottom(area.bottom());
+    if (region.top() < area.top()) region.moveTop(area.top());
+    if (region.right() > area.right()) region.moveRight(area.right());
+    if (region.left() < area.left()) region.moveLeft(area.left());
+    m_overlay->setRegion(region);
+    onRegionChanged();
+    saveRegion();
 }
 
 int MeetFrameModule::fps() const

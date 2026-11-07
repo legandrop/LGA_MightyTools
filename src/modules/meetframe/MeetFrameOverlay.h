@@ -8,6 +8,7 @@
 #include <QWidget>
 
 class QLabel;
+class QScreen;
 class QMenu;
 class QPushButton;
 class StatusDot;
@@ -15,7 +16,8 @@ class StatusDot;
 // El marco de Meet Frame: un borde fino alrededor de la region y una barrita arriba (estado, tamaño, Pause,
 // Size y cerrar). Siempre arriba, no toma foco y no sale en ninguna captura (MeetFrameSystem::prepareFrame).
 // Adentro del borde es transparente al mouse: se sigue trabajando en lo que se comparte. Se mueve tomando la
-// barrita y se estira desde el borde (Windows: con el sistema; mac: a mano, Qt no estira ventanas en mac).
+// barrita y se estira desde el borde (Windows: con el sistema; mac: a mano, Qt no estira ventanas en mac), con
+// la proporcion fija si se eligio una.
 class MeetFrameOverlay : public QWidget
 {
     Q_OBJECT
@@ -30,6 +32,11 @@ public:
     // La region en coordenadas logicas globales de Qt (sin los margenes).
     QRect region() const;
     void setRegion(const QRect &region);
+    // El marco (region con sus margenes) en coordenadas de la ventana: en mac la ventana es un lienzo del tamaño
+    // de la pantalla y el marco va adentro; en Windows son lo mismo.
+    QRect frameRect() const;
+    // Al estirar se mantiene esta proporcion de la region (16:9, 4:3...); invalida, libre.
+    void setAspectRatio(const QSize &ratio);
 
     void setState(bool paused, int hiddenWindows, const QSize &pixels, const QString &error);
     void setShortcuts(const QString &toggle, const QString &pause);
@@ -65,11 +72,22 @@ private:
     void applyCursor(Qt::CursorShape shape);
     void hoverChild(const QPoint &pos);
     void dragTo(const QPoint &global);
+    void setFrameGlobal(const QRect &frame);
+    QRegion frameArea() const;
+    QRect keepAspect(const QRect &frame);
+    void watchScreen(QScreen *screen);
+    void replaceCanvas();
     void updateMask();
     void layoutBar();
     void updateTips();
 
     bool m_capture = false;
+    bool m_canvas = false;
+    QRect m_frame;   // con lienzo: el marco en coordenadas de la ventana
+    QSize m_aspect;  // proporcion al estirar; invalida, libre
+    int m_aspectAxis = 0; // en una esquina con forma fija: 0 sin decidir, 1 manda el ancho, 2 el alto
+    bool m_placing = false; // el lienzo se esta acomodando (sus moveEvent/resizeEvent no son del sistema)
+    QPointer<QScreen> m_screen;
     bool m_paused = false;
     QString m_error;
     QWidget *m_bar = nullptr;

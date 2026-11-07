@@ -179,9 +179,23 @@ QWidget *MeetFramePanel::buildPictureCard()
     auto *hint = Ui::caption(I18n::tr("More frames move smoother and use more of the computer."), card);
     hint->setWordWrap(true);
     column->addWidget(hint);
+    auto *shapeRow = new QHBoxLayout();
+    shapeRow->setContentsMargins(0, 8, 0, 0);
+    shapeRow->setSpacing(8);
+    shapeRow->addWidget(Ui::label(I18n::tr("Frame shape"), "optionLabel", card), 0, Qt::AlignVCenter);
+    m_aspect = new SegmentedSwitch({QStringLiteral("16:9"), QStringLiteral("4:3"), I18n::tr("Free")}, 0, card);
+    shapeRow->addWidget(m_aspect, 0, Qt::AlignVCenter);
+    shapeRow->addStretch(1);
+    column->addLayout(shapeRow);
+    auto *shapeHint = Ui::caption(I18n::tr("Stretching the frame keeps this shape. Meetings show 16:9 without black bars."), card);
+    shapeHint->setWordWrap(true);
+    column->addWidget(shapeHint);
     if (m_interactive) {
         connect(m_cursor, &SwitchRow::clicked, this, [this](bool on) { m_module->setShowCursor(on); });
         connect(m_fps, &SegmentedSwitch::currentChanged, this, [this](int index) { m_module->setFps(index == 0 ? 15 : index == 2 ? 60 : 30); });
+        connect(m_aspect, &SegmentedSwitch::currentChanged, this, [this](int index) {
+            m_module->setAspect(index == 1 ? QStringLiteral("4:3") : index == 2 ? QStringLiteral("free") : QStringLiteral("16:9"));
+        });
     }
     return card;
 }
@@ -222,6 +236,8 @@ void MeetFramePanel::refresh()
     m_cursor->setChecked(m_module->showCursor());
     const int fps = m_module->fps();
     m_fps->setCurrent(fps == 15 ? 0 : fps == 60 ? 2 : 1);
+    const QString aspect = m_module->aspect();
+    m_aspect->setCurrent(aspect == QLatin1String("4:3") ? 1 : aspect == QLatin1String("free") ? 2 : 0);
     rebuildApps();
 }
 

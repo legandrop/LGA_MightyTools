@@ -862,7 +862,7 @@ std::unique_ptr<Session> start(const QString &windowTitle, const QRect &region, 
     return session;
 }
 
-QRect captureRegion(QWidget *frame, const QMargins &margins)
+QRect captureRegion(QWidget *frame, const QRect &region)
 {
     if (!frame) return {};
     HWND hwnd = reinterpret_cast<HWND>(frame->winId());
@@ -870,10 +870,12 @@ QRect captureRegion(QWidget *frame, const QMargins &margins)
     if (!GetWindowRect(hwnd, &r)) return {};
     const UINT dpi = GetDpiForWindow(hwnd);
     const qreal scale = dpi ? dpi / 96.0 : frame->devicePixelRatioF();
-    const int left = qRound(margins.left() * scale);
-    const int top = qRound(margins.top() * scale);
-    const int right = qRound(margins.right() * scale);
-    const int bottom = qRound(margins.bottom() * scale);
+    // Los margenes entre la ventana y la region, pasados a pixeles fisicos sobre el rectangulo real de la ventana.
+    const QRect window = frame->geometry();
+    const int left = qRound((region.left() - window.left()) * scale);
+    const int top = qRound((region.top() - window.top()) * scale);
+    const int right = qRound((window.right() - region.right()) * scale);
+    const int bottom = qRound((window.bottom() - region.bottom()) * scale);
     return QRect(QPoint(r.left + left, r.top + top), QPoint(r.right - right - 1, r.bottom - bottom - 1));
 }
 

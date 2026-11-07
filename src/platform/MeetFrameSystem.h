@@ -68,9 +68,9 @@ signals:
 // Crea la ventana compartida con ese titulo y arranca la captura. nullptr con `error` si no se pudo.
 std::unique_ptr<Session> start(const QString &windowTitle, const QRect &region, const Options &options, QString *error);
 
-// La region a capturar: el rectangulo de la ventana del marco menos sus margenes (en pixeles logicos de Qt),
-// en las coordenadas que usa la captura (Windows: pixeles fisicos del escritorio virtual; mac: puntos).
-QRect captureRegion(QWidget *frame, const QMargins &margins);
+// La region a capturar (`region`: la del marco, en pixeles logicos globales de Qt) en las coordenadas que usa la
+// captura (Windows: pixeles fisicos del escritorio virtual, medidos sobre la ventana del marco; mac: puntos).
+QRect captureRegion(QWidget *frame, const QRect &region);
 // Ese tamaño en pixeles reales (lo que recibe la reunion), para mostrarlo en la barra del marco.
 QSize pixelSize(QWidget *frame, const QRect &region);
 

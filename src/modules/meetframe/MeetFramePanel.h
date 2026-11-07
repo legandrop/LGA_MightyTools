@@ -47,6 +47,7 @@ private:
     QPushButton *m_add = nullptr;
     SwitchRow *m_cursor = nullptr;
     SegmentedSwitch *m_fps = nullptr;
+    SegmentedSwitch *m_aspect = nullptr;
     QString m_appsKey;
 };
 
