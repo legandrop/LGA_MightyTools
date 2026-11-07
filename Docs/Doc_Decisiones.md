@@ -7,8 +7,9 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 - **D-75 · Dictation en macOS** (2026-11-07, Lega: «arrancá» el dictado en mac). Misma herramienta que
   D-72, en la rama `dictado-mac` hasta que Lega la apruebe. Supuestos tomados sin preguntar, reversibles:
-  - **Atajo de fábrica `⌃⌥H`**, el par de Win+H. No `⌥` + letra (desde macOS 15 Carbon rechaza los atajos
-    con solo Option), ni `⌃H` (borra en la Terminal), y los atajos de la app no admiten Espacio.
+  - **Atajo de fábrica `⌘⌥⇧H`** (Lega, 2026-11-07: el que él usa; el primero fue `⌃⌥H`). No `⌥` + letra
+    (desde macOS 15 Carbon rechaza los atajos con solo Option), ni `⌃H` (borra en la Terminal), y los atajos
+    de la app no admiten Espacio.
   - **Escritura con eventos de teclado** con el texto adentro, de a 16 caracteres, a la app del frente:
     no pasa por el portapapeles (no hace falta el «pegado sin historial» de Windows). Los saltos de línea
     van como Return y el tabulador como Tab. Esc corta también a la mitad; si la app del frente cambia,

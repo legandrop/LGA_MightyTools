@@ -47,9 +47,9 @@ namespace {
 
 using Check = std::function<void(bool ok, const QString &what)>;
 
-// El atajo de fabrica de cada plataforma (DictationModule): Win+H en Windows, ⌃⌥H en mac.
+// El atajo de fabrica de cada plataforma (DictationModule): Win+H en Windows, ⌘⌥⇧H en mac.
 #if defined(Q_OS_MACOS)
-const QString kFactoryShortcut = QStringLiteral("Meta+Alt+H");
+const QString kFactoryShortcut = QStringLiteral("Ctrl+Alt+Shift+H");
 #else
 const QString kFactoryShortcut = QStringLiteral("Meta+H");
 #endif
@@ -1575,7 +1575,7 @@ void testModule(const Check &check)
                   && module.customWords() == DictationModule::defaultWords()
                   && module.customWords().contains(QStringLiteral("Nuke Studio")) && module.customWords().contains(QStringLiteral("pushear"))
                   && !module.customWords().contains(QStringLiteral("pullear")),
-              QStringLiteral("modulo: de fabrica Win+H (mac: ⌃⌥H), castellano, 10 min, sin reemplazos y las palabras de VFX y de desarrollo"));
+              QStringLiteral("modulo: de fabrica Win+H (mac: ⌘⌥⇧H), castellano, 10 min, sin reemplazos y las palabras de VFX y de desarrollo"));
         // Quien tiene guardada la lista de antes sin tocar recibe la nueva; una lista propia queda como esta.
         context.values.insert(QStringLiteral("customWords"), QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto"));
         const bool migrated = module.customWords() == DictationModule::defaultWords();

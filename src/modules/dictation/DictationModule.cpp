@@ -28,10 +28,10 @@ constexpr int kEscapeHeldId = 3;
 constexpr int kTickMs = 100;
 
 #if defined(Q_OS_MACOS)
-// ⌃⌥H (en Qt/mac «Meta» es Control), el par de Win+H. No ⌥ + una letra: desde macOS 15 Carbon rechaza los
-// atajos con solo Option (u Option+Shift). ⌃H solo no: en la Terminal y en los campos de texto borra. Los
-// atajos de la app no admiten Espacio (Shortcut::isSupportedKey).
-const QString kDefaultShortcut = QStringLiteral("Meta+Alt+H");
+// ⌘⌥⇧H (en Qt/mac «Ctrl» es ⌘), el que eligio Lega (2026-11-07) en lugar del primero, ⌃⌥H. No ⌥ + una letra:
+// desde macOS 15 Carbon rechaza los atajos con solo Option (u Option+Shift). ⌃H solo no: en la Terminal y en los
+// campos de texto borra. Los atajos de la app no admiten Espacio (Shortcut::isSupportedKey).
+const QString kDefaultShortcut = QStringLiteral("Ctrl+Alt+Shift+H");
 #else
 const QString kDefaultShortcut = QStringLiteral("Meta+H");
 #endif

@@ -2,6 +2,10 @@
 
 v1.53:
 
+Dictation en mac (Lega, 07/11): el atajo de fábrica era `⌃⌥H` y Lega usa `⌘⌥⇧H`; pidió que venga ese. `kDefaultShortcut` pasa a `Ctrl+Alt+Shift+H` en mac (en Qt/mac Ctrl es ⌘); Windows sigue con Win+H. Quien ya tenía uno guardado lo conserva. Self-test, D-75, roadmap y WhatsNew al día.
+
+[ Dictation - En mac el atajo de fabrica pasa a Cmd+Option+Shift+H ]
+
 Dictation en macOS (D-75, rama `dictado-mac`): el dictado existía solo en Windows. El módulo es el mismo; lo nuevo es lo de cada sistema. Micrófono con AVAudioEngine (`AudioCaptureMac.mm`), que pide el permiso de macOS la primera vez (`PermissionAsked`: ese dictado no graba) y `NSMicrophoneUsageDescription` en el Info.plist. Escritura con eventos de teclado con el texto adentro, de a 16 caracteres, sin portapapeles (`TextTyperMac.mm`); sin Accesibilidad no se escribe y el texto queda en Recent (`NoPermission`). Ventanita que no activa la app ni se esconde con la app inactiva (`OverlayWindowMac.mm`). El proceso del motor carga `libtranscribe.dylib` con `dlopen` (`DictationProcessMac.cpp`); tablas fijas del paquete 0.4.1 de Apple Silicon (Metal) e Intel (CPU), medidas sobre los paquetes oficiales. Los atajos Carbon ahora avisan al soltar (modo mantener) e ignoran la repetición de tecla. Atajo de fábrica `⌃⌥H`; modelos en Application Support. Auditoría independiente: el tap del micrófono encola todo con su mutex y se apaga antes de cerrar (no se pierde la cola del audio ni llega nada a un objeto borrado); las excepciones de AVAudioEngine se atajan; un cambio de configuración (auriculares Bluetooth) rearma el micrófono una vez; el destino es la app y su ventana del frente; Esc a la mitad queda como «Partly typed: stopped». Probado: self-test 0 fallas y el motor real cargado en una Mac M.
 
 [ Dictation - Version para macOS con microfono, escritura sin portapapeles y motor Metal ]

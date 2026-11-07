@@ -7,7 +7,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       verdad el botón Download con una carpeta de modelos vacía (en la PC de Lega el motor se copió a mano).
       **macOS (D-75):** hecha en la rama `dictado-mac` (2026-11-07), sin merge a main. Falta la prueba de
       Lega: Download con la carpeta vacía (baja motor y modelo), el permiso de micrófono la primera vez, el
-      de Accesibilidad, dictar en Notas, Safari, la Terminal y una app Electron (tocar y mantener ⌃⌥H, Esc a
+      de Accesibilidad, dictar en Notas, Safari, la Terminal y una app Electron (tocar y mantener ⌘⌥⇧H, Esc a
       la mitad), en Nuke (Qt: algunas apps no Cocoa toman solo la primera letra de cada pedazo de 16),
       con unos AirPods (cambian de perfil al abrir el micrófono) y la velocidad con Metal. Pendientes posibles: mostrar en la página si falta el permiso
       de Accesibilidad o de micrófono (hoy se entera al dictar); probar en una Mac Intel (solo CPU).
