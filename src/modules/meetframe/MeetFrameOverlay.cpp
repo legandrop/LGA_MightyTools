@@ -1,10 +1,14 @@
 #include "modules/meetframe/MeetFrameOverlay.h"
 
 #include "core/I18n.h"
+#include "platform/MeetFrameSystem.h"
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
+#include <QCoreApplication>
+#include <QEnterEvent>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
@@ -13,12 +17,22 @@
 #include <QPushButton>
 #include <QWindow>
 
+#include <algorithm>
+
 namespace {
 
 constexpr int kBand = 8;     // franja alrededor de la region: de ahi se estira el marco
 constexpr int kLine = 2;     // el borde que se ve, pegado a la region por fuera
 constexpr int kBarH = 30;    // la barrita de arriba
 constexpr int kBarRadius = 6;
+
+// mac: Qt 6.5 no implementa startSystemResize y startSystemMove depende de NSApp.currentEvent, que con el click
+// diferido de Qt a veces ya no es el mouseDown: el marco se mueve y se estira a mano, siguiendo al mouse.
+#ifdef Q_OS_MACOS
+constexpr bool kManualDrag = true;
+#else
+constexpr bool kManualDrag = false;
+#endif
 
 // Tooltip con el atajo en la linea de abajo (formato comun de los tooltips de LGA).
 QString withKeys(const QString &text, const QString &keys)
@@ -157,36 +171,133 @@ Qt::Edges MeetFrameOverlay::edgesAt(const QPoint &pos) const
     return edges;
 }
 
+Qt::CursorShape MeetFrameOverlay::cursorAt(const QPoint &pos) const
+{
+    if (!rect().contains(pos)) return Qt::ArrowCursor;
+    // Los botones de la barrita, con la flecha (en Windows ya lo resuelve Qt: cada boton tiene su cursor).
+    for (QWidget *child = childAt(pos); child && child != this; child = child->parentWidget()) {
+        if (qobject_cast<QPushButton *>(child)) return Qt::ArrowCursor;
+    }
+    if (m_bar->geometry().contains(pos)) return Qt::SizeAllCursor;
+    const Qt::Edges edges = edgesAt(pos);
+    if (edges == (Qt::LeftEdge | Qt::TopEdge) || edges == (Qt::RightEdge | Qt::BottomEdge)) return Qt::SizeFDiagCursor;
+    if (edges == (Qt::RightEdge | Qt::TopEdge) || edges == (Qt::LeftEdge | Qt::BottomEdge)) return Qt::SizeBDiagCursor;
+    if (edges & (Qt::LeftEdge | Qt::RightEdge)) return Qt::SizeHorCursor;
+    if (edges & (Qt::TopEdge | Qt::BottomEdge)) return Qt::SizeVerCursor;
+    return Qt::ArrowCursor;
+}
+
+void MeetFrameOverlay::applyCursor(Qt::CursorShape shape)
+{
+    m_cursor = shape;
+    setCursor(shape);
+    if (!m_capture) MeetFrameSystem::setFrameCursor(this, shape);
+}
+
+void MeetFrameOverlay::hoverAt(const QPoint &pos)
+{
+    if (m_dragging) return;
+    const Qt::CursorShape shape = cursorAt(pos);
+    // Solo al cambiar: adentro de la region (que deja pasar el mouse) el cursor de la app de abajo se pisa una
+    // sola vez, con la flecha, al pasar del borde al hueco o al salir del marco.
+    if (shape != m_cursor) applyCursor(shape);
+    if (QGuiApplication::applicationState() != Qt::ApplicationActive) hoverChild(pos);
+}
+
+void MeetFrameOverlay::hoverChild(const QPoint &pos)
+{
+    // Con la app inactiva (siempre en mac: el marco no la activa) Qt no avisa la entrada y la salida del mouse:
+    // sin esto los botones de la barrita no se resaltan y sus tooltips (con el atajo) no aparecen.
+    QWidget *under = nullptr;
+    for (QWidget *child = rect().contains(pos) ? childAt(pos) : nullptr; child && child != this; child = child->parentWidget()) {
+        if (child->parentWidget() == m_bar) {
+            under = child;
+            break;
+        }
+    }
+    if (under == m_hoverChild) return;
+    if (QWidget *old = m_hoverChild.data()) {
+        old->setAttribute(Qt::WA_UnderMouse, false);
+        QEvent leave(QEvent::Leave);
+        QCoreApplication::sendEvent(old, &leave);
+        old->update();
+    }
+    m_hoverChild = under;
+    if (under) {
+        under->setAttribute(Qt::WA_UnderMouse, true);
+        const QPoint local = under->mapFrom(this, pos);
+        QEnterEvent enter(QPointF(local), QPointF(local), QPointF(mapToGlobal(pos)));
+        QCoreApplication::sendEvent(under, &enter);
+        under->update();
+    }
+}
+
 void MeetFrameOverlay::mousePressEvent(QMouseEvent *event)
 {
     if (m_capture || event->button() != Qt::LeftButton || !windowHandle()) {
         return;
     }
     const QPoint pos = event->position().toPoint();
-    if (m_bar->geometry().contains(pos)) {
-        windowHandle()->startSystemMove();
+    const bool onBar = m_bar->geometry().contains(pos);
+    const Qt::Edges edges = onBar ? Qt::Edges() : edgesAt(pos);
+    if (!onBar && !edges) return;
+    if (!kManualDrag && (onBar ? windowHandle()->startSystemMove() : windowHandle()->startSystemResize(edges))) {
         return;
     }
-    const Qt::Edges edges = edgesAt(pos);
-    if (edges) windowHandle()->startSystemResize(edges);
+    m_dragging = true;
+    m_dragEdges = edges;
+    m_pressGlobal = event->globalPosition().toPoint();
+    m_pressGeometry = geometry();
+    applyCursor(onBar ? Qt::ClosedHandCursor : cursorAt(pos));
 }
 
 void MeetFrameOverlay::mouseMoveEvent(QMouseEvent *event)
 {
-    const QPoint pos = event->position().toPoint();
-    const Qt::Edges edges = edgesAt(pos);
-    Qt::CursorShape shape = Qt::ArrowCursor;
-    if (m_bar->geometry().contains(pos)) shape = Qt::SizeAllCursor;
-    else if (edges == (Qt::LeftEdge | Qt::TopEdge) || edges == (Qt::RightEdge | Qt::BottomEdge)) shape = Qt::SizeFDiagCursor;
-    else if (edges == (Qt::RightEdge | Qt::TopEdge) || edges == (Qt::LeftEdge | Qt::BottomEdge)) shape = Qt::SizeBDiagCursor;
-    else if (edges & (Qt::LeftEdge | Qt::RightEdge)) shape = Qt::SizeHorCursor;
-    else if (edges & (Qt::TopEdge | Qt::BottomEdge)) shape = Qt::SizeVerCursor;
-    setCursor(shape);
+    if (m_dragging) {
+        if (event->buttons() & Qt::LeftButton) {
+            dragTo(event->globalPosition().toPoint());
+            return;
+        }
+        m_dragging = false; // se solto afuera sin que llegara el release
+    }
+    hoverAt(event->position().toPoint());
+}
+
+void MeetFrameOverlay::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_dragging && event->button() == Qt::LeftButton) {
+        dragTo(event->globalPosition().toPoint());
+        m_dragging = false;
+        m_cursor = Qt::BitmapCursor; // fuerza a elegir de nuevo el cursor donde quedo el mouse
+        hoverAt(event->position().toPoint());
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void MeetFrameOverlay::dragTo(const QPoint &global)
+{
+    const QPoint delta = global - m_pressGlobal;
+    QRect next = m_pressGeometry;
+    if (!m_dragEdges) {
+        next.translate(delta);
+        move(next.topLeft());
+        return;
+    }
+    // Cada borde sigue al mouse sin achicar la region por debajo del minimo (el borde opuesto queda quieto).
+    const QSize least = minimumSize();
+    if (m_dragEdges & Qt::LeftEdge) next.setLeft(std::min(next.left() + delta.x(), next.right() + 1 - least.width()));
+    if (m_dragEdges & Qt::RightEdge) next.setRight(std::max(next.right() + delta.x(), next.left() + least.width() - 1));
+    if (m_dragEdges & Qt::TopEdge) next.setTop(std::min(next.top() + delta.y(), next.bottom() + 1 - least.height()));
+    if (m_dragEdges & Qt::BottomEdge) next.setBottom(std::max(next.bottom() + delta.y(), next.top() + least.height() - 1));
+    setGeometry(next);
 }
 
 void MeetFrameOverlay::leaveEvent(QEvent *event)
 {
-    unsetCursor();
+    if (!m_dragging) {
+        m_cursor = Qt::ArrowCursor;
+        unsetCursor();
+    }
     QWidget::leaveEvent(event);
 }
 

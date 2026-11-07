@@ -889,6 +889,10 @@ void prepareFrame(QWidget *frame)
     excludeFromCapture(frame);
 }
 
+void trackFrameMouse(QWidget *, std::function<void(const QPoint &)>) {}
+
+void setFrameCursor(QWidget *, Qt::CursorShape) {}
+
 void excludeFromCapture(QWidget *window)
 {
     if (!window) return;

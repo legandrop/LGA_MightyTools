@@ -20,6 +20,7 @@
 #include "modules/diskspace/DiskState.h"
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "modules/diskspace/cleanup/SizeListView.h"
+#include "modules/meetframe/MeetFrameOverlay.h"
 #include "modules/nukeshortcuts/NukeShortcutsState.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsPanel.h"
@@ -2299,6 +2300,120 @@ int runTitleBarDragProbe()
     return failures ? 1 : 0;
 }
 
+// --ui-probe meetframe-drag: el marco de Meet Frame elige el cursor de cada zona (barrita, botones, bordes,
+// esquinas, adentro y afuera) y se mueve y se estira siguiendo al mouse, sin bajar del minimo. En offscreen
+// startSystemMove/Resize no existen, asi que corre el arrastre a mano (el de mac) tambien en Windows. Los eventos
+// van directo al marco: no prueba que macOS o Windows entreguen el click (eso lo prueba Lega).
+int runMeetFrameDragProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&](bool ok, const QString &what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "  %s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+    };
+    MeetFrameOverlay frame(false);
+    frame.setAttribute(Qt::WA_DontShowOnScreen, true);
+    const QRect start(300, 260, 640, 360);
+    frame.setRegion(start);
+    frame.setState(false, 0, QSize(1280, 720), QString());
+    frame.show();
+    settle(frame);
+    const QMargins m = MeetFrameOverlay::frameMargins();
+    const QRect outer = frame.rect();
+    const QRect inner = outer.marginsRemoved(m);
+    const int band = m.left() / 2;
+    const auto shapeAt = [&](const QPoint &pos) {
+        frame.hoverAt(pos);
+        return frame.cursor().shape();
+    };
+    const auto name = [](Qt::CursorShape shape) { return QString::number(int(shape)); };
+    const auto expect = [&](const QPoint &pos, Qt::CursorShape want, const char *what) {
+        const Qt::CursorShape got = shapeAt(pos);
+        check(got == want, QStringLiteral("cursor %1 (%2,%3): %4, se esperaba %5").arg(QLatin1String(what)).arg(pos.x()).arg(pos.y())
+                                    .arg(name(got), name(want)));
+    };
+    QWidget *bar = frame.findChild<QWidget *>(QStringLiteral("meetFrameBar"));
+    QPushButton *button = bar ? bar->findChild<QPushButton *>() : nullptr;
+    if (!bar || !button) {
+        fprintf(stderr, "meetframe-drag: no hay barrita\n");
+        return 1;
+    }
+    const QPoint onBar = bar->geometry().topLeft() + QPoint(14, bar->height() / 2);
+    expect(onBar, Qt::SizeAllCursor, "barrita");
+    expect(button->mapTo(&frame, button->rect().center()), Qt::ArrowCursor, "boton de la barrita");
+    expect(QPoint(band, inner.center().y()), Qt::SizeHorCursor, "borde izquierdo");
+    expect(QPoint(outer.right() - band, inner.center().y()), Qt::SizeHorCursor, "borde derecho");
+    expect(QPoint(inner.center().x(), outer.bottom() - band), Qt::SizeVerCursor, "borde de abajo");
+    expect(QPoint(inner.center().x(), inner.top() - band), Qt::SizeVerCursor, "borde de arriba");
+    expect(QPoint(band, inner.top() - band), Qt::SizeFDiagCursor, "esquina de arriba a la izquierda");
+    expect(QPoint(outer.right() - band, outer.bottom() - band), Qt::SizeFDiagCursor, "esquina de abajo a la derecha");
+    expect(QPoint(outer.right() - band, inner.top() - band), Qt::SizeBDiagCursor, "esquina de arriba a la derecha");
+    expect(QPoint(band, outer.bottom() - band), Qt::SizeBDiagCursor, "esquina de abajo a la izquierda");
+    expect(inner.center(), Qt::ArrowCursor, "adentro de la region");
+    expect(QPoint(band, inner.center().y()), Qt::SizeHorCursor, "borde izquierdo otra vez");
+    expect(QPoint(-1, -1), Qt::ArrowCursor, "afuera del marco");
+    // Con la app inactiva (offscreen: nunca activa) el boton bajo el mouse recibe la entrada y la salida.
+    if (QGuiApplication::applicationState() != Qt::ApplicationActive) {
+        frame.hoverAt(button->mapTo(&frame, button->rect().center()));
+        check(button->testAttribute(Qt::WA_UnderMouse), QStringLiteral("app inactiva: el boton bajo el mouse queda resaltado"));
+        frame.hoverAt(inner.center());
+        check(!button->testAttribute(Qt::WA_UnderMouse), QStringLiteral("app inactiva: al salir del boton deja de estar resaltado"));
+    }
+
+    // Apretar en `pos` (del marco), llevar el mouse `delta` y soltar.
+    const auto drag = [&](const QPoint &pos, const QPoint &delta) {
+        const QPoint global = frame.mapToGlobal(pos);
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(pos), QPointF(global), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&frame, &press);
+        const QPoint half = global + delta / 2;
+        QMouseEvent move(QEvent::MouseMove, QPointF(frame.mapFromGlobal(half)), QPointF(half), Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(&frame, &move);
+        const QPoint end = global + delta;
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(frame.mapFromGlobal(end)), QPointF(end), Qt::LeftButton, Qt::NoButton,
+                            Qt::NoModifier);
+        QCoreApplication::sendEvent(&frame, &release);
+        settle(frame);
+    };
+    const auto rectText = [](const QRect &r) { return QStringLiteral("%1,%2 %3x%4").arg(r.x()).arg(r.y()).arg(r.width()).arg(r.height()); };
+    const auto expectRegion = [&](const QRect &want, const char *what) {
+        const QRect got = frame.region();
+        check(got == want, QStringLiteral("%1: %2, se esperaba %3").arg(QLatin1String(what), rectText(got), rectText(want)));
+    };
+
+    QRect want = start;
+    drag(onBar, QPoint(50, 30));
+    want.translate(50, 30);
+    expectRegion(want, "mover desde la barrita");
+    drag(QPoint(frame.width() - band, frame.height() / 2), QPoint(100, 0));
+    want.setRight(want.right() + 100);
+    expectRegion(want, "estirar desde el borde derecho");
+    drag(QPoint(frame.width() / 2, frame.height() - band), QPoint(0, 60));
+    want.setBottom(want.bottom() + 60);
+    expectRegion(want, "estirar desde el borde de abajo");
+    drag(QPoint(band, m.top() - band), QPoint(-40, -20));
+    want.setLeft(want.left() - 40);
+    want.setTop(want.top() - 20);
+    expectRegion(want, "estirar desde la esquina de arriba a la izquierda");
+    drag(QPoint(band, frame.height() / 2), QPoint(5000, 0));
+    want.setLeft(want.right() + 1 - MeetFrameOverlay::minimumRegion().width());
+    expectRegion(want, "achicar de mas desde la izquierda: queda el minimo y el borde derecho no se mueve");
+    drag(QPoint(frame.width() / 2, frame.height() - band), QPoint(0, -5000));
+    want.setBottom(want.top() + MeetFrameOverlay::minimumRegion().height() - 1);
+    expectRegion(want, "achicar de mas desde abajo: queda el minimo y el borde de arriba no se mueve");
+    // Apretar adentro de la region no arrastra nada.
+    drag(frame.rect().marginsRemoved(m).center(), QPoint(80, 80));
+    expectRegion(want, "un click adentro de la region no mueve el marco");
+    // Durante el arrastre de la barrita, la mano cerrada; al soltar, vuelve el cursor de donde quedo el mouse.
+    drag(onBar, QPoint(0, 0));
+    check(frame.cursor().shape() == Qt::SizeAllCursor, QStringLiteral("al soltar en la barrita, el cursor de mover (no la mano cerrada)"));
+
+    fprintf(stdout, "meetframe-drag: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "meetframe-drag FALLO" : "meetframe-drag ok");
+    return failures ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2351,6 +2466,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("titlebar-drag")) {
         return runTitleBarDragProbe();
+    }
+    if (probe == QLatin1String("meetframe-drag")) {
+        return runMeetFrameDragProbe();
     }
     if (probe == QLatin1String("net-retry")) {
         return runNetRetryProbe(args);

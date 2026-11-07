@@ -20,10 +20,13 @@
 #import <CoreMedia/CoreMedia.h>
 #import <CoreVideo/CoreVideo.h>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#import <objc/message.h>
+#import <objc/runtime.h>
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <dlfcn.h>
 #include <functional>
 #include <memory>
 #include <unistd.h>
@@ -34,12 +37,42 @@
 // iconos) y las del navegador cuyo titulo coincide. El filtro se rearma cada segundo con las apps que corren:
 // una app que se abre entre medio NO sale hasta el proximo rearmado (tapa de mas, nunca de menos).
 //
-// La ventana compartida es una ventana Qt comun («Meet Frame») que dibuja el ultimo cuadro; se la manda al
-// fondo. Lo tapado no se pinta de un color: simplemente no esta, y se ve lo de abajo o el color de fondo.
+// La ventana compartida es una ventana Qt comun («Meet Frame») que dibuja el ultimo cuadro. Como en Windows, vive
+// al fondo y no recibe el mouse (ignoresMouseEvents): un click que pasa por adentro del marco nunca la trae al
+// frente (se veia la region repetida, con un segundo cursor). Si la app se activa (la ventana principal, Cmd-Tab),
+// vuelve al fondo. Lo tapado no se pinta de un color: simplemente no esta, y se ve lo de abajo o el color de fondo.
+//
+// El marco (prepareFrame) no activa la app al hacerle click, como WS_EX_NOACTIVATE en Windows. Con la app
+// inactiva Qt descarta el movimiento del mouse y no pone cursores, y en mac no implementa startSystemResize: el
+// marco se estira y se mueve a mano (MeetFrameOverlay) y el cursor lo pone trackFrameMouse/setFrameCursor.
 
 @interface LGAMeetFrameSink : NSObject <SCStreamOutput, SCStreamDelegate>
 @property(nonatomic, copy) void (^onFrame)(CVPixelBufferRef buffer);
 @property(nonatomic, copy) void (^onStop)(NSError *error);
+@end
+
+// Avisa el movimiento del mouse sobre el marco aunque la app no este activa (el area de Qt lo descarta).
+@interface LGAMeetFrameMouse : NSObject
+@property(nonatomic, weak) NSView *view;
+@property(nonatomic, copy) void (^onMove)(NSPoint point);
+@end
+
+@implementation LGAMeetFrameMouse
+- (void)report:(NSEvent *)event inside:(BOOL)inside
+{
+    NSView *view = self.view;
+    if (!view || !self.onMove) return;
+    if (!inside) {
+        self.onMove(NSMakePoint(-1, -1));
+        return;
+    }
+    NSPoint point = [view convertPoint:event.locationInWindow fromView:nil];
+    if (!view.isFlipped) point.y = view.bounds.size.height - point.y;
+    self.onMove(point);
+}
+- (void)mouseMoved:(NSEvent *)event { [self report:event inside:YES]; }
+- (void)mouseEntered:(NSEvent *)event { [self report:event inside:YES]; }
+- (void)mouseExited:(NSEvent *)event { [self report:event inside:NO]; }
 @end
 
 @implementation LGAMeetFrameSink
@@ -77,6 +110,9 @@ public:
         setWindowTitle(title);
         setAttribute(Qt::WA_OpaquePaintEvent);
         setAttribute(Qt::WA_ShowWithoutActivating);
+        // No recibe el mouse: los clicks que pasan por adentro del marco nunca la traen al frente. Con el flag
+        // (y no con ignoresMouseEvents a mano) Qt lo mantiene si algo vuelve a aplicar los flags.
+        setWindowFlag(Qt::WindowTransparentForInput, true);
     }
     void setFrame(const QImage &image)
     {
@@ -120,6 +156,7 @@ public:
     ~SessionMac() override
     {
         *m_alive = false;
+        for (id observer in m_activeObservers) [[NSNotificationCenter defaultCenter] removeObserver:observer];
         m_refresh.stop();
         stopStream();
         delete m_shared.data();
@@ -145,6 +182,19 @@ public:
         shared->show();
         if (NSView *view = (__bridge NSView *)reinterpret_cast<void *>(shared->winId())) {
             [view.window orderBack:nil];
+        }
+        // Al activarse o desactivarse la app, Qt trae al frente sus ventanas que no se esconden (lo hace por
+        // cualquier ventana con WA_MacAlwaysShowToolWindow, como el aviso de Disk Space): la compartida vuelve
+        // al fondo despues.
+        void (^toBack)(NSNotification *) = ^(NSNotification *) {
+            if (!guard || !guard->m_shared) return;
+            if (NSView *v = (__bridge NSView *)reinterpret_cast<void *>(guard->m_shared->winId())) {
+                [v.window orderBack:nil];
+            }
+        };
+        NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+        for (NSNotificationName name : {NSApplicationDidBecomeActiveNotification, NSApplicationDidResignActiveNotification}) {
+            [m_activeObservers addObject:[center addObserverForName:name object:nil queue:[NSOperationQueue mainQueue] usingBlock:toBack]];
         }
         m_refresh.setInterval(refreshInterval());
         QObject::connect(&m_refresh, &QTimer::timeout, this, [this]() { refreshContent(); });
@@ -442,6 +492,7 @@ private:
     }
 
     std::shared_ptr<std::atomic<bool>> m_alive;
+    NSMutableArray *m_activeObservers = [NSMutableArray array];
     QRect m_region;
     Options m_options;
     QPointer<QWidget> m_shared;
@@ -493,9 +544,93 @@ QSize pixelSize(QWidget *frame, const QRect &region)
     return QSize(qRound(region.width() * dpr), qRound(region.height() * dpr));
 }
 
+namespace {
+
+// Que la app pueda poner el cursor aunque no este activa: macOS lo ignora si no. Propiedad privada de la
+// conexion con el WindowServer (la usan otras apps de overlay); se busca en tiempo de ejecucion y, si no
+// existe, el marco anda igual, con la flecha.
+void setsCursorInBackground(bool on)
+{
+    using ConnectionFn = int (*)();
+    using SetPropertyFn = int (*)(int, int, CFStringRef, CFTypeRef);
+    static const auto connection = reinterpret_cast<ConnectionFn>(dlsym(RTLD_DEFAULT, "CGSMainConnectionID"));
+    static const auto setProperty = reinterpret_cast<SetPropertyFn>(dlsym(RTLD_DEFAULT, "CGSSetConnectionProperty"));
+    static bool current = false;
+    if (!connection || !setProperty || current == on) return;
+    current = on;
+    const int cid = connection();
+    setProperty(cid, cid, CFSTR("SetsCursorInBackground"), on ? kCFBooleanTrue : kCFBooleanFalse);
+}
+
+// Las flechas de estirar ventanas del sistema no son publicas: las mismas que usa Qt (QCocoaCursor).
+NSCursor *systemResizeCursor(NSString *name, NSCursor *fallback)
+{
+    SEL selector = NSSelectorFromString(name);
+    if ([NSCursor respondsToSelector:selector]) {
+        if (NSCursor *cursor = ((NSCursor * (*)(id, SEL))objc_msgSend)([NSCursor class], selector)) return cursor;
+    }
+    return fallback;
+}
+
+NSCursor *nsCursor(Qt::CursorShape shape)
+{
+    switch (shape) {
+    case Qt::SizeHorCursor: return systemResizeCursor(@"_windowResizeEastWestCursor", [NSCursor resizeLeftRightCursor]);
+    case Qt::SizeVerCursor: return systemResizeCursor(@"_windowResizeNorthSouthCursor", [NSCursor resizeUpDownCursor]);
+    case Qt::SizeFDiagCursor: return systemResizeCursor(@"_windowResizeNorthWestSouthEastCursor", [NSCursor crosshairCursor]);
+    case Qt::SizeBDiagCursor: return systemResizeCursor(@"_windowResizeNorthEastSouthWestCursor", [NSCursor crosshairCursor]);
+    case Qt::SizeAllCursor: return [NSCursor openHandCursor];
+    case Qt::ClosedHandCursor: return [NSCursor closedHandCursor];
+    default: return [NSCursor arrowCursor];
+    }
+}
+
+} // namespace
+
 void prepareFrame(QWidget *frame)
 {
     excludeFromCapture(frame);
+    NSWindow *ns = nativeWindow(frame);
+    if (!ns) return;
+    // Un click en el marco no activa la app (no le saca el foco a la reunion ni a lo que se esta usando). El
+    // estilo NonactivatingPanel no se puede cambiar despues de crear la ventana: AppKit lo aplica con este metodo.
+    if ([ns isKindOfClass:[NSPanel class]]) ns.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+    SEL prevents = NSSelectorFromString(@"_setPreventsActivation:");
+    if ([ns respondsToSelector:prevents]) ((void (*)(id, SEL, BOOL))objc_msgSend)(ns, prevents, YES);
+    // Qt::Tool se esconde cuando la app deja de estar activa; el marco se queda. Aca y no con
+    // WA_MacAlwaysShowToolWindow, que hace que Qt traiga al frente las ventanas de la app al (des)activarse.
+    ns.hidesOnDeactivate = NO;
+    // En todos los escritorios (Spaces): el marco sigue a la region aunque se cambie de escritorio.
+    ns.collectionBehavior |= NSWindowCollectionBehaviorCanJoinAllSpaces;
+}
+
+void trackFrameMouse(QWidget *frame, std::function<void(const QPoint &pos)> onMove)
+{
+    NSView *view = frame ? (__bridge NSView *)reinterpret_cast<void *>(frame->winId()) : nil;
+    if (!view || !onMove) return;
+    LGAMeetFrameMouse *mouse = [[LGAMeetFrameMouse alloc] init];
+    mouse.view = view;
+    mouse.onMove = ^(NSPoint point) { onMove(QPoint(int(std::floor(point.x)), int(std::floor(point.y)))); };
+    NSTrackingArea *area = [[NSTrackingArea alloc] initWithRect:NSZeroRect
+                                                        options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingActiveAlways
+                                                                | NSTrackingInVisibleRect
+                                                          owner:mouse
+                                                       userInfo:nil];
+    [view addTrackingArea:area];
+    // El area no retiene a su dueño: vive pegado a la vista y se va con ella.
+    static char key;
+    objc_setAssociatedObject(view, &key, mouse, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    setsCursorInBackground(true);
+    QObject::connect(frame, &QObject::destroyed, []() {
+        [[NSCursor arrowCursor] set]; // antes de apagar la propiedad: si no, con la app inactiva se ignora
+        setsCursorInBackground(false);
+    });
+}
+
+void setFrameCursor(QWidget *, Qt::CursorShape shape)
+{
+    if (QGuiApplication::platformName() != QLatin1String("cocoa")) return; // pruebas sin pantalla
+    [nsCursor(shape) set];
 }
 
 void excludeFromCapture(QWidget *window)

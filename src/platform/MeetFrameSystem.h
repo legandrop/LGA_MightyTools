@@ -11,6 +11,7 @@
 #include <QRect>
 #include <QString>
 
+#include <functional>
 #include <memory>
 
 class QWidget;
@@ -73,6 +74,13 @@ QSize pixelSize(QWidget *frame, const QRect &region);
 // El marco: no toma foco y no sale en ninguna captura (tampoco en la de pantalla completa de la reunion).
 // Con la ventana nativa ya creada y antes de mostrarla.
 void prepareFrame(QWidget *frame);
+
+// El mouse sobre el marco sin botones apretados. En mac el marco no activa la app y Qt descarta el movimiento
+// y los cursores de una app inactiva: esto avisa la posicion (coordenadas del marco; fuera del marco, (-1, -1))
+// para que el marco elija el cursor. Windows: no hace nada (llega mouseMoveEvent).
+void trackFrameMouse(QWidget *frame, std::function<void(const QPoint &pos)> onMove);
+// Pone el cursor aunque la app no este activa (mac). Windows: no hace nada (alcanza con QWidget::setCursor).
+void setFrameCursor(QWidget *frame, Qt::CursorShape shape);
 // Un menu o popup del marco: no sale en ninguna captura.
 void excludeFromCapture(QWidget *window);
 

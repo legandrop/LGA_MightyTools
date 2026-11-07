@@ -14,7 +14,7 @@ class StatusDot;
 // El marco de Meet Frame: un borde fino alrededor de la region y una barrita arriba (estado, tamaño, Pause,
 // Size y cerrar). Siempre arriba, no toma foco y no sale en ninguna captura (MeetFrameSystem::prepareFrame).
 // Adentro del borde es transparente al mouse: se sigue trabajando en lo que se comparte. Se mueve tomando la
-// barrita y se estira desde el borde.
+// barrita y se estira desde el borde (Windows: con el sistema; mac: a mano, Qt no estira ventanas en mac).
 class MeetFrameOverlay : public QWidget
 {
     Q_OBJECT
@@ -32,6 +32,9 @@ public:
 
     void setState(bool paused, int hiddenWindows, const QSize &pixels, const QString &error);
     void setShortcuts(const QString &toggle, const QString &pause);
+    // El mouse sin botones en `pos` (coordenadas del marco; fuera, cualquier punto afuera): elige el cursor.
+    // Lo llama mouseMoveEvent y, en mac, MeetFrameSystem::trackFrameMouse (con la app inactiva Qt no avisa).
+    void hoverAt(const QPoint &pos);
     QMenu *sizeMenu() const { return m_sizeMenu; }
 
 signals:
@@ -48,12 +51,17 @@ protected:
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void moveEvent(QMoveEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void leaveEvent(QEvent *event) override;
 
 private:
     Qt::Edges edgesAt(const QPoint &pos) const;
+    Qt::CursorShape cursorAt(const QPoint &pos) const;
+    void applyCursor(Qt::CursorShape shape);
+    void hoverChild(const QPoint &pos);
+    void dragTo(const QPoint &global);
     void updateMask();
     void updateTips();
 
@@ -72,6 +80,13 @@ private:
     QString m_toggleKeys;
     QString m_pauseKeys;
     QTimer m_settle;
+    // Arrastre a mano: la barrita (sin bordes) mueve; un borde estira.
+    bool m_dragging = false;
+    Qt::Edges m_dragEdges;
+    QPoint m_pressGlobal;
+    QRect m_pressGeometry;
+    Qt::CursorShape m_cursor = Qt::ArrowCursor;
+    QPointer<QWidget> m_hoverChild; // el control de la barrita bajo el mouse con la app inactiva
 };
 
 #endif // MIGHTYTOOLS_MEETFRAMEOVERLAY_H

@@ -463,6 +463,10 @@ void MeetFrameModule::showFrame()
     auto *overlay = new MeetFrameOverlay(false);
     overlay->winId();
     MeetFrameSystem::prepareFrame(overlay);
+    QPointer<MeetFrameOverlay> hover(overlay);
+    MeetFrameSystem::trackFrameMouse(overlay, [hover](const QPoint &pos) {
+        if (hover) hover->hoverAt(pos);
+    });
     MeetFrameSystem::excludeFromCapture(overlay->sizeMenu());
     overlay->setRegion(savedRegion());
     m_overlay = overlay;
