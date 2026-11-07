@@ -13,7 +13,8 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
     tapado pintado liso), no las miniaturas de DWM: es el que funciona seguro sin el prototipo P1. La
     ventana compartida queda al fondo del orden Z (si queda debajo del escritorio, mejor: nadie la ve).
   - **Atajos** `Ctrl+Alt+M` (mostrar u ocultar el marco) y `Ctrl+Alt+P` (pausa, registrado solo con el
-    marco abierto). En mac son `⌘⌥M` y `⌘⌥P`.
+    marco abierto). En mac son `⌘⌥⇧M` (Lega, 2026-11-07: `⌘⌥M` es «minimizar todas las ventanas» de
+    macOS; vale de fábrica el que él usa) y `⌘⌥P`.
   - **Vienen prendidos** los avisos, el escritorio, Mensajería y Contraseñas; Correo viene apagado (se
     suele compartir el correo a propósito). WhatsApp y Telegram en el navegador se reconocen por el
     título y se tapa la ventana entera del navegador mientras esa pestaña está al frente.

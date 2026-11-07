@@ -2,6 +2,10 @@
 
 v1.53:
 
+Meet Frame en mac (Lega, 07/11): el atajo de fábrica para mostrar u ocultar el marco era `⌘⌥M` (en Qt/mac Ctrl es ⌘), que en macOS es «minimizar todas las ventanas» y lo usan otras apps; Lega lo había cambiado a mano por `⌘⌥⇧M`. Ahora `MeetFrameModule::defaultShortcut` da `Ctrl+Alt+Shift+M` en mac; Windows sigue con `Ctrl+Alt+M` y la pausa (solo con el marco abierto) sigue `Ctrl+Alt+P` / `⌘⌥P`. Quien ya tenía un atajo guardado lo conserva. D-74, README y WhatsNew al día.
+
+[ Meet Frame - En mac el atajo de fabrica pasa a Cmd+Option+Shift+M ]
+
 Ventana (pedido de Lega, copiar DayTrace): no había teclado para cerrar la ventana ni para pasar de una página a otra. Ahora Escape la cierra por el mismo camino que la cruz (`closeEvent`: la app queda en la bandeja en Windows y en la barra de menú en mac). Solo llega el Escape que nadie usó: un campo que descarta lo escrito, un atajo grabándose o un menú abierto se lo quedan; si un campo que no lo usa tiene el foco, el primer Escape lo suelta y el segundo cierra; las repeticiones de un Escape mantenido no cierran (el campo descartaba con la primera y la ventana se cerraba con las siguientes). `Ctrl+Alt+←/→` (`⌘⌥` en mac) pasan a la página anterior o siguiente en el orden del índice, con vuelta de la última a General. Una fila que graba un atajo usa `grabKeyboard()`, que el mapa de atajos de Qt no mira: la combinación se le entrega a ella con `event()` (con `sendEvent()` se volvía a disparar el atajo hasta desbordar la pila), cerrando antes el tooltip que ese camino no ve. Sonda nueva `--ui-probe window-keys` (17 comprobaciones, con las teclas por la ruta del sistema).
 
 [ Ventana - Escape la cierra y Ctrl+Alt+flechas pasan de una pagina a otra ]
