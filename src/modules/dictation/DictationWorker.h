@@ -5,7 +5,8 @@
 // Lo lanza DictationEngine; nunca lo lanza el usuario. Modo corto de main.cpp, antes de la instancia
 // unica: sin ventanas, sin bandeja, sin settings, sin registro LGA.
 //
-// Carga transcribe.dll con LoadLibraryEx (la app no enlaza contra el motor: arranca aunque no este), los
+// Carga transcribe.dll con LoadLibraryEx (en mac libtranscribe.dylib con dlopen, y la GPU es Metal; la app
+// no enlaza contra el motor: arranca aunque no este), los
 // modulos de CPU y Vulkan que estan al lado, el modelo, y hace una pasada en vacio de 1 s de silencio: la
 // primera pasada de un proceso compila los shaders de Vulkan (7,3 s la primera vez en una RTX 4090, 1,3 s
 // con la cache del driver) y asi no la paga el primer dictado. Despues manda Ready.

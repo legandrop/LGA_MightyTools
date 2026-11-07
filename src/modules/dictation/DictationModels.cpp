@@ -168,9 +168,12 @@ bool DictationModels::checkEngineFiles(const QString &engineDir, const QList<Fil
             return false;
         }
     }
-    // Una DLL que no viene en el paquete la cargaria el motor (busca sus modulos en su carpeta).
+    // Una biblioteca que no viene en el paquete la cargaria el motor (busca sus modulos en su carpeta).
     for (const QString &relative : listFiles(engineDir)) {
-        if (relative.endsWith(QLatin1String(".dll"), Qt::CaseInsensitive) && !known.contains(relative.toLower())) {
+        const bool library = relative.endsWith(QLatin1String(".dll"), Qt::CaseInsensitive)
+            || relative.endsWith(QLatin1String(".dylib"), Qt::CaseInsensitive)
+            || relative.endsWith(QLatin1String(".so"), Qt::CaseInsensitive);
+        if (library && !known.contains(relative.toLower())) {
             *problem = relative;
             return false;
         }
@@ -178,8 +181,46 @@ bool DictationModels::checkEngineFiles(const QString &engineDir, const QList<Fil
     return true;
 }
 
+QString DictationModels::engineLibrary()
+{
+#if defined(Q_OS_MACOS)
+    return QStringLiteral("libtranscribe.dylib");
+#else
+    return QStringLiteral("transcribe.dll");
+#endif
+}
+
 QList<DictationModels::File> DictationModels::engineFiles041()
 {
+#if defined(Q_OS_MACOS) && defined(Q_PROCESSOR_ARM)
+    // Medido el 2026-11-07 sobre transcribe-native-0.4.1-macos-arm64-metal.tar.gz (SHA-256 7369e36d...).
+    return {
+        {QStringLiteral("contract.json"), 113, QByteArrayLiteral("70f7dfa2c12307ae387ad0d4e39f5c995b42f55a653acef471435aa77db3b384")},
+        {QStringLiteral("libggml-base.dylib"), 674384, QByteArrayLiteral("452eb1f18bb558e360bde5c7b75c58c33a113cb83f295755494f22d2a4d64715")},
+        {QStringLiteral("libggml-cpu.dylib"), 935952, QByteArrayLiteral("2ad4a2e99d86da15f2c0c2ef59de1b8fabcdd6e2655dd8822211d066e9a98eb2")},
+        {QStringLiteral("libggml-metal.dylib"), 5500096, QByteArrayLiteral("8970af35276eeace65cdb5bbc45b1a6f8e91cedf62b05f58840e8cde93ab10d0")},
+        {QStringLiteral("libggml.dylib"), 90976, QByteArrayLiteral("7548b3572a8e12a148d105480591c54c886a589aae3aa1d1647b99055ef5b8e0")},
+        {QStringLiteral("libtranscribe.dylib"), 1669520, QByteArrayLiteral("24a36922d21192a40dcbd4097fe8ac2b115991e14c94c9b4e98ba9493e987a60")},
+        {QStringLiteral("licenses/LICENSE"), 1083, QByteArrayLiteral("86a53633b56f6b029d3cb42158bcc7aac0cdff898aceb13e83b93e368bbc4ac6")},
+        {QStringLiteral("licenses/ggml/LICENSE"), 1078, QByteArrayLiteral("94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d")},
+        {QStringLiteral("licenses/src/third_party/miniz/LICENSE"), 1162, QByteArrayLiteral("6f20fa7672b00e2e975c291df737cf227addf3ad32e36fef3fe0f416e4664d3d")},
+        {QStringLiteral("licenses/src/third_party/silero_vad/LICENSE"), 1075, QByteArrayLiteral("2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b")},
+    };
+#elif defined(Q_OS_MACOS)
+    // Mac con Intel (la mitad x86_64 del bundle universal): solo CPU. Medido el 2026-11-07 sobre
+    // transcribe-native-0.4.1-macos-x86_64-cpu.tar.gz (SHA-256 513a3976...).
+    return {
+        {QStringLiteral("contract.json"), 102, QByteArrayLiteral("268dad369fcce09e2df8a56b6ad59da66e2b95fe7e3889c7480bfafa367e52b9")},
+        {QStringLiteral("libggml-base.dylib"), 693896, QByteArrayLiteral("b9f73b2e2b608bf52ccb57e6a7b608f5cb101bec204046de9dba0af32307ca05")},
+        {QStringLiteral("libggml-cpu.dylib"), 999184, QByteArrayLiteral("3bda39e8d7236ef11665a51a82b62d119bc966ce8ed2ff508540756ce9768582")},
+        {QStringLiteral("libggml.dylib"), 62416, QByteArrayLiteral("28a77e4630f9fcfd9406aec6eac2c5b9c91834351cff017a22f5db200c2a9157")},
+        {QStringLiteral("libtranscribe.dylib"), 1949648, QByteArrayLiteral("893749dea47c75eff89930b648fb0211dfc8e531b1fa822ae387817806c32ff7")},
+        {QStringLiteral("licenses/LICENSE"), 1083, QByteArrayLiteral("86a53633b56f6b029d3cb42158bcc7aac0cdff898aceb13e83b93e368bbc4ac6")},
+        {QStringLiteral("licenses/ggml/LICENSE"), 1078, QByteArrayLiteral("94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d")},
+        {QStringLiteral("licenses/src/third_party/miniz/LICENSE"), 1162, QByteArrayLiteral("6f20fa7672b00e2e975c291df737cf227addf3ad32e36fef3fe0f416e4664d3d")},
+        {QStringLiteral("licenses/src/third_party/silero_vad/LICENSE"), 1075, QByteArrayLiteral("2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b")},
+    };
+#else
     // Medido el 2026-11-03 sobre transcribe-native-0.4.1-windows-x86_64-cpu-vulkan.tar.gz (SHA-256 272eb977...).
     return {
         {QStringLiteral("contract.json"), 125, QByteArrayLiteral("83669009a6eeb805ec735ee841ba59ef8b85c1f46949963fc4391418cc4965ae")},
@@ -201,21 +242,35 @@ QList<DictationModels::File> DictationModels::engineFiles041()
         {QStringLiteral("licenses/src/third_party/silero_vad/LICENSE"), 1095, QByteArrayLiteral("9cb98d261a9f2dfd347ee43b314343c68fe063ecc7f31514e24b248b1be727c6")},
         {QStringLiteral("transcribe.dll"), 2052096, QByteArrayLiteral("c00cbe50a845003f986d3ed0ee149c08f576d0f3cc54c5346033608185a000d5")},
     };
+#endif
 }
 
 QList<DictationModels::Piece> DictationModels::defaultPieces()
 {
     Piece engine;
     engine.id = kEngine;
+#if defined(Q_OS_MACOS) && defined(Q_PROCESSOR_ARM)
+    const QString lane = QStringLiteral("macos-arm64-metal");
+    engine.title = QStringLiteral("transcribe.cpp 0.4.1 (Metal)");
+    engine.size = 2491746;
+    engine.sha256 = QByteArrayLiteral("7369e36dc2a5fc5d52eee5766fa03ad22d3f533c8688bf1deccf3ffdc202ea24");
+#elif defined(Q_OS_MACOS)
+    const QString lane = QStringLiteral("macos-x86_64-cpu");
+    engine.title = QStringLiteral("transcribe.cpp 0.4.1 (CPU)");
+    engine.size = 1619231;
+    engine.sha256 = QByteArrayLiteral("513a3976a2f0ebc0666c9670551e96c226e39ed14090a51f2efa0874f41258d8");
+#else
+    const QString lane = QStringLiteral("windows-x86_64-cpu-vulkan");
     engine.title = QStringLiteral("transcribe.cpp 0.4.1 (CPU + Vulkan)");
-    engine.url = QUrl(QStringLiteral("https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/"
-                                     "transcribe-native-0.4.1-windows-x86_64-cpu-vulkan.tar.gz"));
     engine.size = 18052295;
     engine.sha256 = QByteArrayLiteral("272eb97795048ccb557c85bb9dd44c9e530e1c928443114c39816a8a5f76269d");
+#endif
+    engine.url = QUrl(QStringLiteral("https://github.com/handy-computer/transcribe.cpp/releases/download/v0.4.1/"
+                                     "transcribe-native-0.4.1-%1.tar.gz").arg(lane));
     engine.license = QStringLiteral("MIT");
-    engine.relativePath = QStringLiteral("transcribe.cpp/0.4.1-windows-x86_64-cpu-vulkan");
-    engine.archiveFolder = QStringLiteral("transcribe-native-windows-x86_64-cpu-vulkan");
-    engine.requiredFile = QStringLiteral("transcribe.dll");
+    engine.relativePath = QStringLiteral("transcribe.cpp/0.4.1-%1").arg(lane);
+    engine.archiveFolder = QStringLiteral("transcribe-native-%1").arg(lane);
+    engine.requiredFile = engineLibrary();
     engine.files = engineFiles041();
 
     Piece model;
@@ -232,7 +287,13 @@ QList<DictationModels::Piece> DictationModels::defaultPieces()
 
 QString DictationModels::defaultRoot()
 {
+#if defined(Q_OS_MACOS)
+    // Nada que la app baje va dentro del .app (romperia la firma): va a Application Support, aunque corra
+    // desde build/ (asi una prueba no le baja 900 MB al arbol del repo).
+    return QDir::homePath() + QStringLiteral("/Library/Application Support/LGA/LGA_MightyTools/models");
+#else
     return QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("models"));
+#endif
 }
 
 DictationModels::DictationModels(const QString &root, const QList<Piece> &pieces, QObject *parent)
@@ -803,7 +864,11 @@ void DictationModels::extract(const Piece &piece)
     const QString tar = DictationProcess::systemTar();
     if (tar.isEmpty()) {
         QFile::remove(part);
+#if defined(Q_OS_MACOS)
+        setState(piece.id, State::Error, 0, I18n::tr("Could not unpack the engine."));
+#else
         setState(piece.id, State::Error, 0, I18n::tr("This Windows does not have tar.exe, which is needed to unpack the engine."));
+#endif
         return;
     }
     // Carpeta temporal al lado del destino (mismo disco: despues es un renombre).

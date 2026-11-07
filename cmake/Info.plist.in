@@ -120,6 +120,10 @@
          macOS muestra este texto la primera vez, al pedir el permiso de Automatizacion. -->
     <key>NSAppleEventsUsageDescription</key>
     <string>Folder Switch reads the folder open in Finder to take file dialogs there.</string>
+    <!-- Dictation graba el microfono solo mientras se dicta: macOS muestra este texto la primera vez. Sin
+         esta clave, macOS cierra la app al pedir el microfono. -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Dictation listens only while you hold or tap its shortcut, and turns your speech into text on this Mac.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Lega Pugliese</string>
 </dict>

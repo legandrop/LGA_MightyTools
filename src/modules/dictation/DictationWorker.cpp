@@ -148,7 +148,7 @@ private:
     {
         *out = reinterpret_cast<T>(DictationProcess::resolve(library, name));
         if (!*out) {
-            *error = QStringLiteral("transcribe.dll: no exporta %1").arg(QLatin1String(name));
+            *error = QStringLiteral("%1: no exporta %2").arg(DictationModels::engineLibrary(), QLatin1String(name));
         }
         return *out != nullptr;
     }
@@ -192,7 +192,7 @@ private:
 
 bool Engine::load(const QString &engineDir, const QString &modelPath, QString *error)
 {
-    void *library = DictationProcess::loadLibrary(QDir(engineDir).filePath(QStringLiteral("transcribe.dll")), error);
+    void *library = DictationProcess::loadLibrary(QDir(engineDir).filePath(DictationModels::engineLibrary()), error);
     if (!library) {
         return false;
     }
@@ -231,14 +231,14 @@ bool Engine::load(const QString &engineDir, const QString &modelPath, QString *e
         || m_abiSize(TRANSCRIBE_ABI_RUN_PARAMS) != sizeof(transcribe_run_params)
         || m_abiSize(TRANSCRIBE_ABI_MODEL_LOAD_PARAMS) != sizeof(transcribe_model_load_params)
         || m_abiSize(TRANSCRIBE_ABI_DEVICE_INFO) != sizeof(transcribe_device_info)) {
-        *error = QStringLiteral("transcribe.dll %1 no coincide con el encabezado %2")
+        *error = DictationModels::engineLibrary() + QStringLiteral(" %1 no coincide con el encabezado %2")
                      .arg(QString::fromUtf8(m_version()), QLatin1String(TRANSCRIBE_VERSION));
         return false;
     }
     // Una sola vez y antes de todo (contrato del motor). Los avisos y errores del motor y de ggml van a
     // stderr; nada va a la salida estandar del protocolo.
     m_logSet(&logToStderr, nullptr);
-    // Los modulos de CPU y Vulkan estan al lado de transcribe.dll. Sin esto transcribe_open falla con
+    // Los modulos de CPU y GPU (Vulkan; Metal en mac) estan al lado de la biblioteca del motor. Sin esto transcribe_open falla con
     // "backend error".
     const transcribe_status backends = m_initBackends();
     if (backends != TRANSCRIBE_OK) {

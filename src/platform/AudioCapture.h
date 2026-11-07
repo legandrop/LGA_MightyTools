@@ -12,8 +12,10 @@
 //  - Windows (platform/win/AudioCaptureWin.cpp): WASAPI en modo compartido, en un hilo propio que espera el
 //    evento del dispositivo. Pide float32 mono a 16 kHz y Windows convierte (AUTOCONVERTPCM); si el dispositivo
 //    no lo acepta, abre con su formato de mezcla y convierte acá (AudioCapture::Converter).
+//  - macOS (platform/mac/AudioCaptureMac.mm): AVAudioEngine con un tap en la entrada; convierte acá. Pide el
+//    permiso de Micrófono de macOS la primera vez (PermissionAsked).
 //
-// El micrófono se abre SOLO entre start() y stop(): apenas se cierra, Windows apaga su ícono de micrófono en
+// El micrófono se abre SOLO entre start() y stop(): apenas se cierra, el sistema apaga su ícono de micrófono en
 // uso. En una corrida automatizada start() no abre nada (core/AutomatedRun.h). Todas las señales llegan en
 // el hilo de la UI.
 class AudioCapture : public QObject
@@ -30,7 +32,8 @@ public:
     enum class Error {
         None,
         NoMicrophone,     ///< no hay ningún micrófono activo
-        AccessDenied,     ///< la privacidad de Windows no deja usar el micrófono a las apps de escritorio
+        AccessDenied,     ///< la privacidad de Windows (o de macOS) no deja usar el micrófono a esta app
+        PermissionAsked,  ///< macOS: está preguntando si la app puede usar el micrófono; este dictado no graba
         DeviceInUse,      ///< otra app lo tiene en modo exclusivo
         DeviceGone,       ///< se desconectó (o el elegido no está conectado)
         UnsupportedFormat,

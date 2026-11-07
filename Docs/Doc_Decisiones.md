@@ -5,6 +5,20 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-75 · Dictation en macOS** (2026-11-07, Lega: «arrancá» el dictado en mac). Misma herramienta que
+  D-72, en la rama `dictado-mac` hasta que Lega la apruebe. Supuestos tomados sin preguntar, reversibles:
+  - **Atajo de fábrica `⌃⌥H`**, el par de Win+H. No `⌥` + letra (desde macOS 15 Carbon rechaza los atajos
+    con solo Option), ni `⌃H` (borra en la Terminal), y los atajos de la app no admiten Espacio.
+  - **Escritura con eventos de teclado** con el texto adentro, de a 16 caracteres, a la app del frente:
+    no pasa por el portapapeles (no hace falta el «pegado sin historial» de Windows). Los saltos de línea
+    van como Return y el tabulador como Tab. Esc corta también a la mitad; si la app del frente cambia,
+    se corta ahí y el texto entero queda en «Recent».
+  - **Permisos de macOS:** el de Micrófono la primera vez que se dicta (ese dictado no graba: hay que
+    volver a apretar el atajo) y el de Accesibilidad para escribir en otras apps (el mismo que ya usan
+    Folder Switch y Nuke Shortcuts); sin él el texto queda en «Recent» y macOS muestra su cartel.
+  - **Motor** transcribe.cpp 0.4.1 de mac: Metal en Apple Silicon (2,5 MB) y solo CPU en Intel (1,6 MB,
+    lento con este modelo). Mismo modelo que Windows. La carpeta por defecto es
+    `~/Library/Application Support/LGA/LGA_MightyTools/models` (nunca dentro del `.app`).
 - **D-74 · Meet Frame** (2026-11-06, Lega: «Meet Frame se va a llamar, implementalo»). Herramienta para
   compartir una parte de la pantalla, como Region to Share (GPL-3.0: solo se tomó la idea, ninguna línea
   de código), tapando en lo compartido los avisos, el escritorio y las apps elegidas. Investigación en
@@ -56,8 +70,7 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   El historial vive solo en memoria. Solo Windows por ahora. Lega la aprobó y está en main (2026-11-03).
   Las palabras de fábrica (VFX y desarrollo: Nuke Studio, compo, DMP, comitear, pushear…) vienen puestas
   para todos, en un campo de varias líneas. Descartado por Lega: Parakeet y Voxtral como modelos
-  opcionales, y dictar con una ventana de administrador al frente (sin ayudante elevado). macOS, más
-  adelante.
+  opcionales, y dictar con una ventana de administrador al frente (sin ayudante elevado). macOS: D-75.
 - **D-71 · Ejemplos apagados en App Toggle y Mouse Buttons, y el Explorador como toggle** (2026-11-03,
   Lega: «debe venir con la app ya puesto… es como un setting que viene por defecto», «pero apagado»).
   La primera vez que se prende cada herramienta (sin la clave en settings) trae ejemplos apagados: App

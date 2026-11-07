@@ -12,8 +12,10 @@
 #include "core/DebugFlags.h"
 #include "core/LgaRegistry.h"
 #include "core/UiScale.h"
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 #include "modules/dictation/DictationWorker.h"
+#endif
+#ifdef Q_OS_WIN
 #include "modules/diskspace/cleanup/InstallerCleanup.h"
 #include "modules/openinnukex/win/OldClientMigration.h"
 #include "platform/AdminWindowHelper.h"
@@ -220,6 +222,8 @@ int main(int argc, char *argv[])
     if (hasArg(argc, argv, "--installer-cleanup")) {
         return InstallerCleanup::runHelper(argc, argv);
     }
+#endif
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     // --dictation-worker (lo lanza el motor de dictado, sin elevar): carga el motor y el modelo en este
     // proceso aparte y habla con la app por stdin/stdout. Mismo modo corto.
     if (hasArg(argc, argv, "--dictation-worker")) {

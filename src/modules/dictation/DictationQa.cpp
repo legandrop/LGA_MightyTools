@@ -47,6 +47,13 @@ namespace {
 
 using Check = std::function<void(bool ok, const QString &what)>;
 
+// El atajo de fabrica de cada plataforma (DictationModule): Win+H en Windows, ⌃⌥H en mac.
+#if defined(Q_OS_MACOS)
+const QString kFactoryShortcut = QStringLiteral("Meta+Alt+H");
+#else
+const QString kFactoryShortcut = QStringLiteral("Meta+H");
+#endif
+
 // Lo que usa la prueba de Lega (2026-11-03): con esto "Nuke Studio" salio 5 de 5.
 const QStringList kVocabulary = {QStringLiteral("Nuke Studio"), QStringLiteral("Nuke"), QStringLiteral("NukeX"),
                                  QStringLiteral("Hiero"), QStringLiteral("XYplorer"), QStringLiteral("comp"),
@@ -632,8 +639,18 @@ void testModels(const Check &check)
         const QList<DictationModels::File> table = DictationModels::engineFiles041();
         qint64 tableBytes = 0;
         for (const DictationModels::File &file : table) tableBytes += file.size;
-        check(table.size() == 18 && tableBytes == 56238591 && DictationModels::defaultPieces().first().files.size() == 18,
-              QStringLiteral("motor: la tabla del paquete 0.4.1 tiene sus 18 archivos (%1 bytes)").arg(tableBytes));
+#if defined(Q_OS_MACOS) && defined(Q_PROCESSOR_ARM)
+        const int tableFiles = 10; // macos-arm64-metal
+        const qint64 tableTotal = 8875439;
+#elif defined(Q_OS_MACOS)
+        const int tableFiles = 9; // macos-x86_64-cpu
+        const qint64 tableTotal = 3709644;
+#else
+        const int tableFiles = 18; // windows-x86_64-cpu-vulkan
+        const qint64 tableTotal = 56238591;
+#endif
+        check(table.size() == tableFiles && tableBytes == tableTotal && DictationModels::defaultPieces().first().files.size() == tableFiles,
+              QStringLiteral("motor: la tabla del paquete 0.4.1 tiene sus %1 archivos (%2 bytes)").arg(tableFiles).arg(tableBytes));
         again.markDamaged(engine.id, QStringLiteral("danado"));
         check(again.state(engine.id) == State::Error && again.errorText(engine.id) == QLatin1String("danado"),
               QStringLiteral("motor: si el proceso del motor lo rechaza, la pieza queda en error en la pagina"));
@@ -1046,6 +1063,31 @@ void testAudio(const Check &check)
           QStringLiteral("nivel: escala completa da 1 y -20 dBFS da 2/3"));
 }
 
+#if defined(Q_OS_MACOS)
+void testTyping(const Check &check)
+{
+    const auto text = [](const QStringList &plan) { return plan.value(0); };
+    const QStringList plain = TextTyper::describe(QStringLiteral("Nuke, ¿andás?"));
+    check(text(plain) == QStringLiteral("texto Nuke, ¿andás?"),
+          QStringLiteral("escritura: el texto va tal cual, con tildes y signos (sin depender del teclado)"));
+    const QString emoji = QString::fromUtf8("\xF0\x9F\x98\x80");
+    // 15 letras + el emoji (2 unidades): no entra en el primer pedazo de 16 y va entero en el segundo.
+    const QStringList split = TextTyper::describe(QStringLiteral("abcdefghijklmno") + emoji);
+    check(split.filter(QStringLiteral("unicode ")) == QStringList{QStringLiteral("unicode abcdefghijklmno"), QStringLiteral("unicode ") + emoji},
+          QStringLiteral("escritura: un emoji nunca se parte entre dos eventos"));
+    check(text(TextTyper::describe(QStringLiteral("a\r\nb"))) == QStringLiteral("texto a\\nb")
+              && text(TextTyper::describe(QStringLiteral("a\rb"))) == QStringLiteral("texto a\\nb")
+              && TextTyper::describe(QStringLiteral("a\nb")).filter(QStringLiteral("tecla ")) == QStringList{QStringLiteral("tecla Return")},
+          QStringLiteral("escritura: un salto de linea (\\r\\n, \\n o \\r) va como la tecla Return"));
+    check(TextTyper::describe(QString(QChar(0x01))).isEmpty() && TextTyper::describe(QString()).isEmpty()
+              && text(TextTyper::describe(QStringLiteral("a\tb") + QChar(0x07))) == QStringLiteral("texto a\tb")
+              && TextTyper::describe(QStringLiteral("a\tb")).filter(QStringLiteral("tecla ")) == QStringList{QStringLiteral("tecla Tab")},
+          QStringLiteral("escritura: los caracteres de control no se escriben, salvo el tabulador (tecla Tab)"));
+    check(plain.contains(QStringLiteral("modo teclas CGEvent, sin portapapeles"))
+              && plain.filter(QStringLiteral("unicode ")) == QStringList{QStringLiteral("unicode Nuke, ¿andás?")},
+          QStringLiteral("escritura: en mac va por eventos de teclado, sin tocar el portapapeles"));
+}
+#else
 void testTyping(const Check &check)
 {
     const auto text = [](const QStringList &plan) { return plan.value(0); };
@@ -1071,6 +1113,7 @@ void testTyping(const Check &check)
                                                                 QStringLiteral("tecla vk=0x56 arriba"), QStringLiteral("tecla vk=0x11 arriba")},
           QStringLiteral("pegado: las teclas son Ctrl+V, con la marca propia (los ganchos de la app no la toman)"));
 }
+#endif
 
 void testAutomatedRun(const Check &check)
 {
@@ -1331,8 +1374,10 @@ void testFlow(const Check &check)
         check(r.io.stops == 1 && r.flow.phase() == Phase::Typing, QStringLiteral("recorrido: Esc escribiendo pide cortar la escritura"));
         r.flow.typed(TextTyper::Result::Stopped, 9);
         check(r.clean() && r.entries.size() == 1 && !r.entries.first().typed
-                  && r.entries.first().note == I18n::trc("dictation", "Stopped") && !r.io.overlayShown && r.io.hideDelay == 0,
-              QStringLiteral("recorrido: lo que falta no se escribe; queda en Recent como detenido y la ventanita se va"));
+                  && r.entries.first().note == I18n::tr("Partly typed: stopped") && !r.io.overlayShown && r.io.hideDelay == 0,
+              QStringLiteral("recorrido: lo que falta no se escribe; queda en Recent como escrito en parte y la ventanita se va"));
+        check(DictationFlow::noteFor(TextTyper::Result::Stopped, false) == I18n::trc("dictation", "Stopped"),
+              QStringLiteral("recorrido: Esc antes de escribir nada queda como detenido"));
     }
     {
         FlowRig r;
@@ -1525,12 +1570,12 @@ void testModule(const Check &check)
                           QDir(QDir::tempPath()).filePath(QStringLiteral("lga_mt_dictation_no_models")));
     {
         DictationModule module(context);
-        check(module.shortcut() == Shortcut::fromPortableString(QStringLiteral("Meta+H")) && module.language() == QLatin1String("es")
+        check(module.shortcut() == Shortcut::fromPortableString(kFactoryShortcut) && module.language() == QLatin1String("es")
                   && module.unloadMinutes() == 10 && module.replacements().isEmpty()
                   && module.customWords() == DictationModule::defaultWords()
                   && module.customWords().contains(QStringLiteral("Nuke Studio")) && module.customWords().contains(QStringLiteral("pushear"))
                   && !module.customWords().contains(QStringLiteral("pullear")),
-              QStringLiteral("modulo: de fabrica Win+H, castellano, 10 min, sin reemplazos y las palabras de VFX y de desarrollo"));
+              QStringLiteral("modulo: de fabrica Win+H (mac: ⌃⌥H), castellano, 10 min, sin reemplazos y las palabras de VFX y de desarrollo"));
         // Quien tiene guardada la lista de antes sin tocar recibe la nueva; una lista propia queda como esta.
         context.values.insert(QStringLiteral("customWords"), QStringLiteral("Nuke, NukeX, Nuke Studio, Hiero, comp, roto"));
         const bool migrated = module.customWords() == DictationModule::defaultWords();
@@ -1546,7 +1591,7 @@ void testModule(const Check &check)
         context.values.remove(QStringLiteral("unloadMinutes"));
 
         module.start();
-        check(context.fake.registered.value(1) == Shortcut::fromPortableString(QStringLiteral("Meta+H"))
+        check(context.fake.registered.value(1) == Shortcut::fromPortableString(kFactoryShortcut)
                   && context.fake.declared.contains(1) && context.fake.registered.size() == 1,
               QStringLiteral("modulo: prendido registra solo el atajo (con prioridad); Esc todavia no"));
         check(module.status().tone == ModuleTone::Attention && module.enginePidForQa() == 0,
@@ -1562,7 +1607,7 @@ void testModule(const Check &check)
         context.fake.takenByOther = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+D"));
         QString error;
         check(!module.setShortcut(context.fake.takenByOther, &error) && error == I18n::tr("Already used by %1.").arg(QStringLiteral("App Toggle"))
-                  && module.shortcut() == Shortcut::fromPortableString(QStringLiteral("Meta+H")),
+                  && module.shortcut() == Shortcut::fromPortableString(kFactoryShortcut),
               QStringLiteral("modulo: un atajo de otra herramienta se rechaza y queda el anterior"));
         check(module.setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+J")), &error)
                   && context.fake.registered.value(1) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+J")),
@@ -1581,7 +1626,7 @@ void testModule(const Check &check)
         Shortcut escape;
         escape.key = Qt::Key_Escape;
         Shortcut heldEscape = escape;
-        heldEscape.modifiers = Qt::MetaModifier;
+        heldEscape.modifiers = Shortcut::fromPortableString(kFactoryShortcut).modifiers; // Win (mac: ⌃⌥)
         check(module.phase() == Phase::Recording && module.captureOpen && module.escapeRegisteredForQa()
                   && context.fake.registered.size() == 3 && context.fake.registered.value(2) == escape
                   && context.fake.registered.value(3) == heldEscape,
@@ -1638,6 +1683,23 @@ void testModule(const Check &check)
         atLaunch.stop();
         byUser.stop();
     }
+#if defined(Q_OS_MACOS)
+    check(DictationModule::fullPath(QStringLiteral("/Users/lega/LGA_AI")) && DictationModule::fullPath(QStringLiteral("/Volumes/Datos/models"))
+              && !DictationModule::fullPath(QStringLiteral("models")) && !DictationModule::fullPath(QStringLiteral("~/LGA_AI"))
+              && !DictationModule::fullPath(QStringLiteral("/")) && !DictationModule::fullPath(QStringLiteral("//servidor/recurso"))
+              && !DictationModule::fullPath(QString()),
+          QStringLiteral("modulo: en mac la carpeta de modelos tiene que ser una ruta absoluta (models, ~/x y / no)"));
+    check(DictationModels::defaultRoot().endsWith(QLatin1String("/Library/Application Support/LGA/LGA_MightyTools/models"))
+              && !DictationModels::defaultRoot().contains(QLatin1String(".app/")),
+          QStringLiteral("modulo: en mac los modelos van a Application Support, nunca dentro del .app"));
+    {
+        DictationModule module(context);
+        const QString before = module.modelsRoot();
+        module.setModelsRoot(QStringLiteral("models"));
+        module.setModelsRoot(QStringLiteral("~/LGA_AI"));
+        check(module.modelsRoot() == before, QStringLiteral("modulo: una carpeta incompleta no se guarda"));
+    }
+#else
     check(DictationModule::fullPath(QStringLiteral("C:/models")) && DictationModule::fullPath(QStringLiteral("E:\\LGA_AI"))
               && DictationModule::fullPath(QStringLiteral("\\\\servidor\\recurso\\models"))
               && !DictationModule::fullPath(QStringLiteral("\\models")) && !DictationModule::fullPath(QStringLiteral("C:models"))
@@ -1651,6 +1713,18 @@ void testModule(const Check &check)
         module.setModelsRoot(QStringLiteral("\\models"));
         check(module.modelsRoot() == before, QStringLiteral("modulo: una carpeta incompleta no se guarda"));
     }
+#endif
+    // La tabla del motor de esta plataforma: su biblioteca esta en la tabla y el paquete es el que se baja.
+    const QList<DictationModels::File> table = DictationModels::engineFiles041();
+    const DictationModels::Piece enginePiece = DictationModels::defaultPieces().value(0);
+    const bool listed = std::any_of(table.cbegin(), table.cend(), [](const DictationModels::File &file) {
+        return file.relative == DictationModels::engineLibrary() && file.size > 0 && file.sha256.size() == 64;
+    });
+    check(listed && enginePiece.requiredFile == DictationModels::engineLibrary() && enginePiece.sha256.size() == 64
+              && enginePiece.url.toString().endsWith(enginePiece.archiveFolder.mid(QStringLiteral("transcribe-native-").size()) + QStringLiteral(".tar.gz"))
+              && enginePiece.relativePath.endsWith(enginePiece.archiveFolder.mid(QStringLiteral("transcribe-native-").size())),
+          QStringLiteral("motor: la tabla de esta plataforma trae %1 y la descarga, la carpeta y el paquete coinciden")
+              .arg(DictationModels::engineLibrary()));
 }
 
 int simulateFlow(const QStringList &args)

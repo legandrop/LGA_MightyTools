@@ -48,8 +48,8 @@ public:
 signals:
     void activated(int id);
     // Se solto la tecla (no los modificadores) de un atajo que se activo. Solo los registrados con
-    // registerPriorityHotkey en Windows: el gancho ve la liberacion y se la come. RegisterHotKey no avisa al
-    // soltar y en mac no se emite. Lo usa el modo «mantener» del dictado.
+    // registerPriorityHotkey: en Windows el gancho ve la liberacion y se la come (RegisterHotKey no avisa al
+    // soltar); en mac, kEventHotKeyReleased de Carbon. Lo usa el modo «mantener» del dictado.
     void released(int id);
 
 private:

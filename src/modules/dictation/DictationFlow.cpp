@@ -292,10 +292,17 @@ QString DictationFlow::noteFor(TextTyper::Result result, bool partly)
         return partly ? I18n::tr("Partly typed: the window changed") : I18n::tr("Not typed: the window changed");
     case TextTyper::Result::Elevated: return I18n::tr("Not typed: the window runs as administrator");
     case TextTyper::Result::NoTarget: return I18n::tr("Not typed: the window closed");
-    case TextTyper::Result::Stopped: return I18n::trc("dictation", "Stopped");
+    case TextTyper::Result::Stopped:
+        // En mac Esc puede cortar a la mitad: lo que ya se escribió quedó en la app.
+        return partly ? I18n::tr("Partly typed: stopped") : I18n::trc("dictation", "Stopped");
+    case TextTyper::Result::NoPermission: return I18n::tr("Not typed: allow Accessibility for LGA Mighty Tools in System Settings");
     case TextTyper::Result::Failed: break;
     }
+#if defined(Q_OS_MACOS)
+    return I18n::tr("Not typed: macOS did not take the keys");
+#else
     return I18n::tr("Not typed: Windows did not take the keys");
+#endif
 }
 
 void DictationFlow::setPhase(Phase phase)

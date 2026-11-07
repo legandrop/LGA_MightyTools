@@ -384,20 +384,7 @@ if(WIN32)
         src/modules/desktopicons/DesktopIconsPanel.cpp
         src/modules/desktopicons/DesktopSnapshots.cpp
         src/platform/win/DesktopIconViewWin.cpp
-        # Dictation (por ahora solo Windows): el motor corre en otro proceso (--dictation-worker) y carga
-        # transcribe.dll en tiempo de ejecucion; la app no enlaza contra el motor.
-        src/modules/dictation/DictationEngine.cpp
-        src/modules/dictation/DictationFlow.cpp
-        src/modules/dictation/DictationModels.cpp
-        src/modules/dictation/DictationModule.cpp
-        src/modules/dictation/DictationOverlay.cpp
-        src/modules/dictation/DictationPanel.cpp
-        src/modules/dictation/DictationProtocol.cpp
-        src/modules/dictation/DictationQa.cpp
-        src/modules/dictation/DictationText.cpp
-        src/modules/dictation/DictationTrigger.cpp
-        src/modules/dictation/DictationWorker.cpp
-        src/platform/AudioCaptureCommon.cpp
+        # Dictation: lo de Windows (el modulo, en el bloque comun de abajo).
         src/platform/win/AudioCaptureWin.cpp
         src/platform/win/DictationProcessWin.cpp
         src/platform/win/OverlayWindowWin.cpp
@@ -428,27 +415,15 @@ if(WIN32)
         src/modules/mousebuttons/MouseButtonsPanel.h
         src/modules/mousebuttons/MouseButtonsState.h
         src/platform/MouseButtonsSystem.h
-        src/modules/dictation/DictationEngine.h
-        src/modules/dictation/DictationFlow.h
-        src/modules/dictation/DictationModels.h
-        src/modules/dictation/DictationModule.h
-        src/modules/dictation/DictationOverlay.h
-        src/modules/dictation/DictationPanel.h
-        src/modules/dictation/DictationProtocol.h
-        src/modules/dictation/DictationQa.h
-        src/modules/dictation/DictationText.h
-        src/modules/dictation/DictationTrigger.h
-        src/modules/dictation/DictationWorker.h
-        # Encabezados de transcribe.cpp 0.4.1 (MIT): solo tipos y firmas.
-        src/modules/dictation/third_party/transcribe.h
-        src/modules/dictation/third_party/whisper.h
-        src/platform/AudioCapture.h
-        src/platform/DictationProcess.h
-        src/platform/OverlayWindow.h
-        src/platform/TextTyper.h
     )
 elseif(APPLE)
     list(APPEND SOURCES
+        # Dictation en mac: micrófono (AVAudioEngine), escritura con eventos de teclado (sin portapapeles),
+        # la ventanita que no activa la app y el proceso del motor (libtranscribe.dylib con dlopen).
+        src/platform/mac/AudioCaptureMac.mm
+        src/platform/mac/DictationProcessMac.cpp
+        src/platform/mac/OverlayWindowMac.mm
+        src/platform/mac/TextTyperMac.mm
         src/modules/linkredirector/mac/BrowserDetectionMac.cpp
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/modules/linkredirector/mac/ProcessLatencyMac.cpp
@@ -495,6 +470,46 @@ elseif(APPLE)
         src/modules/folderswitch/RecentFoldersPopup.h
         src/modules/folderswitch/mac/FolderSwitchMacModule.h
         src/modules/folderswitch/mac/MacFileDialogs.h
+    )
+endif()
+
+# Dictation (Windows y macOS): el motor corre en otro proceso (--dictation-worker) y carga transcribe.dll
+# (libtranscribe.dylib en mac) en tiempo de ejecucion; la app no enlaza contra el motor. Lo de cada sistema
+# esta en los bloques de arriba.
+if(WIN32 OR APPLE)
+    list(APPEND SOURCES
+        src/modules/dictation/DictationEngine.cpp
+        src/modules/dictation/DictationFlow.cpp
+        src/modules/dictation/DictationModels.cpp
+        src/modules/dictation/DictationModule.cpp
+        src/modules/dictation/DictationOverlay.cpp
+        src/modules/dictation/DictationPanel.cpp
+        src/modules/dictation/DictationProtocol.cpp
+        src/modules/dictation/DictationQa.cpp
+        src/modules/dictation/DictationText.cpp
+        src/modules/dictation/DictationTrigger.cpp
+        src/modules/dictation/DictationWorker.cpp
+        src/platform/AudioCaptureCommon.cpp
+    )
+    list(APPEND HEADERS
+        src/modules/dictation/DictationEngine.h
+        src/modules/dictation/DictationFlow.h
+        src/modules/dictation/DictationModels.h
+        src/modules/dictation/DictationModule.h
+        src/modules/dictation/DictationOverlay.h
+        src/modules/dictation/DictationPanel.h
+        src/modules/dictation/DictationProtocol.h
+        src/modules/dictation/DictationQa.h
+        src/modules/dictation/DictationText.h
+        src/modules/dictation/DictationTrigger.h
+        src/modules/dictation/DictationWorker.h
+        # Encabezados de transcribe.cpp 0.4.1 (MIT): solo tipos y firmas.
+        src/modules/dictation/third_party/transcribe.h
+        src/modules/dictation/third_party/whisper.h
+        src/platform/AudioCapture.h
+        src/platform/DictationProcess.h
+        src/platform/OverlayWindow.h
+        src/platform/TextTyper.h
     )
 endif()
 
@@ -548,6 +563,10 @@ elseif(APPLE)
         "-framework ScreenCaptureKit"
         "-framework CoreMedia"
         "-framework CoreVideo"
+        # Dictation: el micrófono (AVAudioEngine y la lista de dispositivos de CoreAudio).
+        "-framework AVFoundation"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
     )
     # Los .mm con ARC: sin retain/release a mano.
     set_source_files_properties(
@@ -560,6 +579,8 @@ elseif(APPLE)
         src/platform/mac/WindowActivationMac.mm
         src/platform/mac/WindowPlacementMac.mm
         src/modules/folderswitch/mac/MacFileDialogs.mm
+        src/platform/mac/OverlayWindowMac.mm
+        src/platform/mac/TextTyperMac.mm
         PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 endif()
 

@@ -58,7 +58,13 @@ QString AudioCapture::errorText(Error error, long systemCode)
     case Error::NoMicrophone:
         return I18n::tr("No microphone found.");
     case Error::AccessDenied:
+#if defined(Q_OS_MACOS)
+        return I18n::tr("Allow the microphone for LGA Mighty Tools in System Settings > Privacy & Security > Microphone.");
+#else
         return I18n::tr("Turn on microphone access for desktop apps in Windows Settings.");
+#endif
+    case Error::PermissionAsked:
+        return I18n::tr("Allow the microphone in the macOS message, then press the shortcut again.");
     case Error::DeviceInUse:
         return I18n::tr("The microphone is in use by another app.");
     case Error::DeviceGone:

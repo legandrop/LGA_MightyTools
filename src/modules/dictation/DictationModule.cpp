@@ -27,7 +27,14 @@ constexpr int kEscapeId = 2;
 constexpr int kEscapeHeldId = 3;
 constexpr int kTickMs = 100;
 
+#if defined(Q_OS_MACOS)
+// ⌃⌥H (en Qt/mac «Meta» es Control), el par de Win+H. No ⌥ + una letra: desde macOS 15 Carbon rechaza los
+// atajos con solo Option (u Option+Shift). ⌃H solo no: en la Terminal y en los campos de texto borra. Los
+// atajos de la app no admiten Espacio (Shortcut::isSupportedKey).
+const QString kDefaultShortcut = QStringLiteral("Meta+Alt+H");
+#else
 const QString kDefaultShortcut = QStringLiteral("Meta+H");
+#endif
 const QString kDefaultLanguage = QStringLiteral("es");
 // Palabras de VFX y de desarrollo que Whisper no conoce o escribe en inglés ("Nook Studio", "pujear").
 // Probadas con grabaciones reales: con "pullear" en la lista, "pushear" salía "pullear".
@@ -142,8 +149,13 @@ void DictationModule::registerShortcut()
     if (!takenBy.isEmpty()) {
         m_shortcutError = I18n::tr("%1 is already used by %2.").arg(keys.displayText(), takenBy);
     } else if (!m_hotkeys->registerPriorityHotkey(kShortcutId, keys)) {
-        // Con prioridad: el gancho ve la liberación (modo mantener) y Win + letra le gana a Windows.
+        // Con prioridad: el gancho ve la liberación (modo mantener) y Win + letra le gana a Windows. En mac,
+        // Carbon avisa al soltar, pero no le gana a otra app ni a macOS.
+#if defined(Q_OS_MACOS)
+        m_shortcutError = I18n::tr("Another app or macOS uses %1.").arg(keys.displayText());
+#else
         m_shortcutError = I18n::tr("Could not activate %1 with priority.").arg(keys.displayText());
+#endif
     }
     if (!m_shortcutError.isEmpty()) {
         qWarning().noquote() << "[Dictado]" << m_shortcutError;
@@ -509,6 +521,11 @@ QString DictationModule::modelsRoot() const
 
 bool DictationModule::fullPath(const QString &path)
 {
+#if defined(Q_OS_MACOS)
+    // En mac, una ruta absoluta de verdad: "/" y algo mas, sin "~" ni relativas.
+    const QString p = path.trimmed();
+    return p.size() >= 2 && p.startsWith(QLatin1Char('/')) && !p.startsWith(QLatin1String("//"));
+#else
     // Unidad + barra ("C:/x") o UNC ("//servidor/recurso"). QDir::isAbsolutePath acepta tambien "\x" y
     // "C:x", que Windows resuelve contra la unidad o la carpeta actual (regla 8 de Doc_Borrado_Seguro).
     const QString p = QDir::fromNativeSeparators(path.trimmed());
@@ -520,6 +537,7 @@ bool DictationModule::fullPath(const QString &path)
     }
     const QStringList parts = p.mid(2).split(QLatin1Char('/'), Qt::SkipEmptyParts);
     return parts.size() >= 2 && parts.at(0) != QLatin1String("?") && parts.at(0) != QLatin1String(".");
+#endif
 }
 
 void DictationModule::setModelsRoot(const QString &root)
@@ -835,7 +853,7 @@ ModuleDescriptor dictationDescriptor()
                            I18n::tr("Runs on this computer: the model is downloaded once")};
     };
     d.offBullets = d.offBulletsFor([](const QString &, const QVariant &fallback) { return fallback; });
-    d.platforms = PlatformWindows;
+    d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintDictationIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
         return std::make_unique<DictationModule>(context);
@@ -858,7 +876,12 @@ HelpSection dictationHelp(const SettingsReader &value)
                   I18n::tr("Click in any text field and press %1. Tap it to start and again to finish, or hold it while you speak.")
                       .arg(HelpSection::strong((keys.isValid() ? keys : Shortcut::fromPortableString(kDefaultShortcut)).displayText())),
                   I18n::tr("The text shows up as you speak and is typed when you finish. Esc cancels, also while it types.")};
+#if defined(Q_OS_MACOS)
+    help.note = I18n::tr("Nothing goes through the clipboard. If the window changes before typing, the text waits in Recent, on the tool's page. "
+                         "The first time, macOS asks for the microphone and for Accessibility, which is needed to type in other apps.");
+#else
     help.note = I18n::tr("Nothing goes through the clipboard. If the window changes before typing, the text waits in Recent, on the tool's page. "
                          "With an administrator window in front the shortcut doesn't arrive, so Windows opens its own dictation.");
+#endif
     return help;
 }
