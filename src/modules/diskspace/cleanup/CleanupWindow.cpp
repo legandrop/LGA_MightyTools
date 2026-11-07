@@ -36,6 +36,8 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QStyle>
+#include <QStyleOption>
 #include <QPointer>
 #include <QPushButton>
 #include <QSaveFile>
@@ -515,6 +517,7 @@ CleanupWindow::CleanupWindow(DiskState *state, ModuleContext *context, bool capt
     setWindowTitle(QStringLiteral("LGA Mighty Tools - Disk Space"));
     // La barra de titulo la dibuja la app, como en la ventana principal.
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    WindowFrame::prepare(this); // mac: translucida, para las esquinas redondeadas
     buildUi();
     if (m_capture) {
         setFixedSize(kWidth, kHeight);
@@ -2435,6 +2438,20 @@ void CleanupWindow::removeFolderRule(const QString &categoryId)
 }
 
 // ------------------------------------------------------------------ ventana
+
+void CleanupWindow::paintEvent(QPaintEvent *event)
+{
+    // En mac la ventana es translucida (WindowFrame::prepare, para las esquinas redondeadas) y Qt deja
+    // de pintar el fondo del QSS de la raiz: la cabecera, las pestanas y los filtros no tienen fondo
+    // propio y dejaban ver el escritorio. Se pinta aca, con la misma regla del QSS.
+    if (testAttribute(Qt::WA_TranslucentBackground)) {
+        QStyleOption option;
+        option.initFrom(this);
+        QPainter painter(this);
+        style()->drawPrimitive(QStyle::PE_Widget, &option, &painter, this);
+    }
+    QWidget::paintEvent(event);
+}
 
 void CleanupWindow::showEvent(QShowEvent *event)
 {

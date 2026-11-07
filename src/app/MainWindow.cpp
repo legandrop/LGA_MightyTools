@@ -57,6 +57,7 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
     // La barra de titulo la dibuja la app (TitleBar). En Windows, applyNativeFrame() le devuelve a
     // la ventana la sombra y las esquinas del sistema.
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
+    WindowFrame::prepare(this); // mac: translucida, para las esquinas redondeadas
     buildUi();
     setFixedSize(kWidth, kHeight);
 

@@ -539,6 +539,8 @@ elseif(APPLE)
         "-framework ApplicationServices"
         "-framework Carbon"
         "-framework ServiceManagement"
+        # Esquinas redondeadas de las ventanas sin marco (WindowFrameMac.mm).
+        "-framework QuartzCore"
         # UTType (Open in NukeX, MacFileAssociation.mm). El QtCore de Homebrew lo traia de arrastre; el
         # oficial no.
         "-framework UniformTypeIdentifiers"

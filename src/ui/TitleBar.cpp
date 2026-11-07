@@ -2,6 +2,7 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 #include "core/I18n.h"
+#include "platform/WindowFrame.h"
 
 #include <QAbstractButton>
 #include <QFrame>
@@ -226,9 +227,13 @@ void TitleBar::paintEvent(QPaintEvent *)
 
 void TitleBar::mousePressEvent(QMouseEvent *event)
 {
-    // Los botones se quedan con su propio click; lo que llega aca es la zona libre de la barra.
+    // Los botones se quedan con su propio click y el titulo es transparente al mouse: lo que llega aca
+    // es la zona libre de la barra.
     if (event->button() == Qt::LeftButton && window()->windowHandle()) {
-        window()->windowHandle()->startSystemMove();
+        emit dragRequested();
+        if (!WindowFrame::startDrag(window())) {
+            window()->windowHandle()->startSystemMove();
+        }
         event->accept();
         return;
     }

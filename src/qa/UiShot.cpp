@@ -66,6 +66,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+#include <QWindow>
 #include <qpa/qwindowsysteminterface.h>
 
 #include <climits>
@@ -2165,6 +2166,139 @@ int runHowItWorksProbe()
     return failures ? 1 : 0;
 }
 
+// --ui-probe titlebar-drag: que zonas de la barra de titulo arrancan el arrastre de la ventana. Se mandan
+// clicks a la ventana (QWindow), asi Qt elige el destino como con el mouse de verdad, pixel a pixel por la
+// mitad de la barra y por filas en varios puntos, y se cuenta TitleBar::dragRequested: todo lo que no es
+// un boton tiene que arrastrar; los botones y lo que esta debajo de la barra, no. El soltar va lejos para
+// que ningun boton haga click. En offscreen el arrastre en si no ocurre (no hay ventana del sistema).
+// Ademas: la ventana de Disk Space translucida (como en mac, WindowFrame::prepare) no deja huecos.
+int runTitleBarDragProbe()
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&](bool ok, const QString &what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "  %s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+    };
+    MemorySettingsStore store;
+    MemorySettingsStore appStore;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    MainWindow window(&host, MainWindow::Mode::Normal, &appStore);
+    window.setAttribute(Qt::WA_DontShowOnScreen, true);
+    window.show();
+    settle(window);
+    QWindow *native = window.windowHandle();
+    TitleBar *bar = window.titleBar();
+    if (!native || !bar) {
+        fprintf(stderr, "titlebar-drag: no hay ventana\n");
+        return 1;
+    }
+    int drags = 0;
+    QObject::connect(bar, &TitleBar::dragRequested, [&drags]() { ++drags; });
+    // Un click en `p` (coordenadas de la ventana): true si la barra pidio arrastrar.
+    const auto clickDrags = [&](const QPoint &p) {
+        const int before = drags;
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(p), QPointF(window.mapToGlobal(p)), Qt::LeftButton,
+                          Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(native, &press);
+        const QPoint away(-60, -60);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(away), QPointF(window.mapToGlobal(away)),
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(native, &release);
+        return drags > before;
+    };
+
+    const QPoint barOrigin = bar->mapTo(&window, QPoint(0, 0));
+    QList<QRect> buttons;
+    for (QAbstractButton *button : bar->findChildren<QAbstractButton *>()) {
+        if (button->isVisible()) {
+            buttons << QRect(button->mapTo(&window, QPoint(0, 0)), button->size());
+        }
+    }
+    const auto onButton = [&buttons](const QPoint &p) {
+        for (const QRect &r : buttons) {
+            if (r.contains(p)) {
+                return true;
+            }
+        }
+        return false;
+    };
+    check(!buttons.isEmpty(), QStringLiteral("la barra tiene %1 botones").arg(buttons.size()));
+
+    // Pixel a pixel por la mitad de la barra: arrastra todo lo que no es boton.
+    const int midY = barOrigin.y() + bar->height() / 2;
+    int drag = 0;
+    int wrong = 0;
+    for (int x = barOrigin.x(); x < barOrigin.x() + bar->width(); ++x) {
+        const QPoint p(x, midY);
+        const bool isDrag = clickDrags(p);
+        drag += isDrag ? 1 : 0;
+        if (isDrag == onButton(p)) {
+            ++wrong;
+            if (wrong <= 5) {
+                fprintf(stdout, "    x=%d: %s\n", x, isDrag ? "arrastra sobre un boton" : "no arrastra y no es boton");
+            }
+        }
+    }
+    check(wrong == 0, QStringLiteral("por la mitad: %1 de %2 px arrastran, %3 mal clasificados")
+                          .arg(drag).arg(bar->width()).arg(wrong));
+
+    // Columnas en varios puntos libres (sobre el titulo, en el medio, al lado de cada boton): toda la
+    // altura de la barra arrastra, de la fila 0 a la ultima.
+    const QLabel *title = bar->findChild<QLabel *>(QStringLiteral("titleBarTitle"));
+    QList<int> columns {bar->width() / 2, bar->width() * 3 / 4};
+    if (title) {
+        columns << title->geometry().center().x();
+    }
+    for (const QRect &r : buttons) {
+        columns << r.left() - barOrigin.x() - 2 << r.right() - barOrigin.x() + 2;
+    }
+    for (int cx : columns) {
+        if (cx < 0 || cx >= bar->width()) {
+            continue;
+        }
+        int bad = 0;
+        for (int y = 0; y < bar->height(); ++y) {
+            const QPoint p(barOrigin.x() + cx, barOrigin.y() + y);
+            if (!onButton(p) && !clickDrags(p)) {
+                ++bad;
+            }
+        }
+        check(bad == 0, QStringLiteral("columna x=%1: las %2 filas libres arrastran (%3 no)").arg(cx).arg(bar->height()).arg(bad));
+    }
+    if (title) {
+        check(clickDrags(title->mapTo(&window, title->rect().center())), QStringLiteral("sobre el titulo arrastra"));
+    }
+    check(!clickDrags(QPoint(bar->width() / 2, barOrigin.y() + bar->height() + 4)),
+          QStringLiteral("debajo de la barra no arrastra"));
+    check(window.isVisible() && !window.isMinimized(), QStringLiteral("ningun click cerro ni minimizo la ventana"));
+
+    // Disk Space translucida: la raiz ya no pinta el fondo del QSS por su cuenta; tiene que pintarlo
+    // CleanupWindow::paintEvent. Ni un pixel transparente en la ventana entera.
+    {
+        DiskState state(nullptr);
+        CleanupWindow cleanup(&state, nullptr, true);
+        cleanup.setAttribute(Qt::WA_TranslucentBackground, true);
+        settle(cleanup);
+        const QImage image = cleanup.grab().toImage().convertToFormat(QImage::Format_ARGB32);
+        int holes = 0;
+        for (int y = 0; y < image.height(); ++y) {
+            const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
+            for (int x = 0; x < image.width(); ++x) {
+                holes += qAlpha(line[x]) < 255 ? 1 : 0;
+            }
+        }
+        check(!image.isNull() && holes == 0, QStringLiteral("Disk Space translucida: %1 px transparentes de %2x%3")
+                                                 .arg(holes).arg(image.width()).arg(image.height()));
+    }
+    fprintf(stdout, "titlebar-drag: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "titlebar-drag FALLO" : "titlebar-drag ok");
+    return failures ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2214,6 +2348,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("how-it-works")) {
         return runHowItWorksProbe();
+    }
+    if (probe == QLatin1String("titlebar-drag")) {
+        return runTitleBarDragProbe();
     }
     if (probe == QLatin1String("net-retry")) {
         return runNetRetryProbe(args);

@@ -110,6 +110,7 @@ public:
 
 protected:
     void showEvent(QShowEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
     void changeEvent(QEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;

@@ -99,4 +99,15 @@ bool handleNativeEvent(void *message, qintptr *result)
     return false;
 }
 
+void prepare(QWidget *)
+{
+    // Nada que preparar: apply() le devuelve a la ventana el marco del sistema (sombra y esquinas).
+}
+
+bool startDrag(QWidget *)
+{
+    // Windows arrastra con startSystemMove() desde TitleBar::mousePressEvent.
+    return false;
+}
+
 } // namespace WindowFrame

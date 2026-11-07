@@ -2,6 +2,10 @@
 
 v1.53:
 
+Ventana en macOS (Lega, 06/11): las esquinas salían rectas y la barra de arriba arrastraba la ventana solo a veces. Esquinas: la ventana sin marco de Qt es una NSWindow «borderless», que macOS dibuja con esquinas rectas (el comentario de `WindowFrameMac.mm` decía lo contrario). Ahora `WindowFrame::prepare()` la vuelve translúcida antes de crearla y `apply()` recorta la capa de la vista con el radio de las ventanas del sistema (16 en macOS 26, medido en `NSThemeFrame`; 10 antes), con curva continua, y recalcula la sombra (también al terminar de estirar). Translúcida, la raíz deja de pintar el fondo del QSS: Disk Space lo pinta en su `paintEvent`. Arrastre: Qt entrega el click diferido y `startSystemMove()` usa `NSApp.currentEvent`, que a veces ya no era el mouseDown. Un monitor nativo guarda el último mouseDown real sin tragárselo y la barra arrastra con ese (`WindowFrame::startDrag`). Sonda nueva `--ui-probe titlebar-drag`. Windows no cambia.
+
+[ Ventana mac - Esquinas redondeadas y arrastre fiable desde toda la barra ]
+
 Meet Frame (herramienta nueva, D-74): Teams y Meet solo comparten la pantalla entera o una ventana, y no había forma de compartir una región sin que se vieran los avisos o un chat. Ahora un marco (`Ctrl+Alt+M`) marca la región y la app la dibuja en una ventana propia, «Meet Frame», que es la que se comparte. Antes de dibujarla tapa en gris liso las ventanas de las apps elegidas (Mensajería, Contraseñas, Correo, apps propias; WhatsApp y Telegram web por el título), los avisos, el escritorio, Alt+Tab y las ventanas de la propia app, recorriendo las ventanas en orden Z (`MeetFrameRules::computeMask`, que ante la duda tapa de más). Windows captura con DXGI Desktop Duplication (GDI de respaldo); mac, con ScreenCaptureKit y un filtro sin esas apps. Pausa (`Ctrl+Alt+P`) congela la imagen. El self-test suma 27 casos.
 
 [ Meet Frame - Herramienta nueva para compartir una región sin chats ni avisos ]
