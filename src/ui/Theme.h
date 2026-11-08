@@ -17,7 +17,7 @@ class QApplication;
 namespace Theme {
 
 // Fondos: la mesa (ventana, barra de titulo e indice) y la hoja (la pagina de cada herramienta).
-inline constexpr const char *kDesk = "#0B0B0D";
+inline constexpr const char *kDesk = "#0D0D0F";
 inline constexpr const char *kSheet = "#17171B";
 // Fondo de las paginas y de las ventanas de contenido (limpieza de Disk Space, dialogos). Es la hoja;
 // los modulos lo usan tambien como fondo hundido de miniaturas.
@@ -27,7 +27,7 @@ inline constexpr const char *kCard = "#1E1E23";
 inline constexpr const char *kCardBorder = "#25252B";
 // Relleno de botones, teclas y el riel de las barras.
 inline constexpr const char *kTile = "#2A2A31";
-inline constexpr const char *kField = "#111114";
+inline constexpr const char *kField = "#15151A";
 inline constexpr const char *kDialog = kSheet;
 
 // Bordes
@@ -87,7 +87,7 @@ inline constexpr const char *kOkBorder = "#24586A";
 inline constexpr const char *kErrBg = "#361B1D";
 inline constexpr const char *kErrBorder = "#6B2E31";
 // Casilla sin tildar. La tildada es magenta (kPrimary / kPrimaryBorder / kTextOnAccent): la eleccion del usuario.
-inline constexpr const char *kCheckOffBg = "#111114";
+inline constexpr const char *kCheckOffBg = "#15151A";
 inline constexpr const char *kCheckOffBorder = "#3A3A43";
 
 // Indice lateral (mesa) y filas de listas.
@@ -101,7 +101,7 @@ inline constexpr const char *kStatusOk = kOk;             ///< linea de estado d
 inline constexpr const char *kDotPaused = "#77767E";
 inline constexpr const char *kDotOffBorder = "#4A4A55";
 // Fondo y borde de las miniaturas de pantalla (zonas de Window Layouts y su selector).
-inline constexpr const char *kModIconBg = "#111114";
+inline constexpr const char *kModIconBg = "#15151A";
 inline constexpr const char *kModIconBorder = "#2F2F37";
 inline constexpr const char *kPlatBorder = "#3A3A43";
 inline constexpr const char *kMiniCard = "#19191E";       ///< tarjetas de la bienvenida

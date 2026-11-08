@@ -2,6 +2,10 @@
 
 v1.53:
 
+Tema (pedido de Lega, 07/11): la mesa y los fondos de campo se veían demasiado oscuros. Lega los eligió en vivo con dos selectores de color: la mesa (`kDesk`: ventana, barra de título e índice) pasa de `#0B0B0D` a `#0D0D0F`, y el fondo de campo (`kField`, `kCheckOffBg` y `kModIconBg`: campos de texto, casillas sin tildar y miniaturas de pantalla) de `#111114` a `#15151A`. Solo cambian esos cuatro valores de `Theme.h`; todo lo demás sale de los tokens.
+
+[ Tema - La mesa pasa a #0D0D0F y el fondo de campo a #15151A, un poco menos oscuros ]
+
 Meet Frame en mac (Lega, 07/11): la pausa seguía de fábrica en `⌘⌥P` mientras el marco ya había pasado a `⌘⌥⇧M`. Para que hagan juego, la pausa pasa a `⌘⌥⇧P` (`Ctrl+Alt+Shift+P` en Qt/mac). Windows sigue con `Ctrl+Alt+P`. El self-test comprueba los dos atajos de fábrica en cada plataforma; D-74 al día.
 
 [ Meet Frame - En mac la pausa de fabrica pasa a Cmd+Option+Shift+P ]
