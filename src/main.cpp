@@ -301,9 +301,10 @@ int main(int argc, char *argv[])
     const bool uiProbe = hasArg(argc, argv, "--ui-probe");
     const bool measureCycles = hasArg(argc, argv, "--measure-cycles");
     const bool measureIdle = hasArg(argc, argv, "--measure-idle");
+    const bool measurePages = hasArg(argc, argv, "--measure-pages");
     const bool measureFonts = hasArg(argc, argv, "--measure-fonts");
     const bool notifyPreview = hasArg(argc, argv, "--notify-preview");
-    const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measureFonts || notifyPreview;
+    const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measurePages || measureFonts || notifyPreview;
     if (automated) {
         AutomatedRun::enable();
     } else {
@@ -368,6 +369,9 @@ int main(int argc, char *argv[])
         }
         if (measureCycles) {
             return Measure::cycles(app.arguments());
+        }
+        if (measurePages) {
+            return Measure::pages(app.arguments());
         }
         if (measureFonts) {
             return Measure::fonts(app.arguments());

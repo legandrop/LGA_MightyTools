@@ -50,6 +50,9 @@ public:
     explicit UpdateService(QWidget *parentWindow, QObject *parent = nullptr);
     ~UpdateService() override;
 
+    // La ventana se arma y se suelta (AppController::ensureWindow): sin ella, los dialogos se centran en pantalla.
+    void setParentWindow(QWidget *parentWindow);
+
     // Programa el chequeo automatico una sola vez (llamadas siguientes no hacen nada) y, despues,
     // lo repite cada 3 horas mientras la app siga abierta.
     void scheduleAutomaticCheck();

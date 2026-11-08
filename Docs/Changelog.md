@@ -2,6 +2,10 @@
 
 v1.53:
 
+Rendimiento (Lega, 08/11: «cambiar de tab tarda; tiene que ser súper liviana»): la primera visita a una página tardaba hasta 240 ms y, después de usarla, la app quedaba en 52 MB. Causas: un `<b>` o `QFont::Bold` pedía Inter 700, que la app no trae, y Qt cargaba todas las fuentes del sistema; App Toggle pedía al shell 12 tamaños por ícono; `RichLineLabel` rearmaba su HTML en cada medida; cada fila de atajo creaba seis widgets ocultos; y la ventana se armaba al arrancar y no se soltaba nunca. Ahora la negrita va a 600, la monoespaciada es la del sistema, los íconos salen en los tamaños de pantalla, el documento se guarda, lo oculto se crea a pedido y la ventana se arma al abrirla y se suelta a los 5 minutos escondida (D-77). Todas las páginas: 540 → 250 ms; en la bandeja, 37–52 → 12,5 MB. Arreglado de paso un crash al destruir la ventana con un autoguardado pendiente. Medición nueva `--measure-pages`.
+
+[ Rendimiento - Paginas mas rapidas y la ventana se suelta en la bandeja: de 52 a 12,5 MB en reposo ]
+
 Igualar General con GateBouncer (Lega, 08/11, «todas menos la fila resaltada», y luego espacios y esquinas): quedaban diferencias de borde, letra, menú y medidas. Ahora el foco de los campos usa el borde del botón principal y el borde con el mouse encima es `#44444E`; las etiquetas de opción pasan a `#E3E1DA`, 14 px medio, y las notas a `#9C9BA2`, 12,5 px; el menú usa fondo de tarjeta, borde común, letra de 13 px y el de Colors va sin tilde; el chip «ok» usa `#57CDEF` y el botón principal cambia también el borde al pasar el mouse. Medidas: las tarjetas de todas las páginas pasan a margen 18/15, las filas de General a 12 de columna y 8 de fila, 12 de aire en el divisor, y el selector segmentado a 30 px con radios 7 y 5. 84 de 84 pares de tonos iguales; `nav-fit` queda en las 8 fallas viejas de Meet Frame.
 
 [ Paletas - General con el foco, el menu, los espacios y las esquinas de GateBouncer ]

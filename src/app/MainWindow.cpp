@@ -121,6 +121,14 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
 
 MainWindow::~MainWindow()
 {
+    // Primero se corta lo que llega del host: los paneles se borran despues (con los hijos) y alguno guarda en su
+    // destructor (Match words de Link Redirector), lo que avisa al host, que llamaria a esta ventana a medio
+    // destruir (m_pages ya no existe). Pasaba al cerrar la app con un autoguardado pendiente, y la ventana ahora
+    // tambien se suelta en la bandeja (AppController::releaseWindowIfIdle).
+    if (m_host) {
+        disconnect(m_host, nullptr, this, nullptr);
+    }
+    disconnect(Palette::Notifier::instance(), nullptr, this, nullptr);
     if (isVisible()) {
         savePosition();
     }

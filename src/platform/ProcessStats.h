@@ -17,6 +17,7 @@ struct ProcessStats
     qint64 gdiObjects = -1;
     qint64 userObjects = -1;
     qint64 privateBytes = -1;
+    qint64 workingSetBytes = -1; ///< Windows: la memoria fisica que ocupa ahora (Administrador de tareas)
     qint64 cpuMs = -1; ///< usuario + kernel desde que arranco el proceso
 
     // Foto completa. Cuidado: contar hilos recorre los de TODO el sistema y le cuesta al proceso

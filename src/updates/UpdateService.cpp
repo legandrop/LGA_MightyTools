@@ -164,6 +164,11 @@ QWidget *UpdateService::parentWindow() const
     return m_parentWindow.data();
 }
 
+void UpdateService::setParentWindow(QWidget *parentWindow)
+{
+    m_parentWindow = parentWindow;
+}
+
 bool UpdateService::setEndpointsForTests(const QUrl &manifestUrl, const QUrl &downloadBase, const QString &downloadDir)
 {
     if (!AutomatedRun::active()) {

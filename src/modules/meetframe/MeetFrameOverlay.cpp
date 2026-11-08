@@ -51,7 +51,7 @@ constexpr int kSlack = 1 << 20; // tanta holgura que el lienzo es siempre la pan
 QString withKeys(const QString &text, const QString &keys)
 {
     if (keys.isEmpty()) return text.toHtmlEscaped();
-    return text.toHtmlEscaped() + QStringLiteral("<div align='center'><span style='color:#E8E8E8'><b>%1</b></span></div>").arg(keys.toHtmlEscaped());
+    return text.toHtmlEscaped() + QStringLiteral("<div align='center'><span style='color:#E8E8E8; font-weight:600'>%1</span></div>").arg(keys.toHtmlEscaped());
 }
 
 } // namespace

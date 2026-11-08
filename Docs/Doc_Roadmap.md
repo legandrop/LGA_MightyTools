@@ -54,6 +54,11 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      privado): probarlos en Windows Sandbox.
    - En español la fila «Buscar actualizaciones al iniciar» llena justo la tarjeta App y deja las tarjetas
      5 px más anchas que en inglés (margen derecho de 11 px, no 16).
+   - **Liviana, lo que queda (D-77, medido con `--measure-pages` y el runner con `-Platform windows`):**
+     la primera ventana del proceso tarda ~110 ms en crearse (Windows y Qt, una vez); Window Layouts
+     con 12 atajos tiene 260 widgets y abre en ~40 ms (cada tecla es un Chip de dos widgets: una sola tecla
+     dibujada por fila los bajaría a la mitad); los editores de App Toggle, Mouse Buttons y Window Layouts
+     se arman ocultos con el panel; volver a una página ya vista reacomoda todos sus layouts (~5 ms).
 4. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9): hecha y probada.
    - **Mejora posible:** la migración desde una copia instalada no retoma un ProgID que apunta a otra
      copia de Mighty Tools (por ejemplo la de `build\`), ni aunque ese exe ya no exista: el panel queda

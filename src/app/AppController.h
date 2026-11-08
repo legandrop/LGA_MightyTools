@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_APPCONTROLLER_H
 #define MIGHTYTOOLS_APPCONTROLLER_H
 
+#include "app/GeneralPage.h"
 #include "app/HostServices.h"
 
 #include <QObject>
@@ -12,6 +13,7 @@
 class MainWindow;
 class ModuleHost;
 class QMenu;
+class QTimer;
 class QSystemTrayIcon;
 class SettingsStore;
 class SystemNotifier;
@@ -29,7 +31,7 @@ public:
     {
         bool dryRunInput = false;
         // Medicion de consumo (--measure-idle): settings en memoria, sin bandeja, sin updater, sin
-        // canal de instancia unica y como corrida automatizada. La ventana se arma y no se muestra.
+        // canal de instancia unica y como corrida automatizada. La ventana no se arma.
         bool measurement = false;
         // Abrir la ventana al arrancar: no hay bandeja (la app quedaria invisible) u otra copia la
         // pidio mientras la bandeja no estaba lista.
@@ -42,6 +44,7 @@ public:
     ~AppController() override;
 
     ModuleHost *host() const { return m_host; }
+    // La ventana, si esta armada: se arma al abrirla y se suelta un rato despues de esconderse (ensureWindow).
     MainWindow *mainWindow() const { return m_window; }
 
     // HostServices
@@ -84,11 +87,23 @@ private:
     void applySavedPalette();
     void onUiSizeChangeRequested(int level);
     bool firstRunView() const;
+    // La ventana se arma recien cuando hace falta (abrirla, un aviso, otra copia que la pide) y se suelta a los
+    // kReleaseAfterMs de estar escondida: la app pasa casi todo el tiempo en la bandeja y la ventana con sus
+    // paginas vistas ocupaba unos 23 MB. Volver a abrirla la arma en unos 45 ms.
+    MainWindow *ensureWindow();
+    void scheduleWindowRelease();
+    void releaseWindowIfIdle();
 
     Options m_options;
     std::unique_ptr<SettingsStore> m_store;
     ModuleHost *m_host = nullptr;
     MainWindow *m_window = nullptr;
+    QTimer *m_releaseTimer = nullptr;
+    // Lo que la ventana mostraba o tenia que mostrar, para armarla igual.
+    UpdateRowState m_updateState;
+    QString m_lastPage;
+    // Escondida por una herramienta (el calibrador de Nuke Shortcuts) que la va a volver a mostrar.
+    bool m_hiddenByTool = false;
     QSystemTrayIcon *m_tray = nullptr;
     QMenu *m_menu = nullptr;
     UpdateService *m_updates = nullptr;

@@ -5,6 +5,20 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-77 · App liviana: la ventana se arma al abrirla y se suelta en la bandeja** (2026-11-08, Lega: «cambiar
+  de tab tarda; la app tiene que quedar súper liviana, en procesamiento y en uso»). La ventana principal ya no
+  se arma al arrancar: se arma la primera vez que se abre (bandeja, aviso, otra copia) y se destruye a los
+  5 minutos de estar escondida; al volver se rearma en la página que se veía (unos 45 ms). Con todo apagado
+  la app pasa de 28 a 12,5 MB privados, y después de usarla y soltar la ventana, de 52 a 12,6 MB. Supuestos tomados sin Lega,
+  reversibles (`kReleaseAfterMs` en `src/app/AppController.cpp`):
+  - **5 minutos**: cerrar y reabrir enseguida no rearma nada; lo que quedaba a medio editar en un panel
+    (el editor de un atajo sin guardar) se pierde si la ventana pasa más de 5 minutos escondida.
+  - **No se suelta con algo suyo abierto** (un menú, un diálogo, el popup de Folder Switch) ni mientras la
+    escondió una herramienta (el calibrador de Nuke Shortcuts).
+  - **La negrita del texto con formato va a 600** (SemiBold, la que trae la app), no a 700: pedir un peso o una
+    familia que la app no trae («JetBrains Mono») hacía que Qt cargara todas las fuentes del sistema la
+    primera vez (70 a 230 ms). Se nota un poco más liviana en las pistas de Nuke Shortcuts y Open in NukeX.
+
 - **D-76 · Paletas de color, las de LGA GateBouncer** (2026-11-08, Lega: las mismas paletas y el mismo
   selector que GateBouncer v1.01). `src/ui/Palette.*` agrupa cada color de `Theme.h` y de la hoja en 18
   grupos con los ids de GateBouncer y deriva los tonos en HSL desde el base de cada grupo; las seis paletas

@@ -455,7 +455,7 @@ QLabel#accessText { color: @warnInk; font-size: @fs12_5; font-weight: 500; }
 QLabel#bannerText { color: @ok; font-size: @fs13; font-weight: 500; }
 QLabel#dialogLine, ElidedLabel#dialogLine { color: @text; font-size: @fs13; }
 QLabel#dialogValue { color: @text; font-size: @fs13; }
-ElidedLabel#dialogPath { color: @textStrong; font-family: "JetBrains Mono", Consolas, monospace; font-size: @fs12; }
+ElidedLabel#dialogPath { color: @textStrong; font-family: "@monoFamily"; font-size: @fs12; }
 QScrollArea#dialogScroll, QScrollArea#dialogScroll > QWidget > QWidget { background: transparent; border: none; }
 QLineEdit#ruleField {
     background-color: @field; border: 1px solid @fieldBorder; border-radius: 6px; color: @textStrong;
@@ -476,6 +476,13 @@ QPlainTextEdit#ruleArea:focus { border-color: @primaryBorder; }
 
     const QList<QPair<const char *, QString>> tokens = {
         {"@titleFamily", titleFamily()},
+        // Una monoespaciada que el sistema siempre trae: pedir una que no esta («JetBrains Mono») obligaba a Qt a
+        // cargar la base entera de fuentes del sistema para buscarle reemplazo.
+#ifdef Q_OS_MACOS
+        {"@monoFamily", QStringLiteral("Menlo")},
+#else
+        {"@monoFamily", QStringLiteral("Consolas")},
+#endif
         {"@tw600", QString::number(titleWeight(600))}, {"@tw700", QString::number(titleWeight(700))},
         {"@tw800", QString::number(titleWeight(800))},
         {"@statusOk", kStatusOk}, {"@listSelected", kListSelected}, {"@listHover", kListHover},

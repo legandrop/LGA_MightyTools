@@ -464,6 +464,8 @@ RichLineLabel::RichLineLabel(const QString &html, int lineHeight, QWidget *paren
     setSizePolicy(policy);
 }
 
+RichLineLabel::~RichLineLabel() = default;
+
 namespace {
 
 constexpr int kKeycapHeight = 20;
@@ -505,35 +507,53 @@ QImage keycapImage(const QString &key, qreal dpr)
 
 } // namespace
 
-void RichLineLabel::layoutDocument(QTextDocument &document, int width) const
+QTextDocument &RichLineLabel::document(int width) const
 {
-    document.setDefaultFont(font());
-    document.setDocumentMargin(0);
-    // Las teclas de Ui::keycapsHtml(): una imagen por tecla (el nombre va en hexadecimal: "⌘" no tiene que
-    // pasar por la codificacion de una URL), a la densidad de la pantalla.
-    static const QRegularExpression keycap(QStringLiteral("src=\"lgakey:([0-9a-f]+)\""));
+    // El documento se arma una vez por texto, fuente y densidad: el layout pregunta el alto varias veces por
+    // pasada y la pintada tambien lo necesita, y rearmar el HTML en cada una era lo que mas pesaba al cambiar
+    // de pagina. Cambiar el ancho solo vuelve a partir las lineas.
     const qreal dpr = qMax<qreal>(2.0, devicePixelRatioF());
-    for (auto it = keycap.globalMatch(text()); it.hasNext();) {
-        const QString hex = it.next().captured(1);
-        document.addResource(QTextDocument::ImageResource, QUrl(kKeycapScheme + hex),
-                             keycapImage(QString::fromUtf8(QByteArray::fromHex(hex.toLatin1())), dpr));
+    const QString key = text() + QChar(0x1F) + font().key() + QChar(0x1F) + QString::number(dpr);
+    if (!m_document || key != m_documentKey) {
+        m_document = std::make_unique<QTextDocument>();
+        QTextDocument &document = *m_document;
+        document.setDefaultFont(font());
+        document.setDocumentMargin(0);
+        // <b> a 600: la app trae Inter SemiBold y no Bold. Un 700 obligaba a Qt a cargar la base entera de
+        // fuentes del sistema la primera vez (70 a 230 ms con muchas fuentes instaladas) para sintetizarlo.
+        document.setDefaultStyleSheet(QStringLiteral("b, strong { font-weight: 600; }"));
+        // Las teclas de Ui::keycapsHtml(): una imagen por tecla (el nombre va en hexadecimal: "⌘" no tiene que
+        // pasar por la codificacion de una URL), a la densidad de la pantalla.
+        static const QRegularExpression keycap(QStringLiteral("src=\"lgakey:([0-9a-f]+)\""));
+        for (auto it = keycap.globalMatch(text()); it.hasNext();) {
+            const QString hex = it.next().captured(1);
+            document.addResource(QTextDocument::ImageResource, QUrl(kKeycapScheme + hex),
+                                 keycapImage(QString::fromUtf8(QByteArray::fromHex(hex.toLatin1())), dpr));
+        }
+        document.setHtml(text());
+        QTextCursor cursor(&document);
+        cursor.select(QTextCursor::Document);
+        QTextBlockFormat format;
+        format.setLineHeight(m_lineHeight, QTextBlockFormat::FixedHeight);
+        cursor.mergeBlockFormat(format);
+        m_documentKey = key;
+        m_documentWidth = -1;
+        m_idealWidth = -1;
     }
-    document.setHtml(text());
-    QTextCursor cursor(&document);
-    cursor.select(QTextCursor::Document);
-    QTextBlockFormat format;
-    format.setLineHeight(m_lineHeight, QTextBlockFormat::FixedHeight);
-    cursor.mergeBlockFormat(format);
-    document.setTextWidth(qMax(1, width));
+    width = qMax(1, width);
+    if (width != m_documentWidth) {
+        m_document->setTextWidth(width);
+        m_documentWidth = width;
+    }
+    return *m_document;
 }
 
 int RichLineLabel::heightForWidth(int width) const
 {
-    QTextDocument document;
-    layoutDocument(document, width);
-    document.size(); // el layout del documento es perezoso: sin esto las lineas todavia no existen
+    QTextDocument &doc = document(width);
+    doc.size(); // el layout del documento es perezoso: sin esto las lineas todavia no existen
     int lines = 0;
-    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+    for (QTextBlock block = doc.begin(); block.isValid(); block = block.next()) {
         lines += qMax(1, block.layout() ? block.layout()->lineCount() : 1);
     }
     return qMax(1, lines) * m_lineHeight;
@@ -541,9 +561,17 @@ int RichLineLabel::heightForWidth(int width) const
 
 QSize RichLineLabel::sizeHint() const
 {
-    QTextDocument document;
-    layoutDocument(document, QWIDGETSIZE_MAX / 4);
-    return QSize(int(document.idealWidth()) + 1, m_lineHeight);
+    const QString key = text() + QChar(0x1F) + font().key();
+    if (m_idealWidth < 0 || key != m_idealKey) {
+        // El ancho natural (sin partir) se mide una vez por texto: no cambia con el ancho de la pagina.
+        const int previous = m_documentWidth;
+        m_idealWidth = int(document(QWIDGETSIZE_MAX / 4).idealWidth()) + 1;
+        m_idealKey = key;
+        if (previous > 0) {
+            document(previous);
+        }
+    }
+    return QSize(m_idealWidth, m_lineHeight);
 }
 
 QSize RichLineLabel::minimumSizeHint() const
@@ -554,8 +582,7 @@ QSize RichLineLabel::minimumSizeHint() const
 void RichLineLabel::paintEvent(QPaintEvent *)
 {
     QPainter painter(this);
-    QTextDocument document;
-    layoutDocument(document, width());
+    QTextDocument &doc = document(width());
     // Con altura fija Qt pone la linea arriba de su caja: se baja la mitad del aire, como CSS.
     const QFontMetricsF metrics(font());
     const qreal halfLeading = (m_lineHeight - (metrics.ascent() + metrics.descent())) / 2.0;
@@ -563,7 +590,7 @@ void RichLineLabel::paintEvent(QPaintEvent *)
     QAbstractTextDocumentLayout::PaintContext context;
     context.palette = palette();
     context.palette.setColor(QPalette::Text, palette().color(foregroundRole()));
-    document.documentLayout()->draw(&painter, context);
+    doc.documentLayout()->draw(&painter, context);
 }
 
 // ------------------------------------------------------------------ Chip
@@ -898,6 +925,8 @@ AppIconTile::AppIconTile(QWidget *parent)
 void AppIconTile::setIcon(const QIcon &icon)
 {
     m_icon = icon;
+    m_scaled = QPixmap();
+    m_scaledDpr = 0;
     update();
 }
 
@@ -934,6 +963,10 @@ void AppIconTile::paintIcon(QPainter &painter, const QRect &target) const
     // (ahi el widget sigue creyendo que su pantalla es de 1).
     const qreal dpr = qMax<qreal>(1.0, painter.deviceTransform().m11());
     const int device = qRound(target.width() * dpr);
+    if (!m_scaled.isNull() && qFuzzyCompare(m_scaledDpr, dpr) && m_scaledDevice == device) {
+        painter.drawPixmap(target.topLeft(), m_scaled);
+        return;
+    }
     QSize pick;
     for (const QSize &size : sizes) {
         const bool fits = size.width() >= device;
@@ -947,6 +980,9 @@ void AppIconTile::paintIcon(QPainter &painter, const QRect &target) const
         pixmap = pixmap.scaled(device, device, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
     pixmap.setDevicePixelRatio(dpr);
+    m_scaled = pixmap;
+    m_scaledDpr = dpr;
+    m_scaledDevice = device;
     painter.drawPixmap(target.topLeft(), pixmap);
 }
 
@@ -1137,6 +1173,14 @@ void setDropdownArrow(QPushButton *button)
 
 void repolish(QWidget *widget)
 {
+    // Un widget que todavia no se pulio nunca (recien creado, sin mostrar) toma la propiedad nueva en su primera
+    // pulida: deshacer y rehacer una que no existe era trabajo doble con la hoja de estilo global (cada tecla de
+    // un atajo pasaba por aca dos veces al armar la pagina).
+    if (!widget->testAttribute(Qt::WA_WState_Polished)) {
+        widget->ensurePolished();
+        widget->update();
+        return;
+    }
     widget->style()->unpolish(widget);
     widget->style()->polish(widget);
     widget->update();

@@ -4,6 +4,20 @@
 
 namespace AppToggleSystem {
 
+namespace {
+qreal g_captureIconScale = 0;
+}
+
+void setCaptureIconScale(qreal scale)
+{
+    g_captureIconScale = scale;
+}
+
+qreal captureIconScale()
+{
+    return g_captureIconScale;
+}
+
 QString normalizedPath(const QString &path)
 {
     QString clean = QDir::cleanPath(QDir::fromNativeSeparators(path.trimmed()));

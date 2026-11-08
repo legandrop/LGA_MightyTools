@@ -18,12 +18,14 @@
 #include "ui/Theme.h"
 
 #include "modules/diskspace/cleanup/CleanupWindow.h"
+#include "modules/openinnukex/OpenInNukeXOperations.h"
 #include "updates/UpdateService.h"
 
 #include <QAction>
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDebug>
+#include <QElapsedTimer>
 #include <QFileOpenEvent>
 #include <QMenu>
 #include <QMessageBox>
@@ -43,6 +45,8 @@ const QString kAutoStartDecided = QStringLiteral("app/autoStartDecided");
 const QString kLanguage = QStringLiteral("app/language");
 // La paleta de colores elegida (Palette::presetIds). Sin valor: la de fabrica (Violet).
 const QString kPalette = QStringLiteral("app/palette");
+// Cuanto queda armada la ventana despues de esconderse (ver ensureWindow).
+constexpr int kReleaseAfterMs = 5 * 60 * 1000;
 
 // Los argumentos que vuelven con el click en un aviso: "module=diskSpace&action=snooze&key=C%3A%2F".
 QString noticeArguments(const QString &moduleId, const QString &action, const QString &key)
@@ -84,19 +88,7 @@ AppController::AppController(const Options &options, QObject *parent)
     m_host = new ModuleHost(ModuleRegistry::all(), m_store.get(), hostOptions, this);
     m_host->setHostServices(this);
 
-    m_window = new MainWindow(m_host, MainWindow::Mode::Normal, m_options.measurement ? nullptr : m_store.get());
-    connect(m_window, &MainWindow::toggleRequested, this, &AppController::onToggleRequested);
-    connect(m_window, &MainWindow::releaseRequested, this, &AppController::onReleaseRequested);
-    connect(m_window, &MainWindow::rebuilt, this, &AppController::wireGeneralPage);
-#ifdef Q_OS_MACOS
-    // Cmd+Q con la ventana al frente sale de la app, como en cualquier app de mac (no hay barra de menu
-    // propia: LSUIElement).
-    auto *quitAction = new QAction(m_window);
-    quitAction->setShortcut(QKeySequence::Quit);
-    quitAction->setShortcutContext(Qt::WindowShortcut);
-    connect(quitAction, &QAction::triggered, this, &AppController::quit);
-    m_window->addAction(quitAction);
-#endif
+    // La ventana NO se arma aca: ensureWindow() la arma la primera vez que hace falta.
 
     connect(m_host, &ModuleHost::moduleToggled, this, [this]() { refreshTray(); });
     connect(m_host, &ModuleHost::moduleStatusChanged, this, [this]() { refreshTray(); });
@@ -140,8 +132,9 @@ AppController::AppController(const Options &options, QObject *parent)
     }
 
     if (!m_options.measurement && !m_options.paletteEditor) {
-        // parentWindow es la ventana (normalmente oculta): sus dialogos igual se centran en pantalla.
-        m_updates = new UpdateService(m_window, this);
+        // parentWindow es la ventana cuando esta armada (ensureWindow se la pasa); sin ella, los dialogos se
+        // centran en la pantalla.
+        m_updates = new UpdateService(nullptr, this);
         m_updates->setSettingsStore(m_store.get());
         m_updates->setAutomaticChecksEnabled([this]() { return m_store->value(kCheckUpdates, true).toBool(); });
         // Actualizar cierra la app: con Disk Space borrando, el borrado quedaria por la mitad.
@@ -154,27 +147,31 @@ AppController::AppController(const Options &options, QObject *parent)
             }
             return false;
         });
-        connect(m_updates, &UpdateService::checking, this, [this]() {
-            m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
+        // El estado se guarda aca: la ventana puede no estar armada, y al armarse lo muestra.
+        const auto setUpdateState = [this](const UpdateRowState &state) {
+            m_updateState = state;
+            if (m_window) {
+                m_window->setUpdateState(state);
+            }
+        };
+        connect(m_updates, &UpdateService::checking, this, [setUpdateState]() {
+            setUpdateState(UpdateRowState{UpdateRowState::Kind::Checking, QString()});
         });
-        connect(m_updates, &UpdateService::retrying, this, [this](int attempt, int attempts) {
-            m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Retrying, QString(), attempt, attempts});
+        connect(m_updates, &UpdateService::retrying, this, [setUpdateState](int attempt, int attempts) {
+            setUpdateState(UpdateRowState{UpdateRowState::Kind::Retrying, QString(), attempt, attempts});
         });
-        connect(m_updates, &UpdateService::upToDate, this, [this](const QString &version) {
-            m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Latest, version});
+        connect(m_updates, &UpdateService::upToDate, this, [setUpdateState](const QString &version) {
+            setUpdateState(UpdateRowState{UpdateRowState::Kind::Latest, version});
         });
-        connect(m_updates, &UpdateService::updateAvailable, this, [this](const QString &version) {
-            m_window->setUpdateState(UpdateRowState{UpdateRowState::Kind::Available, version});
+        connect(m_updates, &UpdateService::updateAvailable, this, [setUpdateState](const QString &version) {
+            setUpdateState(UpdateRowState{UpdateRowState::Kind::Available, version});
         });
-        connect(m_updates, &UpdateService::checkFailed, this,
-                [this]() { m_window->setUpdateState(UpdateRowState()); });
+        connect(m_updates, &UpdateService::checkFailed, this, [setUpdateState]() { setUpdateState(UpdateRowState()); });
     }
 
-    wireGeneralPage();
     const bool checkUpdates = m_store->value(kCheckUpdates, true).toBool();
 
     m_host->startEnabled();
-    m_window->setFirstRun(firstRunView());
 
     if (m_tray) {
         refreshTray();
@@ -219,7 +216,15 @@ AppController::~AppController()
     ToastActivation::setHandler(nullptr);
     // Primero las herramientas (sus paneles son hijos de la ventana), despues la ventana y el menu.
     m_host->shutdown();
-    delete m_window;
+    // Sin el filtro y con el puntero en nulo antes del delete: el Hide que manda ~QWidget no tiene que volver a
+    // tocar la ventana a medio destruir.
+    qApp->removeEventFilter(this);
+    if (m_releaseTimer) {
+        m_releaseTimer->stop();
+    }
+    MainWindow *window = m_window;
+    m_window = nullptr;
+    delete window;
     delete m_menu;
 }
 
@@ -233,7 +238,9 @@ void AppController::onToggleRequested(const QString &id, bool on)
     m_host->setEnabled(id, on);
     if (on && m_host->isRunning(id)) {
         onFirstToolOn();
-        m_window->selectPage(id);
+        if (m_window) {
+            m_window->selectPage(id);
+        }
     }
 }
 
@@ -241,7 +248,9 @@ void AppController::onFirstToolOn()
 {
     if (!m_store->value(kWelcomeDone, false).toBool()) {
         m_store->setValue(kWelcomeDone, true);
-        m_window->setFirstRun(false);
+        if (m_window) {
+            m_window->setFirstRun(false);
+        }
     }
     // El inicio con el sistema se activa solo con la primera herramienta que se prende (D-06), una
     // sola vez y solo en una copia instalada: si despues el usuario lo apaga, queda apagado.
@@ -270,11 +279,16 @@ void AppController::onReleaseRequested(const QString &id)
     if (!d->releaseSystem(&error)) {
         QMessageBox::warning(m_window, d->title, error);
     }
-    m_window->selectPage(id);
+    if (m_window) {
+        m_window->selectPage(id);
+    }
 }
 
 void AppController::refreshAutoStart()
 {
+    if (!m_window) {
+        return;
+    }
     if (m_options.measurement) {
         m_window->generalPage()->setAutoStart(false, false);
         return;
@@ -324,7 +338,9 @@ void AppController::onLanguageChangeRequested(const QString &code)
     // Fuera de la senal: el desplegable que la mando es parte de lo que se borra. El menu de la
     // bandeja, los avisos y la ayuda se arman al vuelo y ya salen en el idioma nuevo.
     QTimer::singleShot(0, this, [this]() {
-        m_window->rebuildUi();
+        if (m_window) {
+            m_window->rebuildUi();
+        }
         refreshTray();
     });
 }
@@ -349,7 +365,9 @@ void AppController::onPaletteChangeRequested(const QString &id)
     }
     m_store->setValue(kPalette, id);
     qInfo().noquote() << QStringLiteral("[AppController] Paleta: %1").arg(id);
-    m_window->schedulePaletteRebuild();
+    if (m_window) {
+        m_window->schedulePaletteRebuild();
+    }
 }
 
 void AppController::onUiSizeChangeRequested(int level)
@@ -368,6 +386,9 @@ void AppController::onUiSizeChangeRequested(int level)
     // si no entra entera). Qt deja el origen de cada pantalla sin escalar: se escala solo la distancia
     // a ese origen, asi tambien vale en un segundo monitor. Primero se oculta: al ocultarse la ventana
     // guarda su posicion tal cual, y despues ya no la vuelve a guardar.
+    if (!m_window) {
+        return; // se elige desde la ventana: sin ella no llega
+    }
     const qreal ratio = UiScale::factor(UiScale::sessionLevel()) / UiScale::factor(level);
     const QPoint position = m_window->pos();
     const QPoint origin = m_window->screen() ? m_window->screen()->geometry().topLeft() : QPoint();
@@ -481,20 +502,118 @@ void AppController::onNoticeClicked(const QString &arguments, const QString &cho
 
 void AppController::showPanel(const QString &moduleId)
 {
-    m_window->selectPage(moduleId);
+    if (m_options.measurement) {
+        return;
+    }
+    ensureWindow()->selectPage(moduleId);
     showSettings();
 }
 
 bool AppController::hideWindow()
 {
+    if (!m_window) {
+        return false;
+    }
     const bool visible = m_window->isVisible();
+    // La herramienta la va a volver a mostrar (showWindow): mientras tanto no se suelta. Una segunda herramienta
+    // que la esconde ya escondida no borra la marca de la primera.
+    m_hiddenByTool = m_hiddenByTool || visible;
     m_window->hide();
     return visible;
 }
 
 void AppController::showWindow()
 {
+    m_hiddenByTool = false;
     showSettings();
+}
+
+MainWindow *AppController::ensureWindow()
+{
+    if (m_window) {
+        return m_window;
+    }
+    QElapsedTimer clock;
+    clock.start();
+    m_window = new MainWindow(m_host, MainWindow::Mode::Normal, m_options.measurement ? nullptr : m_store.get());
+    connect(m_window, &MainWindow::toggleRequested, this, &AppController::onToggleRequested);
+    connect(m_window, &MainWindow::releaseRequested, this, &AppController::onReleaseRequested);
+    connect(m_window, &MainWindow::rebuilt, this, &AppController::wireGeneralPage);
+#ifdef Q_OS_MACOS
+    // Cmd+Q con la ventana al frente sale de la app, como en cualquier app de mac (no hay barra de menu
+    // propia: LSUIElement).
+    auto *quitAction = new QAction(m_window);
+    quitAction->setShortcut(QKeySequence::Quit);
+    quitAction->setShortcutContext(Qt::WindowShortcut);
+    connect(quitAction, &QAction::triggered, this, &AppController::quit);
+    m_window->addAction(quitAction);
+#endif
+    if (m_updates) {
+        m_updates->setParentWindow(m_window);
+    }
+    wireGeneralPage();
+    m_window->setFirstRun(firstRunView());
+    m_window->setUpdateState(m_updateState);
+    // Vuelve a la pagina que se veia cuando se solto.
+    if (!m_lastPage.isEmpty()) {
+        m_window->selectPage(m_lastPage);
+    }
+    qInfo().noquote() << QStringLiteral("[AppController] Ventana armada en %1 ms").arg(clock.elapsed());
+    return m_window;
+}
+
+void AppController::scheduleWindowRelease()
+{
+    if (m_options.measurement) {
+        return;
+    }
+    if (!m_releaseTimer) {
+        m_releaseTimer = new QTimer(this);
+        m_releaseTimer->setSingleShot(true);
+        m_releaseTimer->setInterval(kReleaseAfterMs);
+        connect(m_releaseTimer, &QTimer::timeout, this, &AppController::releaseWindowIfIdle);
+    }
+    m_releaseTimer->start();
+}
+
+void AppController::releaseWindowIfIdle()
+{
+    if (!m_window || m_window->isVisible() || m_hiddenByTool) {
+        return;
+    }
+    // Nunca con algo de la ventana abierto: un menu, un dialogo o el popup de Folder Switch son hijos suyos y se
+    // irian con ella. Se vuelve a probar mas tarde.
+    // El Apply de Open in NukeX usa el HWND de la ventana como dueño del selector nativo "Abrir con", que no es un
+    // QWidget: mientras corre, la ventana no se suelta.
+    bool busy = QApplication::activePopupWidget() || QApplication::activeModalWidget() || OpenInNukeXOperations::busy();
+    const QWidgetList tops = QApplication::topLevelWidgets();
+    for (QWidget *top : tops) {
+        if (busy) {
+            break;
+        }
+        if (top == m_window || !top->isVisible()) {
+            continue;
+        }
+        for (QWidget *up = top->parentWidget(); up; up = up->parentWidget()) {
+            if (up == m_window) {
+                busy = true;
+                break;
+            }
+        }
+    }
+    if (busy) {
+        scheduleWindowRelease();
+        return;
+    }
+    m_lastPage = m_window->currentPage();
+    MainWindow *window = m_window;
+    m_window = nullptr;
+    if (m_updates) {
+        m_updates->setParentWindow(nullptr);
+    }
+    // En el acto, como rebuildUi(): el host guarda cada panel en un QPointer y al volver a abrir pide otro.
+    delete window;
+    qInfo().noquote() << QStringLiteral("[AppController] Ventana suelta tras %1 s escondida").arg(kReleaseAfterMs / 1000);
 }
 
 QWidget *AppController::window() const
@@ -507,6 +626,12 @@ void AppController::showSettings()
     if (m_options.measurement) {
         return;
     }
+    ensureWindow();
+    // Abierta por el usuario: ya no la esconde ninguna herramienta, y al volver a esconderla se puede soltar.
+    m_hiddenByTool = false;
+    if (m_releaseTimer) {
+        m_releaseTimer->stop();
+    }
     // Estado real en cada apertura: un cambio hecho por fuera (Task Manager > Startup, Ajustes de
     // macOS, otra copia de la app) tiene que verse sin reiniciar.
     refreshAutoStart();
@@ -517,6 +642,14 @@ void AppController::showSettings()
 
 bool AppController::eventFilter(QObject *watched, QEvent *event)
 {
+    // La ventana escondida (la cruz, Escape, la bandeja) se suelta un rato despues; mostrada, se queda.
+    if (m_window && watched == m_window) {
+        if (event->type() == QEvent::Hide && !event->spontaneous()) {
+            scheduleWindowRelease();
+        } else if (event->type() == QEvent::Show && m_releaseTimer) {
+            m_releaseTimer->stop();
+        }
+    }
 #ifdef Q_OS_MACOS
     // D-46: con una ventana de la app a la vista, icono en el Dock y lugar en Cmd+Tab. Se recalcula
     // despues del evento (la ventana ya cambio de estado) y solo para ventanas de verdad: los popups,

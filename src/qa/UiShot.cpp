@@ -1,4 +1,6 @@
 #include "qa/UiShot.h"
+
+#include "platform/AppToggleSystem.h"
 #include "qa/NetRetryProbe.h"
 
 #include "app/GeneralPage.h"
@@ -308,6 +310,7 @@ int runUiShot(const QStringList &args)
     // ya tiene ese factor; la imagen se dibuja con el mismo, como la ve el usuario.
     const int uiScale = UiScale::sessionLevel();
     dpr *= UiScale::factor(uiScale);
+    AppToggleSystem::setCaptureIconScale(dpr);
     if (!outPath.endsWith(QLatin1String(".png"), Qt::CaseInsensitive) || QFileInfo::exists(outPath)
         || !QFileInfo(outPath).dir().exists()) {
         fprintf(stderr, "ui-shot: output must be a new .png in an existing folder (%s)\n", qPrintable(outPath));
@@ -1771,7 +1774,8 @@ int runHoldKeysProbe()
     for (QLabel *label : hold->findChildren<QLabel *>(QStringLiteral("caption"))) {
         if (label->property("windowsShortcutNote").toBool()) note = label;
     }
-    check(note && !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
+    // La nota se crea recien cuando hace falta: que no exista tambien es «no se muestra».
+    check(!note || !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
     hold->showWindowsShortcutNote(false);
     hold->setShortcut({Qt::NoModifier, Qt::Key_Space});
 #endif
@@ -1808,11 +1812,17 @@ int runRecorderGuardProbe()
     window.show();
     settle(window);
     QLabel *caption = nullptr;
-    QLabel *note = nullptr;
     for (QLabel *label : row->findChildren<QLabel *>(QStringLiteral("caption"))) {
-        if (label->property("windowsShortcutNote").toBool()) note = label;
-        else if (!caption && label->parentWidget() == row) caption = label;
+        if (!label->property("windowsShortcutNote").toBool() && !caption && label->parentWidget() == row) caption = label;
     }
+    // La nota de Windows se crea recien cuando hace falta: se busca en cada control.
+    const auto windowsNote = [row]() -> QLabel * {
+        for (QLabel *label : row->findChildren<QLabel *>(QStringLiteral("caption"))) {
+            if (label->property("windowsShortcutNote").toBool()) return label;
+        }
+        return nullptr;
+    };
+    (void)windowsNote; // en mac no se usa
     const auto press = [row](int key, Qt::KeyboardModifiers modifiers, quint32 vk) {
         QKeyEvent event(QEvent::KeyPress, key, modifiers, 0, vk, 0);
         QCoreApplication::sendEvent(row, &event);
@@ -1848,12 +1858,12 @@ int runRecorderGuardProbe()
 
     row->showWindowsShortcutNote(true);
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
-    check(note && note->isVisibleTo(&window), QStringLiteral("Win+E: nota neutra de que reemplaza el atajo de Windows"));
+    check(windowsNote() && windowsNote()->isVisibleTo(&window), QStringLiteral("Win+E: nota neutra de que reemplaza el atajo de Windows"));
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Meta+E")));
-    check(note && !note->isVisibleTo(&window), QStringLiteral("Ctrl+Win+E: sin nota (no es Win + una tecla sola)"));
+    check(windowsNote() && !windowsNote()->isVisibleTo(&window), QStringLiteral("Ctrl+Win+E: sin nota (no es Win + una tecla sola)"));
     row->showWindowsShortcutNote(false);
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
-    check(note && !note->isVisibleTo(&window), QStringLiteral("sin la opcion (Nuke Shortcuts, Folder Switch) nunca hay nota"));
+    check(windowsNote() && !windowsNote()->isVisibleTo(&window), QStringLiteral("sin la opcion (Nuke Shortcuts, Folder Switch) nunca hay nota"));
     check(Shortcut::fromPortableString(QStringLiteral("Meta+7")).replacesWindowsShortcut()
               && !Shortcut::fromPortableString(QStringLiteral("Meta+F5")).replacesWindowsShortcut()
               && !Shortcut::fromPortableString(QStringLiteral("Shift+Meta+E")).replacesWindowsShortcut(),

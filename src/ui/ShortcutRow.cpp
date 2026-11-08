@@ -77,34 +77,16 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_name = new ElidedShortcutName(name, this);
     m_name->setObjectName(QStringLiteral("shortcutName"));
     row->addWidget(m_name, 1);
+    m_topRow = row;
 
-    // Chip opcional (Folder Switch: "In use"), oculto hasta que setExtraChip() lo pida.
-    m_extraChip = new Chip(this);
-    m_extraChip->hide();
-    row->addWidget(m_extraChip, 0, Qt::AlignVCenter);
-
+    // El chip opcional (Folder Switch: "In use"), el grabador y la nota de Windows se crean recien cuando
+    // hacen falta (ensureExtraChip, ensureRecorder, ensureWindowsNote): una pagina con doce atajos armaba,
+    // pulia y medía seis widgets ocultos por fila.
     m_keys = new QWidget(this);
     m_keysLayout = new QHBoxLayout(m_keys);
     m_keysLayout->setContentsMargins(0, 0, 0, 0);
     m_keysLayout->setSpacing(5);
     row->addWidget(m_keys, 0, Qt::AlignVCenter);
-
-    m_recorder = new QFrame(this);
-    m_recorder->setObjectName(QStringLiteral("recorder"));
-    m_recorder->setFixedWidth(168);
-    auto *recorderLayout = new QHBoxLayout(m_recorder);
-    recorderLayout->setContentsMargins(8, 0, 8, 0);
-    recorderLayout->setSpacing(6);
-    m_recorderText = new QLabel(m_recorder);
-    m_recorderText->setObjectName(QStringLiteral("recorderText"));
-    recorderLayout->addWidget(m_recorderText, 1);
-    // Grabando: el punto magenta (lo que esta haciendo el usuario), como el resto de las marcas.
-    auto *dot = new StatusDot(9, m_recorder);
-    dot->setObjectName(QStringLiteral("recorderDot"));
-    dot->setTone(QStringLiteral("accent"));
-    recorderLayout->addWidget(dot, 0, Qt::AlignVCenter);
-    m_recorder->hide();
-    row->addWidget(m_recorder, 0, Qt::AlignVCenter);
 
     m_editButton = Ui::button(QString(), QStringLiteral("ghost"), QStringLiteral("icon"), this);
     m_editButton->setObjectName(QStringLiteral("editShortcut"));
@@ -122,11 +104,6 @@ ShortcutRow::ShortcutRow(const QString &name, const QString &description, QWidge
     m_captionRow->setSpacing(5);
     m_captionRow->addWidget(m_caption, 1);
     column->addLayout(m_captionRow);
-    m_windowsNote = Ui::caption(I18n::tr("Replaces the Windows shortcut for this key."), this);
-    // El objectName "caption" es el que le da el gris de las descripciones: la marca va aparte.
-    m_windowsNote->setProperty("windowsShortcutNote", true);
-    m_windowsNote->hide();
-    column->addWidget(m_windowsNote);
 
     connect(m_editButton, &QPushButton::clicked, this, [this]() {
         if (m_editHandler) {
@@ -149,11 +126,62 @@ void ShortcutRow::setTrailingWidget(QWidget *widget)
 void ShortcutRow::setExtraChip(const QString &tone, const QString &text)
 {
     if (tone.isEmpty()) {
-        m_extraChip->hide();
+        if (m_extraChip) {
+            m_extraChip->hide();
+        }
         return;
+    }
+    if (!m_extraChip) {
+        // Entre el nombre y las teclas.
+        m_extraChip = new Chip(this);
+        m_extraChip->hide();
+        m_topRow->insertWidget(m_topRow->indexOf(m_keys), m_extraChip, 0, Qt::AlignVCenter);
     }
     m_extraChip->set(tone, text);
     m_extraChip->show();
+}
+
+void ShortcutRow::ensureRecorder()
+{
+    if (m_recorder) {
+        return;
+    }
+    m_recorder = new QFrame(this);
+    m_recorder->setObjectName(QStringLiteral("recorder"));
+    m_recorder->setFixedWidth(168);
+    auto *recorderLayout = new QHBoxLayout(m_recorder);
+    recorderLayout->setContentsMargins(8, 0, 8, 0);
+    recorderLayout->setSpacing(6);
+    m_recorderText = new QLabel(m_recorder);
+    m_recorderText->setObjectName(QStringLiteral("recorderText"));
+    recorderLayout->addWidget(m_recorderText, 1);
+    // Grabando: el punto magenta (lo que esta haciendo el usuario), como el resto de las marcas.
+    auto *dot = new StatusDot(9, m_recorder);
+    dot->setObjectName(QStringLiteral("recorderDot"));
+    dot->setTone(QStringLiteral("accent"));
+    recorderLayout->addWidget(dot, 0, Qt::AlignVCenter);
+    m_recorder->hide();
+    // Donde estan las teclas, antes del lapiz.
+    m_topRow->insertWidget(m_topRow->indexOf(m_editButton), m_recorder, 0, Qt::AlignVCenter);
+}
+
+void ShortcutRow::syncWindowsNote()
+{
+    const bool visible = m_windowsNoteEnabled && !m_holdKeys && m_shortcut.replacesWindowsShortcut();
+    if (!visible) {
+        if (m_windowsNote) {
+            m_windowsNote->hide();
+        }
+        return;
+    }
+    if (!m_windowsNote) {
+        m_windowsNote = Ui::caption(I18n::tr("Replaces the Windows shortcut for this key."), this);
+        // El objectName "caption" es el que le da el gris de las descripciones: la marca va aparte.
+        m_windowsNote->setProperty("windowsShortcutNote", true);
+        // Debajo de la descripcion: lo ultimo de la columna.
+        layout()->addWidget(m_windowsNote);
+    }
+    m_windowsNote->show();
 }
 
 void ShortcutRow::setShortcut(const Shortcut &shortcut)
@@ -173,7 +201,7 @@ void ShortcutRow::setKeyLabels(const QStringList &labels)
 void ShortcutRow::showWindowsShortcutNote(bool enabled)
 {
     m_windowsNoteEnabled = enabled;
-    m_windowsNote->setVisible(m_windowsNoteEnabled && !m_holdKeys && m_shortcut.replacesWindowsShortcut());
+    syncWindowsNote();
 }
 
 void ShortcutRow::rebuildKeys()
@@ -191,7 +219,7 @@ void ShortcutRow::rebuildKeys()
     if (m_keysLayout->isEmpty()) {
         m_keysLayout->addWidget(Ui::caption(I18n::tr("Not set"), m_keys), 0, Qt::AlignVCenter);
     }
-    m_windowsNote->setVisible(m_windowsNoteEnabled && !m_holdKeys && m_shortcut.replacesWindowsShortcut());
+    syncWindowsNote();
 }
 
 QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers) const
@@ -213,9 +241,14 @@ QString ShortcutRow::partialText(Qt::KeyboardModifiers modifiers) const
 
 void ShortcutRow::setRecordingVisible(bool recording, const QString &partial)
 {
+    if (recording) {
+        ensureRecorder();
+    }
     m_keys->setVisible(!recording);
-    m_recorder->setVisible(recording);
-    m_recorderText->setText(partial);
+    if (m_recorder) {
+        m_recorder->setVisible(recording);
+        m_recorderText->setText(partial);
+    }
     if (recording) {
         m_caption->setText(m_holdKeys ? I18n::tr("Press the keys to hold, like Space. Esc cancels.")
                                       : I18n::tr("Press the new combination. Esc cancels."));
@@ -314,7 +347,7 @@ void ShortcutRow::keyPressEvent(QKeyEvent *event)
         return;
     }
     if (Shortcut::isModifierKey(event->key())) {
-        m_recorderText->setText(partialText(modifiers));
+        if (m_recorderText) m_recorderText->setText(partialText(modifiers));
         return;
     }
     Shortcut candidate;
@@ -367,5 +400,5 @@ void ShortcutRow::keyReleaseEvent(QKeyEvent *event)
         return;
     }
     event->accept();
-    m_recorderText->setText(partialText(relevantModifiers(event->modifiers())));
+    if (m_recorderText) m_recorderText->setText(partialText(relevantModifiers(event->modifiers())));
 }

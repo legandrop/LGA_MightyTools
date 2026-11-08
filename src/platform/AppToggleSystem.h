@@ -92,6 +92,11 @@ QString productName(const QString &appPath);
 // shell directamente: la captura de QA (plataforma offscreen) muestra el mismo que ve el usuario.
 QIcon icon(const QString &appPath);
 
+// Una captura (--ui-shot --dpr N) dibuja a una escala que no es la de ninguna pantalla: icon() suma esos
+// tamanos. 0 (por defecto) = solo las pantallas.
+void setCaptureIconScale(qreal scale);
+qreal captureIconScale();
+
 // Una entrada de ejemplo para la primera vez. `shortcut` en texto portable.
 struct Suggestion
 {

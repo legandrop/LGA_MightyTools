@@ -63,17 +63,19 @@ ProcessStats ProcessStats::current()
     memory.cb = sizeof(memory);
     if (GetProcessMemoryInfo(process, reinterpret_cast<PROCESS_MEMORY_COUNTERS *>(&memory), sizeof(memory))) {
         stats.privateBytes = qint64(memory.PrivateUsage);
+        stats.workingSetBytes = qint64(memory.WorkingSetSize);
     }
     return stats;
 }
 
 QString ProcessStats::toString() const
 {
-    return QStringLiteral("handles=%1 threads=%2 gdi=%3 user=%4 private=%5KB cpu=%6ms")
+    return QStringLiteral("handles=%1 threads=%2 gdi=%3 user=%4 private=%5KB ws=%7KB cpu=%6ms")
         .arg(handles)
         .arg(threads)
         .arg(gdiObjects)
         .arg(userObjects)
         .arg(privateBytes / 1024)
-        .arg(cpuMs);
+        .arg(cpuMs)
+        .arg(workingSetBytes / 1024);
 }
