@@ -645,11 +645,11 @@ SegmentedSwitch::SegmentedSwitch(const QStringList &labels, int current, QWidget
     // Sin esto un QWidget comun no pinta el fondo, el borde ni el radio de la hoja de estilo.
     setAttribute(Qt::WA_StyledBackground, true);
     setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    // 24 de alto como el desplegable: borde de 1, aire de 1 y segmentos de 20.
-    setFixedHeight(24);
+    // 30 de alto como el de GateBouncer: borde de 1, aire de 2 y segmentos de 24 (22 y su borde).
+    setFixedHeight(30);
     auto *row = new QHBoxLayout(this);
     row->setContentsMargins(2, 2, 2, 2);
-    row->setSpacing(1);
+    row->setSpacing(2);
     for (int i = 0; i < labels.size(); ++i) {
         auto *segment = new QPushButton(labels.at(i), this);
         segment->setObjectName(QStringLiteral("segment"));

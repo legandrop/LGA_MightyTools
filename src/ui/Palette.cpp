@@ -22,10 +22,10 @@ namespace {
 const QVector<Role> kRoles = {
     {"desk", "Mesa: fondo exterior, barra de título, índice y menús", "#0D0D0F", {"#0D0D0F", "#0F0F12", "#131317", "#1B1B20"}},
     {"sheet", "Hoja: fondo de cada página, de los diálogos y de los campos", "#17171B", {"#17171B", "#15151A", "#19191E"}},
-    {"card", "Tarjetas, filas, tooltip y hover", "#1E1E23", {"#1E1E23", "#1C1C21", "#222227", "#22222A", "#26262C", "#26262D"}},
+    {"card", "Tarjetas, filas, tooltip y hover", "#1E1E23", {"#1E1E23", "#1C1C21", "#202026", "#222227", "#22222A", "#26262C", "#26262D"}},
     {"control", "Botones, teclas y divisores", "#2A2A31", {"#2A2A31", "#24242A", "#33333B"}},
     {"border", "Bordes", "#2E2E36",
-     {"#25252B", "#2E2E36", "#2F2F37", "#333333", "#3A3A43", "#3B3B44", "#4A4A55"}},
+     {"#25252B", "#2E2E36", "#2F2F37", "#333333", "#3A3A43", "#3B3B44", "#44444E", "#4A4A55"}},
     {"title", "Títulos (páginas, tarjetas, diálogos, barra)", "#ECE9E2", {"#ECE9E2"}, false},
     {"section", "Rótulos del índice (TOOLS)", "#8C8B93", {"#8C8B93"}, false},
     {"ink1", "Texto blanco: valores, nombres, botones", "#E3E1DA",
@@ -37,12 +37,12 @@ const QVector<Role> kRoles = {
     // apretado, link y su hover, texto sobre el botón, selección de texto, fila elegida y botón deshabilitado).
     {"accent", "Acento: links, foco, selección y botón principal", "#B4306E",
      {"#B4306E", "#CB4686", "#C33B7C", "#9E2860", "#F070AE", "#F7A3CA", "#FFF3F9", "#9A7387", "#5C1F3F", "#4A2338",
-      "#3A1A2B", "#2B1424"},
+      "#3A1A2B", "#2B1424", "#DB5894"},
      true,
      "#443A91",
      {{"#B4306E", "#443A91"}, {"#CB4686", "#5243A8"}, {"#C33B7C", "#5446B4"}, {"#9E2860", "#3B3380"},
       {"#F070AE", "#9D8FE0"}, {"#F7A3CA", "#C5BBF4"}, {"#FFF3F9", "#DDDBEE"}, {"#9A7387", "#7B7499"},
-      {"#5C1F3F", "#2A2552"}, {"#4A2338", "#3A3466"}, {"#3A1A2B", "#1D1B2C"}, {"#2B1424", "#25223B"}}},
+      {"#5C1F3F", "#2A2552"}, {"#4A2338", "#3A3466"}, {"#3A1A2B", "#1D1B2C"}, {"#2B1424", "#25223B"}, {"#DB5894", "#7060D0"}}},
     // La base de «elegido» no es un color que se use: es la referencia que deja a sus tonos (mas oscuros que los
     // de GateBouncer respecto del magenta) a la misma distancia que alla, asi las paletas dan el mismo fondo.
     {"chosen", "Elegido en selectores (Zoom, GB | %, filtros, versión de Nuke)", "#682344",
@@ -51,7 +51,7 @@ const QVector<Role> kRoles = {
      "#443A91",
      {{"#3A1730", "#2A2552"}, {"#4A1D3D", "#352E66"}, {"#CB4686", "#5243A8"}, {"#FFF3F9", "#DDDBEE"}}},
     {"switch", "Interruptores encendidos", "#4CC9EE", {"#4CC9EE", "#2A97BC", "#0D3542"}, false},
-    {"ok", "Funciona: prendido, todo bien, calibrado", "#4CC9EE", {"#4CC9EE", "#24586A", "#0D2A33"}},
+    {"ok", "Funciona: prendido, todo bien, calibrado", "#4CC9EE", {"#4CC9EE", "#57CDEF", "#24586A", "#0D2A33"}},
     {"warn", "Pide atención", "#F2CB3F", {"#F2CB3F", "#BFA03A", "#8C7731", "#5A4E26", "#1C1606"}},
     {"allow", "Permitir (en GateBouncer; Mighty Tools no lo usa)", "#5ACB8B", {"#5ACB8B"}},
     {"error", "Error", "#F0645C", {"#F0645C", "#6B2E31", "#5E2A2C", "#45222A", "#361B1D", "#2E1719"}},

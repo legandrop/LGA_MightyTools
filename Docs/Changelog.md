@@ -2,6 +2,10 @@
 
 v1.53:
 
+Igualar General con GateBouncer (Lega, 08/11, «todas menos la fila resaltada», y luego espacios y esquinas): quedaban diferencias de borde, letra, menú y medidas. Ahora el foco de los campos usa el borde del botón principal y el borde con el mouse encima es `#44444E`; las etiquetas de opción pasan a `#E3E1DA`, 14 px medio, y las notas a `#9C9BA2`, 12,5 px; el menú usa fondo de tarjeta, borde común, letra de 13 px y el de Colors va sin tilde; el chip «ok» usa `#57CDEF` y el botón principal cambia también el borde al pasar el mouse. Medidas: las tarjetas de General pasan a margen 18/15, filas a 12 de columna y 8 de fila, 12 de aire en el divisor, y el selector segmentado a 30 px con radios 7 y 5. 84 de 84 pares de tonos iguales; `nav-fit` queda en las 8 fallas viejas de Meet Frame.
+
+[ Paletas - General con el foco, el menu, los espacios y las esquinas de GateBouncer ]
+
 Paletas iguales a las de GateBouncer (Lega, 08/11): Violeta y Magenta se veían distintos a los de GateBouncer (fondo y borde del elegido, texto sobre violeta, link) y el desplegable resaltaba con el violeta pleno del botón principal. Causa: los dos usan los mismos JSON, pero los tonos de fábrica de acá son magenta y, rotados por HSL, no dan la luz ni la saturación de los tonos violeta de allá. Ahora los grupos del acento y de «elegido» traen la tabla «tono de acá → tono de GateBouncer» (`Palette::Role::gbTones`) y `mapIn` deriva desde el de allá, igual que allá; las seis paletas dan los mismos colores (66 de 66 pares iguales, medido con los dos `Palette.cpp` reales). El menú resalta la fila con el color de «fila elegida» en vez del primario. La sonda `palette-live` captura el menú recién abierto y con una fila resaltada.
 
 [ Paletas - Los tonos del acento y del elegido salen de los de GateBouncer y el menú resalta suave ]

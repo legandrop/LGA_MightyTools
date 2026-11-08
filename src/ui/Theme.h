@@ -112,6 +112,7 @@ inline constexpr const char *kMiniCard = "#19191E";       ///< tarjetas de la bi
 inline constexpr const char *kPrimary = "#B4306E";
 inline constexpr const char *kPrimaryBorder = "#CB4686";
 inline constexpr const char *kPrimaryHover = "#C33B7C";
+inline constexpr const char *kPrimaryHoverBorder = "#DB5894";
 inline constexpr const char *kTextOnAccent = "#FFF3F9";   ///< texto y trazos sobre el magenta
 // Interruptor: apagado gris, prendido cian (funciona). El riel apagado se despega de la tarjeta (#1E1E23) y
 // de la mesa por el relleno y por un borde mas claro.

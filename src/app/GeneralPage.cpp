@@ -205,7 +205,7 @@ QFrame *GeneralPage::buildAppCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
     addHead(layout, QStringLiteral("App"), card);
 
@@ -242,16 +242,19 @@ QFrame *GeneralPage::buildAppCard()
     // Idioma y tamano de la interfaz: el mismo desplegable que "Remind me every" de Disk Space, en una
     // grilla para que los dos desplegables arranquen en la misma columna. Cada idioma con su nombre en
     // su idioma. Elegir no cambia nada aca: lo aplica quien arma la ventana.
+    // Como GateBouncer: 12 de aire arriba y abajo del divisor (addDivider da 8).
+    layout->addSpacing(4);
     Ui::addDivider(layout, card);
+    layout->addSpacing(4);
     auto *optionsBox = new QWidget(card);
     auto *options = new QGridLayout(optionsBox);
     options->setContentsMargins(0, 0, 0, 0);
-    options->setHorizontalSpacing(8);
-    options->setVerticalSpacing(4);
+    options->setHorizontalSpacing(12);
+    options->setVerticalSpacing(8);
     options->setColumnStretch(2, 1);
-    options->setRowMinimumHeight(0, 26);
-    options->setRowMinimumHeight(1, 26);
-    options->setRowMinimumHeight(2, 26);
+    options->setRowMinimumHeight(0, 28);
+    options->setRowMinimumHeight(1, 28);
+    options->setRowMinimumHeight(2, 30);
     options->addWidget(Ui::label(I18n::tr("Language"), "optionLabel", optionsBox), 0, 0, Qt::AlignVCenter);
     m_languageButton = Ui::button(I18n::nativeName(I18n::language()), QString(), QString(), optionsBox);
     m_languageButton->setObjectName(QStringLiteral("fieldButton"));
@@ -312,13 +315,16 @@ QFrame *GeneralPage::buildAppCard()
         }
         QLabel *uiSizeCaption = Ui::caption(
             I18n::tr("%1 is the default. Changing it restarts the app.").arg(percent(UiScale::kDefaultLevel)), card);
-        uiSizeCaption->setContentsMargins(0, 3, 0, 0);
+        uiSizeCaption->setContentsMargins(0, 6, 0, 0);
+        Ui::setStyleProperty(uiSizeCaption, "note", QStringLiteral("true"));
         layout->addWidget(uiSizeCaption);
         // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
         if (maxLevel < UiScale::kMaxLevel) {
             const QString limit = maxLevel == 0 ? I18n::tr("Only %1 fits on this screen.").arg(percent(0))
                                                 : I18n::tr("Up to %1 fits on this screen.").arg(percent(maxLevel));
-            layout->addWidget(Ui::caption(limit, card));
+            QLabel *limitCaption = Ui::caption(limit, card);
+            Ui::setStyleProperty(limitCaption, "note", QStringLiteral("true"));
+            layout->addWidget(limitCaption);
         }
     }
 #ifdef Q_OS_MACOS
@@ -409,7 +415,7 @@ QFrame *GeneralPage::buildToolsCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
     QHBoxLayout *head = addHead(layout, QStringLiteral("Tools"), card);
     m_toolsChip = new Chip(card);
@@ -545,8 +551,7 @@ void GeneralPage::openPaletteMenu()
     for (const QString &id : Palette::presetIds()) {
         QAction *action = menu.addAction(Palette::presetName(id));
         action->setData(id);
-        action->setCheckable(true);
-        action->setChecked(id == original);
+        // Sin tilde, como el desplegable de GateBouncer: la fila de la paleta actual arranca resaltada.
         if (id == original) {
             marked = action;
         }
