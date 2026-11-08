@@ -1,0 +1,24 @@
+{
+    "name": "Alto contraste",
+    "liked": false,
+    "colors": {
+        "desk": "#000000",
+        "sheet": "#0A0A0C",
+        "card": "#131316",
+        "control": "#26262D",
+        "border": "#474752",
+        "title": "#FFFFFF",
+        "section": "#C77EFF",
+        "ink1": "#F8F7F3",
+        "ink2": "#E0DFE5",
+        "ink3": "#ADACB4",
+        "ink4": "#85848C",
+        "accent": "#4A2AA8",
+        "chosen": "#5A4DC2",
+        "switch": "#5AD4F5",
+        "ok": "#5AD4F5",
+        "warn": "#FFD43B",
+        "allow": "#66DD99",
+        "error": "#FF6A61"
+    }
+}

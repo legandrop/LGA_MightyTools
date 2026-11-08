@@ -34,6 +34,8 @@ public:
         // Abrir la ventana al arrancar: no hay bandeja (la app quedaria invisible) u otra copia la
         // pidio mientras la bandeja no estaba lista.
         bool openWindow = false;
+        // Desarrollo (MIGHTYTOOLS_PALETTE_EDITOR=1): el editor de paletas abierto al lado; sin updater.
+        bool paletteEditor = false;
     };
 
     explicit AppController(const Options &options, QObject *parent = nullptr);
@@ -78,6 +80,8 @@ private:
     // Conecta la pagina General (la de hoy: rebuildUi() arma otra) y le carga sus valores.
     void wireGeneralPage();
     void onLanguageChangeRequested(const QString &code);
+    void onPaletteChangeRequested(const QString &id);
+    void applySavedPalette();
     void onUiSizeChangeRequested(int level);
     bool firstRunView() const;
 

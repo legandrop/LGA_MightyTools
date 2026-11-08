@@ -1,8 +1,13 @@
 #include "ui/Theme.h"
 
+#include "core/AutomatedRun.h"
+
 #include <QApplication>
 #include <QEvent>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
+#include <QImage>
 #include <QFontDatabase>
 #include <QList>
 #include <QPair>
@@ -90,6 +95,74 @@ QFont titleFont(qreal pixelSize, int weight)
     return font;
 }
 
+namespace {
+
+// La paleta de Qt es la red de todo lo que ninguna regla de la hoja nombra (un QMessageBox, el
+// QProgressDialog del update, un tooltip): sin la vieja regla global de QWidget, eso caeria al gris
+// claro de Fusion. Con los colores de la paleta elegida (color() traduce).
+void applyQtPalette(QApplication &app)
+{
+    QPalette palette;
+    palette.setColor(QPalette::Window, color(kWindow));
+    palette.setColor(QPalette::WindowText, color(kText));
+    palette.setColor(QPalette::Base, color(kField));
+    palette.setColor(QPalette::AlternateBase, color(kCard));
+    palette.setColor(QPalette::Text, color(kText));
+    palette.setColor(QPalette::PlaceholderText, color(kTextPlaceholder));
+    palette.setColor(QPalette::Button, color(kTile));
+    palette.setColor(QPalette::ButtonText, color(kTextStrong));
+    palette.setColor(QPalette::Highlight, color(kSelectionBg));
+    palette.setColor(QPalette::HighlightedText, color(kTextBright));
+    palette.setColor(QPalette::ToolTipBase, color(kTooltipBg));
+    palette.setColor(QPalette::ToolTipText, color(kText));
+    palette.setColor(QPalette::Link, color(kLink));
+    palette.setColor(QPalette::Disabled, QPalette::Text, color(kTextPlaceholder));
+    palette.setColor(QPalette::Disabled, QPalette::ButtonText, color(kTextPlaceholder));
+    palette.setColor(QPalette::Disabled, QPalette::WindowText, color(kTextPlaceholder));
+    app.setPalette(palette);
+}
+
+// El tilde de los items marcables del menu es un PNG magenta (resources/icons/check_link.png). Con otra
+// paleta se tine con el color del link y se deja en la carpeta temporal (la hoja de estilo solo carga
+// imagenes desde un archivo o un recurso). Vacio si no se pudo: queda el de fabrica. Las corridas
+// automatizadas no escriben nada (queda el de fabrica) y cada proceso deja un solo archivo: al cambiar de
+// tinte borra el que escribio antes (el editor de desarrollo cambia el acento muchas veces).
+QString tintedCheckPath()
+{
+    if (AutomatedRun::active()) {
+        return QString();
+    }
+    static QString written;
+    const QColor tint = color(kLink);
+    const QString name = tint.name(QColor::HexRgb).mid(1).toUpper();
+    const QString path = QDir(QDir::tempPath()).filePath(QStringLiteral("LGA_MightyTools_check_%1.png").arg(name));
+    if (path == written) {
+        return path;
+    }
+    if (!written.isEmpty()) {
+        QFile::remove(written);
+        written.clear();
+    }
+    QImage image(QStringLiteral(":/icons/check_link.png"));
+    if (image.isNull()) {
+        return QString();
+    }
+    image = image.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < image.height(); ++y) {
+        auto *line = reinterpret_cast<QRgb *>(image.scanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            line[x] = qRgba(tint.red(), tint.green(), tint.blue(), qAlpha(line[x]));
+        }
+    }
+    if (!image.save(path, "PNG")) {
+        return QString();
+    }
+    written = path;
+    return path;
+}
+
+} // namespace
+
 void apply(QApplication &app)
 {
     // Inter embebida (los mismos archivos que VideoDownloader): el diseno se mide con ella y no
@@ -113,32 +186,20 @@ void apply(QApplication &app)
 
     app.setStyle(QStyleFactory::create(QStringLiteral("Fusion")));
 
-    // La paleta es la red de todo lo que ninguna regla de la hoja nombra (un QMessageBox, el
-    // QProgressDialog del update, un tooltip): sin la vieja regla global de QWidget, eso caeria
-    // al gris claro de Fusion.
-    QPalette palette;
-    palette.setColor(QPalette::Window, color(kWindow));
-    palette.setColor(QPalette::WindowText, color(kText));
-    palette.setColor(QPalette::Base, color(kField));
-    palette.setColor(QPalette::AlternateBase, color(kCard));
-    palette.setColor(QPalette::Text, color(kText));
-    palette.setColor(QPalette::PlaceholderText, color(kTextPlaceholder));
-    palette.setColor(QPalette::Button, color(kTile));
-    palette.setColor(QPalette::ButtonText, color(kTextStrong));
-    palette.setColor(QPalette::Highlight, color(kSelectionBg));
-    palette.setColor(QPalette::HighlightedText, color(kTextBright));
-    palette.setColor(QPalette::ToolTipBase, color(kTooltipBg));
-    palette.setColor(QPalette::ToolTipText, color(kText));
-    palette.setColor(QPalette::Link, color(kLink));
-    palette.setColor(QPalette::Disabled, QPalette::Text, color(kTextPlaceholder));
-    palette.setColor(QPalette::Disabled, QPalette::ButtonText, color(kTextPlaceholder));
-    palette.setColor(QPalette::Disabled, QPalette::WindowText, color(kTextPlaceholder));
-    app.setPalette(palette);
+    applyQtPalette(app);
 
     app.setFont(uiFont(14));
     app.setStyleSheet(styleSheet());
     app.installEventFilter(new NoKeyboardFocus(&app));
 }
+
+namespace {
+// Un tono de lo elegido (grupo «chosen»): sus valores de fabrica son los del acento.
+QString chosen(const char *hex)
+{
+    return QStringLiteral("@color(chosen:%1)").arg(QLatin1String(hex));
+}
+} // namespace
 
 QString styleSheet()
 {
@@ -157,12 +218,12 @@ QLabel { background: transparent; color: @text; }
 QLabel#tooltipLabel { color: @text; background-color: transparent; font-size: @fs13; font-weight: 400; }
 
 /* Barra de titulo propia: la tinta de la mesa, el nombre en la fuente de titulos. */
-QLabel#titleBarTitle { color: @textBright; font-family: "@titleFamily"; font-size: @fs14; font-weight: @tw700; }
+QLabel#titleBarTitle { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs14; font-weight: @tw700; }
 QFrame#titleBarSeparator { background-color: @divider; border: none; }
 
 /* Tarjeta (`.card`): radio 10 y borde apenas mas claro que el fondo; warn y err lo tinen. */
 QFrame#card { background-color: @card; border: 1px solid @cardBorder; border-radius: 10px; }
-QLabel#cardTitle { color: @textBright; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
+QLabel#cardTitle { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
 QLabel#caption { color: @textMuted; font-size: @fs13; }
 QLabel#caption[tone="err"] { color: @error; }
 QLabel#optionLabel, ElidedLabel#optionLabel { color: @text; font-size: @fs13_5; }
@@ -190,7 +251,7 @@ QLabel#spotValue { color: @textStrong; font-size: @fs14; font-weight: 600; }
 
 /* Tarjeta de espacio en disco. */
 QLabel#caption[tone="warn"] { color: @warn; }
-QLabel#driveLetter { color: @textBright; font-family: "@titleFamily"; font-size: @fs21; font-weight: @tw800; }
+QLabel#driveLetter { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs21; font-weight: @tw800; }
 QLabel#driveLetter[dim="true"] { color: @textPlaceholder; }
 ElidedLabel#driveName { color: @textStrong; font-size: @fs14; font-weight: 500; }
 ElidedLabel#driveName[dim="true"] { color: @textFaint; }
@@ -301,7 +362,7 @@ QMenu::indicator:checked { image: url(:/icons/check_link.png); }
 
 /* Dialogos: el de update, los QMessageBox y el progreso de descarga (la hoja). */
 QDialog#updateDialog, QMessageBox, QProgressDialog { background-color: @dialog; }
-QLabel#dialogTitle { color: @textBright; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
+QLabel#dialogTitle { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
 /* Novedades del cartel de update (UpdateNotes): rotulo y caja con scroll. */
 QLabel#updateNotesTitle { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 QTextBrowser#updateNotes { background-color: @card; border: 1px solid @cardBorder; border-radius: 8px; padding: 6px 4px; font-size: @fs13; }
@@ -313,13 +374,13 @@ QFrame#howItWorks { background-color: transparent; border: 1px solid @divider; b
 QFrame#howItWorks[open="true"] { background-color: @card; border-color: @border; }
 QLabel#howTitle { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
 QLabel#howCount { color: @textFaint; font-size: @fs12; }
-QLabel#howNumber { color: @textBright; font-family: "@titleFamily"; font-size: @fs19; font-weight: @tw800; }
+QLabel#howNumber { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs19; font-weight: @tw800; }
 QLabel#howStep { color: @text; font-size: @fs13_5; }
 QLabel#howNote { color: @textCaption; font-size: @fs12_5; }
 QFrame#howRule { background-color: @border; border: none; min-height: 1px; max-height: 1px; }
 
 /* Ventana: indice lateral sobre la mesa y la hoja de cada pagina. */
-QLabel#sideLabel { color: @textFaint; font-size: @fs11; font-weight: 600; }
+QLabel#sideLabel { color: @section; font-size: @fs11; font-weight: 600; }
 QLabel#sideName { color: #A3A2A9; font-family: "@titleFamily"; font-size: @fs14; font-weight: @tw600; }
 QLabel#sideName[on="true"] { color: #DCDAD3; }
 QLabel#sideName[sel="true"] { color: #F3F0E9; }
@@ -334,11 +395,11 @@ QScrollBar::handle:vertical { background: @borderStrong; border-radius: 2px; min
 QScrollBar::handle:vertical:hover { background: #4A4A55; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; background: none; border: none; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: none; }
-QLabel#pageTitle { color: @textBright; }
+QLabel#pageTitle { color: @inkTitle; }
 QLabel#platTag { color: #A9A8AF; font-size: @fs11_5; font-weight: 500; border: 1px solid @platBorder; border-radius: 4px; padding: 0px 6px; min-height: 18px; max-height: 18px; }
 QLabel#pageDescription { color: @textMuted; font-size: @fs13_5; }
 QLabel#offBullet { color: @text; font-size: @fs13; }
-QLabel#welcomeTitle { color: @textBright; font-family: "@titleFamily"; font-size: @fs20; font-weight: @tw800; }
+QLabel#welcomeTitle { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs20; font-weight: @tw800; }
 QFrame#miniCard { background-color: @miniCard; border: 1px solid @cardBorder; border-radius: 8px; }
 QLabel#miniTitle { color: @textStrong; font-family: "@titleFamily"; font-size: @fs14; font-weight: @tw600; }
 QLabel#runningText { color: @text; font-size: @fs13; }
@@ -349,7 +410,7 @@ QLabel#linkLabel[hover="true"] { color: @linkHover; }
 QLabel#traySection { color: @textFaint; font-size: @fs11; font-weight: 600; padding: 0px 16px 0px 14px; min-height: 22px; max-height: 22px; background: transparent; }
 
 /* Colofon de General (`.colophon`): logo, version, autor, sitio y la linea de la bandeja. */
-QLabel#colophonName { color: @textBright; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
+QLabel#colophonName { color: @inkTitle; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
 QLabel#colophonText { color: @textCaption; font-size: @fs13; }
 QFrame#colophonRule { background-color: @divider; border: none; min-height: 1px; max-height: 1px; }
 
@@ -414,7 +475,10 @@ QPlainTextEdit#ruleArea:focus { border-color: @accent; }
         {"@tw800", QString::number(titleWeight(800))},
         {"@statusOk", kStatusOk}, {"@listSelected", kListSelected}, {"@listHover", kListHover},
         {"@platBorder", kPlatBorder}, {"@miniCard", kMiniCard},
-        {"@chosenBg", kChosenBg}, {"@chosenHover", kChosenHover}, {"@chosenBorder", kChosenBorder}, {"@chosenText", kChosenText},
+        {"@chosenBg", chosen(kChosenBg)}, {"@chosenHover", chosen(kChosenHover)},
+        {"@chosenBorder", chosen(kChosenBorder)}, {"@chosenText", chosen(kChosenText)},
+        // Titulos, rotulos del indice y lo elegido se piden por grupo: comparten valor con otros textos.
+        {"@inkTitle", QStringLiteral("@color(title)")}, {"@section", QStringLiteral("@color(section)")},
         {"@okBg", kOkBg}, {"@okBorder", kOkBorder}, {"@errBg", kErrBg}, {"@errBorder", kErrBorder},
         {"@errCardBorder", kErrCardBorder}, {"@warnBorder", kWarnBorder}, {"@warnInk", kWarnInk},
         {"@selectionBg", kSelectionBg}, {"@keyBorder", kKeyBorder}, {"@keyBottom", kKeyBottom},
@@ -435,7 +499,35 @@ QPlainTextEdit#ruleArea:focus { border-color: @accent; }
     for (const auto &token : tokens) {
         qss.replace(QLatin1String(token.first), token.second);
     }
+    // Los colores de la paleta elegida (con la del codigo queda igual). El tilde del menu es una imagen.
+    qss = Palette::remapSheet(qss);
+    if (!Palette::isFactory()) {
+        const QString check = tintedCheckPath();
+        if (!check.isEmpty()) {
+            qss.replace(QStringLiteral("url(:/icons/check_link.png)"), QStringLiteral("url(\"%1\")").arg(check));
+        }
+    }
     return qss;
+}
+
+void sheet(QWidget *widget, const QString &raw)
+{
+    widget->setProperty("lgaRawSheet", raw);
+    widget->setStyleSheet(Palette::remapSheet(raw));
+}
+
+void refresh(QApplication &app)
+{
+    applyQtPalette(app);
+    app.setStyleSheet(styleSheet());
+    const QWidgetList widgets = QApplication::allWidgets();
+    for (QWidget *widget : widgets) {
+        const QVariant raw = widget->property("lgaRawSheet");
+        if (raw.isValid()) {
+            widget->setStyleSheet(Palette::remapSheet(raw.toString()));
+        }
+        widget->update();
+    }
 }
 
 QString fontSize(qreal px)

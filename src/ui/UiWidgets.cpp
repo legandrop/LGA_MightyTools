@@ -795,9 +795,10 @@ void ToggleSwitch::paintEvent(QPaintEvent *)
     // altura; la perilla es un circulo de 10 (14 en la grande, pedido de Lega: sin rombo) cuyo centro va de 8
     // a 22 (de 11 a 31 en la grande). Durante la animacion los colores se mezclan por m_tint y la perilla va
     // por m_knob; quieto, son los tokens de siempre.
+    // Prendido es el grupo «switch» de la paleta (el mismo cian que «funciona», con su propio color base).
     const auto mix = [this](const char *off, const char *on) {
         const QColor a = Theme::color(off);
-        const QColor b = Theme::color(on);
+        const QColor b = Theme::colorIn("switch", on);
         const qreal t = m_tint;
         return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t, a.greenF() + (b.greenF() - a.greenF()) * t,
                                 a.blueF() + (b.blueF() - a.blueF()) * t, a.alphaF() + (b.alphaF() - a.alphaF()) * t);

@@ -18,7 +18,7 @@ namespace {
 QString colorizedPath(const QString &path)
 {
     return QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
-        .arg(QLatin1String(Theme::kLink), path.toHtmlEscaped());
+        .arg(Theme::hex(Theme::kLink), path.toHtmlEscaped());
 }
 
 } // namespace
@@ -234,7 +234,7 @@ QDialog *buildLaunchNoticeWidget(QWidget *parent)
     dialog->setWindowTitle(QStringLiteral("NukeX Launcher"));
     // Mismo fondo que el resto de los dialogos de la app (Theme::kDialog): sin objectName
     // "updateDialog" a proposito, para no mezclar este cartel chico con el del updater en un grep.
-    dialog->setStyleSheet(QStringLiteral("QDialog { background-color: %1; }").arg(Theme::color(Theme::kDialog).name()));
+    Theme::sheet(dialog, QStringLiteral("QDialog { background-color: %1; }").arg(QLatin1String(Theme::kDialog)));
     dialog->setModal(false);
 
     auto *layout = new QVBoxLayout(dialog);

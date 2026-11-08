@@ -8,6 +8,8 @@
 #include <QPointer>
 #include <QString>
 
+class QTimer;
+
 class HowItWorksStrip;
 class ModuleHeader;
 class ModuleHost;
@@ -61,6 +63,10 @@ public:
     // herramientas se borran en el acto y se piden de nuevo al verse. La pagina General es otra:
     // quien la escuchaba se reconecta con rebuilt().
     void rebuildUi();
+    // Otra paleta de colores: lo que ya esta armado toma los colores en el acto (Theme::refresh) y la ventana se
+    // rearma, porque hay textos y glifos que se arman con su color. Junta los cambios seguidos (las flechas del
+    // menu, el selector del editor) y con un menu abierto solo repinta: el rearmado espera a que se cierre.
+    void schedulePaletteRebuild();
     // Captura: estado de prueba del aviso de apagado de una herramienta (offNotice del descriptor).
     void setOffNoticeCaptureState(const QString &id, const QString &state);
 
@@ -80,6 +86,11 @@ protected:
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
 private:
+    void applyPaletteChange();
+    void rebuildWhenNoPopup();
+    QTimer *m_paletteTimer = nullptr;
+    bool m_paletteRebuildWaiting = false;
+    int m_rebuildSerial = 0;
     struct ToolPage
     {
         QScrollArea *scroll = nullptr;

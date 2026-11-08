@@ -17,7 +17,7 @@ struct HelpSection
 
     static QString strong(const QString &text)
     {
-        return QStringLiteral("<span style=\"color:%1; font-weight:600;\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
+        return QStringLiteral("<span style=\"color:%1; font-weight:600;\">%2</span>").arg(Theme::hex(Theme::kTextBright), text);
     }
 };
 

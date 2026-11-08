@@ -24,7 +24,9 @@
 #include "modules/nukeshortcuts/NukeShortcutsState.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsPanel.h"
+#include "dev/PaletteEditor.h"
 #include "ui/CustomTooltip.h"
+#include "ui/Palette.h"
 #include "ui/ShortcutRow.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
@@ -204,7 +206,7 @@ QWidget *makeCanvas()
     auto *canvas = new QWidget;
     canvas->setObjectName(QStringLiteral("central"));
     canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
-    canvas->setStyleSheet(QStringLiteral("QWidget#central { background-color: %1; }").arg(QLatin1String(Theme::kDesk)));
+    Theme::sheet(canvas, QStringLiteral("QWidget#central { background-color: %1; }").arg(QLatin1String(Theme::kDesk)));
     return canvas;
 }
 
@@ -2662,6 +2664,253 @@ int runWindowKeysProbe()
     return failures ? 1 : 0;
 }
 
+// Espera a que la ventana tome una paleta: el cambio se junta 30 ms (MainWindow::schedulePaletteRebuild).
+void waitPalette(QWidget &root)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 150) {
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+    settle(root);
+}
+
+QPushButton *paletteButton(MainWindow &w)
+{
+    for (QPushButton *button : w.findChildren<QPushButton *>()) {
+        if (button->property("lgaControl").toString() == QLatin1String("palette")) {
+            return button;
+        }
+    }
+    return nullptr;
+}
+
+void sendKey(QWidget *target, int key)
+{
+    if (!target) {
+        return;
+    }
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QApplication::sendEvent(target, &press);
+    QApplication::sendEvent(target, &release);
+}
+
+// --ui-probe palette-live [<carpeta>]: las seis paletas de Colors en vivo, en varias paginas (y una captura de
+// cada una en la carpeta, si se pasa); el menu de Colors con las flechas (muestran en vivo), Escape (vuelve a la
+// de antes) y Enter (la elige, la pide guardar y la ventana se rearma); la rueda no la cambia; los nombres
+// entran enteros en el desplegable, que mide lo mismo que el de idioma. Con --lang es, en castellano.
+int runPaletteProbe(const QStringList &args)
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&failures, &checks](bool ok, const QString &what) {
+        ++checks;
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const QString outDir = args.value(args.indexOf(QStringLiteral("palette-live")) + 1);
+    const bool shots = !outDir.startsWith(QLatin1String("--")) && !outDir.isEmpty() && QFileInfo(outDir).isDir();
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    // Las herramientas como en el canvas (la ventana «window»).
+    if (!canvasFixture(host, QString())) {
+        return 1;
+    }
+    MainWindow w(&host, MainWindow::Mode::Capture, nullptr);
+    w.setAttribute(Qt::WA_DontShowOnScreen, true);
+    int rebuilt = 0;
+    QStringList requested;
+    const auto wire = [&w, &requested]() {
+        if (GeneralPage *general = w.generalPage()) {
+            // Como AppController: guarda (aca, anota) y pide el rearmado.
+            QObject::connect(general, &GeneralPage::paletteChangeRequested, &w, [&w, &requested](const QString &id) {
+                requested << id;
+                if (id != Palette::currentPreset()) {
+                    Palette::applyPreset(id);
+                }
+                w.schedulePaletteRebuild();
+            });
+        }
+    };
+    QObject::connect(&w, &MainWindow::rebuilt, [&rebuilt, &wire]() {
+        ++rebuilt;
+        wire();
+    });
+    wire();
+    w.show();
+    settle(w);
+
+    // 1. Cada paleta en vivo, en varias paginas.
+    const QStringList views = {QStringLiteral("general"), QStringLiteral("diskSpace"), QStringLiteral("nukeShortcuts"),
+                               QStringLiteral("openInNukeX"), QStringLiteral("windowLayouts")};
+    for (const QString &id : Palette::presetIds()) {
+        const int before = rebuilt;
+        check(Palette::applyPreset(id), QStringLiteral("%1: se carga").arg(id));
+        waitPalette(w);
+        check(rebuilt == before + 1, QStringLiteral("%1: la ventana se rearmo una vez (%2)").arg(id).arg(rebuilt - before));
+        const QString sheet = qApp->styleSheet();
+        const QString desk = Theme::hex(Theme::kDesk);
+        check(sheet.contains(QStringLiteral("QWidget#central { background-color: %1; }").arg(desk)),
+              QStringLiteral("%1: la mesa de la hoja global es %2").arg(id, desk));
+        check(sheet.contains(QStringLiteral("QLabel#sideLabel { color: %1;").arg(Palette::base(QStringLiteral("section")).name().toUpper())),
+              QStringLiteral("%1: rotulos del indice en el color de su grupo").arg(id));
+        check(qApp->palette().color(QPalette::Window) == Theme::color(Theme::kWindow),
+              QStringLiteral("%1: la paleta de Qt sigue a la hoja").arg(id));
+        for (const QString &view : views) {
+            w.selectPage(view);
+            settle(w);
+            const QPixmap pm = w.grab();
+            check(!pm.isNull() && w.currentPage() == view, QStringLiteral("%1: %2 se pinta").arg(id, view));
+            if (shots) {
+                pm.save(QDir(outDir).filePath(QStringLiteral("%1_%2.png").arg(id, view)));
+            }
+        }
+    }
+
+    // 2. El desplegable de Colors.
+    Palette::applyPreset(Palette::defaultPreset());
+    waitPalette(w);
+    w.selectPage(QStringLiteral("general"));
+    settle(w);
+    QPushButton *button = paletteButton(w);
+    check(button != nullptr, QStringLiteral("hay desplegable de Colors"));
+    if (!button) {
+        fprintf(stdout, "palette-live: %d/%d comprobaciones, %d fallas\npalette-live FALLO\n", checks - failures, checks, failures);
+        return 1;
+    }
+    check(button->text() == Palette::presetName(Palette::defaultPreset()),
+          QStringLiteral("muestra la de fabrica (%1)").arg(button->text()));
+    QPushButton *language = nullptr;
+    for (QPushButton *b : w.findChildren<QPushButton *>()) {
+        if (b != button && b->objectName() == QLatin1String("fieldButton") && b->parentWidget() == button->parentWidget()) {
+            language = b;
+        }
+    }
+    check(language && language->width() == button->width(),
+          QStringLiteral("mide lo mismo que el de idioma (%1 y %2)").arg(button->width()).arg(language ? language->width() : -1));
+    const QString keep = button->text();
+    for (const QString &id : Palette::presetIds()) {
+        button->setText(Palette::presetName(id));
+        check(button->sizeHint().width() <= button->width(),
+              QStringLiteral("«%1» entra entero (%2 de %3)").arg(Palette::presetName(id)).arg(button->sizeHint().width()).arg(button->width()));
+    }
+    button->setText(keep);
+    if (shots) {
+        w.grab().save(QDir(outDir).filePath(QStringLiteral("menu_general.png")));
+    }
+
+    // Flechas abajo, abajo y Escape: muestran la segunda y la tercera, y vuelve a la de antes.
+    const QStringList ids = Palette::presetIds();
+    QStringList seen;
+    const QString menuShot = shots ? QDir(outDir).filePath(QStringLiteral("menu_abierto.png")) : QString();
+    QTimer::singleShot(60, [&seen, &menuShot]() {
+        sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+        QTimer::singleShot(80, [&seen, &menuShot]() {
+            seen << Palette::currentPreset();
+            sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+            QTimer::singleShot(80, [&seen, &menuShot]() {
+                seen << Palette::currentPreset();
+                if (QWidget *popup = QApplication::activePopupWidget(); popup && !menuShot.isEmpty()) {
+                    popup->grab().save(menuShot);
+                }
+                sendKey(QApplication::activePopupWidget(), Qt::Key_Escape);
+            });
+        });
+    });
+    const int requestsBefore = requested.size();
+    button->click();
+    waitPalette(w);
+    check(seen.value(0) == ids.value(1), QStringLiteral("flecha abajo: %1 en vivo (%2)").arg(ids.value(1), seen.value(0)));
+    check(seen.value(1) == ids.value(2), QStringLiteral("otra flecha: %1 en vivo (%2)").arg(ids.value(2), seen.value(1)));
+    check(Palette::currentPreset() == ids.value(0), QStringLiteral("Escape vuelve a %1 (%2)").arg(ids.value(0), Palette::currentPreset()));
+    check(requested.size() == requestsBefore + 1 && requested.last() == ids.value(0),
+          QStringLiteral("Escape pide rearmar con la de antes"));
+
+    // Flecha abajo y Enter: la elige.
+    button = paletteButton(w);
+    check(button != nullptr, QStringLiteral("hay desplegable despues de rearmar"));
+    if (button) {
+        QTimer::singleShot(60, []() {
+            sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+            QTimer::singleShot(80, []() { sendKey(QApplication::activePopupWidget(), Qt::Key_Return); });
+        });
+        const int rebuiltBefore = rebuilt;
+        button->click();
+        waitPalette(w);
+        check(Palette::currentPreset() == ids.value(1), QStringLiteral("Enter elige %1 (%2)").arg(ids.value(1), Palette::currentPreset()));
+        check(!requested.isEmpty() && requested.last() == ids.value(1), QStringLiteral("Enter pide guardar %1").arg(ids.value(1)));
+        check(rebuilt > rebuiltBefore, QStringLiteral("la ventana se rearmo con la elegida"));
+        button = paletteButton(w);
+        check(button && button->text() == Palette::presetName(ids.value(1)),
+              QStringLiteral("el desplegable nuevo dice %1").arg(Palette::presetName(ids.value(1))));
+    }
+
+    // La rueda no la cambia.
+    if (button) {
+        const QString current = Palette::currentPreset();
+        const QPointF at(button->width() / 2.0, button->height() / 2.0);
+        for (const int delta : {-120, 120}) {
+            QWheelEvent wheel(at, button->mapToGlobal(at), QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                              Qt::NoScrollPhase, false);
+            QApplication::sendEvent(button, &wheel);
+        }
+        waitPalette(w);
+        check(Palette::currentPreset() == current && !QApplication::activePopupWidget(), QStringLiteral("la rueda no cambia la paleta"));
+    }
+
+    // Con los colores del codigo la hoja vuelve a ser la escrita (Theme.h), sin traducir nada.
+    Palette::apply(Palette::factory());
+    waitPalette(w);
+    check(Palette::isFactory() && qApp->styleSheet().contains(QStringLiteral("QWidget#central { background-color: #0D0D0F; }")),
+          QStringLiteral("con los colores del codigo la mesa vuelve a #0D0D0F"));
+    fprintf(stdout, "palette-live: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "palette-live FALLO" : "palette-live ok");
+    return failures ? 1 : 0;
+}
+
+// --ui-probe palette-editor <carpeta>: el editor de desarrollo y su aviso de ejemplo, con la paleta de fabrica y
+// con Magenta, capturados en la carpeta. Lee y escribe solo adentro de <carpeta>/paletas.
+int runPaletteEditorProbe(const QStringList &args)
+{
+    const QString outDir = args.value(args.indexOf(QStringLiteral("palette-editor")) + 1);
+    if (outDir.isEmpty() || !QFileInfo(outDir).isDir()) {
+        fprintf(stderr, "uso: --ui-probe palette-editor <carpeta existente>\n");
+        return 2;
+    }
+    int failures = 0;
+    const QString folder = QDir(outDir).filePath(QStringLiteral("paletas"));
+    PaletteEditor editor(folder);
+    editor.setAttribute(Qt::WA_DontShowOnScreen, true);
+    editor.show();
+    settle(editor);
+    for (const QString &id : {Palette::defaultPreset(), QStringLiteral("default-2")}) {
+        Palette::applyPreset(id);
+        Theme::refresh(*qApp);
+        settle(editor);
+        if (!editor.grab().save(QDir(outDir).filePath(QStringLiteral("editor_%1.png").arg(id)))) {
+            ++failures;
+        }
+        editor.showSampleNotice();
+        QWidget *notice = editor.sampleNotice();
+        if (notice) {
+            settle(*notice);
+        }
+        if (!notice || !notice->grab().save(QDir(outDir).filePath(QStringLiteral("aviso_%1.png").arg(id)))) {
+            ++failures;
+        }
+    }
+    const bool folderMade = QFileInfo(folder).isDir();
+    fprintf(stdout, "palette-editor: capturas %s, carpeta %s\n%s\n", failures ? "con fallas" : "ok", folderMade ? "ok" : "falta",
+            failures || !folderMade ? "palette-editor FALLO" : "palette-editor ok");
+    return failures || !folderMade ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2714,6 +2963,12 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("titlebar-drag")) {
         return runTitleBarDragProbe();
+    }
+    if (probe == QLatin1String("palette-live")) {
+        return runPaletteProbe(args);
+    }
+    if (probe == QLatin1String("palette-editor")) {
+        return runPaletteEditorProbe(args);
     }
     if (probe == QLatin1String("window-keys")) {
         return runWindowKeysProbe();

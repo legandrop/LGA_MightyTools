@@ -486,7 +486,7 @@ void SizeListView::paintEvent(QPaintEvent *)
                 painter.setFont(chipFont);
                 const int chipWidth = QFontMetrics(chipFont).horizontalAdvance(row.chip) + 14;
                 const QRectF chipRect(x + 0.5, top + (kRowHeight - 18) / 2.0 + 0.5, chipWidth - 1, 17);
-                painter.setPen(QPen(QColor(0x33, 0x33, 0x33), 1)); // el borde de `chip[tone="src"]`
+                painter.setPen(QPen(Theme::color("#333333"), 1)); // el borde de `chip[tone="src"]`
                 painter.setBrush(Qt::NoBrush);
                 painter.drawRoundedRect(chipRect, 4, 4);
                 painter.setPen(Theme::color(Theme::kTextMuted));

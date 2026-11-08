@@ -110,7 +110,7 @@ QString fileRowId(quint32 dir, const QString &name)
 
 QString strong(const QString &text)
 {
-    return QStringLiteral("<span style=\"font-weight:600; color:%1\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
+    return QStringLiteral("<span style=\"font-weight:600; color:%1\">%2</span>").arg(Theme::hex(Theme::kTextBright), text);
 }
 
 QString joinPath(const QString &dir, const QString &name)
@@ -536,6 +536,16 @@ CleanupWindow::CleanupWindow(DiskState *state, ModuleContext *context, bool capt
     connect(m_flashTimer, &QTimer::timeout, this, [this]() {
         m_flash.clear();
         refreshActionBar();
+    });
+    // Otra paleta de colores (General → Colors) con la ventana abierta: los textos y los iconos que arman su
+    // color (el encabezado, la barra de abajo y sus botones) se rehacen; lo demas ya lo repinta Theme::refresh.
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, this, [this]() {
+        refreshHeader();
+        refreshActionBar();
+        Ui::setIcon(m_rescan, Icon::Refresh, Theme::color(Theme::kText), 13);
+        Ui::setIcon(m_actionReveal, Icon::Reveal, Theme::color(Theme::kText), 13);
+        Ui::setIcon(m_actionTrash, Icon::Trash, Theme::color(Theme::kText), 13);
+        Ui::setIcon(m_actionCompare, Icon::ChevronDown, Theme::color(Theme::kText), 11);
     });
 }
 
@@ -1059,7 +1069,7 @@ void CleanupWindow::refreshHeader()
                                  .arg(freeText, totalText, DiskSpace::thresholdText(watch))
                            : I18n::tr("<span style=\"font-weight:600\">%1 free</span> of %2").arg(freeText, totalText);
         text.replace(QStringLiteral("font-weight:600"),
-                     QStringLiteral("font-weight:600; color:%1").arg(QLatin1String(low ? Theme::kWarn : Theme::kTextStrong)));
+                     QStringLiteral("font-weight:600; color:%1").arg(Theme::hex(low ? Theme::kWarn : Theme::kTextStrong)));
         m_freeLabel->setText(text);
         const double total = double(m_drive.totalBytes);
         const double used = total <= 0 ? 0.0 : double(m_drive.totalBytes - m_drive.freeBytes) / total;
@@ -1489,11 +1499,11 @@ void CleanupWindow::refreshActionBar()
         const qint64 selected = CleanupRules::selectedBytes(m_categories);
         if (m_scanState == ScanState::Scanning) {
             text = QStringLiteral("<span style=\"color:%1\">%2</span>")
-                       .arg(QLatin1String(Theme::kTextFaint), I18n::tr("Scanning… what can be cleaned appears when it finishes."));
+                       .arg(Theme::hex(Theme::kTextFaint), I18n::tr("Scanning… what can be cleaned appears when it finishes."));
             primary = I18n::tr("Clean up");
         } else if (m_scanState != ScanState::Complete) {
             text = QStringLiteral("<span style=\"color:%1\">%2</span>")
-                       .arg(QLatin1String(Theme::kTextFaint), I18n::tr("The scan was stopped. Press Rescan to see what can be cleaned."));
+                       .arg(Theme::hex(Theme::kTextFaint), I18n::tr("The scan was stopped. Press Rescan to see what can be cleaned."));
             primary = I18n::tr("Clean up");
         } else if (selected > 0) {
             // Lo que va a la Papelera (los instaladores huerfanos) no libera nada hasta vaciarla.
@@ -1507,7 +1517,7 @@ void CleanupWindow::refreshActionBar()
             exportShown = true;
             exportEnabled = true;
         } else {
-            text = QStringLiteral("<span style=\"color:%1\">%2</span>").arg(QLatin1String(Theme::kTextFaint), I18n::tr("Nothing selected."));
+            text = QStringLiteral("<span style=\"color:%1\">%2</span>").arg(Theme::hex(Theme::kTextFaint), I18n::tr("Nothing selected."));
             primary = I18n::tr("Clean up");
             exportShown = true;
         }
@@ -1530,7 +1540,7 @@ void CleanupWindow::refreshActionBar()
             } else if (tab == Folders && m_scanState == ScanState::Scanning && m_fullScan) {
                 hint = I18n::tr("The list is usable while it fills in. Sizes grow as folders are counted.");
             }
-            text = QStringLiteral("<span style=\"color:%1\">%2</span>").arg(QLatin1String(Theme::kTextFaint), hint);
+            text = QStringLiteral("<span style=\"color:%1\">%2</span>").arg(Theme::hex(Theme::kTextFaint), hint);
         } else {
             qint64 total = 0;
             bool viewOnly = false;
@@ -1547,7 +1557,7 @@ void CleanupWindow::refreshActionBar()
             text = strong(I18n::tr("%1 selected · %2").arg(items.size()).arg(DiskSpace::formatSize(total)));
             if (viewOnly) {
                 text += QStringLiteral(" <span style=\"color:%1\">· %2</span>")
-                            .arg(QLatin1String(Theme::kTextFaint),
+                            .arg(Theme::hex(Theme::kTextFaint),
 #ifdef Q_OS_MACOS
                                  I18n::tr("Protected: macOS and installed apps are not deleted from here."));
 #else
@@ -1568,7 +1578,7 @@ void CleanupWindow::refreshActionBar()
     // El aviso que se va solo tapa el texto de la barra mientras dura.
     if (!m_flash.isEmpty() && m_jobKind == JobKind::None) {
         text = QStringLiteral("<span style=\"color:%1\">%2</span>")
-                   .arg(QLatin1String(m_flashError ? Theme::kError : Theme::kOk), m_flash.toHtmlEscaped());
+                   .arg(Theme::hex(m_flashError ? Theme::kError : Theme::kOk), m_flash.toHtmlEscaped());
     }
 
     m_actionText->setText(text);

@@ -95,6 +95,11 @@ MeetFrameOverlay::MeetFrameOverlay(bool capture, QWidget *parent)
     m_close->setAccessibleName(I18n::tr("Hide the frame"));
     row->addWidget(m_close, 0, Qt::AlignVCenter);
     for (QPushButton *button : {m_pause, m_sizeButton, m_close}) button->setFocusPolicy(Qt::NoFocus);
+    // Otra paleta con el marco abierto: los iconos se arman con su color.
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, m_bar, [this]() {
+        Ui::setDropdownArrow(m_sizeButton);
+        Ui::setIcon(m_close, Icon::X, Theme::color(Theme::kIcon), 12);
+    });
 
     m_sizeMenu = new QMenu(this);
     // La forma: libre o fija al estirar. Elegir una ya acomoda la region (MeetFrameModule::setAspect).
@@ -644,7 +649,7 @@ void MeetFrameOverlay::paintEvent(QPaintEvent *)
     painter.fillRect(frame, QColor(0, 0, 0, 1));
     painter.restore();
     // El borde, por fuera de la region para que nunca salga en lo compartido.
-    const QColor line(!m_error.isEmpty() ? Theme::kError : m_paused ? Theme::kWarn : Theme::kOk);
+    const QColor line = Theme::color(!m_error.isEmpty() ? Theme::kError : m_paused ? Theme::kWarn : Theme::kOk);
     painter.setPen(Qt::NoPen);
     painter.setBrush(line);
     QRegion ring = QRegion(inner.adjusted(-kLine, -kLine, kLine, kLine)).subtracted(QRegion(inner));
@@ -653,7 +658,7 @@ void MeetFrameOverlay::paintEvent(QPaintEvent *)
     painter.setClipping(false);
     // La barrita: tarjeta de la app con el color del borde a la izquierda.
     const QRectF bar = QRectF(m_bar->geometry()).adjusted(0.5, 0.5, -0.5, -0.5);
-    painter.setPen(QPen(QColor(Theme::kCardBorder), 1));
-    painter.setBrush(QColor(Theme::kCard));
+    painter.setPen(QPen(Theme::color(Theme::kCardBorder), 1));
+    painter.setBrush(Theme::color(Theme::kCard));
     painter.drawRoundedRect(bar, kBarRadius, kBarRadius);
 }

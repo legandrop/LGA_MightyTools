@@ -29,6 +29,7 @@
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -68,6 +69,12 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
     WindowFrame::prepare(this); // mac: translucida, para las esquinas redondeadas
     buildUi();
     setFixedSize(kWidth, kHeight);
+
+    m_paletteTimer = new QTimer(this);
+    m_paletteTimer->setSingleShot(true);
+    m_paletteTimer->setInterval(30);
+    connect(m_paletteTimer, &QTimer::timeout, this, &MainWindow::applyPaletteChange);
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, this, &MainWindow::schedulePaletteRebuild);
 
     connect(m_host, &ModuleHost::moduleToggled, this, &MainWindow::onModuleToggled);
     connect(m_host, &ModuleHost::moduleStatusChanged, this, &MainWindow::refreshItem);
@@ -249,6 +256,7 @@ void MainWindow::buildUi()
 
 void MainWindow::rebuildUi()
 {
+    ++m_rebuildSerial;
     const QString current = m_current.isEmpty() ? kGeneral : m_current;
     const bool firstRun = m_general && m_general->firstRun();
     // Rearmar no es entrar a la pagina: la ayuda queda como estaba.
@@ -653,4 +661,36 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
         return true;
     }
     return QMainWindow::nativeEvent(eventType, message, result);
+}
+
+void MainWindow::schedulePaletteRebuild()
+{
+    m_paletteTimer->start();
+}
+
+void MainWindow::applyPaletteChange()
+{
+    Theme::refresh(*qApp);
+    rebuildWhenNoPopup();
+}
+
+void MainWindow::rebuildWhenNoPopup()
+{
+    // Un menu abierto (el de Colors con las flechas, o cualquier otro) puede ser hijo de lo que se rearma: el
+    // rearmado espera a que se cierre. El de Colors lo vuelve a pedir al cerrarse; este reintento cubre los demas
+    // (un cambio del editor de desarrollo con un menu abierto).
+    if (QApplication::activePopupWidget()) {
+        if (!m_paletteRebuildWaiting) {
+            m_paletteRebuildWaiting = true;
+            QTimer::singleShot(250, this, [this, serial = m_rebuildSerial]() {
+                m_paletteRebuildWaiting = false;
+                // Si mientras tanto alguien ya la rearmo (el menu de Colors al cerrarse), no hace falta otra vez.
+                if (serial == m_rebuildSerial) {
+                    rebuildWhenNoPopup();
+                }
+            });
+        }
+        return;
+    }
+    rebuildUi();
 }

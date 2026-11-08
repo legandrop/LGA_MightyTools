@@ -2,6 +2,10 @@
 
 v1.53:
 
+Paletas de color (pedido de Lega, 08/11): los colores estaban fijos en `Theme.h` y en la hoja de estilo, y LGA GateBouncer ya ofrece seis paletas. Ahora `src/ui/Palette.*` agrupa cada color en 18 grupos (los de GateBouncer) y deriva sus tonos en HSL desde el color base de cada grupo; `Theme::color`, `Theme::hex`, `Theme::sheet` y la hoja global traducen, los tooltips también, y la ventana se rearma en vivo. General → App suma Colors entre Language y Zoom, con las seis paletas de GateBouncer (`resources/palettes/`, Violet de fábrica, guardada en `app/palette`); con el menú abierto, las flechas las muestran en vivo. Editor solo de desarrollo (`MIGHTYTOOLS_PALETTE_EDITOR=1`) con el selector de color LGA. Con `--palette code`, 163 de 170 capturas quedan idénticas a la v1.52 (las otras son General). Sondas nuevas `palette-live` (80/80, en y es) y `palette-editor`. D-76.
+
+[ Paletas - Colors en General con las seis paletas de GateBouncer, en vivo, y editor de desarrollo ]
+
 Updates (pedido de Lega, 08/11): el cartel «Update Available» no mostraba qué traía la versión nueva, y las novedades del `WhatsNew.md` estaban solo en castellano. Ahora, antes del cartel, `UpdateNotes` baja el `whats_new.json` del release con `LgaWhatsNew` de `libs/lgaupdate` (copia idéntica de la rev 5 de la Base: verificado por SHA-256, con los reintentos de LGA) y el cartel lo muestra en una caja con scroll, en el idioma de la interfaz: el inglés de cada ítem (`text_en`) o el castellano. Si no hay notas o fallan, el cartel sale como antes. `Docs/WhatsNew.md` pasa a ser bilingüe (`languages: [es, en]`, desde la 1.53). Captura nueva `--ui-shot update-dialog-notes`; `--self-test`, `--ui-probe net-retry` y `check_i18n` en verde.
 
 [ Updates - El cartel de update muestra las novedades en el idioma de la app ]

@@ -21,6 +21,13 @@ const QHash<QString, QString> &spanishTable()
         // ---------- General
         E("Language", "Idioma"),
         E("Zoom", "Zoom"),
+        E("Colors", "Colores"),
+        E("Violet", "Violeta"),
+        E("High contrast", "Alto contraste"),
+        E("Graphite | amber", "Grafito | ámbar"),
+        E("Mist", "Niebla"),
+        E("Warm teal", "Cálido turquesa"),
+        E("Magenta", "Magenta"),
         E("%1%", "%1 %"),
         E("%1 is the default. Changing it restarts the app.", "%1 es el normal. Cambiarlo reinicia la app."),
         E("Only %1 fits on this screen.", "En esta pantalla solo entra el %1."),

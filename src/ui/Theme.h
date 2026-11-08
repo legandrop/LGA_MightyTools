@@ -5,7 +5,10 @@
 #include <QFont>
 #include <QString>
 
+#include "ui/Palette.h"
+
 class QApplication;
+class QWidget;
 
 // Tokens visuales de la app y la hoja de estilo global. Lenguaje «Pliego» (D-73): cada herramienta es
 // una hoja mas clara sobre la mesa negra, y las tres tintas del logo tienen significado:
@@ -138,7 +141,22 @@ inline constexpr const char *kChosenHover = "#4A1D3D";
 inline constexpr const char *kChosenBorder = "#CB4686";
 inline constexpr const char *kChosenText = "#FFF3F9";
 
-inline QColor color(const char *hex) { return QColor(QLatin1String(hex)); }
+// Con la paleta elegida (ui/Palette.h): los tokens guardan el valor de fabrica y se traducen al usarlos. Un
+// texto con color armado a mano (un <span style="color:...">) va con hex(), nunca con el token suelto.
+inline QColor color(const char *hex) { return Palette::map(QLatin1String(hex)); }
+inline QColor colorIn(const char *roleId, const char *hex)
+{
+    return Palette::mapIn(QLatin1String(roleId), QLatin1String(hex));
+}
+inline QString hex(const char *token) { return Palette::hex(QLatin1String(token)); }
+
+// Pone una hoja propia en un widget y guarda la de fabrica: al cambiar la paleta, refresh() la vuelve a
+// traducir. Toda hoja con colores puesta fuera de la global va por aca.
+void sheet(QWidget *widget, const QString &raw);
+
+// La paleta elegida en todo lo ya armado: la QPalette de Qt, la hoja global, las hojas de sheet() y un
+// repintado de cada widget. Lo que arma textos con color al construirse (MainWindow) se rearma aparte.
+void refresh(QApplication &app);
 
 // Fuente de interfaz (Inter) en pixeles, con peso opcional.
 QFont uiFont(qreal pixelSize, int weight = QFont::Normal);

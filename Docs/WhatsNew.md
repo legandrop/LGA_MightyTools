@@ -13,6 +13,8 @@ en_from: "1.53"
 ## Unreleased
 
 ## v1.53
+- [new] En General, Colors deja elegir entre seis paletas de color: Violet, High contrast, Graphite | amber, Mist, Warm teal y Magenta; se aplican en el acto y, con el menú abierto, las flechas del teclado las muestran antes de elegir.
+  en: In General, Colors lets you choose one of six color palettes: Violet, High contrast, Graphite | amber, Mist, Warm teal and Magenta; they apply at once and, with the menu open, the arrow keys preview them before you choose.
 - [new] El cartel de actualización muestra las novedades de la versión nueva, en el idioma que elegiste para Mighty Tools.
   en: The update window shows what's new in the new version, in the language you chose for Mighty Tools.
 - [new] Escape cierra la ventana de Mighty Tools y la deja en la bandeja (en Mac, en la barra de menú), y Ctrl+Alt con las flechas izquierda y derecha (⌘⌥ en Mac) pasa a la herramienta anterior o siguiente de la lista.
@@ -25,8 +27,8 @@ en_from: "1.53"
   en: Link Redirector no longer alters the links it forwards to the browser: sign-ins with Google and other services that ended in «Error 400: invalid_request» work again.
 - [improved] Si falla la conexión, la búsqueda de actualizaciones, la descarga de una versión nueva y la del modelo de Dictation lo vuelven a intentar solas, cada cinco segundos y hasta tres veces por cada servidor, y avisan «Retrying (2 of 4)…» mientras esperan; una descarga cortada sigue desde donde quedó.
   en: If the connection fails, checking for updates, downloading a new version and downloading the Dictation model retry on their own, every five seconds and up to three times per server, and show «Retrying (2 of 4)…» while they wait; an interrupted download resumes where it left off.
-- [improved] Mighty Tools tiene un diseño nuevo: cada herramienta es una hoja sobre fondo negro unida a su lugar en la lista de la izquierda, y los colores dicen algo: cian es lo que está funcionando, magenta lo que podés tocar y amarillo lo que pide atención; la letra es igual de grande que antes.
-  en: Mighty Tools has a new design: each tool is a sheet on a black background joined to its place in the list on the left, and the colors mean something: cyan is what is running, magenta what you can click and yellow what needs attention; the text is as large as before.
+- [improved] Mighty Tools tiene un diseño nuevo: cada herramienta es una hoja sobre fondo negro unida a su lugar en la lista de la izquierda, y los colores dicen algo: cian es lo que está funcionando, violeta lo que podés tocar y amarillo lo que pide atención; la letra es igual de grande que antes.
+  en: Mighty Tools has a new design: each tool is a sheet on a black background joined to its place in the list on the left, and the colors mean something: cyan is what is running, violet what you can click and yellow what needs attention; the text is as large as before.
 - [improved] Las herramientas aparecen en orden alfabético en la ventana, en el menú de la bandeja y en General.
   en: Tools appear in alphabetical order in the window, in the tray menu and in General.
 - [improved] El «?» ya no abre una ayuda de todas las herramientas juntas: cada página tiene su «How it works» con los pasos de esa herramienta, cerrado al entrar, que se abre con un clic o con el «?»; la versión, el autor y la web están al pie de General.

@@ -15,6 +15,7 @@
 #include "platform/SystemNotifier.h"
 #include "platform/ToastActivation.h"
 #include "platform/WindowActivation.h"
+#include "ui/Theme.h"
 
 #include "modules/diskspace/cleanup/CleanupWindow.h"
 #include "updates/UpdateService.h"
@@ -40,6 +41,8 @@ const QString kFirstRunCompleted = QStringLiteral("app/firstRunCompleted");
 const QString kWelcomeDone = QStringLiteral("app/welcomeDone");
 const QString kAutoStartDecided = QStringLiteral("app/autoStartDecided");
 const QString kLanguage = QStringLiteral("app/language");
+// La paleta de colores elegida (Palette::presetIds). Sin valor: la de fabrica (Violet).
+const QString kPalette = QStringLiteral("app/palette");
 
 // Los argumentos que vuelven con el click en un aviso: "module=diskSpace&action=snooze&key=C%3A%2F".
 QString noticeArguments(const QString &moduleId, const QString &action, const QString &key)
@@ -67,6 +70,10 @@ AppController::AppController(const Options &options, QObject *parent)
     m_buildTree = LgaBuildTree::isBuildTree(AppPaths::exeDir());
     // Antes de armar cualquier texto. Sin valor guardado (o en la medicion): ingles.
     I18n::setLanguage(I18n::fromCode(m_store->value(kLanguage).toString()));
+    // La paleta, antes de armar la ventana. La medicion se queda con la que eligio main (--palette o Violet).
+    if (!m_options.measurement) {
+        applySavedPalette();
+    }
 
     HostOptions hostOptions;
     hostOptions.automatedRun = m_options.measurement;
@@ -132,7 +139,7 @@ AppController::AppController(const Options &options, QObject *parent)
         WindowActivation::onReopenRequested([this]() { showSettings(); });
     }
 
-    if (!m_options.measurement) {
+    if (!m_options.measurement && !m_options.paletteEditor) {
         // parentWindow es la ventana (normalmente oculta): sus dialogos igual se centran en pantalla.
         m_updates = new UpdateService(m_window, this);
         m_updates->setSettingsStore(m_store.get());
@@ -293,6 +300,7 @@ void AppController::wireGeneralPage()
     connect(general, &GeneralPage::checkUpdatesAtStartupToggled, this,
             [this](bool check) { m_store->setValue(kCheckUpdates, check); });
     connect(general, &GeneralPage::languageChangeRequested, this, &AppController::onLanguageChangeRequested);
+    connect(general, &GeneralPage::paletteChangeRequested, this, &AppController::onPaletteChangeRequested);
     connect(general, &GeneralPage::uiSizeChangeRequested, this, &AppController::onUiSizeChangeRequested);
     connect(general, &GeneralPage::quitRequested, this, &AppController::quit);
     if (m_updates) {
@@ -319,6 +327,29 @@ void AppController::onLanguageChangeRequested(const QString &code)
         m_window->rebuildUi();
         refreshTray();
     });
+}
+
+void AppController::applySavedPalette()
+{
+    const QString saved = m_store->value(kPalette).toString();
+    const QString id = Palette::presetIds().contains(saved) ? saved : Palette::defaultPreset();
+    if (Palette::applyPreset(id)) {
+        Theme::refresh(*qApp);
+    }
+}
+
+void AppController::onPaletteChangeRequested(const QString &id)
+{
+    if (!Palette::presetIds().contains(id)) {
+        return;
+    }
+    // Se guarda solo si se aplico: el desplegable y la ventana nunca dicen paletas distintas.
+    if (id != Palette::currentPreset() && !Palette::applyPreset(id)) {
+        return;
+    }
+    m_store->setValue(kPalette, id);
+    qInfo().noquote() << QStringLiteral("[AppController] Paleta: %1").arg(id);
+    m_window->schedulePaletteRebuild();
 }
 
 void AppController::onUiSizeChangeRequested(int level)

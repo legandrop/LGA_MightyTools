@@ -55,7 +55,7 @@ public:
         m_value->setText(text);
         // canvas .combo .v: color @textStrong (no @textCaption, mas atenuado, del campo de solo
         // lectura del que sale este widget); "-" cae al gris de placeholder, como el resto de la app.
-        m_value->setStyleSheet(QStringLiteral("color:%1;")
+        Theme::sheet(m_value, QStringLiteral("color:%1;")
                                     .arg(empty ? QLatin1String(Theme::kTextPlaceholder) : QLatin1String(Theme::kTextStrong)));
     }
 
@@ -241,7 +241,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // canvas. A proposito SIN "color:" aca: la paleta de la app ya distingue texto (kText) de
     // placeholder (kTextPlaceholder, mas apagado); fijar "color" por QSS pisa esa distincion y el
     // placeholder se ve igual de brillante que una palabra real.
-    m_matchWords->setStyleSheet(QStringLiteral(
+    Theme::sheet(m_matchWords, QStringLiteral(
                                     "QTextEdit#linkRedirectorMatchWords { background-color:%1; "
                                     "border:1px solid %2; border-radius:6px; padding:6px 8px; "
                                     "selection-background-color:%5; selection-color:%3; } "

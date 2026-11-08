@@ -5,6 +5,23 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-76 · Paletas de color, las de LGA GateBouncer** (2026-11-08, Lega: las mismas paletas y el mismo
+  selector que GateBouncer v1.01). `src/ui/Palette.*` agrupa cada color de `Theme.h` y de la hoja en 18
+  grupos con los ids de GateBouncer y deriva los tonos en HSL desde el base de cada grupo; las seis paletas
+  de `resources/palettes/` son sus mismos JSON. General → App: Language, Colors, Zoom. Supuestos tomados sin
+  Lega, reversibles:
+  - **De fábrica, Violet** (la primera de `Palette::presetIds`), como en GateBouncer. El rosa de antes no es
+    ninguna de las seis: con los colores del código (`--palette code`) la app queda idéntica a la v1.52.
+  - **Las flechas cambian la paleta con el menú abierto** (en vivo; Enter la deja, Escape vuelve a la de
+    antes). Con el menú cerrado no: en Mighty Tools ningún botón toma el foco del teclado.
+  - **Los dos desplegables miden lo que pide el nombre más largo** (English, Español y las seis paletas en el
+    idioma de la interfaz), no 130 fijos: 144 en inglés, 137 en castellano.
+  - **El link lega.com.ar sigue con el color de los links**, no el de los rótulos del índice: con los
+    colores del código tiene que seguir rosa.
+  - **La base de «elegido» es `#682344`**, una referencia (no se usa): deja a sus tonos a la misma distancia
+    que en GateBouncer, así el segmento elegido sale igual de claro en cada paleta.
+  - La elegida va en `settings.ini` (`app/palette`). Editor de desarrollo: `MIGHTYTOOLS_PALETTE_EDITOR=1`.
+
 - **D-74 · Meet Frame** (2026-11-06, Lega: «Meet Frame se va a llamar, implementalo»). Herramienta para
   compartir una parte de la pantalla, como Region to Share (GPL-3.0: solo se tomó la idea, ninguna línea
   de código), tapando en lo compartido los avisos, el escritorio y las apps elegidas. Investigación en

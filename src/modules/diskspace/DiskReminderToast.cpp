@@ -91,7 +91,7 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
 #else
     const QString family = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
 #endif
-    setStyleSheet(QStringLiteral(
+    Theme::sheet(this, QStringLiteral(
         "#diskReminderToast QLabel, #diskReminderToast QLineEdit, #diskReminderToast QComboBox, #diskReminderToast QPushButton { background:transparent; border:0; color:%1; font-family:'%2'; font-size:13px; font-weight:400; }"
         "#diskReminderToast QPushButton { min-height:24px; max-height:24px; padding:0; }"
         "#diskReminderToast QLabel#headerTitle { font-size:12px; }"
@@ -144,6 +144,10 @@ DiskReminderToast::DiskReminderToast(DriveInfo drive, DiskWatch watch, int minut
     closeButton->setObjectName(QStringLiteral("reminderClose"));
     closeButton->setFixedSize(18, 24);
     closeButton->setIcon(Icons::icon(Icon::X, Theme::color(Theme::kReminderHeaderIcon)));
+    // Otra paleta con el aviso abierto: el icono se arma con su color.
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, closeButton, [closeButton]() {
+        closeButton->setIcon(Icons::icon(Icon::X, Theme::color(Theme::kReminderHeaderIcon)));
+    });
     closeButton->setIconSize(QSize(14, 14));
     closeButton->setAccessibleName(I18n::tr("Close"));
     header->addWidget(closeButton);

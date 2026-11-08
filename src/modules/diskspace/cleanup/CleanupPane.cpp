@@ -473,7 +473,7 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
         if (blocked > 0) {
             // Cuantas no se pueden borrar porque su app esta abierta: explica el "de" del tamano.
             meta += QStringLiteral(" · <span style=\"color:%1\">%2</span>")
-                        .arg(QLatin1String(Theme::kWarn), I18n::tr("%1 in use").arg(blocked).toHtmlEscaped());
+                        .arg(Theme::hex(Theme::kWarn), I18n::tr("%1 in use").arg(blocked).toHtmlEscaped());
         }
         QLabel *metaLabel = Ui::label(meta, "meta", row);
         metaLabel->setTextFormat(Qt::RichText);
@@ -497,7 +497,7 @@ void CleanupPane::addCategory(QVBoxLayout *layout, const Cleanup::Category &cate
     } else if (!category.info && picked > 0 && picked < total) {
         // Lo que se va de lo que hay: destildado o retenido por una app abierta.
         sizeText = QStringLiteral("%1 <span style=\"color:%2; font-weight:400\">%3</span>")
-                       .arg(DiskSpace::formatSize(picked), QLatin1String(Theme::kTextFaint),
+                       .arg(DiskSpace::formatSize(picked), Theme::hex(Theme::kTextFaint),
                             I18n::tr("of %1").arg(DiskSpace::formatSize(total)));
     } else {
         sizeText = DiskSpace::formatSize(total);

@@ -186,6 +186,9 @@ set(SOURCES
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
     src/ui/ShortcutRow.cpp
+    src/ui/Palette.cpp
+    src/dev/PaletteEditor.cpp
+    src/dev/LgaColorPickerDialog.cpp
     src/ui/Theme.cpp
     src/ui/TitleBar.cpp
     src/ui/UiWidgets.cpp
@@ -314,6 +317,9 @@ set(HEADERS
     src/qa/UiShot.h
     src/ui/HelpSection.h
     src/ui/ShortcutRow.h
+    src/ui/Palette.h
+    src/dev/PaletteEditor.h
+    src/dev/LgaColorPickerDialog.h
     src/ui/Theme.h
     src/ui/TitleBar.h
     src/ui/UiWidgets.h
