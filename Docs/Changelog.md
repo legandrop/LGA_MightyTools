@@ -2,6 +2,10 @@
 
 v1.53:
 
+Meet Frame en Windows (Lega, 07/11): al estirar el marco titilaban los bordes que se movían. Con la forma fija (16:9 de fábrica) el marco se estiraba cambiando el tamaño y la máscara de la ventana translúcida en cada paso, y la ventana cambiaba antes de tener su dibujo nuevo. Ahora Windows usa el lienzo de mac: la ventana es la pantalla, el marco se dibuja adentro y mover o estirar solo redibuja lo que cambia, sin máscara (el alfa 0 deja pasar el mouse); el marco no sale del área libre de la pantalla y lo compartido lo sigue mientras se arrastra. Además la forma ya no viene fija: libre de fábrica, con «Lock the frame shape» en 16:9, 4:3, 1:1 o la forma actual, también desde el menú Size del marco. Atajos de fábrica en Windows: Alt+Shift+Win+M y la pausa Alt+Shift+Win+P. Sonda `meetframe-drag` 49/49.
+
+[ Meet Frame - En Windows el marco ya no titila al estirarlo, la forma viene libre y se puede fijar, y atajos Alt+Shift+Win+M/P ]
+
 Tema (pedido de Lega, 07/11): la mesa y los fondos de campo se veían demasiado oscuros. Lega los eligió en vivo con dos selectores de color: la mesa (`kDesk`: ventana, barra de título e índice) pasa de `#0B0B0D` a `#0D0D0F`, y el fondo de campo (`kField`, `kCheckOffBg` y `kModIconBg`: campos de texto, casillas sin tildar y miniaturas de pantalla) de `#111114` a `#15151A`. Solo cambian esos cuatro valores de `Theme.h`; todo lo demás sale de los tokens.
 
 [ Tema - La mesa pasa a #0D0D0F y el fondo de campo a #15151A, un poco menos oscuros ]

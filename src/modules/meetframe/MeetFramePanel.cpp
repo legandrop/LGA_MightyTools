@@ -39,6 +39,12 @@ void runLater(QObject *context, F f)
     QTimer::singleShot(0, context, f);
 }
 
+// La forma fija de cada opcion de «Frame shape».
+QString lockedAspect(int index)
+{
+    return index == 1 ? QStringLiteral("4:3") : index == 2 ? QStringLiteral("1:1") : index == 3 ? QStringLiteral("current") : QStringLiteral("16:9");
+}
+
 QString groupTitle(const QString &id)
 {
     if (id == QLatin1String("messaging")) return I18n::tr("Messaging apps");
@@ -179,23 +185,28 @@ QWidget *MeetFramePanel::buildPictureCard()
     auto *hint = Ui::caption(I18n::tr("More frames move smoother and use more of the computer."), card);
     hint->setWordWrap(true);
     column->addWidget(hint);
+    // La forma: libre (cualquier tamaño) o fija al estirar. Prender el interruptor fija la ultima proporcion
+    // elegida; elegir una proporcion tambien la fija.
+    m_aspectLock = new SwitchRow(I18n::tr("Lock the frame shape"), QString(), card);
+    column->addWidget(m_aspectLock);
     auto *shapeRow = new QHBoxLayout();
-    shapeRow->setContentsMargins(0, 8, 0, 0);
+    shapeRow->setContentsMargins(0, 4, 0, 0);
     shapeRow->setSpacing(8);
     shapeRow->addWidget(Ui::label(I18n::tr("Frame shape"), "optionLabel", card), 0, Qt::AlignVCenter);
-    m_aspect = new SegmentedSwitch({QStringLiteral("16:9"), QStringLiteral("4:3"), I18n::tr("Free")}, 0, card);
+    m_aspect = new SegmentedSwitch({QStringLiteral("16:9"), QStringLiteral("4:3"), QStringLiteral("1:1"), I18n::tr("Current")}, 0, card);
     shapeRow->addWidget(m_aspect, 0, Qt::AlignVCenter);
     shapeRow->addStretch(1);
     column->addLayout(shapeRow);
-    auto *shapeHint = Ui::caption(I18n::tr("Stretching the frame keeps this shape. Meetings show 16:9 without black bars."), card);
-    shapeHint->setWordWrap(true);
-    column->addWidget(shapeHint);
+    m_aspectHint = Ui::caption(QString(), card);
+    m_aspectHint->setWordWrap(true);
+    column->addWidget(m_aspectHint);
     if (m_interactive) {
         connect(m_cursor, &SwitchRow::clicked, this, [this](bool on) { m_module->setShowCursor(on); });
         connect(m_fps, &SegmentedSwitch::currentChanged, this, [this](int index) { m_module->setFps(index == 0 ? 15 : index == 2 ? 60 : 30); });
-        connect(m_aspect, &SegmentedSwitch::currentChanged, this, [this](int index) {
-            m_module->setAspect(index == 1 ? QStringLiteral("4:3") : index == 2 ? QStringLiteral("free") : QStringLiteral("16:9"));
+        connect(m_aspectLock, &SwitchRow::clicked, this, [this](bool on) {
+            m_module->setAspect(on ? m_module->lastLockedAspect() : QStringLiteral("free"));
         });
+        connect(m_aspect, &SegmentedSwitch::currentChanged, this, [this](int index) { m_module->setAspect(lockedAspect(index)); });
     }
     return card;
 }
@@ -237,7 +248,12 @@ void MeetFramePanel::refresh()
     const int fps = m_module->fps();
     m_fps->setCurrent(fps == 15 ? 0 : fps == 60 ? 2 : 1);
     const QString aspect = m_module->aspect();
-    m_aspect->setCurrent(aspect == QLatin1String("4:3") ? 1 : aspect == QLatin1String("free") ? 2 : 0);
+    const bool locked = aspect != QLatin1String("free");
+    m_aspectLock->setChecked(locked);
+    // Libre: ninguna proporcion marcada (al prender el interruptor vuelve la ultima elegida).
+    m_aspect->setCurrent(!locked ? -1 : aspect == QLatin1String("4:3") ? 1 : aspect == QLatin1String("1:1") ? 2 : aspect == QLatin1String("current") ? 3 : 0);
+    m_aspectHint->setText(locked ? I18n::tr("Stretching the frame keeps this shape. Meetings show 16:9 without black bars.")
+                                 : I18n::tr("The frame stretches to any size. Meetings show 16:9 without black bars."));
     rebuildApps();
 }
 

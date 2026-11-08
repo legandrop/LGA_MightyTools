@@ -2315,7 +2315,8 @@ int runMeetFrameDragProbe()
     };
     MeetFrameOverlay frame(false);
     frame.setAttribute(Qt::WA_DontShowOnScreen, true);
-    const QRect start(120, 100, 560, 320);
+    // Chico, para que estirar en libre no llegue al borde de la pantalla (offscreen: 800 x 800).
+    const QRect start(60, 80, 460, 280);
     frame.setRegion(start);
     frame.setState(false, 0, QSize(1280, 720), QString());
     frame.show();
@@ -2406,9 +2407,22 @@ int runMeetFrameDragProbe()
     };
 
     QRect want = start;
+    // Mover y estirar no cambian el tamaño ni la mascara de la ventana (el lienzo): en Windows, estirar la ventana
+    // translucida y cambiarle la mascara en cada paso hacia titilar los bordes que se movian.
+    const QRect canvasBefore = frame.geometry();
+    const QRegion maskBefore = frame.mask();
     drag(barPoint(), QPoint(50, 30));
     want.translate(50, 30);
     expectRegion(want, "mover desde la barrita");
+    drag(right(), QPoint(40, 0));
+    drag(right(), QPoint(-40, 0));
+    expectRegion(want, "estirar y volver desde el borde derecho");
+    check(frame.geometry() == canvasBefore, QStringLiteral("mover y estirar no cambian el lienzo: %1 (antes %2)").arg(rectText(frame.geometry()), rectText(canvasBefore)));
+#ifndef Q_OS_MACOS
+    check(frame.mask().isEmpty() && maskBefore.isEmpty(), QStringLiteral("Windows: el lienzo no lleva mascara (el alfa 0 deja pasar el mouse)"));
+#else
+    Q_UNUSED(maskBefore);
+#endif
     check(bar->geometry().top() == frame.frameRect().top(), QStringLiteral("la barrita se movio con el marco"));
     drag(right(), QPoint(100, 0));
     want.setRight(want.right() + 100);
@@ -2432,6 +2446,21 @@ int runMeetFrameDragProbe()
     // Durante el arrastre de la barrita, la mano cerrada; al soltar, vuelve el cursor de donde quedo el mouse.
     drag(barPoint(), QPoint(0, 0));
     check(frame.cursorShape() == Qt::SizeAllCursor, QStringLiteral("al soltar en la barrita, el cursor de mover (no la mano cerrada)"));
+#ifndef Q_OS_MACOS
+    // Windows: el marco no se puede sacar del area libre de la pantalla (lo que sale del lienzo no se dibuja ni se
+    // agarra): ni moviendolo ni estirandolo de mas.
+    const QRect freeArea = frame.screen()->availableGeometry();
+    const auto outerGlobal = [&]() { return frame.frameRect().translated(frame.geometry().topLeft()); };
+    drag(barPoint(), QPoint(5000, 5000));
+    check(freeArea.contains(outerGlobal()), QStringLiteral("Windows: mover de mas deja el marco adentro de la pantalla: %1 (%2)").arg(rectText(outerGlobal()), rectText(freeArea)));
+    drag(barPoint(), QPoint(-5000, -5000));
+    check(freeArea.contains(outerGlobal()) && outerGlobal().topLeft() == freeArea.topLeft(),
+          QStringLiteral("Windows: y hacia el otro lado, la barrita queda arriba a la izquierda: %1").arg(rectText(outerGlobal())));
+    const QRect leftBefore = frame.region();
+    drag(right(), QPoint(5000, 0));
+    check(freeArea.contains(outerGlobal()) && outerGlobal().right() == freeArea.right() && frame.region().left() == leftBefore.left(),
+          QStringLiteral("Windows: estirar de mas frena en el borde y la izquierda queda quieta: %1").arg(rectText(outerGlobal())));
+#endif
 
     // Proporcion fija (16:9, la de fabrica): estirar desde cualquier lado mantiene la forma de la region.
     frame.setAspectRatio(QSize(16, 9));
@@ -2465,7 +2494,25 @@ int runMeetFrameDragProbe()
     got = frame.region();
     check(isWide(got) && got.width() == MeetFrameOverlay::minimumRegion().width() && got.right() == before.right(),
           QStringLiteral("16:9 al achicar de mas: el minimo, con la forma, y la derecha quieta: %1").arg(rectText(got)));
-    frame.setAspectRatio(QSize());
+    // La forma elegida queda marcada en el menu Size y, si es fija, junto al tamaño en la barrita.
+    const auto checkedShape = [&]() {
+        for (QAction *action : frame.sizeMenu()->actions()) {
+            if (action->isCheckable() && action->isChecked()) return action->data().toString();
+        }
+        return QString();
+    };
+    const auto sizeText = [&]() {
+        for (QLabel *label : bar->findChildren<QLabel *>()) {
+            if (label->text().contains(QChar(0x00D7))) return label->text();
+        }
+        return QString();
+    };
+    frame.setAspectChoice(QStringLiteral("4:3"), QSize(4, 3));
+    check(checkedShape() == QLatin1String("4:3") && sizeText().endsWith(QStringLiteral("· 4:3")),
+          QStringLiteral("forma 4:3: marcada en el menu (%1) y en la barrita (%2)").arg(checkedShape(), sizeText()));
+    frame.setAspectChoice(QStringLiteral("free"), QSize());
+    check(checkedShape() == QLatin1String("free") && !sizeText().contains(QLatin1Char(':')),
+          QStringLiteral("forma libre: marcada en el menu (%1), sin forma en la barrita (%2)").arg(checkedShape(), sizeText()));
     before = frame.region();
     drag(bottom(), QPoint(0, 33));
     got = frame.region();

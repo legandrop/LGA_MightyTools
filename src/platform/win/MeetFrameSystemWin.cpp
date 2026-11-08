@@ -870,13 +870,12 @@ QRect captureRegion(QWidget *frame, const QRect &region)
     if (!GetWindowRect(hwnd, &r)) return {};
     const UINT dpi = GetDpiForWindow(hwnd);
     const qreal scale = dpi ? dpi / 96.0 : frame->devicePixelRatioF();
-    // Los margenes entre la ventana y la region, pasados a pixeles fisicos sobre el rectangulo real de la ventana.
+    // La distancia de la ventana a la region y el tamaño de la region, pasados a pixeles fisicos desde la esquina
+    // real de la ventana. (La ventana es un lienzo del tamaño de la pantalla: medir desde su borde opuesto, que
+    // con 125 % o 150 % se redondea, corria el borde derecho y el de abajo uno o dos pixeles.)
     const QRect window = frame->geometry();
-    const int left = qRound((region.left() - window.left()) * scale);
-    const int top = qRound((region.top() - window.top()) * scale);
-    const int right = qRound((window.right() - region.right()) * scale);
-    const int bottom = qRound((window.bottom() - region.bottom()) * scale);
-    return QRect(QPoint(r.left + left, r.top + top), QPoint(r.right - right - 1, r.bottom - bottom - 1));
+    const QPoint origin(r.left + qRound((region.left() - window.left()) * scale), r.top + qRound((region.top() - window.top()) * scale));
+    return QRect(origin, QSize(qRound(region.width() * scale), qRound(region.height() * scale)));
 }
 
 QSize pixelSize(QWidget *, const QRect &region)

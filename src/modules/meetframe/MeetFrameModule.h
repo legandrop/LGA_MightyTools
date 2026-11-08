@@ -66,10 +66,15 @@ public:
     void setHideDesktop(bool hide);
     bool showCursor() const;
     void setShowCursor(bool show);
-    // Proporcion de la region al estirar: "16:9" (por defecto, lo que espera una reunion), "4:3" o "free".
+    // Forma de la region al estirar: "free" (por defecto, cualquier tamaño), o fija en "16:9" (lo que espera una
+    // reunion), "4:3", "1:1" o "current" (la forma que tenia la region al elegirla).
+    static QStringList aspects();
     QString aspect() const;
     void setAspect(const QString &aspect);
-    static QSize aspectRatio(const QString &aspect);
+    // La proporcion de la forma elegida; invalida si es libre.
+    QSize aspectRatio() const;
+    // La ultima forma fija elegida (la que vuelve al fijar la forma otra vez); "16:9" si nunca se eligio una.
+    QString lastLockedAspect() const;
     int fps() const;
     void setFps(int fps);
     QList<CustomApp> customApps() const;

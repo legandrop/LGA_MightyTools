@@ -12,9 +12,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   - **Motor B en Windows** (captura del monitor con DXGI Desktop Duplication, GDI de respaldo, y lo
     tapado pintado liso), no las miniaturas de DWM: es el que funciona seguro sin el prototipo P1. La
     ventana compartida queda al fondo del orden Z (si queda debajo del escritorio, mejor: nadie la ve).
-  - **Atajos** `Ctrl+Alt+M` (mostrar u ocultar el marco) y `Ctrl+Alt+P` (pausa, registrado solo con el
-    marco abierto). En mac son `⌘⌥⇧M` (Lega, 2026-11-07: `⌘⌥M` es «minimizar todas las ventanas» de
+  - **Atajos** `Alt+Shift+Win+M` (mostrar u ocultar el marco; Lega, 2026-11-07: el que él usa) y
+    `Alt+Shift+Win+P` (pausa, que haga juego; registrado solo con el marco abierto). En mac son `⌘⌥⇧M` (Lega, 2026-11-07: `⌘⌥M` es «minimizar todas las ventanas» de
     macOS; vale de fábrica el que él usa) y `⌘⌥⇧P` (Lega, mismo día: que haga juego).
+  - **Forma libre de fábrica** (Lega, 2026-11-07: «todo bloqueado no está bien»): se estira a cualquier
+    tamaño; «Lock the frame shape» (panel y menú Size del marco) la fija en 16:9, 4:3, 1:1 o la actual.
   - **Vienen prendidos** los avisos, el escritorio, Mensajería y Contraseñas; Correo viene apagado (se
     suele compartir el correo a propósito). WhatsApp y Telegram en el navegador se reconocen por el
     título y se tapa la ventana entera del navegador mientras esa pestaña está al frente.

@@ -18,7 +18,9 @@
 #include <QPainter>
 #include <QScreen>
 
+#include <algorithm>
 #include <cstdio>
+#include <numeric>
 
 namespace {
 
@@ -216,9 +218,9 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
                   && module.shortcut(MeetFrameModule::PauseShortcut) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+P")),
               QStringLiteral("modulo: de fabrica en mac Cmd+Option+Shift+M y +P (Cmd+Option+M minimiza todo en macOS)"));
 #else
-        check(module.shortcut(MeetFrameModule::ToggleShortcut) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+M"))
-                  && module.shortcut(MeetFrameModule::PauseShortcut) == Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+P")),
-              QStringLiteral("modulo: de fabrica en Windows Ctrl+Alt+M y Ctrl+Alt+P"));
+        check(module.shortcut(MeetFrameModule::ToggleShortcut) == Shortcut::fromPortableString(QStringLiteral("Alt+Shift+Meta+M"))
+                  && module.shortcut(MeetFrameModule::PauseShortcut) == Shortcut::fromPortableString(QStringLiteral("Alt+Shift+Meta+P")),
+              QStringLiteral("modulo: de fabrica en Windows Alt+Shift+Win+M y Alt+Shift+Win+P"));
 #endif
         QString error;
         context.fake.other = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+D"));
@@ -334,13 +336,14 @@ void MeetFrameModule::stop()
 Shortcut MeetFrameModule::defaultShortcut(int id)
 {
     // En mac Ctrl es ⌘: ⌘⌥M es «minimizar todas las ventanas» de macOS, asi que el marco va con ⌘⌥⇧M (el que eligio
-    // Lega, 2026-11-07), y la pausa, para hacer juego, con ⌘⌥⇧P.
+    // Lega, 2026-11-07), y la pausa, para hacer juego, con ⌘⌥⇧P. En Windows, Alt+Shift+Win+M (el que usa Lega,
+    // 2026-11-07) y la pausa, para hacer juego, Alt+Shift+Win+P.
 #ifdef Q_OS_MACOS
     const QString toggle = QStringLiteral("Ctrl+Alt+Shift+M");
     const QString pause = QStringLiteral("Ctrl+Alt+Shift+P");
 #else
-    const QString toggle = QStringLiteral("Ctrl+Alt+M");
-    const QString pause = QStringLiteral("Ctrl+Alt+P");
+    const QString toggle = QStringLiteral("Alt+Shift+Meta+M");
+    const QString pause = QStringLiteral("Alt+Shift+Meta+P");
 #endif
     return Shortcut::fromPortableString(id == PauseShortcut ? pause : toggle);
 }
@@ -500,10 +503,11 @@ void MeetFrameModule::showFrame()
     });
     MeetFrameSystem::excludeFromCapture(overlay->sizeMenu());
     overlay->setRegion(savedRegion());
-    overlay->setAspectRatio(aspectRatio(aspect()));
-    fitAspect(); // antes de la captura: la ventana compartida nace con la forma elegida
     m_overlay = overlay;
+    overlay->setAspectChoice(aspect(), aspectRatio());
+    fitAspect(); // antes de la captura: la ventana compartida nace con la forma elegida
     connect(overlay, &MeetFrameOverlay::closeClicked, this, &MeetFrameModule::hideFrame);
+    connect(overlay, &MeetFrameOverlay::aspectRequested, this, &MeetFrameModule::setAspect);
     connect(overlay, &MeetFrameOverlay::pauseClicked, this, &MeetFrameModule::togglePause);
     connect(overlay, &MeetFrameOverlay::sizeRequested, this, &MeetFrameModule::resizeRegion);
     connect(overlay, &MeetFrameOverlay::regionChanged, this, &MeetFrameModule::onRegionChanged);
@@ -590,11 +594,14 @@ void MeetFrameModule::onRegionChanged()
     if (!m_overlay || !m_session) return;
     ++m_regionRequests;
     m_regionPending = true;
+#ifdef Q_OS_MACOS
     // Mientras se mueve o se estira, la captura y la ventana compartida no se tocan: reconfigurar ScreenCaptureKit
     // 10 veces por segundo le encolaba pedidos (hasta 450 ms de respuesta) y cargaba al sistema que dibuja las
     // ventanas y entrega el mouse; el marco iba a los tirones. Se aplica una vez, al soltar (dragFinished).
+    // En Windows (DXGI) cambiar la region es barato: lo compartido sigue al marco mientras se arrastra.
     if (m_overlay->dragging()) return;
-    // Fuera de un arrastre (Size, la forma, otra pantalla), los cambios seguidos se juntan.
+#endif
+    // Los cambios seguidos (un arrastre, Size, la forma, otra pantalla) se juntan.
     if (!m_regionTimer.isActive()) m_regionTimer.start();
 }
 
@@ -687,7 +694,7 @@ void MeetFrameModule::resizeRegion(const QSize &pixels)
     m_overlay->setRegion(region);
     onRegionChanged();
     saveRegion();
-    if (pixels.isValid()) fitAspect(); // los tamaños del menu son 16:9: con otra forma, se corrige el alto
+    if (pixels.isValid()) fitAspect(); // los tamaños del menu son 16:9: con otra forma fija, se corrige el alto
     MeetFrameSystem::syncFrameMouse(m_overlay);
 }
 
@@ -766,24 +773,55 @@ void MeetFrameModule::setShowCursor(bool show)
     changed();
 }
 
-QString MeetFrameModule::aspect() const
+QStringList MeetFrameModule::aspects()
 {
-    const QString value = context().value(QStringLiteral("aspect"), QStringLiteral("16:9")).toString();
-    return (value == QLatin1String("4:3") || value == QLatin1String("free")) ? value : QStringLiteral("16:9");
+    return {QStringLiteral("free"), QStringLiteral("16:9"), QStringLiteral("4:3"), QStringLiteral("1:1"), QStringLiteral("current")};
 }
 
-QSize MeetFrameModule::aspectRatio(const QString &aspect)
+QString MeetFrameModule::aspect() const
 {
-    if (aspect == QLatin1String("free")) return QSize();
-    return aspect == QLatin1String("4:3") ? QSize(4, 3) : QSize(16, 9);
+    const QString value = context().value(QStringLiteral("aspect"), QStringLiteral("free")).toString();
+    if (!aspects().contains(value)) return QStringLiteral("free");
+    if (value == QLatin1String("current") && !aspectRatio().isValid()) return QStringLiteral("free");
+    return value;
+}
+
+QSize MeetFrameModule::aspectRatio() const
+{
+    const QString value = context().value(QStringLiteral("aspect"), QStringLiteral("free")).toString();
+    if (value == QLatin1String("16:9")) return QSize(16, 9);
+    if (value == QLatin1String("4:3")) return QSize(4, 3);
+    if (value == QLatin1String("1:1")) return QSize(1, 1);
+    if (value == QLatin1String("current")) {
+        // La forma que tenia la region al elegirla, guardada como "ancho:alto".
+        const QStringList parts = context().value(QStringLiteral("aspectCurrent")).toString().split(QLatin1Char(':'));
+        const QSize ratio = parts.size() == 2 ? QSize(parts.at(0).toInt(), parts.at(1).toInt()) : QSize();
+        if (ratio.width() > 0 && ratio.height() > 0) return ratio;
+    }
+    return QSize();
+}
+
+QString MeetFrameModule::lastLockedAspect() const
+{
+    const QString value = context().value(QStringLiteral("aspectLast"), QStringLiteral("16:9")).toString();
+    return aspects().contains(value) && value != QLatin1String("free") ? value : QStringLiteral("16:9");
 }
 
 void MeetFrameModule::setAspect(const QString &value)
 {
+    if (!aspects().contains(value)) return;
+    if (value == QLatin1String("current")) {
+        // Se guarda la forma de ahora (la del marco abierto o, cerrado, la de la region guardada).
+        const QSize size = m_overlay ? m_overlay->region().size() : savedRegion().size();
+        const int divisor = std::max(1, std::gcd(size.width(), size.height()));
+        context().setValue(QStringLiteral("aspectCurrent"), QStringLiteral("%1:%2").arg(size.width() / divisor).arg(size.height() / divisor));
+    }
     context().setValue(QStringLiteral("aspect"), value);
+    if (value != QLatin1String("free")) context().setValue(QStringLiteral("aspectLast"), value);
     if (m_overlay) {
-        m_overlay->setAspectRatio(aspectRatio(aspect()));
+        m_overlay->setAspectChoice(aspect(), aspectRatio());
         fitAspect();
+        MeetFrameSystem::syncFrameMouse(m_overlay);
     }
     changed();
 }
@@ -792,7 +830,7 @@ void MeetFrameModule::fitAspect()
 {
     // Con una proporcion fija, la region la toma ya (no recien al estirar): mismo ancho y mismo centro; si no
     // entra en la pantalla, se achica.
-    const QSize ratio = aspectRatio(aspect());
+    const QSize ratio = aspectRatio();
     if (!m_overlay || !ratio.isValid()) return;
     QRect region = m_overlay->region();
     QScreen *screen = m_overlay->screen();
