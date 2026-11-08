@@ -21,6 +21,12 @@ struct Role {
     const char *base;    ///< color base de fabrica
     QStringList members; ///< los colores de fabrica que siguen a este grupo
     bool byValue = true; ///< false: sus tonos se piden por nombre (@color(rol:#HEX), mapIn), no por valor
+    /// Solo el grupo del acento y el de «elegido»: los colores de fabrica de esta app son magenta, y rotarlos por
+    /// HSL no da lo que se ve en GateBouncer (otra luz y otra saturacion). Cada tono de aca se calcula desde su
+    /// equivalente de GateBouncer (gbTones: tono de aca -> tono de alla) respecto del base de alla (gbBase), igual
+    /// que alla, asi las seis paletas se ven identicas en las dos apps. Vacio = se deriva del tono de fabrica.
+    const char *gbBase = nullptr;
+    QVector<QPair<const char *, const char *>> gbTones;
 };
 
 const QVector<Role> &roles();

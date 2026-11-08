@@ -33,13 +33,23 @@ const QVector<Role> kRoles = {
     {"ink2", "Texto común: párrafos y descripciones", "#C4C3C9", {"#C4C3C9", "#A9A8AF", "#A6A5AC", "#A3A2A9"}},
     {"ink3", "Texto gris: notas, metas, íconos", "#8C8B93", {"#9C9BA2", "#8C8B93", "#85848C"}},
     {"ink4", "Texto apagado: deshabilitado, herramientas apagadas", "#6E6D75", {"#77767E", "#6E6D75", "#5E5D66"}},
+    // gbTones: el equivalente de cada tono magenta en el violeta de GateBouncer (botón principal, su borde, hover y
+    // apretado, link y su hover, texto sobre el botón, selección de texto, fila elegida y botón deshabilitado).
     {"accent", "Acento: links, foco, selección y botón principal", "#B4306E",
      {"#B4306E", "#CB4686", "#C33B7C", "#9E2860", "#F070AE", "#F7A3CA", "#FFF3F9", "#9A7387", "#5C1F3F", "#4A2338",
-      "#3A1A2B", "#2B1424"}},
+      "#3A1A2B", "#2B1424"},
+     true,
+     "#443A91",
+     {{"#B4306E", "#443A91"}, {"#CB4686", "#5243A8"}, {"#C33B7C", "#5446B4"}, {"#9E2860", "#3B3380"},
+      {"#F070AE", "#9D8FE0"}, {"#F7A3CA", "#C5BBF4"}, {"#FFF3F9", "#DDDBEE"}, {"#9A7387", "#7B7499"},
+      {"#5C1F3F", "#2A2552"}, {"#4A2338", "#3A3466"}, {"#3A1A2B", "#1D1B2C"}, {"#2B1424", "#25223B"}}},
     // La base de «elegido» no es un color que se use: es la referencia que deja a sus tonos (mas oscuros que los
     // de GateBouncer respecto del magenta) a la misma distancia que alla, asi las paletas dan el mismo fondo.
     {"chosen", "Elegido en selectores (Zoom, GB | %, filtros, versión de Nuke)", "#682344",
-     {"#4A1D3D", "#3A1730", "#CB4686", "#FFF3F9"}, false},
+     {"#4A1D3D", "#3A1730", "#CB4686", "#FFF3F9"},
+     false,
+     "#443A91",
+     {{"#3A1730", "#2A2552"}, {"#4A1D3D", "#352E66"}, {"#CB4686", "#5243A8"}, {"#FFF3F9", "#DDDBEE"}}},
     {"switch", "Interruptores encendidos", "#4CC9EE", {"#4CC9EE", "#2A97BC", "#0D3542"}, false},
     {"ok", "Funciona: prendido, todo bien, calibrado", "#4CC9EE", {"#4CC9EE", "#24586A", "#0D2A33"}},
     {"warn", "Pide atención", "#F2CB3F", {"#F2CB3F", "#BFA03A", "#8C7731", "#5A4E26", "#1C1606"}},
@@ -174,7 +184,20 @@ QColor mapIn(const QString &roleId, const QString &hex) {
     QColor out(h);
     if (const Role *r = role(roleId)) {
         const QColor fixed = state().overrides.value(key);
-        out = fixed.isValid() ? fixed : derive(QColor(h), QColor(r->base), base(roleId));
+        if (fixed.isValid()) {
+            out = fixed;
+        } else {
+            // Con tabla de equivalencias, se parte del tono de GateBouncer y de su base (ver Role::gbTones).
+            QColor from(h), fromBase(r->base);
+            if (r->gbBase)
+                for (const auto &pair : r->gbTones)
+                    if (norm(QLatin1String(pair.first)) == h) {
+                        from = QColor(QLatin1String(pair.second));
+                        fromBase = QColor(QLatin1String(r->gbBase));
+                        break;
+                    }
+            out = derive(from, fromBase, base(roleId));
+        }
     }
     c.insert(key, out);
     return out;

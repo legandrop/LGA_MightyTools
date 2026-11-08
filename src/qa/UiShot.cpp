@@ -2810,6 +2810,17 @@ int runPaletteProbe(const QStringList &args)
     QStringList seen;
     const QString menuShot = shots ? QDir(outDir).filePath(QStringLiteral("menu_abierto.png")) : QString();
     QTimer::singleShot(60, [&seen, &menuShot]() {
+        // El menu recien abierto, con la paleta de fabrica (antes de las flechas, que previsualizan otra).
+        if (QWidget *popup = QApplication::activePopupWidget(); popup && !menuShot.isEmpty()) {
+            popup->grab().save(QFileInfo(menuShot).dir().filePath(QStringLiteral("menu_inicial.png")));
+            // Y con una fila resaltada (la tercera), como cuando el mouse pasa por encima.
+            if (auto *menu = qobject_cast<QMenu *>(popup); menu && menu->actions().size() > 2) {
+                QAction *before = menu->activeAction();
+                menu->setActiveAction(menu->actions().at(2));
+                popup->grab().save(QFileInfo(menuShot).dir().filePath(QStringLiteral("menu_inicial_resaltada.png")));
+                menu->setActiveAction(before); // las flechas de abajo parten de donde estaban
+            }
+        }
         sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
         QTimer::singleShot(80, [&seen, &menuShot]() {
             seen << Palette::currentPreset();

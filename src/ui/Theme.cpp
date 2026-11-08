@@ -351,7 +351,7 @@ QFrame#chip[tone="keyDim"] QLabel { color: @textFaint; }
    un QMenu de nivel superior sin translucidez pinta las esquinas de negro. */
 QMenu { background-color: #1B1B20; border: 1px solid @borderStrong; padding: 5px 0px; }
 QMenu::item { color: @textStrong; padding: 5px 16px 5px 14px; background: transparent; font-size: @fs14; }
-QMenu::item:selected { background-color: @primary; color: @textOnAccent; }
+QMenu::item:selected { background-color: @listSelected; color: @textBright; }
 QMenu::item:disabled { color: @textFaint; }
 QMenu::separator { height: 1px; background: @divider; margin: 5px 8px; }
 /* Item marcable (el combo de Link Redirector, el intervalo de Disk Space): la marca es un tilde magenta,

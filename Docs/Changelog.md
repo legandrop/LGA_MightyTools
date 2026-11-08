@@ -2,6 +2,10 @@
 
 v1.53:
 
+Paletas iguales a las de GateBouncer (Lega, 08/11): Violeta y Magenta se veían distintos a los de GateBouncer (fondo y borde del elegido, texto sobre violeta, link) y el desplegable resaltaba con el violeta pleno del botón principal. Causa: los dos usan los mismos JSON, pero los tonos de fábrica de acá son magenta y, rotados por HSL, no dan la luz ni la saturación de los tonos violeta de allá. Ahora los grupos del acento y de «elegido» traen la tabla «tono de acá → tono de GateBouncer» (`Palette::Role::gbTones`) y `mapIn` deriva desde el de allá, igual que allá; las seis paletas dan los mismos colores (66 de 66 pares iguales, medido con los dos `Palette.cpp` reales). El menú resalta la fila con el color de «fila elegida» en vez del primario. La sonda `palette-live` captura el menú recién abierto y con una fila resaltada.
+
+[ Paletas - Los tonos del acento y del elegido salen de los de GateBouncer y el menú resalta suave ]
+
 Paletas de color (pedido de Lega, 08/11): los colores estaban fijos en `Theme.h` y en la hoja de estilo, y LGA GateBouncer ya ofrece seis paletas. Ahora `src/ui/Palette.*` agrupa cada color en 18 grupos (los de GateBouncer) y deriva sus tonos en HSL desde el color base de cada grupo; `Theme::color`, `Theme::hex`, `Theme::sheet` y la hoja global traducen, los tooltips también, y la ventana se rearma en vivo. General → App suma Colors entre Language y Zoom, con las seis paletas de GateBouncer (`resources/palettes/`, Violet de fábrica, guardada en `app/palette`); con el menú abierto, las flechas las muestran en vivo. Editor solo de desarrollo (`MIGHTYTOOLS_PALETTE_EDITOR=1`) con el selector de color LGA. Con `--palette code`, 163 de 170 capturas quedan idénticas a la v1.52 (las otras son General). Sondas nuevas `palette-live` (80/80, en y es) y `palette-editor`. D-76.
 
 [ Paletas - Colors en General con las seis paletas de GateBouncer, en vivo, y editor de desarrollo ]

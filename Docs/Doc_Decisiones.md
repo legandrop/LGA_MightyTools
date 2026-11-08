@@ -20,6 +20,10 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
     colores del código tiene que seguir rosa.
   - **La base de «elegido» es `#682344`**, una referencia (no se usa): deja a sus tonos a la misma distancia
     que en GateBouncer, así el segmento elegido sale igual de claro en cada paleta.
+    (2026-11-08, superado: la base de referencia no alcanzaba. Los tonos del acento y de «elegido» se calculan
+    desde su equivalente de GateBouncer, `Role::gbTones`, y dan los mismos colores que allá en las seis paletas.)
+  - **El menú resalta con «fila elegida»** (`@listSelected`, el violeta tenue), no con el color del botón
+    principal.
   - La elegida va en `settings.ini` (`app/palette`). Editor de desarrollo: `MIGHTYTOOLS_PALETTE_EDITOR=1`.
 
 - **D-74 · Meet Frame** (2026-11-06, Lega: «Meet Frame se va a llamar, implementalo»). Herramienta para
