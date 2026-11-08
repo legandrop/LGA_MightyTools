@@ -8,10 +8,11 @@
 #include <QLabel>
 #include <QProgressDialog>
 #include <QPushButton>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 
 QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName, const QString &version,
-                                     const QString &currentVersion)
+                                     const QString &currentVersion, const QString &notesHtml)
 {
     auto *dialog = new QDialog(parent);
     dialog->setObjectName(QStringLiteral("updateDialog"));
@@ -40,6 +41,22 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
     message->setWordWrap(true);
     layout->addWidget(message);
 
+    const bool withNotes = !notesHtml.isEmpty();
+    if (withNotes) {
+        auto *heading = Ui::label(I18n::tr("What's new"), "updateNotesTitle", dialog);
+        layout->addSpacing(8);
+        layout->addWidget(heading);
+        // Solo lectura y sin foco: nada en el cartel toma el teclado salvo los botones. Los colores de
+        // cada rotulo (NEW, IMPROVED, FIXED) vienen en el HTML de LgaWhatsNew.
+        auto *notes = new QTextBrowser(dialog);
+        notes->setObjectName(QStringLiteral("updateNotes"));
+        notes->setFocusPolicy(Qt::NoFocus);
+        notes->setOpenLinks(false);
+        notes->setHtml(notesHtml);
+        notes->setFixedHeight(220);
+        layout->addWidget(notes);
+    }
+
     auto *buttons = new QHBoxLayout();
     buttons->setContentsMargins(0, 12, 0, 0);
     buttons->setSpacing(8);
@@ -54,7 +71,8 @@ QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName
     QObject::connect(update, &QPushButton::clicked, dialog, &QDialog::accept);
     QObject::connect(later, &QPushButton::clicked, dialog, &QDialog::reject);
 
-    dialog->setFixedWidth(380);
+    // Con novedades, mas ancho: las lineas de las notas son oraciones enteras.
+    dialog->setFixedWidth(withNotes ? 460 : 380);
     return dialog;
 }
 

@@ -302,6 +302,9 @@ QMenu::indicator:checked { image: url(:/icons/check_link.png); }
 /* Dialogos: el de update, los QMessageBox y el progreso de descarga (la hoja). */
 QDialog#updateDialog, QMessageBox, QProgressDialog { background-color: @dialog; }
 QLabel#dialogTitle { color: @textBright; font-family: "@titleFamily"; font-size: @fs16; font-weight: @tw700; }
+/* Novedades del cartel de update (UpdateNotes): rotulo y caja con scroll. */
+QLabel#updateNotesTitle { color: @textStrong; font-size: @fs13_5; font-weight: 600; }
+QTextBrowser#updateNotes { background-color: @card; border: 1px solid @cardBorder; border-radius: 8px; padding: 6px 4px; font-size: @fs13; }
 QProgressBar { background-color: @tile; border: none; border-radius: 1px; min-height: 8px; max-height: 8px; color: transparent; }
 QProgressBar::chunk { background-color: @ok; border-radius: 1px; }
 

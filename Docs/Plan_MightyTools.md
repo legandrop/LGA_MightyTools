@@ -129,7 +129,7 @@ src/
     folderswitch/       DialogSwitcher, UiaSwitcher, FolderResolver, WindowUtils, popup de recientes, panel
     linkredirector/     UrlRouter, registro de navegador, panel
   ui/                   Theme, UiWidgets, TitleBar, HelpDialog, piezas comunes de paneles
-  updates/              UpdateService, UpdateDialog, VersionCompare
+  updates/              UpdateService, UpdateDialog, UpdateNotes, VersionCompare
   qa/                   UiShot, UiProbe
 ```
 
@@ -256,6 +256,20 @@ Medición (criterio de aceptación desde la fase 2, cada número anotado en el c
 - Versión de a centésimos (D-02); la sube `bump_version` solo al publicar, como FileManagerS3 (D-59).
 - `UpdateService` de Nuke Shortcuts con el slug `legandrop/LGA_MightyTools`; alta en
   `LGA_Updates/repos.json` y en el catálogo del sitio.
+- **Novedades en el cartel de update** (desde la v1.53): antes de mostrar «Update Available»,
+  `UpdateService::onCheckFinished()` le pide a `UpdateNotes::fetch()` (`src/updates/UpdateNotes.cpp`) lo
+  nuevo desde la versión instalada hasta la ofrecida. `UpdateNotes` usa `LgaWhatsNew` de
+  `libs/lgaupdate` (copia idéntica de la pieza canónica de `../LGA_Base_QT_C_Py`, rev 5; de la biblioteca
+  se usa solo eso): toma el `whats_new.json` de `assetLatest` del manifiesto, lo baja de github.com con los
+  reintentos de LGA, lo verifica con el SHA-256 del manifiesto y lo arma en HTML. Con la interfaz en
+  inglés cada ítem sale con su `text_en`; en español, con el castellano (`LgaUpdateI18n::setLanguage()`
+  sigue a `I18n::language()`, y traduce también NEW / IMPROVED / FIXED). Sin notas, o si la descarga
+  falla, el cartel sale igual, sin la caja. En una corrida automatizada o contra el manifiesto de prueba
+  no se baja nada (`UpdateService::notesAllowed()`). La caja la arma `createUpdateAvailableDialog()`
+  (`QTextBrowser#updateNotes`, captura `--ui-shot update-dialog-notes`). Solo el cartel: no hay aviso
+  después de instalar ni historial en la app.
+- `Docs/WhatsNew.md` es bilingüe desde la v1.53 (`languages: [es, en]`, `en_from: "1.53"`): cada ítem
+  lleva su línea `en:`. Formato: `../LGA_RepoTools/Docs/WhatsNew_Sistema.md`.
 - Inno Setup sin permisos de administrador (`PrivilegesRequired=lowest`), cierre por ruta con
   `tools/close_by_path.ps1`, AppId nuevo, carpeta `C:\Portable\LGA\MightyTools` (regla de la Base,
   `Doc_Rutas_Instalacion.md`). Migra a los usuarios de Open in NukeX y desinstala el cliente viejo solo

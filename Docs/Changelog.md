@@ -2,6 +2,10 @@
 
 v1.53:
 
+Updates (pedido de Lega, 08/11): el cartel «Update Available» no mostraba qué traía la versión nueva, y las novedades del `WhatsNew.md` estaban solo en castellano. Ahora, antes del cartel, `UpdateNotes` baja el `whats_new.json` del release con `LgaWhatsNew` de `libs/lgaupdate` (copia idéntica de la rev 5 de la Base: verificado por SHA-256, con los reintentos de LGA) y el cartel lo muestra en una caja con scroll, en el idioma de la interfaz: el inglés de cada ítem (`text_en`) o el castellano. Si no hay notas o fallan, el cartel sale como antes. `Docs/WhatsNew.md` pasa a ser bilingüe (`languages: [es, en]`, desde la 1.53). Captura nueva `--ui-shot update-dialog-notes`; `--self-test`, `--ui-probe net-retry` y `check_i18n` en verde.
+
+[ Updates - El cartel de update muestra las novedades en el idioma de la app ]
+
 Meet Frame en Windows (Lega, 07/11): al estirar el marco titilaban los bordes que se movían. Con la forma fija (16:9 de fábrica) el marco se estiraba cambiando el tamaño y la máscara de la ventana translúcida en cada paso, y la ventana cambiaba antes de tener su dibujo nuevo. Ahora Windows usa el lienzo de mac: la ventana es la pantalla, el marco se dibuja adentro y mover o estirar solo redibuja lo que cambia, sin máscara (el alfa 0 deja pasar el mouse); el marco no sale del área libre de la pantalla y lo compartido lo sigue mientras se arrastra. Además la forma ya no viene fija: libre de fábrica, con «Lock the frame shape» en 16:9, 4:3, 1:1 o la forma actual, también desde el menú Size del marco. Atajos de fábrica en Windows: Alt+Shift+Win+M y la pausa Alt+Shift+Win+P. Sonda `meetframe-drag` 49/49.
 
 [ Meet Frame - En Windows el marco ya no titila al estirarlo, la forma viene libre y se puede fijar, y atajos Alt+Shift+Win+M/P ]

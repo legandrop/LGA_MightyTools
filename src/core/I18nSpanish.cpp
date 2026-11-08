@@ -917,6 +917,7 @@ const QHash<QString, QString> &spanishTable()
           "Disk Space todavía está borrando archivos. Actualizar cuando termine."),
         E("Later", "Más tarde"),
         E("Update now", "Actualizar ahora"),
+        E("What's new", "Novedades"),
 
         // App Toggle: descriptor, ayuda, panel, editor y errores al abrir o traer una app.
         E("One shortcut per app: opens it, brings it to the front or minimizes it.",

@@ -1,5 +1,6 @@
 #include "updates/UpdateService.h"
 #include "updates/UpdateManifest.h"
+#include "updates/UpdateNotes.h"
 #include "updates/VersionCompare.h"
 #include "updates/UpdateDialog.h"
 
@@ -125,6 +126,7 @@ UpdateService::UpdateService(QWidget *parentWindow, QObject *parent)
     : QObject(parent)
     , m_parentWindow(parentWindow)
     , m_network(new QNetworkAccessManager(this))
+    , m_notes(new UpdateNotes(m_network, this))
 {
 }
 
@@ -551,21 +553,38 @@ void UpdateService::onCheckFinished()
         }
     }
     // m_busy queda en true a proposito: sigue representando la operacion en curso
-    // durante el dialogo y, si el usuario acepta, durante el arranque de la
-    // descarga. Se libera en promptForUpdate (si elige "Later") o en
+    // mientras se bajan las novedades, durante el dialogo y, si el usuario acepta, durante el
+    // arranque de la descarga. Se libera en promptForUpdate (si elige "Later") o en
     // onDownloadFinished / los retornos tempranos de downloadAndRunUpdate.
-    promptForUpdate(info.version, downloadUrl, info.assetName, info.assetDigest);
+    if (!notesAllowed()) {
+        promptForUpdate(info.version, downloadUrl, info.assetName, info.assetDigest, QString());
+        return;
+    }
+    // Las novedades primero (un fallo sale sin ellas, nunca frena el cartel). Si el servicio se
+    // destruye antes, m_notes se va con el y no llama.
+    m_notes->fetch(payload, QApplication::applicationVersion(), info.version,
+                   [this, info, downloadUrl](const QString &notesHtml) {
+                       promptForUpdate(info.version, downloadUrl, info.assetName, info.assetDigest, notesHtml);
+                   });
+}
+
+bool UpdateService::notesAllowed() const
+{
+    return !usingDebugManifest() && !m_testManifestUrl.isValid()
+           && !refusedInAutomatedRun(QUrl(QStringLiteral("https://github.com/%1/releases").arg(kRepoSlug)));
 }
 
 void UpdateService::promptForUpdate(const QString &version, const QUrl &downloadUrl,
-                                    const QString &assetName, const QString &sha256Digest)
+                                    const QString &assetName, const QString &sha256Digest,
+                                    const QString &notesHtml)
 {
     // Prueba del updater contra un servidor local: instala sin preguntar (ver DebugFlags.h).
     const bool withoutAsking = usingDebugManifest() && DebugFlags::isOn(QStringLiteral("updateInstallWithoutAsking"));
 
     // El armado vive en UpdateDialog.cpp para que --ui-shot lo pueda dibujar sin este servicio.
     QScopedPointer<QDialog> dialog(
-        createUpdateAvailableDialog(parentWindow(), kDisplayName, version, QApplication::applicationVersion()));
+        createUpdateAvailableDialog(parentWindow(), kDisplayName, version, QApplication::applicationVersion(),
+                                    notesHtml));
 
     // Later (o cerrar el cartel) pospone el chequeo automatico 1 dia; sin eso el chequeo
     // periodico lo volvia a mostrar cada 3 horas. El manual y "Check now" lo ignoran.

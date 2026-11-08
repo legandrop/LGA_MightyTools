@@ -9,8 +9,9 @@ class QWidget;
 
 // Dialogo "Update Available" de UpdateService, armado aparte para que --ui-shot lo pueda dibujar
 // sin UpdateService ni QNetworkAccessManager. Accept = "Update now", reject = "Later".
+// `notesHtml`: las novedades de UpdateNotes; con texto, van en una caja con scroll debajo del mensaje.
 QDialog *createUpdateAvailableDialog(QWidget *parent, const QString &displayName, const QString &version,
-                                     const QString &currentVersion);
+                                     const QString &currentVersion, const QString &notesHtml = QString());
 
 // Dialogo de progreso de la descarga del update (sin mostrarlo): el de UpdateService y el de --ui-shot.
 QProgressDialog *createUpdateProgressDialog(QWidget *parent, const QString &displayName, const QString &version);

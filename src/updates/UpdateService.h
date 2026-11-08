@@ -19,6 +19,7 @@ class QCryptographicHash;
 class QTimer;
 class QWidget;
 class SettingsStore;
+class UpdateNotes;
 
 // Auto-update de LGA_MightyTools: chequea un manifiesto estatico publicado por
 // GitHub Pages (legandrop/LGA_Updates), ofrece bajar el paquete de esta plataforma si hay una
@@ -107,8 +108,12 @@ private:
     QDateTime snoozeUntil() const;
     void setSnoozeUntil(const QDateTime &until);
 
+    // `notesHtml`: las novedades desde la version instalada (UpdateNotes), o vacio si no hay.
     void promptForUpdate(const QString &version, const QUrl &downloadUrl,
-                         const QString &assetName, const QString &sha256Digest);
+                         const QString &assetName, const QString &sha256Digest, const QString &notesHtml);
+    // Si las novedades se pueden bajar de github.com: nunca en una corrida automatizada ni contra el
+    // manifiesto de prueba de un servidor local.
+    bool notesAllowed() const;
     // True si ESTA copia no se puede actualizar sola (ya le mostro al usuario por que y lo dejo
     // pospuesto como "Later").
     bool blockedHere();
@@ -141,6 +146,8 @@ private:
     // via, la referencia se vuelve null sola en vez de quedar colgante.
     QPointer<QWidget> m_parentWindow;
     QNetworkAccessManager *m_network = nullptr;
+    // Baja las novedades antes del cartel de update. Hijo del servicio: se va con el y corta la descarga.
+    UpdateNotes *m_notes = nullptr;
     QNetworkReply *m_checkReply = nullptr;
     QNetworkReply *m_downloadReply = nullptr;
     QPointer<QProgressDialog> m_progressDialog;

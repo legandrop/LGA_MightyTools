@@ -29,6 +29,7 @@
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
 #include "updates/UpdateDialog.h"
+#include "updates/UpdateNotes.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -102,6 +103,7 @@ const QStringList kHostStates = {
     QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
     QStringLiteral("tray-menu-empty"),   // menu con todo apagado
     QStringLiteral("update-dialog"),
+    QStringLiteral("update-dialog-notes"), // con las novedades (fixture bilingue: --lang es las muestra en castellano)
     QStringLiteral("update-download-retrying"), // la descarga del update se corto y se reintenta (2 de 4)
 };
 
@@ -482,6 +484,27 @@ int runUiShot(const QStringList &args)
     } else if (state == QLatin1String("update-dialog")) {
         canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"),
                                                  QStringLiteral(MIGHTYTOOLS_VERSION)));
+        canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
+        root = canvas.data();
+        settle(*root);
+        root->adjustSize();
+        settle(*root);
+    } else if (state == QLatin1String("update-dialog-notes")) {
+        // Un whats_new.json de prueba como el que publica build_whats_new.py en un producto bilingue: la
+        // 1.52 ya instalada no entra en el rango.
+        const QByteArray fixture = R"({"schemaVersion":1,"product":"legandrop/LGA_MightyTools","name":"LGA Mighty Tools",
+          "versions":[
+           {"version":"1.53","items":[
+             {"kind":"new","text":"Meet Frame: con Alt+Shift+Win+M aparece un marco para compartir solo esa parte de la pantalla.",
+              "text_en":"Meet Frame: Alt+Shift+Win+M shows a frame to share only that part of the screen."},
+             {"kind":"improved","text":"Escape cierra la ventana y la deja en la bandeja.",
+              "text_en":"Escape closes the window and leaves Mighty Tools in the tray."},
+             {"kind":"fixed","text":"El cartel de update muestra las novedades.",
+              "text_en":"The update window shows what's new."}]},
+           {"version":"1.52","items":[{"kind":"fixed","text":"Ya instalada: no aparece.","text_en":"Already installed: not shown."}]}]})";
+        canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.53"),
+                                                 QStringLiteral("1.52"),
+                                                 UpdateNotes::html(fixture, QStringLiteral("1.52"), QStringLiteral("1.53"))));
         canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
         root = canvas.data();
         settle(*root);
