@@ -113,7 +113,7 @@ QFrame *titledCard(QWidget *parent, const QString &title, QVBoxLayout **column, 
 {
     QFrame *card = Ui::card(parent);
     *column = new QVBoxLayout(card);
-    (*column)->setContentsMargins(14, 12, 14, 12);
+    (*column)->setContentsMargins(18, 15, 18, 16);
     (*column)->setSpacing(spacing);
     (*column)->addWidget(Ui::label(title, "cardTitle", card));
     return card;

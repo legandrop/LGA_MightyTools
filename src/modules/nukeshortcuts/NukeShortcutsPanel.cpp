@@ -85,7 +85,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     // ---------- Tarjeta 2: atajos ----------
     QFrame *shortcutsCard = Ui::card(this);
     auto *shortcuts = new QVBoxLayout(shortcutsCard);
-    shortcuts->setContentsMargins(14, 12, 14, 12);
+    shortcuts->setContentsMargins(18, 15, 18, 16);
     shortcuts->setSpacing(0);
     QLabel *shortcutsTitle = Ui::label(I18n::tr("Shortcuts"), "cardTitle", shortcutsCard);
     shortcutsTitle->setMinimumHeight(22);
@@ -103,7 +103,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     // ---------- Tarjeta 3: plugin de Nuke ----------
     QFrame *pluginCard = Ui::card(this);
     auto *plugin = new QVBoxLayout(pluginCard);
-    plugin->setContentsMargins(14, 12, 14, 12);
+    plugin->setContentsMargins(18, 15, 18, 16);
     plugin->setSpacing(8);
     auto *pluginHead = new QHBoxLayout();
     pluginHead->setSpacing(6);
@@ -145,7 +145,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     QFrame *spotCard = Ui::card(this);
     m_spotCard = spotCard;
     auto *spot = new QVBoxLayout(spotCard);
-    spot->setContentsMargins(14, 12, 14, 12);
+    spot->setContentsMargins(18, 15, 18, 16);
     spot->setSpacing(8);
     auto *spotHead = new QHBoxLayout();
     spotHead->setSpacing(6);

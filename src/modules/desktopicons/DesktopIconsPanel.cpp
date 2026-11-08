@@ -87,7 +87,7 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
     // El automatico: una opcion de toda la herramienta, primero (como el de Window Layouts).
     auto *dailyCard = Ui::card(this);
     auto *dailyColumn = new QVBoxLayout(dailyCard);
-    dailyColumn->setContentsMargins(14, 12, 14, 12);
+    dailyColumn->setContentsMargins(18, 15, 18, 16);
     dailyColumn->setSpacing(8); // solo cuenta con el aviso a la vista: un widget oculto no suma espacio
     m_daily = new SwitchRow(I18n::tr("Daily snapshot"),
                             I18n::tr("Once a day, after the computer has been awake for an hour. The last 5 are kept."),
@@ -110,7 +110,7 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
 
     auto *saveCard = Ui::card(this);
     auto *saveColumn = new QVBoxLayout(saveCard);
-    saveColumn->setContentsMargins(14, 12, 14, 12);
+    saveColumn->setContentsMargins(18, 15, 18, 16);
     saveColumn->setSpacing(8);
     auto *texts = new QVBoxLayout();
     texts->setSpacing(2);
@@ -144,7 +144,7 @@ DesktopIconsPanel::DesktopIconsPanel(DesktopIconsModule *module, bool interactiv
 
     auto *listCard = Ui::card(this);
     auto *listColumn = new QVBoxLayout(listCard);
-    listColumn->setContentsMargins(14, 12, 14, 12);
+    listColumn->setContentsMargins(18, 15, 18, 16);
     listColumn->setSpacing(8);
     listColumn->addWidget(Ui::label(I18n::tr("Snapshots"), "cardTitle", listCard));
     m_rows = new QWidget(listCard);

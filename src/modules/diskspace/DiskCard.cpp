@@ -493,7 +493,7 @@ DiskCard::DiskCard(DiskState *state, bool interactive, QWidget *parent)
 {
     setObjectName(QStringLiteral("card"));
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
 
     auto *head = new QHBoxLayout();

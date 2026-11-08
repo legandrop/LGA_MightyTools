@@ -230,7 +230,7 @@ void CleanupPane::rebuild()
     content->setObjectName(QStringLiteral("cleanContent"));
     auto *column = new QVBoxLayout(content);
     // `.pane.pad` del canvas: 12 / 14 de relleno y 10 entre tarjetas.
-    column->setContentsMargins(14, 12, 14, 12);
+    column->setContentsMargins(18, 15, 18, 16);
     column->setSpacing(10);
 
     if (!m_banner.isEmpty()) {
@@ -246,7 +246,7 @@ void CleanupPane::rebuild()
     if (!m_skipped.isEmpty()) {
         QFrame *card = Ui::card(content);
         auto *layout = new QVBoxLayout(card);
-        layout->setContentsMargins(14, 12, 14, 12);
+        layout->setContentsMargins(18, 15, 18, 16);
         layout->setSpacing(0);
         auto *head = new QHBoxLayout();
         head->setSpacing(6);

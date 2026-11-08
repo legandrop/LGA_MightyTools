@@ -170,7 +170,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // ---- Tarjeta "Browsers": dos combos lado a lado.
     QFrame *browsersCard = Ui::card(this);
     auto *browsersLayout = new QVBoxLayout(browsersCard);
-    browsersLayout->setContentsMargins(14, 12, 14, 12);
+    browsersLayout->setContentsMargins(18, 15, 18, 16);
     browsersLayout->setSpacing(0);
     QLabel *browsersTitle = Ui::label(I18n::tr("Browsers"), "cardTitle", browsersCard);
     browsersTitle->setMinimumHeight(22); // canvas .head: min-height 22px
@@ -207,7 +207,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // ---- Tarjeta "Match words": autoguardado, una palabra por linea.
     QFrame *wordsCard = Ui::card(this);
     auto *wordsLayout = new QVBoxLayout(wordsCard);
-    wordsLayout->setContentsMargins(14, 12, 14, 12);
+    wordsLayout->setContentsMargins(18, 15, 18, 16);
     wordsLayout->setSpacing(0);
     auto *wordsHead = new QHBoxLayout();
     wordsHead->setContentsMargins(0, 0, 0, 0);

@@ -172,7 +172,7 @@ QWidget *OpenInNukeXPanel::buildAssociationCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(8);
 
     auto *head = new QHBoxLayout();
@@ -282,7 +282,7 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(8);
 
     layout->addWidget(Ui::label(I18n::tr("Preferred Nuke version"), "cardTitle", card));
@@ -470,7 +470,7 @@ QWidget *OpenInNukeXPanel::buildBridgeCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(8);
 
     auto *head = new QHBoxLayout();
