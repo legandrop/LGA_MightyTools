@@ -429,3 +429,9 @@ void AppTogglePanel::showEditorForCapture(int id, const QString &error, const QS
     }
     if (!recording.isEmpty()) m_shortcut->showRecordingFixture(recording);
 }
+
+bool AppTogglePanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
+}

@@ -372,3 +372,9 @@ void MouseButtonsPanel::showEditorForCapture(int id, bool buttonMenuOpen)
     m_captureMenu->raise();
     m_captureMenu->show();
 }
+
+bool MouseButtonsPanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
+}

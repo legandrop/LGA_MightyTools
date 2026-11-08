@@ -6,15 +6,23 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 ## Tomadas
 
 - **D-77 · App liviana: la ventana se arma al abrirla y se suelta en la bandeja** (2026-11-08, Lega: «cambiar
-  de tab tarda; la app tiene que quedar súper liviana, en procesamiento y en uso»). La ventana principal ya no
-  se arma al arrancar: se arma la primera vez que se abre (bandeja, aviso, otra copia) y se destruye a los
-  5 minutos de estar escondida; al volver se rearma en la página que se veía (unos 45 ms). Con todo apagado
-  la app pasa de 28 a 12,5 MB privados, y después de usarla y soltar la ventana, de 52 a 12,6 MB. Supuestos tomados sin Lega,
-  reversibles (`kReleaseAfterMs` en `src/app/AppController.cpp`):
-  - **5 minutos**: cerrar y reabrir enseguida no rearma nada; lo que quedaba a medio editar en un panel
-    (el editor de un atajo sin guardar) se pierde si la ventana pasa más de 5 minutos escondida.
-  - **No se suelta con algo suyo abierto** (un menú, un diálogo, el popup de Folder Switch) ni mientras la
-    escondió una herramienta (el calibrador de Nuke Shortcuts).
+  de tab tarda; la app tiene que quedar súper liviana, en procesamiento y en uso», y después «sin perder nada
+  de UX, incluso en computadoras muy malas»). La ventana principal se arma la primera vez que se abre
+  (bandeja, aviso, otra copia), cada página de herramienta recién cuando se elige, y la ventana se destruye a
+  los 5 minutos de estar escondida; al volver se rearma igual: la página, el scroll de cada página ya vista y la
+  ayuda abierta (~50 ms). Medido en Windows con la configuración de Lega: con la ventana abierta y todo visto,
+  50 MB privados; soltada, 24 MB (antes de D-77 nunca bajaba de 50); sin abrirla nunca, 16,5 MB. Supuestos
+  tomados por la sesión, reversibles (constantes en `src/app/AppController.cpp`):
+  - **5 minutos** (`kReleaseAfterMs`): cerrar y reabrir enseguida no rearma nada.
+  - **Nunca se suelta con algo a medio hacer:** un menú, un diálogo o el popup de Folder Switch abiertos, una
+    herramienta que la escondió (el calibrador), el Apply de Open in NukeX, ni un panel que dice tener trabajo
+    sin guardar (`PanelState`: un editor abierto, una ruta o carpeta elegida sin Save/Install, un reemplazo o
+    un nombre a medio escribir, «Make Default» esperando a Windows hasta 15 minutos).
+  - **Primera ventana nativa por adelantado** (`kWarmupDelayMs`, 4 s después del arranque): la primera ventana
+    del proceso le cuesta a Windows ~105 ms una sola vez y se pagaba al abrir desde la bandeja. Ahora se crea y
+    se destruye una sin mostrar; cuesta ~4 MB que igual quedaban al abrir la ventana por primera vez. Si Lega
+    prefiere esos 4 MB a los 105 ms, se saca el bloque del constructor.
+  - **Al soltarse se vacía la caché de fuentes de Qt** (4,4 MB; reabrir tarda ~12 ms más).
   - **La negrita del texto con formato va a 600** (SemiBold, la que trae la app), no a 700: pedir un peso o una
     familia que la app no trae («JetBrains Mono») hacía que Qt cargara todas las fuentes del sistema la
     primera vez (70 a 230 ms). Se nota un poco más liviana en las pistas de Nuke Shortcuts y Open in NukeX.

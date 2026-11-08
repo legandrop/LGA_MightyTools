@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_DESKTOPICONSPANEL_H
 #define MIGHTYTOOLS_DESKTOPICONSPANEL_H
 
+#include "app/PanelState.h"
 #include <QHash>
 #include <QWidget>
 
@@ -13,9 +14,11 @@ class QStackedLayout;
 class StatusCard;
 class SwitchRow;
 
-class DesktopIconsPanel : public QWidget
+class DesktopIconsPanel : public QWidget, public PanelState
 {
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     DesktopIconsPanel(DesktopIconsModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
     // Captura "confirm-delete": el borrado de la primera fila esperando el segundo click.

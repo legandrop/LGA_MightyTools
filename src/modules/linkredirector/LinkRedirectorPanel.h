@@ -1,10 +1,12 @@
 #ifndef MIGHTYTOOLS_LINKREDIRECTOR_PANEL_H
 #define MIGHTYTOOLS_LINKREDIRECTOR_PANEL_H
 
+#include "app/PanelState.h"
 #include "app/ModuleContext.h"
 #include "modules/linkredirector/LinkRedirectorRouting.h"
 #include "modules/linkredirector/LinkRedirectorTypes.h"
 
+#include <QElapsedTimer>
 #include <QList>
 #include <QString>
 #include <QWidget>
@@ -37,11 +39,13 @@ struct LinkRedirectorPanelSources
 // Panel de Settings de Link Redirector (etapa 2): tarjeta de estado + "Make Default", combos
 // "Default browser"/"Alternative browser" y "Match words" con autoguardado. Estetica de Theme/
 // UiWidgets: nada del Liquid Glass del origen (v0.173).
-class LinkRedirectorPanel : public QWidget
+class LinkRedirectorPanel : public QWidget, public PanelState
 {
     Q_OBJECT
 
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     LinkRedirectorPanel(ModuleContext &context, LinkRedirectorPanelSources sources, QWidget *parent = nullptr);
     ~LinkRedirectorPanel() override;
 
@@ -85,6 +89,7 @@ private:
     // origen), via LinkRedirectorRouting::browserToSyncAsDefault.
     QString m_pendingPreviousDefaultExe;
     bool m_makeDefaultRequested = false;
+    QElapsedTimer m_makeDefaultClock; ///< desde el ultimo Make Default: el pedido abandonado vence (hasUnsavedWork)
 };
 
 #endif // MIGHTYTOOLS_LINKREDIRECTOR_PANEL_H

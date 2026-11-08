@@ -1,6 +1,7 @@
 #include "platform/ProcessStats.h"
 
 #include <windows.h>
+#include <malloc.h>
 #include <psapi.h>
 #include <tlhelp32.h>
 
@@ -78,4 +79,38 @@ QString ProcessStats::toString() const
         .arg(privateBytes / 1024)
         .arg(cpuMs)
         .arg(workingSetBytes / 1024);
+}
+
+void ProcessStats::releaseFreeHeap()
+{
+    // Solo el CRT y el heap del proceso: los heaps privados de otras DLL pueden estar creados sin serializacion y
+    // compactarlos desde este hilo los romperia.
+    _heapmin();
+    HeapCompact(GetProcessHeap(), 0);
+}
+
+bool ProcessStats::capCpuForTest(int percentOfOneCore)
+{
+    if (percentOfOneCore <= 0 || percentOfOneCore > 100) {
+        return false;
+    }
+    // Un solo nucleo y, dentro del job, un tope duro relativo a TODA la maquina: N % de un nucleo = N / nucleos.
+    SetProcessAffinityMask(GetCurrentProcess(), 1);
+    SYSTEM_INFO info{};
+    GetSystemInfo(&info);
+    const DWORD cores = qMax<DWORD>(1, info.dwNumberOfProcessors);
+    HANDLE job = CreateJobObjectW(nullptr, nullptr);
+    if (!job) {
+        return false;
+    }
+    JOBOBJECT_CPU_RATE_CONTROL_INFORMATION rate{};
+    rate.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+    // En centesimos de por ciento del total de la maquina (10000 = 100 %).
+    rate.CpuRate = qMax<DWORD>(1, DWORD(percentOfOneCore) * 100 / cores);
+    if (!SetInformationJobObject(job, JobObjectCpuRateControlInformation, &rate, sizeof(rate))) {
+        CloseHandle(job);
+        return false;
+    }
+    // El job queda abierto hasta que sale el proceso (es solo para medir).
+    return AssignProcessToJobObject(job, GetCurrentProcess()) != FALSE;
 }

@@ -2,6 +2,10 @@
 
 v1.53:
 
+Rendimiento, segunda vuelta (Lega: «sin perder nada de UX, incluso en PCs malas»): soltar la ventana en la bandeja perdía trabajo (un editor abierto, una ruta elegida sin Save, «Make Default» esperando a Windows), el scroll y la ayuda abierta; abrirla costaba ~240 ms, 105 de ellos la primera ventana nativa del proceso; y soltada quedaba en 28 MB, no en 12,5 como se anotó antes. Ahora no se suelta si un panel tiene algo sin guardar (`PanelState`), vuelve igual (página, scroll, ayuda), cada página se arma al elegirla, la primera ventana nativa se prepara 4 s después del arranque y al soltarse se vacía la caché de fuentes. Abrir: 240 → 70 ms; soltada: 28 → 24 MB. Sonda nueva `window-release`; `--measure-pages` suma `--probe-native` y `--cpu-cap`.
+
+[ Rendimiento - La ventana abre en 70 ms y al soltarse no pierde nada sin guardar ]
+
 Rendimiento (Lega, 08/11: «cambiar de tab tarda; tiene que ser súper liviana»): la primera visita a una página tardaba hasta 240 ms y, después de usarla, la app quedaba en 52 MB. Causas: un `<b>` o `QFont::Bold` pedía Inter 700, que la app no trae, y Qt cargaba todas las fuentes del sistema; App Toggle pedía al shell 12 tamaños por ícono; `RichLineLabel` rearmaba su HTML en cada medida; cada fila de atajo creaba seis widgets ocultos; y la ventana se armaba al arrancar y no se soltaba nunca. Ahora la negrita va a 600, la monoespaciada es la del sistema, los íconos salen en los tamaños de pantalla, el documento se guarda, lo oculto se crea a pedido y la ventana se arma al abrirla y se suelta a los 5 minutos escondida (D-77). Todas las páginas: 540 → 250 ms; en la bandeja, 37–52 → 12,5 MB. Arreglado de paso un crash al destruir la ventana con un autoguardado pendiente. Medición nueva `--measure-pages`.
 
 [ Rendimiento - Paginas mas rapidas y la ventana se suelta en la bandeja: de 52 a 12,5 MB en reposo ]

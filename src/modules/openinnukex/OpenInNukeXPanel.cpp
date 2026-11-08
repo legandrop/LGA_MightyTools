@@ -159,6 +159,7 @@ bool OpenInNukeXPanel::eventFilter(QObject *watched, QEvent *event)
         }
         if (watched == m_nukeDirField) {
             m_nukeDirField->setText(QDir::toNativeSeparators(NukeBridge::currentNukeDirectory()));
+            m_nukeDirShown = m_nukeDirField->text();
             m_nukeDirField->clearFocus();
             return true;
         }
@@ -341,6 +342,7 @@ QWidget *OpenInNukeXPanel::buildVersionCard()
 void OpenInNukeXPanel::loadSavedNukePath()
 {
     m_pathField->setText(QDir::toNativeSeparators(NukeXPath::read(m_nukeXPathFile)));
+    m_pathShown = m_pathField->text();
 }
 
 void OpenInNukeXPanel::startScan()
@@ -368,6 +370,7 @@ void OpenInNukeXPanel::startScan()
         const QString healed = NukeXPath::healStalePath(m_nukeXPathFile, m_pathField->text().trimmed(), versions);
         if (!healed.isEmpty() && healed != m_pathField->text()) {
             m_pathField->setText(QDir::toNativeSeparators(healed));
+            m_pathShown = m_pathField->text();
         }
         updateChosenVersionHighlight();
     });
@@ -447,6 +450,8 @@ void OpenInNukeXPanel::onSaveNukeXClicked()
         // Inventario: "Saving it anyway" — el aviso no bloquea el guardado.
         report(OpenInNukeXMessages::notANukeExecutable());
     }
+    // Guardado (o, en una corrida automatizada, dado por guardado): ya no es trabajo pendiente.
+    m_pathShown = m_pathField->text();
     updateChosenVersionHighlight();
     if (m_context.automatedRun()) {
         qInfo("[openInNukeX] (automatedRun) Save: no se escribe nukeXpath.txt");
@@ -551,6 +556,7 @@ void OpenInNukeXPanel::refreshBridge()
     // panel y despues de un Install/Reinstall exitoso (recien publicado). Un refresco disparado
     // por el USUARIO editando el campo usa refreshBridgeStatus(), que nunca le pisa lo que tipeo.
     m_nukeDirField->setText(QDir::toNativeSeparators(NukeBridge::currentNukeDirectory()));
+    m_nukeDirShown = m_nukeDirField->text();
     refreshBridgeStatus();
 }
 
@@ -842,6 +848,7 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     rebuildVersionButtons();
     const bool noVersionsFound = state == QStringLiteral("scan-none") || state == QStringLiteral("no-nuke-manual-open");
     m_pathField->setText((assocOk && !noVersionsFound) ? v170.path : QString());
+    m_pathShown = m_pathField->text();
     updateChosenVersionHighlight();
 
     // "Nuke Bridge"
@@ -887,10 +894,22 @@ bool OpenInNukeXPanel::applyCaptureState(const QString &state)
     m_nukeDirField->setText(state == QStringLiteral("no-nuke-manual-open") || state == QStringLiteral("first-time")
                                 ? QString()
                                 : fixtureNukeDir());
+    m_nukeDirShown = m_nukeDirField->text();
 
     m_manualOpen = state == QStringLiteral("no-nuke-manual-open");
     m_manualPanel->setVisible(m_manualOpen);
     m_manualToggle->setText(m_manualOpen ? I18n::tr("Hide manual instructions")
                                         : I18n::tr("Install manually instead..."));
     return true;
+}
+
+bool OpenInNukeXPanel::hasUnsavedWork() const
+{
+    // Una version o una ruta elegida sin Save, o una carpeta .nuke elegida sin Install: el panel nuevo volveria a
+    // lo guardado. Se compara con lo que el propio panel puso, no con el disco (los estados detectados no cuentan).
+    const auto same = [](const QString &a, const QString &b) {
+        return QDir::cleanPath(QDir::fromNativeSeparators(a.trimmed())) == QDir::cleanPath(QDir::fromNativeSeparators(b.trimmed()));
+    };
+    return (m_pathField && !same(m_pathField->text(), m_pathShown))
+        || (m_nukeDirField && !same(m_nukeDirField->text(), m_nukeDirShown));
 }

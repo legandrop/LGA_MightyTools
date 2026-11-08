@@ -401,3 +401,9 @@ bool DesktopIconsPanel::eventFilter(QObject *watched, QEvent *event)
     }
     return QWidget::eventFilter(watched, event);
 }
+
+bool DesktopIconsPanel::hasUnsavedWork() const
+{
+    // El nombre de un snapshot escrito y todavia sin Save.
+    return m_name && !m_name->text().trimmed().isEmpty();
+}

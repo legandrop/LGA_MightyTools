@@ -1627,6 +1627,99 @@ int runDiskReminderProbe()
     return failures ? 1 : 0;
 }
 
+// D-77: la ventana que se suelta en la bandeja y se rearma vuelve igual (pagina, scroll, ayuda abierta), y no se
+// suelta con algo a medio hacer en un panel (el editor de App Toggle abierto).
+int runWindowReleaseProbe()
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!canvasFixture(host, QString())) {
+        fprintf(stderr, "window-release: no se pudo preparar la ventana\n");
+        return 1;
+    }
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        if (canvasOff(d.id) && !enable(host, d.id, QString())) {
+            fprintf(stderr, "window-release: %s no se pudo prender\n", qPrintable(d.id));
+            return 1;
+        }
+    }
+    int checks = 0;
+    int failures = 0;
+    const auto check = [&](bool ok, const QString &what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+    };
+    const auto visibleScroll = [](MainWindow &window) -> QScrollArea * {
+        for (QScrollArea *candidate : window.findChildren<QScrollArea *>(QStringLiteral("pane"))) {
+            if (candidate->isVisibleTo(&window)) return candidate;
+        }
+        return nullptr;
+    };
+    const auto makeWindow = [](ModuleHost &h) {
+        auto *window = new MainWindow(&h, MainWindow::Mode::Capture, nullptr);
+        window->setAttribute(Qt::WA_DontShowOnScreen, true);
+        window->setFixedSize(MainWindow::kWidth, 420); // corta: casi todas las paginas desplazan
+        window->show();
+        return window;
+    };
+
+    // 1. Una pagina con barra, desplazada a la mitad y con la ayuda abierta.
+    MainWindow *first = makeWindow(host);
+    QString page;
+    int value = 0;
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        first->selectPage(d.id);
+        settle(*first);
+        QScrollArea *scroll = visibleScroll(*first);
+        if (scroll && scroll->verticalScrollBar()->maximum() > 80) {
+            first->setHelpOpen(true);
+            settle(*first);
+            value = scroll->verticalScrollBar()->maximum() / 2;
+            scroll->verticalScrollBar()->setValue(value);
+            page = d.id;
+            break;
+        }
+    }
+    check(!page.isEmpty(), QStringLiteral("hay una pagina con barra a 420 px (%1)").arg(page));
+    const MainWindow::ViewState saved = first->viewState();
+    check(saved.page == page, QStringLiteral("viewState guarda la pagina (%1)").arg(saved.page));
+    check(saved.scroll.value(page) == value, QStringLiteral("viewState guarda el scroll (%1 = %2)").arg(saved.scroll.value(page)).arg(value));
+    check(saved.helpOpen, QStringLiteral("viewState guarda la ayuda abierta"));
+    check(!first->hasUnsavedWork(), QStringLiteral("sin editores abiertos no hay trabajo pendiente"));
+    delete first;
+
+    // 2. La ventana nueva vuelve igual.
+    MainWindow *second = makeWindow(host);
+    second->restoreViewState(saved);
+    settle(*second);
+    QScrollArea *scroll = visibleScroll(*second);
+    check(second->currentPage() == page, QStringLiteral("vuelve a la pagina (%1)").arg(second->currentPage()));
+    check(scroll && qAbs(scroll->verticalScrollBar()->value() - value) <= 1,
+          QStringLiteral("vuelve al scroll (%1 = %2)").arg(scroll ? scroll->verticalScrollBar()->value() : -1).arg(value));
+    check(second->helpOpen(), QStringLiteral("vuelve con la ayuda abierta"));
+    // Salir de la pagina y volver: el scroll ya no se repone a la fuerza (lo maneja el usuario).
+    second->selectPage(MainWindow::kGeneral);
+    settle(*second);
+    check(second->viewState().scroll.value(MainWindow::kGeneral, 0) == 0, QStringLiteral("General sigue arriba"));
+    delete second;
+
+    // 3. Con el editor de App Toggle abierto, la ventana tiene trabajo pendiente y no se suelta.
+    if (!enable(host, QStringLiteral("appToggle"), QStringLiteral("editor"))) {
+        check(false, QStringLiteral("App Toggle acepta el estado editor"));
+    } else {
+        MainWindow *third = makeWindow(host);
+        third->selectPage(QStringLiteral("appToggle"));
+        settle(*third);
+        check(third->hasUnsavedWork(), QStringLiteral("el editor abierto de App Toggle es trabajo pendiente"));
+        delete third;
+    }
+    fprintf(stdout, "window-release: %d/%d comprobaciones, %d fallas\n", checks - failures, checks, failures);
+    return failures ? 1 : 0;
+}
+
 // Cada pagina de la ventana, con su alto real y con uno corto que obliga a desplazar: ningun texto de
 // varias lineas ni control puede quedar mas bajo de lo que necesita. Si el contenido no entra, la pagina
 // tiene que mostrar la barra, no aplastar lo que tiene adentro.
@@ -2954,6 +3047,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("page-fit")) {
         return runPageFitProbe();
+    }
+    if (probe == QLatin1String("window-release")) {
+        return runWindowReleaseProbe();
     }
     if (probe == QLatin1String("disk-reminder")) {
         return runDiskReminderProbe();

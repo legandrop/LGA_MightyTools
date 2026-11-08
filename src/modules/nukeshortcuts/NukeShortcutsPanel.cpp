@@ -182,7 +182,10 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
         connect(m_calibrateButton, &QPushButton::clicked, this, &NukeShortcutsPanel::calibrateRequested);
         connect(m_pluginBrowseButton, &QPushButton::clicked, this, &NukeShortcutsPanel::onBrowseNukeDirClicked);
         connect(m_pluginInstallButton, &QPushButton::clicked, this,
-                [this]() { emit installPluginRequested(m_nukeDir); });
+                [this]() {
+                    m_nukeDirPicked = false;
+                    emit installPluginRequested(m_nukeDir);
+                });
         // Si la ventana pierde el frente mientras una fila graba, la grabacion se corta: si no, la
         // siguiente combinacion que el usuario apriete en OTRA app terminaria guardada como atajo.
         if (QWidget *top = window()) {
@@ -272,6 +275,7 @@ void NukeShortcutsPanel::onBrowseNukeDirClicked()
     dialog.setOption(QFileDialog::ShowDirsOnly, false); // la .nuke es oculta en mac
     if (dialog.exec() == QDialog::Accepted && !dialog.selectedFiles().isEmpty()) {
         setNukeDirectory(QDir::cleanPath(dialog.selectedFiles().first()));
+        m_nukeDirPicked = true;
     }
 }
 
@@ -417,7 +421,15 @@ void NukeShortcutsPanel::onStatusButtonClicked()
         emit accessibilityRequested();
         break;
     case Status::NeedsPlugin:
+        m_nukeDirPicked = false;
         emit installPluginRequested(m_nukeDir);
         break;
     }
+}
+
+bool NukeShortcutsPanel::hasUnsavedWork() const
+{
+    // Una carpeta .nuke elegida con Browse, distinta de la que el panel nuevo mostraria, y todavia sin Install.
+    return m_nukeDirPicked
+        && QDir::cleanPath(m_nukeDir) != QDir::cleanPath(NukePlugin::currentNukeDirectory());
 }

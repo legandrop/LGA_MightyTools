@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_APPTOGGLEPANEL_H
 #define MIGHTYTOOLS_APPTOGGLEPANEL_H
 
+#include "app/PanelState.h"
 #include "modules/apptoggle/AppToggleState.h"
 
 #include <QHash>
@@ -18,9 +19,11 @@ class StatusCard;
 
 // El panel copia la forma y los materiales del de Window Layouts: tarjeta de estado, lista con el icono
 // de cada app, sus teclas, el lapiz y su interruptor, y el editor en su propia pagina.
-class AppTogglePanel : public QWidget
+class AppTogglePanel : public QWidget, public PanelState
 {
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     AppTogglePanel(AppToggleModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
     // Captura de QA: el editor de una entrada nueva (0) o de la entrada `id`, con un error abajo o el

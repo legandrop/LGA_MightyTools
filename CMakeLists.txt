@@ -212,6 +212,7 @@ set(HEADERS
     src/app/ModuleContext.h
     src/app/ModuleContextImpl.h
     src/app/ModuleHost.h
+    src/app/PanelState.h
     src/app/ModuleRegistry.h
     src/app/SettingsStore.h
     src/app/SingleInstance.h

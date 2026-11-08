@@ -13,8 +13,8 @@ en_from: "1.53"
 ## Unreleased
 
 ## v1.53
-- [improved] Mighty Tools es más liviana: las páginas abren más rápido, sobre todo App Toggle, Nuke Shortcuts y Window Layouts, y con la ventana cerrada en la bandeja ocupa hasta cuatro veces menos memoria.
-  en: Mighty Tools is lighter: pages open faster, especially App Toggle, Nuke Shortcuts and Window Layouts, and with the window closed in the tray it uses up to four times less memory.
+- [improved] Mighty Tools es más liviana y rápida: la ventana abre y cambia de página al instante, y cerrada en la bandeja ocupa menos de la mitad de memoria, sin perder nada de lo que estabas editando.
+  en: Mighty Tools is lighter and faster: the window opens and switches pages instantly, and closed in the tray it uses less than half the memory, without losing anything you were editing.
 - [new] En General, Colors deja elegir entre seis paletas de color: Violet, High contrast, Graphite | amber, Mist, Warm teal y Magenta; se aplican en el acto y, con el menú abierto, las flechas del teclado las muestran antes de elegir.
   en: In General, Colors lets you choose one of six color palettes: Violet, High contrast, Graphite | amber, Mist, Warm teal and Magenta; they apply at once and, with the menu open, the arrow keys preview them before you choose.
 - [new] El cartel de actualización muestra las novedades de la versión nueva, en el idioma que elegiste para Mighty Tools.

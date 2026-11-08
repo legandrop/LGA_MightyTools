@@ -160,6 +160,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
             m_sources.requestSetAsDefault();
         }
         m_makeDefaultRequested = true;
+        m_makeDefaultClock.start();
         refreshStatus();
         // El cambio puede requerir una eleccion manual (Windows) o ser asincrono (mac): dos
         // reintentos, como el origen.
@@ -466,3 +467,11 @@ QWidget *LinkRedirectorPanel::buildDropdownPreview(const QList<ComboItem> &items
 }
 
 #include "LinkRedirectorPanel.moc"
+
+bool LinkRedirectorPanel::hasUnsavedWork() const
+{
+    // «Make Default» pedido y Windows todavia sin confirmarlo: el panel es el que, al ver que ya es el navegador
+    // del sistema, pone el que estaba como «Default browser» de la herramienta.
+    // Vence a los 15 minutos: quien cerro Ajustes sin elegir no deja la ventana armada para siempre.
+    return m_makeDefaultRequested && m_makeDefaultClock.isValid() && m_makeDefaultClock.elapsed() < 15 * 60 * 1000;
+}

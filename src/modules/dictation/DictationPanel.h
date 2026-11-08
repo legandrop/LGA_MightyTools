@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_DICTATIONPANEL_H
 #define MIGHTYTOOLS_DICTATIONPANEL_H
 
+#include "app/PanelState.h"
 #include "platform/AudioCapture.h"
 
 #include <QHash>
@@ -23,9 +24,11 @@ class UsageBar;
 
 // La página de Dictation, con los materiales de App Toggle y Mouse Buttons: tarjeta de estado, el atajo, idioma
 // y micrófono, palabras propias y reemplazos, el motor y el modelo (descarga con botón) y los últimos dictados.
-class DictationPanel : public QWidget
+class DictationPanel : public QWidget, public PanelState
 {
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     DictationPanel(DictationModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
     // Captura de QA: el editor de reemplazos con el segundo par cargado para editar, o el tacho de una pieza

@@ -35,6 +35,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
+#include <QtGui/private/qfont_p.h>
 
 namespace {
 
@@ -47,6 +48,8 @@ const QString kLanguage = QStringLiteral("app/language");
 const QString kPalette = QStringLiteral("app/palette");
 // Cuanto queda armada la ventana despues de esconderse (ver ensureWindow).
 constexpr int kReleaseAfterMs = 5 * 60 * 1000;
+// La primera ventana nativa se prepara un rato despues del arranque, cuando nadie espera (ver el constructor).
+constexpr int kWarmupDelayMs = 4000;
 
 // Los argumentos que vuelven con el click en un aviso: "module=diskSpace&action=snooze&key=C%3A%2F".
 QString noticeArguments(const QString &moduleId, const QString &action, const QString &key)
@@ -208,6 +211,20 @@ AppController::AppController(const Options &options, QObject *parent)
         if (firstLaunch || m_options.openWindow) {
             showSettings();
         }
+        // D-77: la primera ventana nativa del proceso le cuesta a Windows ~105 ms una sola vez (entrada de texto,
+        // temas; en una PC lenta, varias veces eso), y se pagaba al abrir la ventana desde la bandeja. Se paga
+        // antes, cuando nadie espera: una ventana sin mostrar, que se crea y se destruye en el acto (no aparece ni
+        // toma el foco). Deja ~4 MB, los mismos que dejaria abrir la ventana la primera vez.
+        QTimer::singleShot(kWarmupDelayMs, this, [this]() {
+            if (m_window) {
+                return;
+            }
+            QElapsedTimer clock;
+            clock.start();
+            QWidget warmup(nullptr, Qt::Tool | Qt::FramelessWindowHint);
+            warmup.winId();
+            qInfo().noquote() << QStringLiteral("[AppController] Primera ventana nativa preparada en %1 ms").arg(clock.elapsed());
+        });
     }
 }
 
@@ -554,9 +571,9 @@ MainWindow *AppController::ensureWindow()
     wireGeneralPage();
     m_window->setFirstRun(firstRunView());
     m_window->setUpdateState(m_updateState);
-    // Vuelve a la pagina que se veia cuando se solto.
-    if (!m_lastPage.isEmpty()) {
-        m_window->selectPage(m_lastPage);
+    // Vuelve como estaba cuando se solto: la pagina, el scroll de cada una y la ayuda abierta.
+    if (!m_lastView.page.isEmpty()) {
+        m_window->restoreViewState(m_lastView);
     }
     qInfo().noquote() << QStringLiteral("[AppController] Ventana armada en %1 ms").arg(clock.elapsed());
     return m_window;
@@ -585,7 +602,9 @@ void AppController::releaseWindowIfIdle()
     // irian con ella. Se vuelve a probar mas tarde.
     // El Apply de Open in NukeX usa el HWND de la ventana como dueño del selector nativo "Abrir con", que no es un
     // QWidget: mientras corre, la ventana no se suelta.
+    // Ni con algo a medio hacer en un panel (un editor abierto, una ruta elegida sin Save): se perderia.
     bool busy = QApplication::activePopupWidget() || QApplication::activeModalWidget() || OpenInNukeXOperations::busy();
+    busy = busy || m_window->hasUnsavedWork();
     const QWidgetList tops = QApplication::topLevelWidgets();
     for (QWidget *top : tops) {
         if (busy) {
@@ -605,7 +624,7 @@ void AppController::releaseWindowIfIdle()
         scheduleWindowRelease();
         return;
     }
-    m_lastPage = m_window->currentPage();
+    m_lastView = m_window->viewState();
     MainWindow *window = m_window;
     m_window = nullptr;
     if (m_updates) {
@@ -613,6 +632,10 @@ void AppController::releaseWindowIfIdle()
     }
     // En el acto, como rebuildUi(): el host guarda cada panel en un QPointer y al volver a abrir pide otro.
     delete window;
+    // Lo que la ventana dejo en cache y nadie usa con ella cerrada: las fuentes (unos 4 MB de motores y glifos
+    // armados; Qt los rearma solos, lo mismo que hace al agregarse una fuente). Devolver el heap libre no bajaba nada
+    // (medido).
+    QFontCache::instance()->clear();
     qInfo().noquote() << QStringLiteral("[AppController] Ventana suelta tras %1 s escondida").arg(kReleaseAfterMs / 1000);
 }
 

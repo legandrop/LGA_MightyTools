@@ -3,6 +3,7 @@
 
 #include "app/GeneralPage.h"
 #include "app/HostServices.h"
+#include "app/MainWindow.h"
 
 #include <QObject>
 #include <QPointer>
@@ -101,7 +102,7 @@ private:
     QTimer *m_releaseTimer = nullptr;
     // Lo que la ventana mostraba o tenia que mostrar, para armarla igual.
     UpdateRowState m_updateState;
-    QString m_lastPage;
+    MainWindow::ViewState m_lastView; ///< pagina, scroll y ayuda de la ventana que se solto (D-77)
     // Escondida por una herramienta (el calibrador de Nuke Shortcuts) que la va a volver a mostrar.
     bool m_hiddenByTool = false;
     QSystemTrayIcon *m_tray = nullptr;

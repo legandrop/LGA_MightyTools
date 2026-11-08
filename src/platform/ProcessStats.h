@@ -25,6 +25,12 @@ struct ProcessStats
     static ProcessStats current();
     // Solo el CPU del proceso (usuario + kernel), barato.
     static qint64 cpuMsNow();
+    // Solo para medir: devuelve al sistema la memoria libre que guardan el CRT y el heap del proceso (Windows:
+    // _heapmin y HeapCompact). No toca nada vivo. mac: no hace nada.
+    static void releaseFreeHeap();
+    // Solo para medir (--measure-pages --cpu-cap N): limita el proceso a N % de UN nucleo, como una PC N veces
+    // mas lenta (un nucleo y un tope de CPU por job de Windows). Devuelve false si no pudo. mac: false.
+    static bool capCpuForTest(int percentOfOneCore);
     QString toString() const;
 };
 

@@ -697,3 +697,9 @@ void WindowLayoutsPanel::showEditorForCapture()
     m_draft.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
     updateEditor();
 }
+
+bool WindowLayoutsPanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
+}

@@ -920,3 +920,10 @@ bool DictationPanel::eventFilter(QObject *watched, QEvent *event)
     }
     return QWidget::eventFilter(watched, event);
 }
+
+bool DictationPanel::hasUnsavedWork() const
+{
+    // Un reemplazo a medio escribir o en edicion: se agrega con Add, Enter o un click afuera, no al esconder la
+    // ventana.
+    return m_editing >= 0 || (m_from && !m_from->text().trimmed().isEmpty()) || (m_to && !m_to->text().trimmed().isEmpty());
+}

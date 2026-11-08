@@ -58,3 +58,12 @@ QString ProcessStats::toString() const
         .arg(privateBytes / 1024)
         .arg(cpuMs);
 }
+
+void ProcessStats::releaseFreeHeap()
+{
+}
+
+bool ProcessStats::capCpuForTest(int)
+{
+    return false;
+}

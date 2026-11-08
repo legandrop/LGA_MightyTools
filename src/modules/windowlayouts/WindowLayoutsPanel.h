@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_WINDOWLAYOUTSPANEL_H
 #define MIGHTYTOOLS_WINDOWLAYOUTSPANEL_H
 
+#include "app/PanelState.h"
 #include "modules/windowlayouts/WindowLayoutsState.h"
 
 #include <QWidget>
@@ -16,9 +17,11 @@ class StatusCard;
 class WindowLayoutsModule;
 class WorkAreaPreview;
 
-class WindowLayoutsPanel : public QWidget
+class WindowLayoutsPanel : public QWidget, public PanelState
 {
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     WindowLayoutsPanel(WindowLayoutsModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
     void showEditorForCapture();
