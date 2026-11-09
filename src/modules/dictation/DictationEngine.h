@@ -34,7 +34,7 @@ public:
     explicit DictationEngine(QObject *parent = nullptr);
     ~DictationEngine() override;
 
-    // enginePath: la carpeta con transcribe.dll; modelPath: el .gguf. Si falta alguno, failed().
+    // enginePath: la carpeta con transcribe.dll (libtranscribe.dylib en mac); modelPath: el .gguf. Si falta alguno, failed().
     void start(const QString &enginePath, const QString &modelPath);
     void stop();
     bool isRunning() const { return m_process != nullptr; }

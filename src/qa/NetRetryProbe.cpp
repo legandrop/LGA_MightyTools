@@ -6,7 +6,7 @@
 #include "platform/UpdateInstaller.h"
 #include "updates/UpdateManifest.h"
 #include "updates/UpdateService.h"
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 #include "modules/dictation/DictationModels.h"
 #endif
 
@@ -680,9 +680,9 @@ void testUpdateDownload(Probe &probe, Watcher &watcher, const QString &baseDir)
     }
 }
 
-// ---------------------------------------------------------------- Dictado (solo Windows)
+// ---------------------------------------------------------------- Dictado (Windows y macOS)
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 using State = DictationModels::State;
 
 struct ModelRun
@@ -916,10 +916,10 @@ int runNetRetryProbe(const QStringList &args)
     LgaNetRetry::delayMsOverrideForTests() = 60;
     testUpdateCheck(probe, watcher, base);
     testUpdateDownload(probe, watcher, base);
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     testDictation(probe, base);
 #else
-    fprintf(stdout, "-    dictado: omitido (solo Windows)\n");
+    fprintf(stdout, "-    dictado: omitido (solo Windows y macOS)\n");
 #endif
     LgaNetRetry::delayMsOverrideForTests() = -1;
     probe.check(LgaNetRetry::delayMs() == 5000 && LgaNetRetry::kRetries == 3,

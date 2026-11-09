@@ -339,7 +339,11 @@ QWidget *DictationPanel::buildModelCard()
     browse->setFocusPolicy(Qt::NoFocus);
     rootRow->addWidget(browse);
     column->addLayout(rootRow);
+#if defined(Q_OS_MACOS)
+    m_rootError = Ui::caption(I18n::tr("Write a full path, like /Users/Shared/LGA_AI."), card);
+#else
     m_rootError = Ui::caption(I18n::tr("Write a full path, like E:\\LGA_AI."), card);
+#endif
     Ui::setStyleProperty(m_rootError, "tone", QStringLiteral("err"));
     m_rootError->hide();
     column->addWidget(m_rootError);

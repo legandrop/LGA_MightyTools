@@ -12,6 +12,12 @@ en_from: "1.53"
 
 ## Unreleased
 
+## v1.54
+- [fixed][mac] El primer tooltip después de abrir Mighty Tools ya no aparece encima del puntero tapando el botón: sale debajo, como los siguientes.
+  en: The first tooltip after opening Mighty Tools no longer appears over the pointer covering the button: it shows below, like the following ones.
+- [new][mac] Dictation escribe lo que decís en cualquier campo de texto: tocás ⌘⌥⇧H (o lo mantenés mientras hablás), ves el texto en una ventanita mientras hablás y se escribe al terminar sin pasar por el portapapeles; la primera vez macOS te pide permiso para el micrófono y para Accesibilidad, y el modelo se descarga una sola vez con «Download» desde su página.
+  en: Dictation types what you say into any text field: press ⌘⌥⇧H (or hold it while you speak), see the text in a small window as you talk, and it is typed when you finish without going through the clipboard; the first time, macOS asks for Microphone and Accessibility permission, and the model is downloaded only once with «Download» from its page.
+
 ## v1.53
 - [improved] Mighty Tools es más liviana y rápida: la ventana abre y cambia de página al instante, y cerrada en la bandeja ocupa menos de la mitad de memoria, sin perder nada de lo que estabas editando.
   en: Mighty Tools is lighter and faster: the window opens and switches pages instantly, and closed in the tray it uses less than half the memory, without losing anything you were editing.

@@ -1,5 +1,27 @@
 # Changelog — LGA Mighty Tools
 
+v1.54:
+
+Dictation en mac pasa a main (Lega, 09/11: «mergeá todo a main»): la rama `dictado-mac` (el dictado de macOS, el atajo `⌘⌥⇧H`, el primer tooltip de mac y los scripts de la Base) se mergea a main después de publicar la v1.53 de Mac, que salió del tag sin el dictado de mac. Como la v1.53 ya está publicada, sus entradas de acá y del WhatsNew pasan a la v1.54. Sin cambios de código en el merge: solo el changelog y el WhatsNew.
+
+[ Dictation - El dictado de Mac pasa a main ]
+
+Scripts de mac (de la Base v0.171): `compilar.sh` lanzaba la app con `&` + `disown` dentro del grupo de procesos de la terminal, así que matar ese grupo se llevaba la app abierta; ahora `set -m` le da un grupo propio (también con `--sim-slow`) y stdin va a `/dev/null`, para que no frene si lee la terminal. Una opción desconocida ya cortaba antes de cerrar o compilar nada: el mensaje y la ayuda quedan como en la Base. `tools/macos/publish_release.sh` re-copiado idéntico de la Base: `gh` y `git ls-remote`/`fetch`/`push` reintentan 3 veces cada 5 s ante errores de red (no ante un 404 ni un error de login). `LgaBuildTree` ya decidía por estructura en mac: sin cambios.
+
+[ Mac - compilar.sh con grupo propio y reintentos en publish_release ]
+
+Tooltips en mac (port del arreglo de la Base): el primer tooltip después de abrir la app salía ~20 px más arriba de lo calculado, encima del puntero, y tapaba el botón (el click caía en el tooltip); los siguientes salían bien. Causa: la ventana del tooltip todavía no tenía ventana nativa, y `QWidget::move()` sobre un top-level sin crear marca la posición como «incluye el marco»; al crearse en el `show()`, Qt la corrige con los márgenes de marco de Cocoa, que este tooltip sin marco no tiene. Ahora `CustomTooltip::showToolTip()` crea la ventana nativa con `winId()` antes del primer `move()` si todavía no existe (`Qt::WA_WState_Created`), y el primero queda donde los demás. Sin efecto en Windows.
+
+[ Tooltip - El primer tooltip en Mac ya no aparece encima del puntero ]
+
+Dictation en mac (Lega, 07/11): el atajo de fábrica era `⌃⌥H` y Lega usa `⌘⌥⇧H`; pidió que venga ese. `kDefaultShortcut` pasa a `Ctrl+Alt+Shift+H` en mac (en Qt/mac Ctrl es ⌘); Windows sigue con Win+H. Quien ya tenía uno guardado lo conserva. Self-test, D-75, roadmap y WhatsNew al día.
+
+[ Dictation - En mac el atajo de fabrica pasa a Cmd+Option+Shift+H ]
+
+Dictation en macOS (D-75, rama `dictado-mac`): el dictado existía solo en Windows. El módulo es el mismo; lo nuevo es lo de cada sistema. Micrófono con AVAudioEngine (`AudioCaptureMac.mm`), que pide el permiso de macOS la primera vez (`PermissionAsked`: ese dictado no graba) y `NSMicrophoneUsageDescription` en el Info.plist. Escritura con eventos de teclado con el texto adentro, de a 16 caracteres, sin portapapeles (`TextTyperMac.mm`); sin Accesibilidad no se escribe y el texto queda en Recent (`NoPermission`). Ventanita que no activa la app ni se esconde con la app inactiva (`OverlayWindowMac.mm`). El proceso del motor carga `libtranscribe.dylib` con `dlopen` (`DictationProcessMac.cpp`); tablas fijas del paquete 0.4.1 de Apple Silicon (Metal) e Intel (CPU), medidas sobre los paquetes oficiales. Los atajos Carbon ahora avisan al soltar (modo mantener) e ignoran la repetición de tecla. Atajo de fábrica `⌃⌥H`; modelos en Application Support. Auditoría independiente: el tap del micrófono encola todo con su mutex y se apaga antes de cerrar (no se pierde la cola del audio ni llega nada a un objeto borrado); las excepciones de AVAudioEngine se atajan; un cambio de configuración (auriculares Bluetooth) rearma el micrófono una vez; el destino es la app y su ventana del frente; Esc a la mitad queda como «Partly typed: stopped». Probado: self-test 0 fallas y el motor real cargado en una Mac M.
+
+[ Dictation - Version para macOS con microfono, escritura sin portapapeles y motor Metal ]
+
 v1.53:
 
 Nota del último atajo en amarillo y permiso de Mac (Lega, 09/11: «¿por qué no están en rojo o amarillo si son warning?»): la nota iba pegada al texto de la tarjeta, en gris (o en rojo si la herramienta ya estaba en rojo), y no se leía como advertencia. Además, en macOS la falta del permiso de Accesibilidad, que hace fallar todos los atajos, había pasado a ser una nota. Ahora `StatusCard::setNote` la pone en su propia línea, amarilla, sin tocar el punto ni la barra lateral; `WindowPlacement::canControlWindows()` deja Window Layouts en rojo, en vivo, mientras falte el permiso, y en Mac el motivo es concreto (nada al frente, Mighty Tools, el escritorio o la app sin ventana, con su nombre).

@@ -3,6 +3,8 @@
 #include <QDebug>
 #include <QHash>
 #include <QMetaObject>
+#include <QElapsedTimer>
+#include <QTimer>
 
 #include <Carbon/Carbon.h>
 
@@ -47,6 +49,8 @@ UInt32 nativeKey(int key)
         {Qt::Key_F9, kVK_F9}, {Qt::Key_F10, kVK_F10}, {Qt::Key_F11, kVK_F11}, {Qt::Key_F12, kVK_F12},
         {Qt::Key_Left, kVK_LeftArrow}, {Qt::Key_Right, kVK_RightArrow},
         {Qt::Key_Up, kVK_UpArrow}, {Qt::Key_Down, kVK_DownArrow},
+        // El dictado registra Esc mientras dicta (para cancelar).
+        {Qt::Key_Escape, kVK_Escape},
     };
     return table.value(key, UINT32_MAX);
 }
@@ -58,6 +62,53 @@ struct HotkeyService::Private
     HotkeyService *q = nullptr;
     EventHandlerRef handler = nullptr;
     QHash<int, EventHotKeyRef> refs;
+    // Los registrados con prioridad (`keys`) avisan al soltar (released). Carbon manda kEventHotKeyReleased al
+    // soltar la tecla (no los modificadores), igual que el gancho de Windows.
+    // Con prioridad, apretados y todavia sin soltar: la repeticion de la tecla mantenida no es otra activacion.
+    struct Held
+    {
+        UInt32 key = 0;
+        bool readable = false; // al apretar, la tecla fisica se leyo apretada: se puede vigilar
+        QElapsedTimer last;    // ultimo apretón o repeticion
+    };
+    QHash<int, Held> down;
+    QHash<int, UInt32> keys; // tecla fisica de cada registrado con prioridad
+    // Mientras hay uno apretado: si macOS no manda la liberacion (un campo de contrasena prende la entrada
+    // segura a mitad de camino), la tecla fisica ya suelta la da por liberada. Si no, el proximo apretón se
+    // tomaria como repeticion y el atajo quedaria muerto. Solo si la tecla se pudo leer apretada al apretar:
+    // si macOS no deja leerla, el reloj la daria por suelta enseguida y romperia el modo «mantener».
+    QTimer poll;
+    static constexpr qint64 kLostReleaseMs = 2500; // sin lectura: un apretón despues de esto es uno nuevo
+
+    void release(int id)
+    {
+        if (!down.contains(id)) {
+            return; // ya se dio por liberada (por el reloj o por Carbon)
+        }
+        down.remove(id);
+        updatePoll();
+        HotkeyService *service = q;
+        QMetaObject::invokeMethod(service, [service, id]() { emit service->released(id); }, Qt::QueuedConnection);
+    }
+
+    void updatePoll()
+    {
+        bool any = false;
+        for (const Held &held : std::as_const(down)) any = any || held.readable;
+        if (!any) poll.stop();
+        else if (!poll.isActive()) poll.start();
+    }
+
+    void checkPhysical()
+    {
+        const QList<int> ids = down.keys();
+        for (const int id : ids) {
+            const Held held = down.value(id);
+            if (held.readable && !CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, CGKeyCode(held.key))) {
+                release(id);
+            }
+        }
+    }
 
     static OSStatus onHotKey(EventHandlerCallRef, EventRef event, void *userData)
     {
@@ -73,8 +124,30 @@ struct HotkeyService::Private
         if (!self->refs.contains(id)) {
             return eventNotHandledErr;
         }
-        // Encolado: la accion corre despues de que Carbon termine de despachar el evento.
         HotkeyService *service = self->q;
+        if (GetEventKind(event) == kEventHotKeyReleased) {
+            self->release(id); // solo los de prioridad estan en `down`
+            return noErr;
+        }
+        if (self->keys.contains(id)) {
+            auto it = self->down.find(id);
+            if (it != self->down.end()) {
+                // Con lectura, el reloj ya la habria soltado: es la repeticion de la tecla mantenida (el dictado la
+                // tomaria como «apretar otra vez»). Sin lectura, despues de un rato largo se perdio la liberacion.
+                if (it->readable || it->last.elapsed() < kLostReleaseMs) {
+                    it->last.restart();
+                    return noErr;
+                }
+                self->release(id);
+            }
+            Held held;
+            held.key = self->keys.value(id);
+            held.readable = CGEventSourceKeyState(kCGEventSourceStateHIDSystemState, CGKeyCode(held.key));
+            held.last.start();
+            self->down.insert(id, held);
+            self->updatePoll();
+        }
+        // Encolado: la accion corre despues de que Carbon termine de despachar el evento.
         QMetaObject::invokeMethod(service, [service, id]() { emit service->activated(id); }, Qt::QueuedConnection);
         return noErr;
     }
@@ -85,8 +158,10 @@ HotkeyService::HotkeyService(QObject *parent)
     , d(std::make_unique<Private>())
 {
     d->q = this;
-    const EventTypeSpec spec{kEventClassKeyboard, kEventHotKeyPressed};
-    InstallApplicationEventHandler(&Private::onHotKey, 1, &spec, d.get(), &d->handler);
+    d->poll.setInterval(100);
+    connect(&d->poll, &QTimer::timeout, this, [this]() { d->checkPhysical(); });
+    const EventTypeSpec specs[] = {{kEventClassKeyboard, kEventHotKeyPressed}, {kEventClassKeyboard, kEventHotKeyReleased}};
+    InstallApplicationEventHandler(&Private::onHotKey, 2, specs, d.get(), &d->handler);
 }
 
 HotkeyService::~HotkeyService()
@@ -118,13 +193,22 @@ bool HotkeyService::registerHotkey(int id, const Shortcut &shortcut)
     return true;
 }
 
-bool HotkeyService::registerPriorityHotkey(int, const Shortcut &)
+bool HotkeyService::registerPriorityHotkey(int id, const Shortcut &shortcut)
 {
-    return false;
+    // En mac no hay gancho que le gane al sistema: es el mismo registro de Carbon, pero ademas avisa al
+    // soltar (el modo «mantener» del dictado). Si otra app o macOS ya tiene la combinacion, falla igual.
+    if (!registerHotkey(id, shortcut)) {
+        return false;
+    }
+    d->keys.insert(id, nativeKey(shortcut.key));
+    return true;
 }
 
 void HotkeyService::unregisterHotkey(int id)
 {
+    d->keys.remove(id);
+    d->down.remove(id); // sin released: quien lo retira ya no lo espera
+    d->updatePoll();
     const auto it = d->refs.find(id);
     if (it == d->refs.end()) {
         return;

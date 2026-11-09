@@ -22,9 +22,12 @@ class QProcess;
 
 // Lo que el dictado necesita en disco: el motor (transcribe.cpp, un .tar.gz) y el modelo (un .gguf),
 // dentro de una carpeta raiz de modelos que se elige en la pagina de la herramienta (por defecto
-// <carpeta del exe>\models; en la PC de desarrollo, E:\LGA_AI). Nada viaja con el instalador.
+// <carpeta del exe>\models; en la PC de desarrollo, E:\LGA_AI; en mac, ~/Library/Application Support/LGA/
+// LGA_MightyTools/models, nunca dentro del .app). Nada viaja con el instalador.
 //
 //   <raiz>\transcribe.cpp\0.4.1-windows-x86_64-cpu-vulkan\   transcribe.dll, ggml*.dll, licenses\
+//   <raiz>/transcribe.cpp/0.4.1-macos-arm64-metal/           libtranscribe.dylib, libggml*.dylib (Intel:
+//                                                            0.4.1-macos-x86_64-cpu, solo CPU)
 //   <raiz>\whisper\whisper-large-v3-turbo-Q8_0.gguf
 //
 // Estado por pieza: falta, bajando (%), verificando (%), lista o error. Se baja solo lo que falta, a un
@@ -80,8 +83,11 @@ public:
     static inline const QString kModel = QStringLiteral("model");
     // transcribe.cpp 0.4.1 (CPU + Vulkan) y Whisper large-v3 turbo Q8_0, los dos MIT.
     static QList<Piece> defaultPieces();
-    // Los archivos del paquete del motor 0.4.1, con su tamano y SHA-256 (la tabla de defaultPieces()).
+    // Los archivos del paquete del motor 0.4.1 de esta plataforma, con su tamano y SHA-256 (la tabla de
+    // defaultPieces()).
     static QList<File> engineFiles041();
+    // La biblioteca del motor que se carga: transcribe.dll, o libtranscribe.dylib en mac.
+    static QString engineLibrary();
     static QString defaultRoot();
 
     explicit DictationModels(const QString &root, const QList<Piece> &pieces = defaultPieces(), QObject *parent = nullptr);

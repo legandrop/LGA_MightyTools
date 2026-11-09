@@ -872,8 +872,19 @@ void CustomTooltip::showToolTip(const QString& text, QWidget* parent, const QPoi
     // Asegurar que la X quede dentro del window/screen conocido (el Y ya se seteó
     // arriba a posBelowY o posAboveY, que están calculados con overlap intencional).
     idealPos.setX(qMax(windowGeometry.left(), idealPos.x()));
-    
-    
+
+
+    // ⚠️ Crear la ventana nativa ANTES del primer move(). Si el widget todavía no tiene
+    //    ventana nativa (primer tooltip desde que abrió la app), QWidget::move() marca la
+    //    posición como "incluye el marco" (posIncludesFrame) y al crearse la ventana Qt la
+    //    corrige con los márgenes de marco que informa la plataforma. En macOS eso corre el
+    //    tooltip ~20px hacia arriba y queda encima del puntero, tapando el botón. Con la
+    //    ventana ya creada, move() posiciona el área de cliente exacta, como en los siguientes.
+    //    winId() es la vía pública para crearla (QWidget::create() es protegido).
+    if (!m_tooltipWidget->testAttribute(Qt::WA_WState_Created)) {
+        (void)m_tooltipWidget->winId();
+    }
+
     // Mover y mostrar
     m_tooltipWidget->move(idealPos);
 

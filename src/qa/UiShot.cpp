@@ -13,7 +13,7 @@
 #include "app/WindowParts.h"
 #include "core/I18n.h"
 #include "core/UiScale.h"
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 #include "modules/dictation/DictationOverlay.h"
 #endif
 #include "modules/diskspace/DiskCard.h"
@@ -212,11 +212,11 @@ QWidget *makeCanvas()
     return canvas;
 }
 
-// La ventanita del dictado (Windows): "dictation:overlay-<estado>". Va aparte de los estados de herramienta
+// La ventanita del dictado (Windows y macOS): "dictation:overlay-<estado>". Va aparte de los estados de herramienta
 // porque es una ventana propia, no la pagina.
 QString dictationOverlayState(const QString &state)
 {
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     const QString prefix = QStringLiteral("dictation:");
     if (state.startsWith(prefix) && state.mid(prefix.size()).startsWith(QLatin1String("overlay-"))) {
         return state.mid(prefix.size());
@@ -230,7 +230,7 @@ QString dictationOverlayState(const QString &state)
 QStringList allStates(const ModuleHost &host)
 {
     QStringList states = kHostStates;
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     for (const QString &overlay : DictationOverlay::captureStates()) {
         states << QStringLiteral("dictation:%1").arg(overlay);
     }
@@ -471,7 +471,7 @@ int runUiShot(const QStringList &args)
         root->adjustSize();
         settle(*root);
     } else if (!overlayState.isEmpty()) {
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
         canvas.reset(makeCanvas());
         auto *layout = new QVBoxLayout(canvas.data());
         layout->setContentsMargins(20, 20, 20, 20);

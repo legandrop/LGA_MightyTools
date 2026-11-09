@@ -1,6 +1,7 @@
 #include "modules/dictation/DictationEngine.h"
 
 #include "core/I18n.h"
+#include "modules/dictation/DictationModels.h"
 #include "modules/dictation/DictationProtocol.h"
 #include "platform/DictationProcess.h"
 
@@ -70,7 +71,7 @@ void DictationEngine::launch()
     m_damaged = false;
     m_buffer.clear();
     m_errorBuffer.clear();
-    if (!QFileInfo::exists(QDir(m_enginePath).filePath(QStringLiteral("transcribe.dll")))) {
+    if (!QFileInfo::exists(QDir(m_enginePath).filePath(DictationModels::engineLibrary()))) {
         emit failed(I18n::tr("The dictation engine is not installed."));
         return;
     }

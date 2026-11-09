@@ -15,6 +15,8 @@
 //    que lo dejan fuera del historial de Win+V, de la nube y de los programas que vigilan el portapapeles, se
 //    manda Ctrl+V y, cuando la ventana ya leyó el texto, se devuelve lo de antes (también sin historial). Si
 //    otra app copió algo mientras tanto, no se pisa. Los saltos de línea van como \r\n.
+//  - macOS (platform/mac/TextTyperMac.mm): eventos de teclado con el texto adentro, de a pedazos, sin el
+//    portapapeles. El destino es la app del frente (su PID). Pide el permiso de Accesibilidad.
 //
 // Las teclas llevan la marca propia (InputOrigin.h): los ganchos de la app no las toman como del usuario. En una
 // corrida automatizada no se toca nada: type() solo anota en el log y termina con LoggedOnly.
@@ -30,7 +32,8 @@ public:
         Elevated,     ///< la ventana corre como administrador y esta app no (UIPI): no se escribió nada
         NoTarget,     ///< la ventana ya no existe (o nunca hubo una)
         Failed,       ///< no se pegó: portapapeles ocupado, teclas rechazadas o la ventana nunca pidió el texto
-        Stopped,      ///< stop(): el usuario lo cortó con Esc antes de pegar; no se escribió nada
+        Stopped,      ///< stop(): el usuario lo cortó con Esc (en Windows antes de pegar; en mac puede ser a la mitad)
+        NoPermission, ///< macOS: falta el permiso de Accesibilidad; no se escribió nada
     };
     Q_ENUM(Result)
 

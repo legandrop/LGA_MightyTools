@@ -14,11 +14,13 @@
 
 #if defined(Q_OS_WIN)
 #include "modules/desktopicons/DesktopIconsModule.h" // solo Windows
-#include "modules/dictation/DictationModule.h"
 #include "modules/folderswitch/FolderSwitchModule.h"
 #include "modules/mousebuttons/MouseButtonsModule.h"
 #elif defined(Q_OS_MACOS)
 #include "modules/folderswitch/mac/FolderSwitchMacModule.h" // D-40: su propia implementacion de mac
+#endif
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+#include "modules/dictation/DictationModule.h"
 #endif
 
 // Una linea por herramienta (all() las devuelve en orden alfabetico). Cada modulo declara su
@@ -40,9 +42,11 @@ QList<ModuleDescriptor> all()
     list << windowLayoutsDescriptor();
     list << appToggleDescriptor();
     list << meetFrameDescriptor();
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    list << dictationDescriptor();
+#endif
 #if defined(Q_OS_WIN)
     list << mouseButtonsDescriptor();
-    list << dictationDescriptor();
     list << desktopIconsDescriptor();
 #endif
 
@@ -79,9 +83,11 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
     providers.insert(QStringLiteral("meetFrame"), &meetFrameHelp);
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    providers.insert(QStringLiteral("dictation"), &dictationHelp);
+#endif
 #if defined(Q_OS_WIN)
     providers.insert(QStringLiteral("mouseButtons"), &mouseButtonsHelp);
-    providers.insert(QStringLiteral("dictation"), &dictationHelp);
     providers.insert(QStringLiteral("desktopIcons"), &desktopIconsHelp);
 #endif
     return providers;
