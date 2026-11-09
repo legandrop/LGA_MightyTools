@@ -203,6 +203,27 @@ QRect pickerWorkAreaAt(const QPoint &globalLogical)
     }
 }
 
+// Por que la app del frente no deja mover ni minimizar: nada al frente, Mighty Tools misma, el escritorio
+// (Finder sin ventanas) o una app sin ventana al frente, con su nombre.
+static QString noWindowReason(NSRunningApplication *front)
+{
+    if (!front) return I18n::tr("No window was in front, so there was nothing to move.");
+    if (front.processIdentifier == getpid()) {
+        return I18n::tr("LGA Mighty Tools was in front. The shortcuts move other apps' windows.");
+    }
+    if ([front.bundleIdentifier isEqualToString:@"com.apple.finder"]) {
+        return I18n::tr("The desktop was in front, so there was no window to move.");
+    }
+    const QString name = QString::fromNSString(front.localizedName ?: @"").trimmed();
+    return name.isEmpty() ? I18n::tr("The active app has no accessible window.")
+                          : I18n::tr("%1 had no window in front. Open one of its windows and try again.").arg(name);
+}
+
+bool canControlWindows()
+{
+    return AXIsProcessTrustedWithOptions(nullptr);
+}
+
 bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
 {
     if (error) error->clear();
@@ -220,7 +241,7 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
         }
         NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
         if (!front || front.processIdentifier == getpid()) {
-            fail(error, I18n::tr("Switch to a movable app window and try again."));
+            fail(error, noWindowReason(front));
             return false;
         }
         CFHolder app, window;
@@ -232,7 +253,7 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
         AXUIElementSetMessagingTimeout(static_cast<AXUIElementRef>(app.value), 1.0f);
         if (AXUIElementCopyAttributeValue(static_cast<AXUIElementRef>(app.value), kAXFocusedWindowAttribute,
                                           &window.value) != kAXErrorSuccess || !window.value) {
-            fail(error, I18n::tr("The active app has no accessible window."));
+            fail(error, noWindowReason(front));
             return false;
         }
         auto *axWindow = static_cast<AXUIElementRef>(window.value);
@@ -311,7 +332,7 @@ bool minimizeForeground(QString *error, bool dryRun)
         }
         NSRunningApplication *front = NSWorkspace.sharedWorkspace.frontmostApplication;
         if (!front || front.processIdentifier == getpid()) {
-            fail(error, I18n::tr("Switch to a movable app window and try again."));
+            fail(error, noWindowReason(front));
             return false;
         }
         CFHolder app, window, minimized;
@@ -323,7 +344,7 @@ bool minimizeForeground(QString *error, bool dryRun)
         AXUIElementSetMessagingTimeout(static_cast<AXUIElementRef>(app.value), 1.0f);
         if (AXUIElementCopyAttributeValue(static_cast<AXUIElementRef>(app.value), kAXFocusedWindowAttribute,
                                           &window.value) != kAXErrorSuccess || !window.value) {
-            fail(error, I18n::tr("The active app has no accessible window."));
+            fail(error, noWindowReason(front));
             return false;
         }
         auto *axWindow = static_cast<AXUIElementRef>(window.value);

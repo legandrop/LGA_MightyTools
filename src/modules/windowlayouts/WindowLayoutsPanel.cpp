@@ -10,6 +10,7 @@
 
 #include <QGuiApplication>
 #include <QHideEvent>
+#include <QShowEvent>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -473,40 +474,39 @@ void WindowLayoutsPanel::refresh()
     const int failed = m_module->registrationFailureCount();
     const int shared = m_module->externalConflictCount();
     const QString error = m_module->lastError();
-    // Un atajo que no pudo hacer nada es una nota gris con su hora, no un problema: va debajo del estado y
-    // se descarta con el boton.
+    m_shownError = error;
+    // Un atajo que no pudo hacer nada es una nota amarilla con su hora en su propia linea, no el estado de la
+    // herramienta: no cambia el punto ni la barra lateral, y se descarta con el boton.
     const QString note = Ui::attemptNoteText(m_module->attemptNote(), m_module->attemptTime());
-    const auto withNote = [&note](const QString &text) {
-        return note.isEmpty() ? text : text + QLatin1Char('\n') + note;
-    };
     const QString dismiss = note.isEmpty() ? QString() : I18n::tr("Dismiss");
     if (!error.isEmpty()) {
-        m_statusCard->set(QStringLiteral("error"), I18n::tr("Window shortcuts need attention"), withNote(error),
+        m_statusCard->set(QStringLiteral("error"), I18n::tr("Window shortcuts need attention"), error,
                           dismiss, QString(), QStringLiteral("err"), QStringLiteral("sm"));
     } else if (failed) {
         m_statusCard->set(QStringLiteral("error"), failed == 1 ? I18n::tr("1 shortcut could not start")
                                                               : I18n::tr("%1 shortcuts could not start").arg(failed),
-                          withNote(shared ? (shared == 1
+                          shared ? (shared == 1
                                         ? I18n::tr("1 affected shortcut also shares keys with another app or the system. Check its marked row and error.")
                                         : I18n::tr("%1 also share keys with another app or the system. Check the marked rows and their errors.").arg(shared))
-                                 : I18n::tr("Check each row's error. Turn off or edit the affected shortcuts.")),
+                                 : I18n::tr("Check each row's error. Turn off or edit the affected shortcuts."),
                           dismiss, QString(), QStringLiteral("err"), QStringLiteral("sm"));
     } else if (shared) {
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          withNote(I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed.")),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
 #else
-                          withNote(I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too.")),
+                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
 #endif
                           dismiss, QString(), QString(), QStringLiteral("sm"));
     } else {
         m_statusCard->set(QStringLiteral("on"), I18n::tr("Window shortcuts are on"),
-                          withNote(count == 0 ? I18n::tr("No shortcuts yet. Add one to get started.")
-                                   : enabled == 0 ? I18n::tr("All shortcuts are off. Use their switches to turn them on.")
-                                   : I18n::tr("%1 of %2 shortcuts are on.").arg(enabled).arg(count)),
+                          count == 0 ? I18n::tr("No shortcuts yet. Add one to get started.")
+                          : enabled == 0 ? I18n::tr("All shortcuts are off. Use their switches to turn them on.")
+                          : I18n::tr("%1 of %2 shortcuts are on.").arg(enabled).arg(count),
                           dismiss, QString(), QString(), QStringLiteral("sm"));
     }
+    m_statusCard->setNote(note);
     if (m_pages->currentWidget() == m_editorPage && !m_module->pickerError().isEmpty()) {
         m_editorError->setText(m_module->pickerError());
         m_editorError->show();
@@ -615,6 +615,12 @@ void WindowLayoutsPanel::resetDeleteConfirmation()
         m_remove->setText(I18n::tr("Delete"));
         Ui::setStyleProperty(m_remove, "variant", QStringLiteral("ghost"));
     }
+}
+
+void WindowLayoutsPanel::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (m_module->lastError() != m_shownError) refresh();
 }
 
 void WindowLayoutsPanel::hideEvent(QHideEvent *event)

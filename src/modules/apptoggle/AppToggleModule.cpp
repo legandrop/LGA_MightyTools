@@ -697,7 +697,7 @@ bool AppToggleModule::applyCaptureState(const QString &state)
         m_externalConflicts.insert(b.id);
         m_registrationErrors.insert(c.id, I18n::tr("Could not activate %1 with priority.").arg(c.shortcut.displayText()));
     }
-    // El atajo se apreto y la app no se pudo abrir (la desinstalaron): nota gris con la hora, la herramienta
+    // El atajo se apreto y la app no se pudo abrir (la desinstalaron): nota amarilla con la hora, la herramienta
     // sigue en verde.
     if (state == QLatin1String("run-error")) {
         m_attemptNote = QStringLiteral("%1 · %2").arg(b.name, I18n::tr("The app was not found: %1").arg(QDir::toNativeSeparators(recorder)));

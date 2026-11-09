@@ -13,6 +13,7 @@
 class QBoxLayout;
 class QDateTime;
 class QHBoxLayout;
+class QVBoxLayout;
 class QMouseEvent;
 class QTextDocument;
 class QPainter;
@@ -293,6 +294,9 @@ public:
     void set(const QString &dot, const QString &title, const QString &text, const QString &button,
              const QString &buttonVariant, const QString &cardTone, const QString &buttonSize = QString());
     QPushButton *button() const { return m_button; }
+    // Una linea aparte, en amarillo, debajo del texto: lo que paso con el ultimo atajo (no el estado de la
+    // herramienta, que sigue en el punto y en el titulo). Vacia la esconde.
+    void setNote(const QString &note);
     QString title() const;
     // El estado vivo de la herramienta (`.live` del Pliego): sin caja, y la ventana lo sube al encabezado
     // de la hoja, arriba de «How it works». Lo marca el panel al crearla.
@@ -307,6 +311,8 @@ private:
     QString m_alert; ///< "warn", "err" o vacio: el marco de color del aviso, tambien en el encabezado
     QLabel *m_title = nullptr;
     QLabel *m_text = nullptr;
+    QLabel *m_note = nullptr; ///< se crea con la primera nota
+    QVBoxLayout *m_texts = nullptr;
     QPushButton *m_button = nullptr;
 };
 
@@ -340,7 +346,7 @@ void setStyleProperty(QWidget *widget, const char *name, const QVariant &value);
 QLabel *label(const QString &text, const char *objectName, QWidget *parent);
 // Texto gris de dos lineas o mas (`.cap` del canvas).
 QLabel *caption(const QString &text, QWidget *parent);
-// La nota gris de un atajo que se apreto y no pudo hacer nada: «Ultimo atajo, 14:32: motivo» (hoy solo la
+// La nota de un atajo que se apreto y no pudo hacer nada: «Ultimo atajo, 14:32: motivo» (hoy solo la
 // hora; otro dia, tambien la fecha). Texto vacio si no hay nota.
 QString attemptNoteText(const QString &note, const QDateTime &when);
 // Tarjeta vacia (`.card`): fondo, radio 10, sin layout.

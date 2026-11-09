@@ -33,6 +33,10 @@ bool moveForeground(const QRectF &normalizedArea, QString *error = nullptr, bool
 // En dryRun no consulta ni modifica ventanas del sistema.
 bool minimizeForeground(QString *error = nullptr, bool dryRun = false);
 
+// Esta app tiene permiso para mover y minimizar ventanas de otras apps. En macOS es el permiso de
+// Accesibilidad (se lee sin pedirlo); en Windows no hace falta ninguno y siempre es true.
+bool canControlWindows();
+
 #ifdef Q_OS_WIN
 // La ventana del frente es una ventana comun de una app abierta como administrador. Desde un
 // proceso sin elevar, un proceso cuya elevacion no se puede leer cuenta como elevado.

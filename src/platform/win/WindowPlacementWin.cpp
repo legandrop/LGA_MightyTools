@@ -441,4 +441,9 @@ bool minimizeForeground(QString *error, bool dryRun)
     return true;
 }
 
+bool canControlWindows()
+{
+    return true;
+}
+
 } // namespace WindowPlacement

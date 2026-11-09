@@ -32,10 +32,11 @@ public:
     QWidget *createCaptureWidget(const QString &state, QWidget *parent) override;
 
     const WindowLayoutsState &layoutsState() const { return m_state; }
-    // Lo que el usuario tiene que arreglar (el ayudante de administrador no arranco): pone la herramienta en rojo.
-    QString lastError() const { return m_adminError; }
+    // Lo que el usuario tiene que arreglar, y pone la herramienta en rojo: el ayudante de administrador no
+    // arranco (Windows) o falta el permiso de Accesibilidad (macOS; se mira en vivo, sin pedirlo).
+    QString lastError() const;
     // El ultimo atajo que no pudo hacer nada (el escritorio al frente, una ventana minimizada). No es un
-    // problema de la herramienta: va como nota gris con su hora y se borra con el proximo atajo que funcione.
+    // problema de la herramienta: va como nota amarilla con su hora y se borra con el proximo atajo que funcione.
     QString attemptNote() const { return m_attemptNote; }
     QDateTime attemptTime() const { return m_attemptTime; }
     void dismissAttempt();
@@ -78,6 +79,7 @@ private:
     QString m_pickerError;
     QString m_adminError;
     bool m_adminFailed = false;
+    bool m_permissionShown = false; ///< el ultimo estado avisado del permiso de macOS
     QString m_captureState;
 #ifdef Q_OS_WIN
     AdminWindowHelper *m_adminHelper = nullptr;

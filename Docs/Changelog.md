@@ -2,6 +2,10 @@
 
 v1.53:
 
+Nota del último atajo en amarillo y permiso de Mac (Lega, 09/11: «¿por qué no están en rojo o amarillo si son warning?»): la nota iba pegada al texto de la tarjeta, en gris (o en rojo si la herramienta ya estaba en rojo), y no se leía como advertencia. Además, en macOS la falta del permiso de Accesibilidad, que hace fallar todos los atajos, había pasado a ser una nota. Ahora `StatusCard::setNote` la pone en su propia línea, amarilla, sin tocar el punto ni la barra lateral; `WindowPlacement::canControlWindows()` deja Window Layouts en rojo, en vivo, mientras falte el permiso, y en Mac el motivo es concreto (nada al frente, Mighty Tools, el escritorio o la app sin ventana, con su nombre).
+
+[ Avisos - La nota del ultimo atajo en amarillo y el permiso de Mac otra vez en rojo ]
+
 Aviso de Window Layouts y App Toggle (Lega, 09/11: «está en rojo y no dice qué pasa ni cómo se soluciona»): apretar un atajo con el escritorio, la barra de tareas o una ventana minimizada al frente dejaba la herramienta en «Needs attention» hasta el próximo atajo exitoso, con «Switch to a movable app window» y nada más. Causa: el fallo de un solo intento se guardaba como error de la herramienta (`m_lastError`). Ahora es una nota gris dentro de su estado, con la hora y un botón «Dismiss», que no cambia la barra lateral y se borra con el próximo atajo que funciona; en rojo queda solo lo que hay que arreglar (un atajo sin registrar, el ayudante de administrador caído). En Windows el motivo es concreto (escritorio, barra de tareas, minimizada, panel flotante, Mighty Tools, oculta) y nombra la ventana; con una de administrador indica la opción a prender. `CaptionLabel` respeta los saltos de línea.
 
 [ Avisos - Un atajo que no pudo mover nada ya no pone la herramienta en rojo y dice por que ]

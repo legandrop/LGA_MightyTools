@@ -225,6 +225,8 @@ void WindowLayoutsModule::start()
         return;
     }
     m_started = true;
+    // El rojo del permiso (macOS) ya se ve desde el arranque: el proximo atajo avisa si cambio.
+    m_permissionShown = !context().automatedRun() && !WindowPlacement::canControlWindows();
     registerLayouts();
 }
 
@@ -426,6 +428,17 @@ void WindowLayoutsModule::onHotkey(int id)
             ? WindowPlacement::minimizeForeground(&error, context().automatedRun())
             : WindowPlacement::moveForeground(layout.normalizedArea(), &error, context().automatedRun());
         if (!succeeded && error.isEmpty()) error = I18n::tr("This window could not be moved or minimized.");
+        // Falta el permiso: lo dice el estado en rojo, no una nota. Al darlo, el proximo atajo lo saca.
+        const bool permissionMissing = !context().automatedRun() && !WindowPlacement::canControlWindows();
+        if (permissionMissing != m_permissionShown) {
+            m_permissionShown = permissionMissing;
+            emit statusChanged();
+            emit layoutsChanged();
+        }
+        if (permissionMissing) {
+            setAttempt(QString()); // el rojo ya dice lo que pasa: una nota vieja abajo confunde
+            break;
+        }
 #ifdef Q_OS_WIN
         // Una ventana de administrador sin la opcion prendida: el aviso dice donde se prende.
         if (!succeeded && !adminWindowsEnabled() && !WindowPlacement::currentProcessElevated()
@@ -436,6 +449,18 @@ void WindowLayoutsModule::onHotkey(int id)
         setAttempt(succeeded ? QString() : error);
         break;
     }
+}
+
+QString WindowLayoutsModule::lastError() const
+{
+    if (!m_adminError.isEmpty()) return m_adminError;
+    // Sin el permiso (macOS) todos los atajos fallan: no es un intento, es algo para arreglar. Una corrida
+    // automatizada o una captura no lo miran (en el CI nunca esta dado).
+    if (m_started && !context().automatedRun() && !context().captureMode()
+        && !WindowPlacement::canControlWindows()) {
+        return I18n::tr("Allow LGA Mighty Tools in Privacy & Security > Accessibility to move windows.");
+    }
+    return {};
 }
 
 void WindowLayoutsModule::setAttempt(const QString &note)
@@ -518,7 +543,7 @@ bool WindowLayoutsModule::applyCaptureState(const QString &state)
             m_registrationErrors.insert(a.id, I18n::tr("Could not activate %1 with priority.").arg(a.shortcut.displayText()));
             m_registrationErrors.insert(b.id, I18n::tr("Could not activate %1 with priority.").arg(b.shortcut.displayText()));
         }
-        // Un atajo apretado con el escritorio al frente: nota gris con la hora, la herramienta sigue en verde.
+        // Un atajo apretado con el escritorio al frente: nota amarilla con la hora, la herramienta sigue en verde.
         if (state == QLatin1String("attempt")) {
             m_attemptNote = I18n::tr("The desktop was in front, so there was no window to move.");
             m_attemptTime = QDateTime(QDate(2026, 11, 9), QTime(14, 32));

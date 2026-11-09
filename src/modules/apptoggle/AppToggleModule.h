@@ -31,7 +31,7 @@ public:
 
     const AppToggleState &appsState() const { return m_state; }
     // El ultimo atajo que no pudo abrir ni activar su app. No es un problema de la herramienta: va como nota
-    // gris con su hora y se borra con el proximo atajo que funcione.
+    // amarilla con su hora y se borra con el proximo atajo que funcione.
     QString attemptNote() const { return m_attemptNote; }
     QDateTime attemptTime() const { return m_attemptTime; }
     void dismissAttempt();

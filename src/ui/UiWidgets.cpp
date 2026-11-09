@@ -1065,6 +1065,7 @@ StatusCard::StatusCard(QWidget *parent)
     m_dot = new StatusDot(10, this); // el punto de 10 de antes del Pliego
     row->addWidget(m_dot, 0, Qt::AlignVCenter);
     auto *texts = new QVBoxLayout();
+    m_texts = texts;
     texts->setSpacing(2);
     m_title = Ui::label(QString(), "cardTitle", this);
     // Con ajuste de linea: un titulo largo (otro idioma) baja a una segunda linea en vez de ensanchar la
@@ -1101,6 +1102,18 @@ void StatusCard::set(const QString &dot, const QString &title, const QString &te
     m_button->setMinimumWidth(buttonSize.isEmpty() ? 78 : 0);
     Ui::setStyleProperty(m_button, "variant", buttonVariant);
     Ui::setStyleProperty(m_button, "btnSize", buttonSize);
+}
+
+void StatusCard::setNote(const QString &note)
+{
+    if (note.isEmpty() && !m_note) return;
+    if (!m_note) {
+        m_note = Ui::caption(QString(), this);
+        Ui::setStyleProperty(m_note, "tone", QStringLiteral("warn"));
+        m_texts->addWidget(m_note);
+    }
+    m_note->setText(note);
+    m_note->setVisible(!note.isEmpty());
 }
 
 QString StatusCard::title() const
