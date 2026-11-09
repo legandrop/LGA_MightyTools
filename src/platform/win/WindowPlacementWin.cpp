@@ -220,6 +220,50 @@ void fail(QString *error, const QString &message)
     }
 }
 
+// Nombre corto de la ventana del frente para los avisos: su titulo o, sin titulo, el programa.
+QString frontName(HWND hwnd, DWORD pid)
+{
+    QString name = titleOf(hwnd);
+    if (name.isEmpty()) name = processName(pid);
+    if (name.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) name.chop(4);
+    if (name.size() > 40) name = name.left(39).trimmed() + QChar(0x2026);
+    return name;
+}
+
+// Por que la ventana del frente no se puede mover ni minimizar, dicho desde lo que el usuario veia.
+QString notMovableReason(HWND hwnd, DWORD pid)
+{
+    if (!hwnd) {
+        return I18n::tr("No window was in front, so there was nothing to move.");
+    }
+    if (pid == GetCurrentProcessId()) {
+        return I18n::tr("LGA Mighty Tools was in front. The shortcuts move other apps' windows.");
+    }
+    wchar_t className[256] = {};
+    GetClassNameW(hwnd, className, 256);
+    if (!wcscmp(className, L"Progman") || !wcscmp(className, L"WorkerW")) {
+        return I18n::tr("The desktop was in front, so there was no window to move.");
+    }
+    if (!wcscmp(className, L"Shell_TrayWnd") || !wcscmp(className, L"Shell_SecondaryTrayWnd")) {
+        return I18n::tr("The taskbar was in front, so there was no window to move.");
+    }
+    const QString name = frontName(hwnd, pid);
+    if (IsIconic(hwnd)) {
+        return name.isEmpty() ? I18n::tr("The window in front was minimized. Open it and try again.")
+                              : I18n::tr("The window «%1» was minimized. Open it and try again.").arg(name);
+    }
+    const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    const LONG_PTR exStyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    if (IsWindowVisible(hwnd) && !isCloaked(hwnd)
+        && ((style & WS_CHILD) || (exStyle & WS_EX_TOOLWINDOW) || (exStyle & WS_EX_TRANSPARENT))) {
+        return name.isEmpty()
+                   ? I18n::tr("The window in front was a floating panel or tool window. Only app windows are moved.")
+                   : I18n::tr("«%1» was a floating panel or tool window. Only app windows are moved.").arg(name);
+    }
+    return name.isEmpty() ? I18n::tr("The window in front was hidden or on another desktop.")
+                          : I18n::tr("The window «%1» was hidden or on another desktop.").arg(name);
+}
+
 } // namespace
 
 namespace WindowPlacement {
@@ -283,7 +327,7 @@ bool moveForeground(const QRectF &normalizedArea, QString *error, bool dryRun)
     DWORD pid = 0;
     if (hwnd) GetWindowThreadProcessId(hwnd, &pid);
     if (!hwnd || pid == GetCurrentProcessId() || !isOrdinaryWindow(hwnd)) {
-        fail(error, I18n::tr("Switch to a movable app window and try again."));
+        fail(error, notMovableReason(hwnd, pid));
         return false;
     }
     if (targetNeedsElevation(hwnd)) {
@@ -382,7 +426,7 @@ bool minimizeForeground(QString *error, bool dryRun)
     DWORD pid = 0;
     if (hwnd) GetWindowThreadProcessId(hwnd, &pid);
     if (!hwnd || pid == GetCurrentProcessId() || !isOrdinaryWindow(hwnd)) {
-        fail(error, I18n::tr("Switch to a movable app window and try again."));
+        fail(error, notMovableReason(hwnd, pid));
         return false;
     }
     if (targetNeedsElevation(hwnd)) {

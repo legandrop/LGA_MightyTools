@@ -267,6 +267,9 @@ QWidget *WindowLayoutsPanel::createListPage()
 #endif
     m_statusCard = new StatusCard(page);
     m_statusCard->setLive(true); // sube al encabezado de la hoja (D-73); se ve solo con la lista (ModuleHeader)
+    if (m_interactive) {
+        connect(m_statusCard->button(), &QPushButton::clicked, m_module, &WindowLayoutsModule::dismissAttempt);
+    }
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
@@ -470,35 +473,42 @@ void WindowLayoutsPanel::refresh()
     const int failed = m_module->registrationFailureCount();
     const int shared = m_module->externalConflictCount();
     const QString error = m_module->lastError();
+    // Un atajo que no pudo hacer nada es una nota gris con su hora, no un problema: va debajo del estado y
+    // se descarta con el boton.
+    const QString note = Ui::attemptNoteText(m_module->attemptNote(), m_module->attemptTime());
+    const auto withNote = [&note](const QString &text) {
+        return note.isEmpty() ? text : text + QLatin1Char('\n') + note;
+    };
+    const QString dismiss = note.isEmpty() ? QString() : I18n::tr("Dismiss");
     if (!error.isEmpty()) {
-        m_statusCard->set(QStringLiteral("error"), I18n::tr("Window shortcuts need attention"), error,
-                          QString(), QString(), QStringLiteral("err"));
+        m_statusCard->set(QStringLiteral("error"), I18n::tr("Window shortcuts need attention"), withNote(error),
+                          dismiss, QString(), QStringLiteral("err"), QStringLiteral("sm"));
     } else if (failed) {
         m_statusCard->set(QStringLiteral("error"), failed == 1 ? I18n::tr("1 shortcut could not start")
                                                               : I18n::tr("%1 shortcuts could not start").arg(failed),
-                          shared ? (shared == 1
+                          withNote(shared ? (shared == 1
                                         ? I18n::tr("1 affected shortcut also shares keys with another app or the system. Check its marked row and error.")
                                         : I18n::tr("%1 also share keys with another app or the system. Check the marked rows and their errors.").arg(shared))
-                                 : I18n::tr("Check each row's error. Turn off or edit the affected shortcuts."),
-                          QString(), QString(), QStringLiteral("err"));
+                                 : I18n::tr("Check each row's error. Turn off or edit the affected shortcuts.")),
+                          dismiss, QString(), QStringLiteral("err"), QStringLiteral("sm"));
     } else if (shared) {
         m_statusCard->set(QStringLiteral("warn"), shared == 1 ? I18n::tr("1 shared shortcut is active")
                                                             : I18n::tr("%1 shared shortcuts are active").arg(shared),
 #ifdef Q_OS_WIN
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed."),
+                          withNote(I18n::tr("Yellow dots mark shortcuts also used elsewhere. Window Layouts tries to respond first, but priority is not guaranteed.")),
 #else
-                          I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too."),
+                          withNote(I18n::tr("Yellow dots mark shortcuts also used elsewhere. The other app may respond too.")),
 #endif
-                          QString(), QString(), QString());
+                          dismiss, QString(), QString(), QStringLiteral("sm"));
     } else {
         m_statusCard->set(QStringLiteral("on"), I18n::tr("Window shortcuts are on"),
-                          count == 0 ? I18n::tr("No shortcuts yet. Add one to get started.")
-                          : enabled == 0 ? I18n::tr("All shortcuts are off. Use their switches to turn them on.")
-                          : I18n::tr("%1 of %2 shortcuts are on.").arg(enabled).arg(count),
-                          QString(), QString(), QString());
+                          withNote(count == 0 ? I18n::tr("No shortcuts yet. Add one to get started.")
+                                   : enabled == 0 ? I18n::tr("All shortcuts are off. Use their switches to turn them on.")
+                                   : I18n::tr("%1 of %2 shortcuts are on.").arg(enabled).arg(count)),
+                          dismiss, QString(), QString(), QStringLiteral("sm"));
     }
-    if (m_pages->currentWidget() == m_editorPage && !error.isEmpty()) {
-        m_editorError->setText(error);
+    if (m_pages->currentWidget() == m_editorPage && !m_module->pickerError().isEmpty()) {
+        m_editorError->setText(m_module->pickerError());
         m_editorError->show();
     }
     if (m_adminWindows) {
@@ -574,6 +584,7 @@ void WindowLayoutsPanel::rebuildList()
 void WindowLayoutsPanel::editLayout(int id)
 {
     resetDeleteConfirmation();
+    m_module->clearPickerError(); // un error del selector de otra edicion no reaparece
     m_draft = WindowLayout();
     m_draft.name = I18n::tr("Left third");
     m_draft.horizontal = {3, 0};

@@ -440,8 +440,15 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     AppToggleModule ghost(context);
     ghost.start();
     context.fake.fire(7);
-    check(ghost.lastError().isEmpty() && ghost.appsState().apps().size() == 1,
+    check(ghost.attemptNote().isEmpty() && ghost.appsState().apps().size() == 1,
           QStringLiteral("modulo: el atajo en una corrida automatizada solo loguea, no abre ni activa nada"));
+    // Un atajo que fallo una vez es una nota con hora: la herramienta no pasa a rojo y Dismiss la borra.
+    ghost.setAttempt(QStringLiteral("x"));
+    const bool noted = !ghost.attemptNote().isEmpty() && ghost.attemptTime().isValid()
+                       && ghost.status().tone != ModuleTone::Error;
+    ghost.dismissAttempt();
+    check(noted && ghost.attemptNote().isEmpty() && !ghost.attemptTime().isValid(),
+          QStringLiteral("modulo: un intento fallido es una nota que no pone la herramienta en rojo y se descarta"));
     ghost.stop();
     module.stop();
     check(context.fake.registered.isEmpty(), QStringLiteral("modulo: stop suelta todos los atajos"));
@@ -589,21 +596,31 @@ void AppToggleModule::toggle(int id)
         QString error;
         if (!AppToggleSystem::run(decision, entry.target(), &error)) {
             qWarning().noquote() << "[appToggle]" << entry.name << "fallo:" << error;
-            m_lastError = error;
-            emit statusChanged();
-            emit appsChanged();
-        } else if (!m_lastError.isEmpty()) {
-            m_lastError.clear();
-            emit statusChanged();
-            emit appsChanged();
+            // El nombre de la entrada adelante: el usuario sabe que atajo apreto.
+            setAttempt(QStringLiteral("%1 · %2").arg(entry.name, error.isEmpty() ? I18n::tr("The app could not be opened.") : error));
+        } else {
+            setAttempt(QString());
         }
         return;
     }
 }
 
+void AppToggleModule::setAttempt(const QString &note)
+{
+    if (note.isEmpty() && m_attemptNote.isEmpty()) return;
+    m_attemptNote = note;
+    m_attemptTime = note.isEmpty() ? QDateTime() : QDateTime::currentDateTime();
+    emit appsChanged();
+}
+
+void AppToggleModule::dismissAttempt()
+{
+    setAttempt(QString());
+}
+
 ModuleStatus AppToggleModule::status() const
 {
-    if (!m_lastError.isEmpty() || !m_registrationErrors.isEmpty()) {
+    if (!m_registrationErrors.isEmpty()) {
         return {ModuleTone::Error, I18n::tr("Needs attention")};
     }
     int count = 0;
@@ -649,7 +666,7 @@ bool AppToggleModule::applyCaptureState(const QString &state)
     m_captureState = state;
     m_registrationErrors.clear();
     m_externalConflicts.clear();
-    m_lastError.clear();
+    m_attemptNote.clear();
     if (state == QLatin1String("empty")) {
         m_state.setCaptureApps({});
         return true;
@@ -680,9 +697,11 @@ bool AppToggleModule::applyCaptureState(const QString &state)
         m_externalConflicts.insert(b.id);
         m_registrationErrors.insert(c.id, I18n::tr("Could not activate %1 with priority.").arg(c.shortcut.displayText()));
     }
-    // El atajo se apreto y la app no se pudo abrir (la desinstalaron): el estado pide atencion.
+    // El atajo se apreto y la app no se pudo abrir (la desinstalaron): nota gris con la hora, la herramienta
+    // sigue en verde.
     if (state == QLatin1String("run-error")) {
-        m_lastError = I18n::tr("The app was not found: %1").arg(QDir::toNativeSeparators(recorder));
+        m_attemptNote = QStringLiteral("%1 · %2").arg(b.name, I18n::tr("The app was not found: %1").arg(QDir::toNativeSeparators(recorder)));
+        m_attemptTime = QDateTime(QDate(2026, 11, 9), QTime(14, 32));
     }
     m_state.setCaptureApps({a, b, c});
     return true;

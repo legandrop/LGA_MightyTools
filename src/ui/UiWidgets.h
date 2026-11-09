@@ -11,6 +11,7 @@
 #include <memory>
 
 class QBoxLayout;
+class QDateTime;
 class QHBoxLayout;
 class QMouseEvent;
 class QTextDocument;
@@ -106,6 +107,7 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 private:
     int lineCount(int width) const;
+    QString laidOutText() const;
     int m_lineHeight = 17;
 };
 
@@ -338,6 +340,9 @@ void setStyleProperty(QWidget *widget, const char *name, const QVariant &value);
 QLabel *label(const QString &text, const char *objectName, QWidget *parent);
 // Texto gris de dos lineas o mas (`.cap` del canvas).
 QLabel *caption(const QString &text, QWidget *parent);
+// La nota gris de un atajo que se apreto y no pudo hacer nada: «Ultimo atajo, 14:32: motivo» (hoy solo la
+// hora; otro dia, tambien la fecha). Texto vacio si no hay nota.
+QString attemptNoteText(const QString &note, const QDateTime &when);
 // Tarjeta vacia (`.card`): fondo, radio 10, sin layout.
 QFrame *card(QWidget *parent);
 // Un atajo ("Ctrl+Shift+D", o "⌃⌥⇧⌘D" en mac) como teclas para un RichLineLabel; texto vacio si `text` no

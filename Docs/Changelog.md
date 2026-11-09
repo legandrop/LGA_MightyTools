@@ -2,6 +2,10 @@
 
 v1.53:
 
+Aviso de Window Layouts y App Toggle (Lega, 09/11: «está en rojo y no dice qué pasa ni cómo se soluciona»): apretar un atajo con el escritorio, la barra de tareas o una ventana minimizada al frente dejaba la herramienta en «Needs attention» hasta el próximo atajo exitoso, con «Switch to a movable app window» y nada más. Causa: el fallo de un solo intento se guardaba como error de la herramienta (`m_lastError`). Ahora es una nota gris dentro de su estado, con la hora y un botón «Dismiss», que no cambia la barra lateral y se borra con el próximo atajo que funciona; en rojo queda solo lo que hay que arreglar (un atajo sin registrar, el ayudante de administrador caído). En Windows el motivo es concreto (escritorio, barra de tareas, minimizada, panel flotante, Mighty Tools, oculta) y nombra la ventana; con una de administrador indica la opción a prender. `CaptionLabel` respeta los saltos de línea.
+
+[ Avisos - Un atajo que no pudo mover nada ya no pone la herramienta en rojo y dice por que ]
+
 Rendimiento, segunda vuelta (Lega: «sin perder nada de UX, incluso en PCs malas»): soltar la ventana en la bandeja perdía trabajo (un editor abierto, una ruta elegida sin Save, «Make Default» esperando a Windows), el scroll y la ayuda abierta; abrirla costaba ~240 ms, 105 de ellos la primera ventana nativa del proceso; y soltada quedaba en 28 MB, no en 12,5 como se anotó antes. Ahora no se suelta si un panel tiene algo sin guardar (`PanelState`), vuelve igual (página, scroll, ayuda), cada página se arma al elegirla, la primera ventana nativa se prepara 4 s después del arranque y al soltarse se vacía la caché de fuentes. Abrir: 240 → 70 ms; soltada: 28 → 24 MB. Sonda nueva `window-release`; `--measure-pages` suma `--probe-native` y `--cpu-cap`.
 
 [ Rendimiento - La ventana abre en 70 ms y al soltarse no pierde nada sin guardar ]
