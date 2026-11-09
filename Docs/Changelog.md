@@ -2,6 +2,10 @@
 
 v1.53:
 
+Tooltips en mac (port del arreglo de la Base): el primer tooltip después de abrir la app salía ~20 px más arriba de lo calculado, encima del puntero, y tapaba el botón (el click caía en el tooltip); los siguientes salían bien. Causa: la ventana del tooltip todavía no tenía ventana nativa, y `QWidget::move()` sobre un top-level sin crear marca la posición como «incluye el marco»; al crearse en el `show()`, Qt la corrige con los márgenes de marco de Cocoa, que este tooltip sin marco no tiene. Ahora `CustomTooltip::showToolTip()` crea la ventana nativa con `winId()` antes del primer `move()` si todavía no existe (`Qt::WA_WState_Created`), y el primero queda donde los demás. Sin efecto en Windows.
+
+[ Tooltip - El primer tooltip en Mac ya no aparece encima del puntero ]
+
 Rendimiento, segunda vuelta (Lega: «sin perder nada de UX, incluso en PCs malas»): soltar la ventana en la bandeja perdía trabajo (un editor abierto, una ruta elegida sin Save, «Make Default» esperando a Windows), el scroll y la ayuda abierta; abrirla costaba ~240 ms, 105 de ellos la primera ventana nativa del proceso; y soltada quedaba en 28 MB, no en 12,5 como se anotó antes. Ahora no se suelta si un panel tiene algo sin guardar (`PanelState`), vuelve igual (página, scroll, ayuda), cada página se arma al elegirla, la primera ventana nativa se prepara 4 s después del arranque y al soltarse se vacía la caché de fuentes. Abrir: 240 → 70 ms; soltada: 28 → 24 MB. Sonda nueva `window-release`; `--measure-pages` suma `--probe-native` y `--cpu-cap`.
 
 [ Rendimiento - La ventana abre en 70 ms y al soltarse no pierde nada sin guardar ]
