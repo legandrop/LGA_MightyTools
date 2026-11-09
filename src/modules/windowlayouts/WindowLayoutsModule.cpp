@@ -195,6 +195,15 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
           QStringLiteral("administrador: ids repetidos y listas de mas de 64 atajos se rechazan"));
     module.setAdminWindowsEnabled(false);
 #endif
+    // Sin atajos rechazados la herramienta esta en verde: la nota no la cambia.
+    module.setLayoutEnabled(secondId, false);
+    // Un atajo que fallo una vez es una nota con hora: la herramienta no pasa a rojo y Dismiss la borra.
+    module.setAttempt(QStringLiteral("x"));
+    const bool noted = !module.attemptNote().isEmpty() && module.attemptTime().isValid()
+                       && module.status().tone != ModuleTone::Error;
+    module.dismissAttempt();
+    check(noted && module.attemptNote().isEmpty() && !module.attemptTime().isValid(),
+          QStringLiteral("intento: un fallo de un atajo es una nota que no pone la herramienta en rojo y se descarta"));
     module.stop();
 }
 
@@ -216,6 +225,8 @@ void WindowLayoutsModule::start()
         return;
     }
     m_started = true;
+    // El rojo del permiso (macOS) ya se ve desde el arranque: el proximo atajo avisa si cambio.
+    m_permissionShown = !context().automatedRun() && !WindowPlacement::canControlWindows();
     registerLayouts();
 }
 
@@ -259,7 +270,6 @@ void WindowLayoutsModule::registerLayouts()
     }
     m_registrationErrors.clear();
     m_externalConflicts.clear();
-    m_lastError.clear();
     for (const WindowLayout &layout : m_state.layouts()) {
         if (!layout.enabled || !layout.shortcut.isValid()) {
             continue;
@@ -371,10 +381,7 @@ void WindowLayoutsModule::syncAdminHelper()
     }
     m_adminHelper = new AdminWindowHelper(this);
     connect(m_adminHelper, &AdminWindowHelper::actionFinished, this, [this](int, const QString &error) {
-        if (error == m_lastError) return;
-        m_lastError = error;
-        emit statusChanged();
-        emit layoutsChanged();
+        setAttempt(error);
     });
     connect(m_adminHelper, &AdminWindowHelper::failed, this, [this](const QString &error) {
         disconnect(m_adminHelper, nullptr, this, nullptr);
@@ -420,17 +427,53 @@ void WindowLayoutsModule::onHotkey(int id)
         const bool succeeded = layout.destination == LayoutDestination::Minimize
             ? WindowPlacement::minimizeForeground(&error, context().automatedRun())
             : WindowPlacement::moveForeground(layout.normalizedArea(), &error, context().automatedRun());
-        if (!succeeded) {
-            m_lastError = error.isEmpty() ? I18n::tr("This window could not be moved or minimized.") : error;
-            emit statusChanged();
-            emit layoutsChanged();
-        } else if (!m_lastError.isEmpty()) {
-            m_lastError.clear();
+        if (!succeeded && error.isEmpty()) error = I18n::tr("This window could not be moved or minimized.");
+        // Falta el permiso: lo dice el estado en rojo, no una nota. Al darlo, el proximo atajo lo saca.
+        const bool permissionMissing = !context().automatedRun() && !WindowPlacement::canControlWindows();
+        if (permissionMissing != m_permissionShown) {
+            m_permissionShown = permissionMissing;
             emit statusChanged();
             emit layoutsChanged();
         }
+        if (permissionMissing) {
+            setAttempt(QString()); // el rojo ya dice lo que pasa: una nota vieja abajo confunde
+            break;
+        }
+#ifdef Q_OS_WIN
+        // Una ventana de administrador sin la opcion prendida: el aviso dice donde se prende.
+        if (!succeeded && !adminWindowsEnabled() && !WindowPlacement::currentProcessElevated()
+            && WindowPlacement::foregroundIsElevated()) {
+            error += QLatin1Char(' ') + I18n::tr("Turn on «%1» to move it.").arg(I18n::tr("Also move administrator windows"));
+        }
+#endif
+        setAttempt(succeeded ? QString() : error);
         break;
     }
+}
+
+QString WindowLayoutsModule::lastError() const
+{
+    if (!m_adminError.isEmpty()) return m_adminError;
+    // Sin el permiso (macOS) todos los atajos fallan: no es un intento, es algo para arreglar. Una corrida
+    // automatizada o una captura no lo miran (en el CI nunca esta dado).
+    if (m_started && !context().automatedRun() && !context().captureMode()
+        && !WindowPlacement::canControlWindows()) {
+        return I18n::tr("Allow LGA Mighty Tools in Privacy & Security > Accessibility to move windows.");
+    }
+    return {};
+}
+
+void WindowLayoutsModule::setAttempt(const QString &note)
+{
+    if (note.isEmpty() && m_attemptNote.isEmpty()) return;
+    m_attemptNote = note;
+    m_attemptTime = note.isEmpty() ? QDateTime() : QDateTime::currentDateTime();
+    emit layoutsChanged();
+}
+
+void WindowLayoutsModule::dismissAttempt()
+{
+    setAttempt(QString());
 }
 
 ModuleStatus WindowLayoutsModule::status() const
@@ -460,7 +503,7 @@ QStringList WindowLayoutsModule::captureStates() const
 {
     return {QStringLiteral("list"), QStringLiteral("long-name"), QStringLiteral("editor"),
             QStringLiteral("shared"), QStringLiteral("failed"), QStringLiteral("minimize"), QStringLiteral("picker"),
-            QStringLiteral("draw")};
+            QStringLiteral("draw"), QStringLiteral("attempt")};
 }
 
 bool WindowLayoutsModule::applyCaptureState(const QString &state)
@@ -477,7 +520,8 @@ bool WindowLayoutsModule::applyCaptureState(const QString &state)
         layout.destination = LayoutDestination::Minimize;
         m_state.setCaptureLayouts({layout});
     } else if (state == QLatin1String("list") || state == QLatin1String("long-name")
-               || state == QLatin1String("shared") || state == QLatin1String("failed")) {
+               || state == QLatin1String("shared") || state == QLatin1String("failed")
+               || state == QLatin1String("attempt")) {
         WindowLayout a;
         a.id = 1;
         a.name = I18n::tr("Left third");
@@ -498,6 +542,11 @@ bool WindowLayoutsModule::applyCaptureState(const QString &state)
             m_externalConflicts.insert(b.id);
             m_registrationErrors.insert(a.id, I18n::tr("Could not activate %1 with priority.").arg(a.shortcut.displayText()));
             m_registrationErrors.insert(b.id, I18n::tr("Could not activate %1 with priority.").arg(b.shortcut.displayText()));
+        }
+        // Un atajo apretado con el escritorio al frente: nota amarilla con la hora, la herramienta sigue en verde.
+        if (state == QLatin1String("attempt")) {
+            m_attemptNote = I18n::tr("The desktop was in front, so there was no window to move.");
+            m_attemptTime = QDateTime(QDate(2026, 11, 9), QTime(14, 32));
         }
     } else {
         m_state.setCaptureLayouts({});
@@ -591,18 +640,17 @@ void WindowLayoutsModule::openAreaPicker(AreaPicker::Mode mode, std::function<vo
     if (!m_started || m_picker || context().automatedRun()) {
         return;
     }
+    m_pickerError.clear();
     auto *picker = new AreaPicker(mode, false);
     if (!picker->error().isEmpty()) {
-        m_lastError = picker->error();
+        m_pickerError = picker->error();
         picker->deleteLater();
-        emit statusChanged();
         emit layoutsChanged();
         return;
     }
     if (mode == AreaPicker::Mode::Window && !picker->hasCandidates()) {
-        m_lastError = I18n::tr("No selectable windows found. Draw an area instead.");
+        m_pickerError = I18n::tr("No selectable windows found. Draw an area instead.");
         picker->deleteLater();
-        emit statusChanged();
         emit layoutsChanged();
         return;
     }

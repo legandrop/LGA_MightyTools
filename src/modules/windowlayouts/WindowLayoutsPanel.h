@@ -28,8 +28,11 @@ public:
 
 protected:
     void hideEvent(QHideEvent *event) override;
+    // El permiso de macOS se mira en vivo: si cambio mientras el panel no se veia, al mostrarse se rearma.
+    void showEvent(QShowEvent *event) override;
 
 private:
+    QString m_shownError; ///< el error persistente que muestra la tarjeta
     QWidget *createListPage();
     QWidget *createEditorPage();
     void rebuildList();

@@ -1,6 +1,9 @@
 #include "ui/UiWidgets.h"
 #include "ui/CustomTooltip.h"
 #include "ui/Theme.h"
+#include "core/I18n.h"
+
+#include <QDateTime>
 
 #include <QBoxLayout>
 #include <QtMath>
@@ -387,12 +390,20 @@ CaptionLabel::CaptionLabel(const QString &text, QWidget *parent, int lineHeight)
     setTextFormat(Qt::PlainText);
 }
 
+QString CaptionLabel::laidOutText() const
+{
+    // QTextLayout no corta en un salto de linea comun: pasa al separador de linea de Unicode.
+    QString shown = text();
+    shown.replace(QLatin1Char('\n'), QChar::LineSeparator);
+    return shown;
+}
+
 int CaptionLabel::lineCount(int width) const
 {
     if (text().isEmpty()) {
         return 1;
     }
-    QTextLayout layout(text(), font());
+    QTextLayout layout(laidOutText(), font());
     QTextOption option;
     option.setWrapMode(wordWrap() ? QTextOption::WordWrap : QTextOption::NoWrap);
     layout.setTextOption(option);
@@ -418,7 +429,15 @@ int CaptionLabel::heightForWidth(int width) const
 QSize CaptionLabel::sizeHint() const
 {
     const QMargins m = contentsMargins();
-    const int natural = QFontMetrics(font()).horizontalAdvance(text()) + 1;
+    // Con saltos de linea, el ancho natural es el de la linea mas larga.
+    const QFontMetrics metrics(font());
+    int natural = 1;
+    if (!text().contains(QLatin1Char('\n'))) {
+        natural = metrics.horizontalAdvance(text()) + 1;
+    } else {
+        for (const QString &line : text().split(QLatin1Char('\n')))
+            natural = qMax(natural, metrics.horizontalAdvance(line) + 1);
+    }
     return QSize(natural + m.left() + m.right(), m_lineHeight + m.top() + m.bottom());
 }
 
@@ -433,7 +452,7 @@ void CaptionLabel::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setPen(palette().color(foregroundRole()));
     const QRect area = contentsRect();
-    QTextLayout layout(text(), font());
+    QTextLayout layout(laidOutText(), font());
     QTextOption option;
     option.setWrapMode(wordWrap() ? QTextOption::WordWrap : QTextOption::NoWrap);
     layout.setTextOption(option);
@@ -1046,6 +1065,7 @@ StatusCard::StatusCard(QWidget *parent)
     m_dot = new StatusDot(10, this); // el punto de 10 de antes del Pliego
     row->addWidget(m_dot, 0, Qt::AlignVCenter);
     auto *texts = new QVBoxLayout();
+    m_texts = texts;
     texts->setSpacing(2);
     m_title = Ui::label(QString(), "cardTitle", this);
     // Con ajuste de linea: un titulo largo (otro idioma) baja a una segunda linea en vez de ensanchar la
@@ -1082,6 +1102,18 @@ void StatusCard::set(const QString &dot, const QString &title, const QString &te
     m_button->setMinimumWidth(buttonSize.isEmpty() ? 78 : 0);
     Ui::setStyleProperty(m_button, "variant", buttonVariant);
     Ui::setStyleProperty(m_button, "btnSize", buttonSize);
+}
+
+void StatusCard::setNote(const QString &note)
+{
+    if (note.isEmpty() && !m_note) return;
+    if (!m_note) {
+        m_note = Ui::caption(QString(), this);
+        Ui::setStyleProperty(m_note, "tone", QStringLiteral("warn"));
+        m_texts->addWidget(m_note);
+    }
+    m_note->setText(note);
+    m_note->setVisible(!note.isEmpty());
 }
 
 QString StatusCard::title() const
@@ -1205,6 +1237,14 @@ QLabel *label(const QString &text, const char *objectName, QWidget *parent)
 QLabel *caption(const QString &text, QWidget *parent)
 {
     return new CaptionLabel(text, parent);
+}
+
+QString attemptNoteText(const QString &note, const QDateTime &when)
+{
+    if (note.isEmpty()) return {};
+    const QString time = when.date() == QDate::currentDate() ? when.toString(QStringLiteral("HH:mm"))
+                                                             : when.toString(QStringLiteral("dd/MM HH:mm"));
+    return I18n::tr("Last shortcut, %1: %2").arg(time, note);
 }
 
 QFrame *card(QWidget *parent)

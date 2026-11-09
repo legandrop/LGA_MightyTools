@@ -61,6 +61,8 @@ en_from: "1.53"
   en: The scroll bar is thinner.
 - [improved] Todas las opciones de encender y apagar usan el mismo switch, en lugar de casillas, y el switch se desliza suave al tocarlo.
   en: All on and off options use the same switch instead of checkboxes, and the switch slides smoothly when you click it.
+- [fixed] Window Layouts ya no queda en rojo con «Needs attention» cuando un atajo se aprieta sin una ventana para mover: avisa en amarillo qué había al frente (el escritorio, una ventana minimizada…) y a qué hora, y el aviso se borra con «Dismiss» o con el próximo atajo que funcione.
+  en: Window Layouts no longer stays red with «Needs attention» when a shortcut is pressed with no window to move: it says in yellow what was in front (the desktop, a minimized window…) and when, and the note clears with «Dismiss» or with the next shortcut that works.
 - [new][win] Window Layouts ahora puede mover también el Administrador de tareas y las apps abiertas como administrador: activar «Also move administrator windows» arriba de su panel.
   en: Window Layouts can now also move Task Manager and apps running as administrator: turn on «Also move administrator windows» at the top of its panel.
 - [fixed][win] Apply de Open in NukeX ya no cierra la app cuando Windows tiene que preguntar con qué programa abrir los `.nk`.

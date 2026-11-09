@@ -4,6 +4,7 @@
 #include "app/Module.h"
 #include "modules/apptoggle/AppToggleState.h"
 #include "ui/HelpSection.h"
+#include <QDateTime>
 
 #include <QHash>
 #include <QSet>
@@ -29,7 +30,13 @@ public:
     bool applyCaptureState(const QString &state) override;
 
     const AppToggleState &appsState() const { return m_state; }
-    QString lastError() const { return m_lastError; }
+    // El ultimo atajo que no pudo abrir ni activar su app. No es un problema de la herramienta: va como nota
+    // amarilla con su hora y se borra con el proximo atajo que funcione.
+    QString attemptNote() const { return m_attemptNote; }
+    QDateTime attemptTime() const { return m_attemptTime; }
+    void dismissAttempt();
+    // Publica para el self-test; la llama el atajo.
+    void setAttempt(const QString &note);
     int registrationFailureCount() const { return m_registrationErrors.size(); }
     int externalConflictCount() const { return m_externalConflicts.size(); }
     QString registrationError(int id) const { return m_registrationErrors.value(id); }
@@ -55,7 +62,8 @@ private:
     QSet<int> m_declaredIds;
     QHash<int, QString> m_registrationErrors;
     QSet<int> m_externalConflicts;
-    QString m_lastError;
+    QString m_attemptNote;
+    QDateTime m_attemptTime;
     QString m_captureState;
 };
 
