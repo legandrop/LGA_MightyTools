@@ -2,6 +2,10 @@
 
 v1.53:
 
+Scripts de mac (de la Base v0.171): `compilar.sh` lanzaba la app con `&` + `disown` dentro del grupo de procesos de la terminal, así que matar ese grupo se llevaba la app abierta; ahora `set -m` le da un grupo propio (también con `--sim-slow`) y stdin va a `/dev/null`, para que no frene si lee la terminal. Una opción desconocida ya cortaba antes de cerrar o compilar nada: el mensaje y la ayuda quedan como en la Base. `tools/macos/publish_release.sh` re-copiado idéntico de la Base: `gh` y `git ls-remote`/`fetch`/`push` reintentan 3 veces cada 5 s ante errores de red (no ante un 404 ni un error de login). `LgaBuildTree` ya decidía por estructura en mac: sin cambios.
+
+[ Mac - compilar.sh con grupo propio y reintentos en publish_release ]
+
 Tooltips en mac (port del arreglo de la Base): el primer tooltip después de abrir la app salía ~20 px más arriba de lo calculado, encima del puntero, y tapaba el botón (el click caía en el tooltip); los siguientes salían bien. Causa: la ventana del tooltip todavía no tenía ventana nativa, y `QWidget::move()` sobre un top-level sin crear marca la posición como «incluye el marco»; al crearse en el `show()`, Qt la corrige con los márgenes de marco de Cocoa, que este tooltip sin marco no tiene. Ahora `CustomTooltip::showToolTip()` crea la ventana nativa con `winId()` antes del primer `move()` si todavía no existe (`Qt::WA_WState_Created`), y el primero queda donde los demás. Sin efecto en Windows.
 
 [ Tooltip - El primer tooltip en Mac ya no aparece encima del puntero ]

@@ -32,7 +32,14 @@ while [[ $# -gt 0 ]]; do
         --sim-slow) SIM_SLOW=true; shift ;;
         --force-clean) FORCE_CLEAN=true; shift ;;
         --help) show_help; exit 0 ;;
-        *) echo "Opcion desconocida: $1"; show_help; exit 1 ;;
+        # Una opcion desconocida corta ANTES de cerrar o compilar nada: un `--norun` mal escrito
+        # no puede compilar, cerrar la app abierta y volver a lanzarla.
+        *)
+            echo "ERROR: opcion desconocida: $1"
+            echo ""
+            show_help
+            exit 1
+            ;;
     esac
 done
 
@@ -161,14 +168,21 @@ if [ "$NO_RUN" = "true" ]; then
 fi
 
 echo "Iniciando $APP_NAME..."
+# `set -m` (control de trabajos) le da a la app su PROPIO grupo de procesos. Sin eso queda en el
+# grupo de la terminal que corrio el script, y una herramienta que al cerrarse mata ese grupo entero
+# se lleva la app (medido el 2026-11-09: kill al grupo del shell mata un proceso lanzado con `&` +
+# `disown`; con `set -m` sobrevive). stdin desde /dev/null para que, fuera del grupo de primer
+# plano, la app no frene con SIGTTIN si lee la terminal.
 if [ "$SIM_SLOW" = "true" ]; then
     echo "   --sim-slow: QoS background e I/O throttled."
-    taskpolicy -c background -d throttle "$APP_BIN" >/dev/null 2>&1 &
+    set -m
+    taskpolicy -c background -d throttle "$APP_BIN" </dev/null >/dev/null 2>&1 &
     disown
 elif [ "$WAIT_FOR_APP" = "true" ]; then
     "$APP_BIN"
 else
-    "$APP_BIN" >/dev/null 2>&1 &
+    set -m
+    "$APP_BIN" </dev/null >/dev/null 2>&1 &
     disown
     echo "   PID $! (background)."
     echo "   Usa --wait si necesitas ver su salida o su exit code en la terminal."
