@@ -20,6 +20,14 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QDir>
+#include <QHash>
+#include <QPixmapCache>
+#include <QtGui/private/qfont_p.h>
+
+
+
+
+#include <QSettings>
 #include <QThread>
 #include <QTimer>
 
@@ -179,6 +187,187 @@ int cycles(const QStringList &arguments)
     host.shutdown();
     return failures == 0 ? 0 : 1;
 }
+// --measure-pages [rondas] [on|off] [--settings-copy <ini>]: lo que tarda cambiar de pagina en la ventana real
+// y lo que ocupa. Por cada pagina mide la llamada a selectPage, los eventos que deja pendientes (layouts) y el
+// pintado entero de la ventana; la primera visita (arma el panel) aparte de las siguientes. Al final, la memoria
+// con la ventana escondida y despues de destruirla (lo que pasa cuando queda en la bandeja). «on» prende todas
+// las herramientas antes (modo automatizado: nada actua de verdad). Con -Platform windows del runner mide la
+// plataforma real en un escritorio aparte.
+int pages(const QStringList &arguments)
+{
+    bool ok = false;
+    int rounds = argAfter(arguments, QStringLiteral("--measure-pages"), 1).toInt(&ok);
+    if (!ok || rounds <= 0) {
+        rounds = 5;
+    }
+    const bool allOn = argAfter(arguments, QStringLiteral("--measure-pages"), 2) != QLatin1String("off");
+    // --cpu-cap N: N % de un nucleo (25 = una PC unas cuatro veces mas lenta que esta en un solo hilo).
+    const int cpuCap = argAfter(arguments, QStringLiteral("--cpu-cap"), 1).toInt();
+    if (cpuCap > 0) {
+        std::printf("measure cpu-cap=%d%% of one core applied=%s\n", cpuCap, ProcessStats::capCpuForTest(cpuCap) ? "si" : "no");
+    }
+
+    MemorySettingsStore store;
+    // --settings-copy <ini>: los valores de una COPIA de un settings.ini (solo se lee), para medir con una
+    // configuracion real (atajos, discos, layouts). La memoria no escribe nada.
+    const QString copy = argAfter(arguments, QStringLiteral("--settings-copy"), 1);
+    if (!copy.isEmpty()) {
+        const QSettings ini(copy, QSettings::IniFormat);
+        for (const QString &key : ini.allKeys()) {
+            store.setValue(key, ini.value(key));
+        }
+    }
+    HostOptions options;
+    options.automatedRun = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!copy.isEmpty()) {
+        host.startEnabled();
+    } else if (allOn) {
+        for (const ModuleDescriptor &d : host.descriptors()) {
+            host.setEnabled(d.id, true);
+        }
+    }
+    pump(200);
+    std::printf("measure mode=pages rounds=%d tools_on=%s platform=%s\n", rounds,
+                copy.isEmpty() ? (allOn ? "all" : "none") : "settings-copy", qPrintable(QGuiApplication::platformName()));
+    std::printf("measure no-window %s\n", qPrintable(ProcessStats::current().toString()));
+
+    QElapsedTimer build;
+    // --probe-native: una ventana vacia y sin marco antes que la real, para separar lo que cuesta la PRIMERA
+    // ventana nativa del proceso (Windows y Qt, una vez) de lo que cuesta la de la app.
+    if (arguments.contains(QStringLiteral("--probe-native"))) {
+        build.start();
+        auto *plain = new QWidget(nullptr, Qt::Window | Qt::FramelessWindowHint);
+        plain->resize(400, 300);
+        plain->winId();
+        const qint64 native = build.nsecsElapsed();
+        plain->show();
+        QCoreApplication::processEvents();
+        plain->repaint();
+        std::printf("measure probe-native plain native=%.2f show+paint=%.2f ms\n", native / 1e6,
+                    (build.nsecsElapsed() - native) / 1e6);
+        delete plain;
+        pump(100);
+        std::printf("measure after-first-native %s\n", qPrintable(ProcessStats::current().toString()));
+    }
+    build.restart();
+    auto *window = new MainWindow(&host, MainWindow::Mode::Capture, nullptr);
+    QObject::connect(window, &MainWindow::toggleRequested, &host, &ModuleHost::setEnabled);
+    const qint64 built = build.nsecsElapsed();
+    window->ensurePolished();
+    const qint64 polished = build.nsecsElapsed();
+    window->winId();
+    const qint64 native = build.nsecsElapsed();
+    window->show();
+    const qint64 showCall = build.nsecsElapsed();
+    QCoreApplication::sendPostedEvents();
+    QCoreApplication::processEvents();
+    const qint64 events = build.nsecsElapsed();
+    window->repaint();
+    std::printf("measure open build=%.2f show+paint=%.2f ms (polish=%.2f native=%.2f show=%.2f events=%.2f paint=%.2f)\n",
+                built / 1e6, (build.nsecsElapsed() - built) / 1e6, (polished - built) / 1e6, (native - polished) / 1e6,
+                (showCall - native) / 1e6, (events - showCall) / 1e6, (build.nsecsElapsed() - events) / 1e6);
+    pump(300);
+    std::printf("measure window-open %s\n", qPrintable(ProcessStats::current().toString()));
+
+    QStringList ids{MainWindow::kGeneral};
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        ids << d.id;
+    }
+    QHash<QString, qint64> totalNext;
+    qint64 sumFirst = 0;
+    qint64 sumNext = 0;
+    int countNext = 0;
+    for (int round = 0; round <= rounds; ++round) {
+        for (const QString &id : ids) {
+            QElapsedTimer clock;
+            clock.start();
+            window->selectPage(id);
+            const qint64 select = clock.nsecsElapsed();
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+            const qint64 events = clock.nsecsElapsed() - select;
+            window->repaint();
+            const qint64 total = clock.nsecsElapsed();
+            const qint64 paint = total - select - events;
+            if (round == 0) {
+                sumFirst += total;
+                std::printf("measure page first %-16s select=%6.2f events=%6.2f paint=%6.2f total=%6.2f ms\n",
+                            qPrintable(id), select / 1e6, events / 1e6, paint / 1e6, total / 1e6);
+            } else {
+                totalNext[id] += total;
+                sumNext += total;
+                ++countNext;
+                if (round == 1) {
+                    std::printf("measure page next  %-16s select=%6.2f events=%6.2f paint=%6.2f total=%6.2f ms\n",
+                                qPrintable(id), select / 1e6, events / 1e6, paint / 1e6, total / 1e6);
+                }
+            }
+            std::fflush(stdout);
+            pump(30);
+        }
+    }
+    for (const QString &id : ids) {
+        std::printf("measure page avg   %-16s %6.2f ms\n", qPrintable(id), totalNext.value(id) / 1e6 / rounds);
+    }
+    std::printf("measure all-pages-seen %s\n", qPrintable(ProcessStats::current().toString()));
+    window->hide();
+    pump(300);
+    std::printf("measure window-hidden %s\n", qPrintable(ProcessStats::current().toString()));
+    delete window;
+    pump(300);
+    std::printf("measure window-destroyed %s\n", qPrintable(ProcessStats::current().toString()));
+    // Cuanto de lo que queda es cache de Qt y cuanto memoria libre que el heap no devolvio.
+    QPixmapCache::clear();
+    pump(100);
+    std::printf("measure after-pixmapcache %s\n", qPrintable(ProcessStats::current().toString()));
+    ProcessStats::releaseFreeHeap();
+    pump(100);
+    std::printf("measure after-heap-release %s\n", qPrintable(ProcessStats::current().toString()));
+    QFontCache::instance()->clear();
+    ProcessStats::releaseFreeHeap();
+    pump(100);
+    std::printf("measure after-fontcache %s\n", qPrintable(ProcessStats::current().toString()));
+    {
+        // Lo que sigue vivo despues de destruir la ventana: por clase, las mas numerosas.
+        QHash<QString, int> classes;
+        const QWidgetList all = QApplication::allWidgets();
+        for (QWidget *w : all) {
+            classes[QString::fromLatin1(w->metaObject()->className())]++;
+        }
+        std::printf("measure widgets-alive=%lld\n", static_cast<long long>(all.size()));
+        for (auto it = classes.constBegin(); it != classes.constEnd(); ++it) {
+            std::printf("measure widget-class %s=%d\n", qPrintable(it.key()), it.value());
+        }
+    }
+    // Reabrirla: lo que cuesta volver de la bandeja cuando la ventana se solto.
+    for (int again = 0; again < 2; ++again) {
+        build.restart();
+        window = new MainWindow(&host, MainWindow::Mode::Capture, nullptr);
+        const qint64 rebuilt = build.nsecsElapsed();
+        window->show();
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
+        window->repaint();
+        const qint64 shown = build.nsecsElapsed();
+        window->selectPage(ids.value(1));
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
+        window->repaint();
+        std::printf("measure reopen build=%.2f show+paint=%.2f first-tool=%.2f ms\n", rebuilt / 1e6, (shown - rebuilt) / 1e6,
+                    (build.nsecsElapsed() - shown) / 1e6);
+        pump(200);
+        delete window;
+        pump(300);
+        std::printf("measure reopen-destroyed %s\n", qPrintable(ProcessStats::current().toString()));
+    }
+    std::printf("measure result pages first_total=%.1f ms next_avg=%.2f ms\n", sumFirst / 1e6,
+                countNext ? sumNext / 1e6 / countNext : 0.0);
+    std::fflush(stdout);
+    host.shutdown();
+    return 0;
+}
+
 
 int idle(const QStringList &arguments)
 {

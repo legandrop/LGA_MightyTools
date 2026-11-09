@@ -66,7 +66,7 @@ QFrame *FolderSwitchPanel::buildShortcutsCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
 
     // "Switch automatically": switch con su descripcion (era una casilla en el canvas).
@@ -97,7 +97,7 @@ QFrame *FolderSwitchPanel::buildLastFolderCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
 
     QHBoxLayout *head = addHead(layout, I18n::tr("Last folder"), card);

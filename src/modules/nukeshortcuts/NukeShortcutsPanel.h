@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_NUKESHORTCUTSPANEL_H
 #define MIGHTYTOOLS_NUKESHORTCUTSPANEL_H
 
+#include "app/PanelState.h"
 #include "core/NukePlugin.h"
 #include "modules/nukeshortcuts/NukeShortcutsState.h"
 
@@ -26,11 +27,13 @@ class StatusCard;
 //     keyframe" lo resuelve Nuke. Instalar lo hace el modulo (installPluginRequested).
 //  4. Dope Sheet position: el punto guardado sobre la captura del layout de Nuke y "Calibrate...".
 // Todo lo que muestra sale de NukeShortcutsState; lo que el usuario cambia se escribe ahi.
-class NukeShortcutsPanel : public QWidget
+class NukeShortcutsPanel : public QWidget, public PanelState
 {
     Q_OBJECT
 
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     // interactive = false (captura): no conecta nada. showPermission: la tarjeta puede decir
     // "Accessibility access needed" (mac, o la captura en cualquier plataforma).
     NukeShortcutsPanel(NukeShortcutsState *state, bool interactive, bool showPermission, QWidget *parent = nullptr);
@@ -84,6 +87,7 @@ private:
     QPushButton *m_pluginBrowseButton = nullptr;
     QPushButton *m_pluginInstallButton = nullptr;
     QString m_nukeDir;
+    bool m_nukeDirPicked = false; ///< carpeta elegida con Browse y todavia sin Install
     bool m_pluginFixture = false;
 };
 

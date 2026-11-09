@@ -8,6 +8,9 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
+#include <QScreen>
+#include <QtMath>
 #include <QHash>
 #include <QImage>
 #include <QPixmap>
@@ -19,6 +22,7 @@
 #include <windows.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <shobjidl.h>
 #include <tlhelp32.h>
 
@@ -310,6 +314,36 @@ bool run(const Decision &decision, const Target &target, QString *error)
     return true;
 }
 
+namespace {
+// Los tamanos en pixeles reales en que se dibuja el icono: la baldosa (20) y el menu (16) a la escala de cada
+// pantalla. Pedirle al shell los doce tamanos de antes (16..128) tardaba unos 20 ms por programa al abrir la
+// pagina; dos o tres alcanzan, y AppIconTile achica el que le sobra. Una captura (--dpr) suma la suya.
+QList<int> iconPixelSizes()
+{
+    QList<qreal> scales;
+    for (const QScreen *screen : QGuiApplication::screens()) {
+        scales << screen->devicePixelRatio();
+    }
+    if (captureIconScale() > 0) {
+        scales << captureIconScale();
+    }
+    QList<int> sizes;
+    for (const qreal scale : scales) {
+        for (const int logical : {16, 20}) {
+            const int device = qCeil(logical * scale - 0.01);
+            if (!sizes.contains(device)) {
+                sizes << device;
+            }
+        }
+    }
+    if (sizes.isEmpty()) {
+        sizes << 16 << 20;
+    }
+    std::sort(sizes.begin(), sizes.end());
+    return sizes;
+}
+} // namespace
+
 QIcon icon(const QString &appPath)
 {
     if (!QFileInfo(appPath).isFile()) {
@@ -317,11 +351,28 @@ QIcon icon(const QString &appPath)
     }
     const std::wstring file = QDir::toNativeSeparators(appPath).toStdWString();
     QIcon result;
-    // Cada tamano pedido al shell, que elige el cuadro del .ico que mejor le queda: la baldosa (20 px) sale
-    // nitida al 100, 150, 200 y 300 % sin estirar un icono de 32. COM ya esta iniciado en main.
+    const QList<int> sizes = iconPixelSizes();
+    // Un .exe trae su icono en los recursos: leerlo de ahi (el primero, el que muestra el Explorador) no
+    // levanta la maquinaria de miniaturas del shell, que la primera vez costaba unos 30 ms al abrir la pagina.
+    if (appPath.endsWith(QLatin1String(".exe"), Qt::CaseInsensitive)) {
+        for (const int size : sizes) {
+            HICON handle = nullptr;
+            if (SHDefExtractIconW(file.c_str(), 0, 0, &handle, nullptr, MAKELONG(size, 0)) == S_OK && handle) {
+                const QImage image = QImage::fromHICON(handle);
+                DestroyIcon(handle);
+                if (!image.isNull()) result.addPixmap(QPixmap::fromImage(image));
+            }
+        }
+        if (!result.isNull()) {
+            return result;
+        }
+    }
+    // Sin icono propio (o no es un .exe): cada tamano pedido al shell, que elige el cuadro del .ico que mejor
+    // le queda: la baldosa sale nitida a cualquier escala sin estirar un icono mas chico. COM ya esta iniciado
+    // en main.
     IShellItemImageFactory *factory = nullptr;
     if (SUCCEEDED(SHCreateItemFromParsingName(file.c_str(), nullptr, IID_PPV_ARGS(&factory)))) {
-        for (const int size : {16, 20, 24, 30, 32, 40, 48, 60, 64, 80, 96, 128}) {
+        for (const int size : sizes) {
             HBITMAP bitmap = nullptr;
             if (SUCCEEDED(factory->GetImage(SIZE{size, size}, SIIGBF_ICONONLY, &bitmap)) && bitmap) {
                 const QImage image = imageFromShellBitmap(bitmap);

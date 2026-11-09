@@ -59,6 +59,12 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
      privado): probarlos en Windows Sandbox.
    - En español la fila «Buscar actualizaciones al iniciar» llena justo la tarjeta App y deja las tarjetas
      5 px más anchas que en inglés (margen derecho de 11 px, no 16).
+   - **Liviana, lo que queda (D-77, medido con `--measure-pages` y el runner con `-Platform windows`):**
+     cambiar a una página ya vista cuesta ~9 ms (mostrar, esconder y pintar: el piso de Qt); la primera visita a
+     Window Layouts con 12 atajos, ~40 ms (260 widgets: una sola tecla dibujada por fila los bajaría a la mitad);
+     soltada la ventana quedan ~7 MB de Windows y Qt que no se pudieron atribuir sin un perfilador de heap;
+     Open in NukeX no guarda la ruta al hacer click afuera (el `editingFinished` exige `hasFocus()`, que ya es
+     false en ese momento), al revés de lo que dice su comentario.
 4. **Mudanza de los usuarios de Open in NukeX** (D-21, plan sección 9): hecha y probada.
    - **Mejora posible:** la migración desde una copia instalada no retoma un ProgID que apunta a otra
      copia de Mighty Tools (por ejemplo la de `build\`), ni aunque ese exe ya no exista: el panel queda

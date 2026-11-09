@@ -5,6 +5,7 @@
 #include <QWidget>
 
 class MeetFrameModule;
+class QLabel;
 class QPushButton;
 class QVBoxLayout;
 class SegmentedSwitch;
@@ -47,7 +48,9 @@ private:
     QPushButton *m_add = nullptr;
     SwitchRow *m_cursor = nullptr;
     SegmentedSwitch *m_fps = nullptr;
+    SwitchRow *m_aspectLock = nullptr;
     SegmentedSwitch *m_aspect = nullptr;
+    QLabel *m_aspectHint = nullptr;
     QString m_appsKey;
 };
 

@@ -5,6 +5,49 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-77 · App liviana: la ventana se arma al abrirla y se suelta en la bandeja** (2026-11-08, Lega: «cambiar
+  de tab tarda; la app tiene que quedar súper liviana, en procesamiento y en uso», y después «sin perder nada
+  de UX, incluso en computadoras muy malas»). La ventana principal se arma la primera vez que se abre
+  (bandeja, aviso, otra copia), cada página de herramienta recién cuando se elige, y la ventana se destruye a
+  los 5 minutos de estar escondida; al volver se rearma igual: la página, el scroll de cada página ya vista y la
+  ayuda abierta (~50 ms). Medido en Windows con la configuración de Lega: con la ventana abierta y todo visto,
+  50 MB privados; soltada, 24 MB (antes de D-77 nunca bajaba de 50); sin abrirla nunca, 16,5 MB. Supuestos
+  tomados por la sesión, reversibles (constantes en `src/app/AppController.cpp`):
+  - **5 minutos** (`kReleaseAfterMs`): cerrar y reabrir enseguida no rearma nada.
+  - **Nunca se suelta con algo a medio hacer:** un menú, un diálogo o el popup de Folder Switch abiertos, una
+    herramienta que la escondió (el calibrador), el Apply de Open in NukeX, ni un panel que dice tener trabajo
+    sin guardar (`PanelState`: un editor abierto, una ruta o carpeta elegida sin Save/Install, un reemplazo o
+    un nombre a medio escribir, «Make Default» esperando a Windows hasta 15 minutos).
+  - **Primera ventana nativa por adelantado** (`kWarmupDelayMs`, 4 s después del arranque): la primera ventana
+    del proceso le cuesta a Windows ~105 ms una sola vez y se pagaba al abrir desde la bandeja. Ahora se crea y
+    se destruye una sin mostrar; cuesta ~4 MB que igual quedaban al abrir la ventana por primera vez. Si Lega
+    prefiere esos 4 MB a los 105 ms, se saca el bloque del constructor.
+  - **Al soltarse se vacía la caché de fuentes de Qt** (4,4 MB; reabrir tarda ~12 ms más).
+  - **La negrita del texto con formato va a 600** (SemiBold, la que trae la app), no a 700: pedir un peso o una
+    familia que la app no trae («JetBrains Mono») hacía que Qt cargara todas las fuentes del sistema la
+    primera vez (70 a 230 ms). Se nota un poco más liviana en las pistas de Nuke Shortcuts y Open in NukeX.
+
+- **D-76 · Paletas de color, las de LGA GateBouncer** (2026-11-08, Lega: las mismas paletas y el mismo
+  selector que GateBouncer v1.01). `src/ui/Palette.*` agrupa cada color de `Theme.h` y de la hoja en 18
+  grupos con los ids de GateBouncer y deriva los tonos en HSL desde el base de cada grupo; las seis paletas
+  de `resources/palettes/` son sus mismos JSON. General → App: Language, Colors, Zoom. Supuestos tomados sin
+  Lega, reversibles:
+  - **De fábrica, Violet** (la primera de `Palette::presetIds`), como en GateBouncer. El rosa de antes no es
+    ninguna de las seis: con los colores del código (`--palette code`) la app queda idéntica a la v1.52.
+  - **Las flechas cambian la paleta con el menú abierto** (en vivo; Enter la deja, Escape vuelve a la de
+    antes). Con el menú cerrado no: en Mighty Tools ningún botón toma el foco del teclado.
+  - **Los dos desplegables miden lo que pide el nombre más largo** (English, Español y las seis paletas en el
+    idioma de la interfaz), no 130 fijos: 144 en inglés, 137 en castellano.
+  - **El link lega.com.ar sigue con el color de los links**, no el de los rótulos del índice: con los
+    colores del código tiene que seguir rosa.
+  - **La base de «elegido» es `#682344`**, una referencia (no se usa): deja a sus tonos a la misma distancia
+    que en GateBouncer, así el segmento elegido sale igual de claro en cada paleta.
+    (2026-11-08, superado: la base de referencia no alcanzaba. Los tonos del acento y de «elegido» se calculan
+    desde su equivalente de GateBouncer, `Role::gbTones`, y dan los mismos colores que allá en las seis paletas.)
+  - **El menú resalta con «fila elegida»** (`@listSelected`, el violeta tenue), no con el color del botón
+    principal.
+  - La elegida va en `settings.ini` (`app/palette`). Editor de desarrollo: `MIGHTYTOOLS_PALETTE_EDITOR=1`.
+
 - **D-75 · Dictation en macOS** (2026-11-07, Lega: «arrancá» el dictado en mac). Misma herramienta que
   D-72, en la rama `dictado-mac` hasta que Lega la apruebe. Supuestos tomados sin preguntar, reversibles:
   - **Atajo de fábrica `⌘⌥⇧H`** (Lega, 2026-11-07: el que él usa; el primero fue `⌃⌥H`). No `⌥` + letra
@@ -27,9 +70,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
   - **Motor B en Windows** (captura del monitor con DXGI Desktop Duplication, GDI de respaldo, y lo
     tapado pintado liso), no las miniaturas de DWM: es el que funciona seguro sin el prototipo P1. La
     ventana compartida queda al fondo del orden Z (si queda debajo del escritorio, mejor: nadie la ve).
-  - **Atajos** `Ctrl+Alt+M` (mostrar u ocultar el marco) y `Ctrl+Alt+P` (pausa, registrado solo con el
-    marco abierto). En mac son `⌘⌥⇧M` (Lega, 2026-11-07: `⌘⌥M` es «minimizar todas las ventanas» de
+  - **Atajos** `Alt+Shift+Win+M` (mostrar u ocultar el marco; Lega, 2026-11-07: el que él usa) y
+    `Alt+Shift+Win+P` (pausa, que haga juego; registrado solo con el marco abierto). En mac son `⌘⌥⇧M` (Lega, 2026-11-07: `⌘⌥M` es «minimizar todas las ventanas» de
     macOS; vale de fábrica el que él usa) y `⌘⌥⇧P` (Lega, mismo día: que haga juego).
+  - **Forma libre de fábrica** (Lega, 2026-11-07: «todo bloqueado no está bien»): se estira a cualquier
+    tamaño; «Lock the frame shape» (panel y menú Size del marco) la fija en 16:9, 4:3, 1:1 o la actual.
   - **Vienen prendidos** los avisos, el escritorio, Mensajería y Contraseñas; Correo viene apagado (se
     suele compartir el correo a propósito). WhatsApp y Telegram en el navegador se reconocen por el
     título y se tapa la ventana entera del navegador mientras esa pestaña está al frente.

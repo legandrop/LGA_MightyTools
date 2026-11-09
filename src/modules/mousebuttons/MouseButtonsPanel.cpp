@@ -52,7 +52,7 @@ QWidget *MouseButtonsPanel::createListPage()
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
-    savedColumn->setContentsMargins(14, 12, 14, 12);
+    savedColumn->setContentsMargins(18, 15, 18, 16);
     savedColumn->setSpacing(8);
     savedColumn->addWidget(Ui::label(I18n::tr("Saved rules"), "cardTitle", saved));
     m_rows = new QWidget(saved);
@@ -66,7 +66,7 @@ QWidget *MouseButtonsPanel::createListPage()
     column->addWidget(saved);
     auto *addCard = Ui::card(page);
     auto *addRow = new QHBoxLayout(addCard);
-    addRow->setContentsMargins(14, 12, 14, 12);
+    addRow->setContentsMargins(18, 15, 18, 16);
     auto *texts = new QVBoxLayout();
     texts->addWidget(Ui::label(I18n::tr("Create a mouse rule"), "cardTitle", addCard));
     auto *caption = Ui::caption(I18n::tr("Choose an app, a button and the keys to hold."), addCard);
@@ -89,7 +89,7 @@ QWidget *MouseButtonsPanel::createEditorPage()
     column->setSpacing(6);
     auto *card = Ui::card(page);
     auto *form = new QVBoxLayout(card);
-    form->setContentsMargins(14, 12, 14, 12);
+    form->setContentsMargins(18, 15, 18, 16);
     form->setSpacing(6);
     form->addWidget(Ui::label(I18n::tr("Mouse rule"), "cardTitle", card));
     form->addWidget(Ui::caption(I18n::tr("App"), card));
@@ -371,4 +371,10 @@ void MouseButtonsPanel::showEditorForCapture(int id, bool buttonMenuOpen)
     m_captureMenu->setActiveAction(m_captureMenu->actions().value(1));
     m_captureMenu->raise();
     m_captureMenu->show();
+}
+
+bool MouseButtonsPanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
 }

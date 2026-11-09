@@ -1,4 +1,5 @@
 #include "app/AppController.h"
+#include "dev/PaletteEditor.h"
 #include "app/ExternalDispatch.h"
 #include "app/ModuleRegistry.h"
 #include "app/SettingsStore.h"
@@ -304,9 +305,10 @@ int main(int argc, char *argv[])
     const bool uiProbe = hasArg(argc, argv, "--ui-probe");
     const bool measureCycles = hasArg(argc, argv, "--measure-cycles");
     const bool measureIdle = hasArg(argc, argv, "--measure-idle");
+    const bool measurePages = hasArg(argc, argv, "--measure-pages");
     const bool measureFonts = hasArg(argc, argv, "--measure-fonts");
     const bool notifyPreview = hasArg(argc, argv, "--notify-preview");
-    const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measureFonts || notifyPreview;
+    const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measurePages || measureFonts || notifyPreview;
     if (automated) {
         AutomatedRun::enable();
     } else {
@@ -340,6 +342,24 @@ int main(int argc, char *argv[])
         // Ni leer ni escribir el settings.ini del usuario.
         AppSettings::useMemoryOnly();
         applyAppStyle(app);
+        // --palette <id|code|archivo.json>: la paleta de la corrida. Sin el flag, la de fabrica (Violet), nunca la
+        // que eligio quien usa la PC: capturas comparables. «code» deja los colores escritos en Theme.h.
+        {
+            const int paletteIndex = app.arguments().indexOf(QStringLiteral("--palette"));
+            const QString palette = paletteIndex > 0 ? app.arguments().value(paletteIndex + 1) : Palette::defaultPreset();
+            Palette::Data data;
+            if (palette == QLatin1String("code")) {
+                Palette::apply(Palette::factory());
+            } else if (Palette::presetIds().contains(palette)) {
+                Palette::applyPreset(palette);
+            } else if (Palette::load(palette, &data)) {
+                Palette::apply(data);
+            } else {
+                std::fprintf(stderr, "palette: unknown \"%s\"\n", qPrintable(palette));
+                return 2;
+            }
+            Theme::refresh(app);
+        }
         // --lang es: la captura en espanol (sin settings.ini no hay idioma guardado).
         const int langIndex = app.arguments().indexOf(QStringLiteral("--lang"));
         if (langIndex > 0) {
@@ -353,6 +373,9 @@ int main(int argc, char *argv[])
         }
         if (measureCycles) {
             return Measure::cycles(app.arguments());
+        }
+        if (measurePages) {
+            return Measure::pages(app.arguments());
         }
         if (measureFonts) {
             return Measure::fonts(app.arguments());
@@ -372,6 +395,11 @@ int main(int argc, char *argv[])
         FileSettingsStore store;
         // Los cuadros de este camino (navegador no disponible, NukeX no configurado) salen en el idioma elegido.
         I18n::setLanguage(I18n::fromCode(store.value(QStringLiteral("app/language")).toString()));
+        // Y con la paleta elegida (la de fabrica si no hay ninguna), como la ventana.
+        const QString palette = store.value(QStringLiteral("app/palette")).toString();
+        if (Palette::applyPreset(Palette::presetIds().contains(palette) ? palette : Palette::defaultPreset())) {
+            Theme::refresh(app);
+        }
         const ExternalDispatch::Outcome outcome =
             ExternalDispatch::run(ModuleRegistry::all(), external, &store, /*dryRun=*/false);
         if (outcome.handled) {
@@ -415,6 +443,9 @@ int main(int argc, char *argv[])
 
     AppController::Options options;
     options.dryRunInput = hasArg(argc, argv, "--dry-run-input") || DebugFlags::isOn(QStringLiteral("dryRunInput"));
+    // Desarrollo: MIGHTYTOOLS_PALETTE_EDITOR=1 abre el editor de paletas (dev/PaletteEditor.h) junto a la ventana;
+    // cerrarlo cierra la app. Lo usa el lanzador de desarrollo, que antes cierra la instalada con --quit.
+    options.paletteEditor = !qEnvironmentVariableIsEmpty("MIGHTYTOOLS_PALETTE_EDITOR");
 
     // El canal de la instancia unica escucha desde ya, aunque la bandeja no este lista: un pedido de
     // otra copia en ese rato queda anotado y la ventana se abre apenas existe.
@@ -464,6 +495,14 @@ int main(int argc, char *argv[])
             }
             start.openWindow = start.openWindow || showPending;
             controller = new AppController(start, &app);
+            if (start.paletteEditor) {
+                AppController *running = controller;
+                running->showSettings();
+                auto *editor = new PaletteEditor(PaletteEditor::folderFromEnvironment());
+                editor->setAttribute(Qt::WA_DeleteOnClose);
+                editor->onClosed = [running]() { running->quit(); };
+                editor->show();
+            }
             app.removeEventFilter(&earlyFileOpens);
             for (const QString &argument : std::as_const(earlyFileOpens.pending)) {
                 const bool claimed = controller->openExternal(argument);

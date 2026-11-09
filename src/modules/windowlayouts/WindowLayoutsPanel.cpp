@@ -250,7 +250,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     // Primero, debajo del encabezado (Lega): es una opcion de toda la herramienta, no de un atajo.
     auto *adminCard = Ui::card(page);
     auto *adminColumn = new QVBoxLayout(adminCard);
-    adminColumn->setContentsMargins(14, 12, 14, 12);
+    adminColumn->setContentsMargins(18, 15, 18, 16);
     adminColumn->setSpacing(0);
     m_adminWindows = new SwitchRow(
         I18n::tr("Also move administrator windows"),
@@ -270,7 +270,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
-    savedColumn->setContentsMargins(14, 12, 14, 12);
+    savedColumn->setContentsMargins(18, 15, 18, 16);
     savedColumn->setSpacing(8);
     savedColumn->addWidget(Ui::label(I18n::tr("Saved shortcuts"), "cardTitle", saved));
     m_rows = new QWidget(saved);
@@ -284,7 +284,7 @@ QWidget *WindowLayoutsPanel::createListPage()
     column->addWidget(saved);
     auto *addCard = Ui::card(page);
     auto *addRow = new QHBoxLayout(addCard);
-    addRow->setContentsMargins(14, 12, 14, 12);
+    addRow->setContentsMargins(18, 15, 18, 16);
     auto *texts = new QVBoxLayout();
     texts->addWidget(Ui::label(I18n::tr("Create a window shortcut"), "cardTitle", addCard));
     auto *caption = Ui::caption(I18n::tr("Combine fractions, draw an area, or copy a window's bounds."), addCard);
@@ -307,7 +307,7 @@ QWidget *WindowLayoutsPanel::createEditorPage()
     column->setSpacing(6);
     auto *card = Ui::card(page);
     auto *form = new QVBoxLayout(card);
-    form->setContentsMargins(14, 12, 14, 12);
+    form->setContentsMargins(18, 15, 18, 16);
     form->setSpacing(6);
     form->addWidget(Ui::label(I18n::tr("Window shortcut"), "cardTitle", card));
     // Nombre y ajuste rapido lado a lado, como Horizontal y Vertical: con el encabezado grande del Pliego
@@ -696,4 +696,10 @@ void WindowLayoutsPanel::showEditorForCapture()
     m_draft.vertical = {4, 1};
     m_draft.shortcut = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+L"));
     updateEditor();
+}
+
+bool WindowLayoutsPanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
 }

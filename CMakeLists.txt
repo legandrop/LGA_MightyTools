@@ -43,6 +43,11 @@ endif()
 find_package(Qt6 6.5.3 COMPONENTS Core Gui Widgets Network REQUIRED)
 qt_standard_project_setup()
 
+# Las novedades del cartel de update (LgaWhatsNew): libs/lgaupdate es la copia identica de la pieza
+# canonica de LGA_Base_QT_C_Py (ver su README). De la biblioteca se usa solo LgaWhatsNew, desde
+# src/updates/UpdateNotes.cpp; el updater de esta app sigue siendo el propio (UpdateService).
+add_subdirectory(libs/lgaupdate)
+
 if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
     # El FindWrapOpenGL de Qt 6.5 agrega "-framework AGL" aunque no lo encuentre: se saca de la interfaz
     # para que ningun consumidor de Qt6::Gui lo arrastre al link.
@@ -181,12 +186,16 @@ set(SOURCES
     src/qa/SelfTest.cpp
     src/qa/UiShot.cpp
     src/ui/ShortcutRow.cpp
+    src/ui/Palette.cpp
+    src/dev/PaletteEditor.cpp
+    src/dev/LgaColorPickerDialog.cpp
     src/ui/Theme.cpp
     src/ui/TitleBar.cpp
     src/ui/UiWidgets.cpp
     src/ui/CustomTooltip.cpp
     src/updates/UpdateDialog.cpp
     src/updates/UpdateManifest.cpp
+    src/updates/UpdateNotes.cpp
     src/updates/UpdateSelfTest.cpp
     src/updates/UpdateService.cpp
     src/updates/VersionCompare.cpp
@@ -203,6 +212,7 @@ set(HEADERS
     src/app/ModuleContext.h
     src/app/ModuleContextImpl.h
     src/app/ModuleHost.h
+    src/app/PanelState.h
     src/app/ModuleRegistry.h
     src/app/SettingsStore.h
     src/app/SingleInstance.h
@@ -308,12 +318,16 @@ set(HEADERS
     src/qa/UiShot.h
     src/ui/HelpSection.h
     src/ui/ShortcutRow.h
+    src/ui/Palette.h
+    src/dev/PaletteEditor.h
+    src/dev/LgaColorPickerDialog.h
     src/ui/Theme.h
     src/ui/TitleBar.h
     src/ui/UiWidgets.h
     src/ui/CustomTooltip.h
     src/updates/UpdateDialog.h
     src/updates/UpdateManifest.h
+    src/updates/UpdateNotes.h
     src/updates/UpdateSelfTest.h
     src/updates/UpdateService.h
     src/updates/VersionCompare.h
@@ -526,6 +540,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::GuiPrivate
     Qt6::Widgets
     Qt6::Network
+    LGAUpdate
 )
 
 if(WIN32)

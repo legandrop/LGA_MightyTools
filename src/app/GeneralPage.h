@@ -58,6 +58,9 @@ signals:
     void toolToggleRequested(const QString &id, bool on);
     // El usuario eligio otro idioma ("en" / "es").
     void languageChangeRequested(const QString &code);
+    // El usuario eligio otra paleta de colores (Palette::presetIds), o la volvio a dejar tras mirar otras con
+    // las flechas: se guarda y la ventana se rearma con ella.
+    void paletteChangeRequested(const QString &id);
     // El usuario eligio otro tamano de interfaz (0..2): se aplica reiniciando la app.
     void uiSizeChangeRequested(int level);
     // macOS: el boton Quit de la tarjeta App (ahi no hay menu en la barra).
@@ -68,6 +71,7 @@ private:
     QFrame *buildAppCard();
     QFrame *buildToolsCard();
     QWidget *buildColophon();
+    void openPaletteMenu();
 
     ModuleHost *m_host = nullptr;
     bool m_firstRun = false;
@@ -84,6 +88,7 @@ private:
     Chip *m_updateBadge = nullptr;
     QPushButton *m_updateButton = nullptr;
     QPushButton *m_languageButton = nullptr;
+    QPushButton *m_paletteButton = nullptr;
     SegmentedSwitch *m_uiSizeSwitch = nullptr;
     UpdateRowState m_updateState;
 

@@ -1,4 +1,6 @@
 #include "qa/UiShot.h"
+
+#include "platform/AppToggleSystem.h"
 #include "qa/NetRetryProbe.h"
 
 #include "app/GeneralPage.h"
@@ -24,11 +26,14 @@
 #include "modules/nukeshortcuts/NukeShortcutsState.h"
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/windowlayouts/WindowLayoutsPanel.h"
+#include "dev/PaletteEditor.h"
 #include "ui/CustomTooltip.h"
+#include "ui/Palette.h"
 #include "ui/ShortcutRow.h"
 #include "ui/TitleBar.h"
 #include "ui/UiWidgets.h"
 #include "updates/UpdateDialog.h"
+#include "updates/UpdateNotes.h"
 
 #include <QAbstractButton>
 #include <QAction>
@@ -102,6 +107,7 @@ const QStringList kHostStates = {
     QStringLiteral("tray-menu"),         // menu de la bandeja con secciones e iconos activo/atenuado
     QStringLiteral("tray-menu-empty"),   // menu con todo apagado
     QStringLiteral("update-dialog"),
+    QStringLiteral("update-dialog-notes"), // con las novedades (fixture bilingue: --lang es las muestra en castellano)
     QStringLiteral("update-download-retrying"), // la descarga del update se corto y se reintenta (2 de 4)
 };
 
@@ -202,7 +208,7 @@ QWidget *makeCanvas()
     auto *canvas = new QWidget;
     canvas->setObjectName(QStringLiteral("central"));
     canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
-    canvas->setStyleSheet(QStringLiteral("QWidget#central { background-color: %1; }").arg(QLatin1String(Theme::kDesk)));
+    Theme::sheet(canvas, QStringLiteral("QWidget#central { background-color: %1; }").arg(QLatin1String(Theme::kDesk)));
     return canvas;
 }
 
@@ -304,6 +310,7 @@ int runUiShot(const QStringList &args)
     // ya tiene ese factor; la imagen se dibuja con el mismo, como la ve el usuario.
     const int uiScale = UiScale::sessionLevel();
     dpr *= UiScale::factor(uiScale);
+    AppToggleSystem::setCaptureIconScale(dpr);
     if (!outPath.endsWith(QLatin1String(".png"), Qt::CaseInsensitive) || QFileInfo::exists(outPath)
         || !QFileInfo(outPath).dir().exists()) {
         fprintf(stderr, "ui-shot: output must be a new .png in an existing folder (%s)\n", qPrintable(outPath));
@@ -482,6 +489,27 @@ int runUiShot(const QStringList &args)
     } else if (state == QLatin1String("update-dialog")) {
         canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.01"),
                                                  QStringLiteral(MIGHTYTOOLS_VERSION)));
+        canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
+        root = canvas.data();
+        settle(*root);
+        root->adjustSize();
+        settle(*root);
+    } else if (state == QLatin1String("update-dialog-notes")) {
+        // Un whats_new.json de prueba como el que publica build_whats_new.py en un producto bilingue: la
+        // 1.52 ya instalada no entra en el rango.
+        const QByteArray fixture = R"({"schemaVersion":1,"product":"legandrop/LGA_MightyTools","name":"LGA Mighty Tools",
+          "versions":[
+           {"version":"1.53","items":[
+             {"kind":"new","text":"Meet Frame: con Alt+Shift+Win+M aparece un marco para compartir solo esa parte de la pantalla.",
+              "text_en":"Meet Frame: Alt+Shift+Win+M shows a frame to share only that part of the screen."},
+             {"kind":"improved","text":"Escape cierra la ventana y la deja en la bandeja.",
+              "text_en":"Escape closes the window and leaves Mighty Tools in the tray."},
+             {"kind":"fixed","text":"El cartel de update muestra las novedades.",
+              "text_en":"The update window shows what's new."}]},
+           {"version":"1.52","items":[{"kind":"fixed","text":"Ya instalada: no aparece.","text_en":"Already installed: not shown."}]}]})";
+        canvas.reset(createUpdateAvailableDialog(nullptr, QStringLiteral("LGA Mighty Tools"), QStringLiteral("1.53"),
+                                                 QStringLiteral("1.52"),
+                                                 UpdateNotes::html(fixture, QStringLiteral("1.52"), QStringLiteral("1.53"))));
         canvas->setAttribute(Qt::WA_DontShowOnScreen, true);
         root = canvas.data();
         settle(*root);
@@ -1599,6 +1627,99 @@ int runDiskReminderProbe()
     return failures ? 1 : 0;
 }
 
+// D-77: la ventana que se suelta en la bandeja y se rearma vuelve igual (pagina, scroll, ayuda abierta), y no se
+// suelta con algo a medio hacer en un panel (el editor de App Toggle abierto).
+int runWindowReleaseProbe()
+{
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    if (!canvasFixture(host, QString())) {
+        fprintf(stderr, "window-release: no se pudo preparar la ventana\n");
+        return 1;
+    }
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        if (canvasOff(d.id) && !enable(host, d.id, QString())) {
+            fprintf(stderr, "window-release: %s no se pudo prender\n", qPrintable(d.id));
+            return 1;
+        }
+    }
+    int checks = 0;
+    int failures = 0;
+    const auto check = [&](bool ok, const QString &what) {
+        ++checks;
+        failures += ok ? 0 : 1;
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+    };
+    const auto visibleScroll = [](MainWindow &window) -> QScrollArea * {
+        for (QScrollArea *candidate : window.findChildren<QScrollArea *>(QStringLiteral("pane"))) {
+            if (candidate->isVisibleTo(&window)) return candidate;
+        }
+        return nullptr;
+    };
+    const auto makeWindow = [](ModuleHost &h) {
+        auto *window = new MainWindow(&h, MainWindow::Mode::Capture, nullptr);
+        window->setAttribute(Qt::WA_DontShowOnScreen, true);
+        window->setFixedSize(MainWindow::kWidth, 420); // corta: casi todas las paginas desplazan
+        window->show();
+        return window;
+    };
+
+    // 1. Una pagina con barra, desplazada a la mitad y con la ayuda abierta.
+    MainWindow *first = makeWindow(host);
+    QString page;
+    int value = 0;
+    for (const ModuleDescriptor &d : host.descriptors()) {
+        first->selectPage(d.id);
+        settle(*first);
+        QScrollArea *scroll = visibleScroll(*first);
+        if (scroll && scroll->verticalScrollBar()->maximum() > 80) {
+            first->setHelpOpen(true);
+            settle(*first);
+            value = scroll->verticalScrollBar()->maximum() / 2;
+            scroll->verticalScrollBar()->setValue(value);
+            page = d.id;
+            break;
+        }
+    }
+    check(!page.isEmpty(), QStringLiteral("hay una pagina con barra a 420 px (%1)").arg(page));
+    const MainWindow::ViewState saved = first->viewState();
+    check(saved.page == page, QStringLiteral("viewState guarda la pagina (%1)").arg(saved.page));
+    check(saved.scroll.value(page) == value, QStringLiteral("viewState guarda el scroll (%1 = %2)").arg(saved.scroll.value(page)).arg(value));
+    check(saved.helpOpen, QStringLiteral("viewState guarda la ayuda abierta"));
+    check(!first->hasUnsavedWork(), QStringLiteral("sin editores abiertos no hay trabajo pendiente"));
+    delete first;
+
+    // 2. La ventana nueva vuelve igual.
+    MainWindow *second = makeWindow(host);
+    second->restoreViewState(saved);
+    settle(*second);
+    QScrollArea *scroll = visibleScroll(*second);
+    check(second->currentPage() == page, QStringLiteral("vuelve a la pagina (%1)").arg(second->currentPage()));
+    check(scroll && qAbs(scroll->verticalScrollBar()->value() - value) <= 1,
+          QStringLiteral("vuelve al scroll (%1 = %2)").arg(scroll ? scroll->verticalScrollBar()->value() : -1).arg(value));
+    check(second->helpOpen(), QStringLiteral("vuelve con la ayuda abierta"));
+    // Salir de la pagina y volver: el scroll ya no se repone a la fuerza (lo maneja el usuario).
+    second->selectPage(MainWindow::kGeneral);
+    settle(*second);
+    check(second->viewState().scroll.value(MainWindow::kGeneral, 0) == 0, QStringLiteral("General sigue arriba"));
+    delete second;
+
+    // 3. Con el editor de App Toggle abierto, la ventana tiene trabajo pendiente y no se suelta.
+    if (!enable(host, QStringLiteral("appToggle"), QStringLiteral("editor"))) {
+        check(false, QStringLiteral("App Toggle acepta el estado editor"));
+    } else {
+        MainWindow *third = makeWindow(host);
+        third->selectPage(QStringLiteral("appToggle"));
+        settle(*third);
+        check(third->hasUnsavedWork(), QStringLiteral("el editor abierto de App Toggle es trabajo pendiente"));
+        delete third;
+    }
+    fprintf(stdout, "window-release: %d/%d comprobaciones, %d fallas\n", checks - failures, checks, failures);
+    return failures ? 1 : 0;
+}
+
 // Cada pagina de la ventana, con su alto real y con uno corto que obliga a desplazar: ningun texto de
 // varias lineas ni control puede quedar mas bajo de lo que necesita. Si el contenido no entra, la pagina
 // tiene que mostrar la barra, no aplastar lo que tiene adentro.
@@ -1746,7 +1867,8 @@ int runHoldKeysProbe()
     for (QLabel *label : hold->findChildren<QLabel *>(QStringLiteral("caption"))) {
         if (label->property("windowsShortcutNote").toBool()) note = label;
     }
-    check(note && !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
+    // La nota se crea recien cuando hace falta: que no exista tambien es «no se muestra».
+    check(!note || !note->isVisibleTo(&host), QStringLiteral("teclas para mantener: Win+E no muestra la nota de Windows"));
     hold->showWindowsShortcutNote(false);
     hold->setShortcut({Qt::NoModifier, Qt::Key_Space});
 #endif
@@ -1783,11 +1905,17 @@ int runRecorderGuardProbe()
     window.show();
     settle(window);
     QLabel *caption = nullptr;
-    QLabel *note = nullptr;
     for (QLabel *label : row->findChildren<QLabel *>(QStringLiteral("caption"))) {
-        if (label->property("windowsShortcutNote").toBool()) note = label;
-        else if (!caption && label->parentWidget() == row) caption = label;
+        if (!label->property("windowsShortcutNote").toBool() && !caption && label->parentWidget() == row) caption = label;
     }
+    // La nota de Windows se crea recien cuando hace falta: se busca en cada control.
+    const auto windowsNote = [row]() -> QLabel * {
+        for (QLabel *label : row->findChildren<QLabel *>(QStringLiteral("caption"))) {
+            if (label->property("windowsShortcutNote").toBool()) return label;
+        }
+        return nullptr;
+    };
+    (void)windowsNote; // en mac no se usa
     const auto press = [row](int key, Qt::KeyboardModifiers modifiers, quint32 vk) {
         QKeyEvent event(QEvent::KeyPress, key, modifiers, 0, vk, 0);
         QCoreApplication::sendEvent(row, &event);
@@ -1823,12 +1951,12 @@ int runRecorderGuardProbe()
 
     row->showWindowsShortcutNote(true);
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
-    check(note && note->isVisibleTo(&window), QStringLiteral("Win+E: nota neutra de que reemplaza el atajo de Windows"));
+    check(windowsNote() && windowsNote()->isVisibleTo(&window), QStringLiteral("Win+E: nota neutra de que reemplaza el atajo de Windows"));
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Ctrl+Meta+E")));
-    check(note && !note->isVisibleTo(&window), QStringLiteral("Ctrl+Win+E: sin nota (no es Win + una tecla sola)"));
+    check(windowsNote() && !windowsNote()->isVisibleTo(&window), QStringLiteral("Ctrl+Win+E: sin nota (no es Win + una tecla sola)"));
     row->showWindowsShortcutNote(false);
     row->setShortcut(Shortcut::fromPortableString(QStringLiteral("Meta+E")));
-    check(note && !note->isVisibleTo(&window), QStringLiteral("sin la opcion (Nuke Shortcuts, Folder Switch) nunca hay nota"));
+    check(windowsNote() && !windowsNote()->isVisibleTo(&window), QStringLiteral("sin la opcion (Nuke Shortcuts, Folder Switch) nunca hay nota"));
     check(Shortcut::fromPortableString(QStringLiteral("Meta+7")).replacesWindowsShortcut()
               && !Shortcut::fromPortableString(QStringLiteral("Meta+F5")).replacesWindowsShortcut()
               && !Shortcut::fromPortableString(QStringLiteral("Shift+Meta+E")).replacesWindowsShortcut(),
@@ -2315,7 +2443,8 @@ int runMeetFrameDragProbe()
     };
     MeetFrameOverlay frame(false);
     frame.setAttribute(Qt::WA_DontShowOnScreen, true);
-    const QRect start(120, 100, 560, 320);
+    // Chico, para que estirar en libre no llegue al borde de la pantalla (offscreen: 800 x 800).
+    const QRect start(60, 80, 460, 280);
     frame.setRegion(start);
     frame.setState(false, 0, QSize(1280, 720), QString());
     frame.show();
@@ -2406,9 +2535,22 @@ int runMeetFrameDragProbe()
     };
 
     QRect want = start;
+    // Mover y estirar no cambian el tamaño ni la mascara de la ventana (el lienzo): en Windows, estirar la ventana
+    // translucida y cambiarle la mascara en cada paso hacia titilar los bordes que se movian.
+    const QRect canvasBefore = frame.geometry();
+    const QRegion maskBefore = frame.mask();
     drag(barPoint(), QPoint(50, 30));
     want.translate(50, 30);
     expectRegion(want, "mover desde la barrita");
+    drag(right(), QPoint(40, 0));
+    drag(right(), QPoint(-40, 0));
+    expectRegion(want, "estirar y volver desde el borde derecho");
+    check(frame.geometry() == canvasBefore, QStringLiteral("mover y estirar no cambian el lienzo: %1 (antes %2)").arg(rectText(frame.geometry()), rectText(canvasBefore)));
+#ifndef Q_OS_MACOS
+    check(frame.mask().isEmpty() && maskBefore.isEmpty(), QStringLiteral("Windows: el lienzo no lleva mascara (el alfa 0 deja pasar el mouse)"));
+#else
+    Q_UNUSED(maskBefore);
+#endif
     check(bar->geometry().top() == frame.frameRect().top(), QStringLiteral("la barrita se movio con el marco"));
     drag(right(), QPoint(100, 0));
     want.setRight(want.right() + 100);
@@ -2432,6 +2574,21 @@ int runMeetFrameDragProbe()
     // Durante el arrastre de la barrita, la mano cerrada; al soltar, vuelve el cursor de donde quedo el mouse.
     drag(barPoint(), QPoint(0, 0));
     check(frame.cursorShape() == Qt::SizeAllCursor, QStringLiteral("al soltar en la barrita, el cursor de mover (no la mano cerrada)"));
+#ifndef Q_OS_MACOS
+    // Windows: el marco no se puede sacar del area libre de la pantalla (lo que sale del lienzo no se dibuja ni se
+    // agarra): ni moviendolo ni estirandolo de mas.
+    const QRect freeArea = frame.screen()->availableGeometry();
+    const auto outerGlobal = [&]() { return frame.frameRect().translated(frame.geometry().topLeft()); };
+    drag(barPoint(), QPoint(5000, 5000));
+    check(freeArea.contains(outerGlobal()), QStringLiteral("Windows: mover de mas deja el marco adentro de la pantalla: %1 (%2)").arg(rectText(outerGlobal()), rectText(freeArea)));
+    drag(barPoint(), QPoint(-5000, -5000));
+    check(freeArea.contains(outerGlobal()) && outerGlobal().topLeft() == freeArea.topLeft(),
+          QStringLiteral("Windows: y hacia el otro lado, la barrita queda arriba a la izquierda: %1").arg(rectText(outerGlobal())));
+    const QRect leftBefore = frame.region();
+    drag(right(), QPoint(5000, 0));
+    check(freeArea.contains(outerGlobal()) && outerGlobal().right() == freeArea.right() && frame.region().left() == leftBefore.left(),
+          QStringLiteral("Windows: estirar de mas frena en el borde y la izquierda queda quieta: %1").arg(rectText(outerGlobal())));
+#endif
 
     // Proporcion fija (16:9, la de fabrica): estirar desde cualquier lado mantiene la forma de la region.
     frame.setAspectRatio(QSize(16, 9));
@@ -2465,7 +2622,25 @@ int runMeetFrameDragProbe()
     got = frame.region();
     check(isWide(got) && got.width() == MeetFrameOverlay::minimumRegion().width() && got.right() == before.right(),
           QStringLiteral("16:9 al achicar de mas: el minimo, con la forma, y la derecha quieta: %1").arg(rectText(got)));
-    frame.setAspectRatio(QSize());
+    // La forma elegida queda marcada en el menu Size y, si es fija, junto al tamaño en la barrita.
+    const auto checkedShape = [&]() {
+        for (QAction *action : frame.sizeMenu()->actions()) {
+            if (action->isCheckable() && action->isChecked()) return action->data().toString();
+        }
+        return QString();
+    };
+    const auto sizeText = [&]() {
+        for (QLabel *label : bar->findChildren<QLabel *>()) {
+            if (label->text().contains(QChar(0x00D7))) return label->text();
+        }
+        return QString();
+    };
+    frame.setAspectChoice(QStringLiteral("4:3"), QSize(4, 3));
+    check(checkedShape() == QLatin1String("4:3") && sizeText().endsWith(QStringLiteral("· 4:3")),
+          QStringLiteral("forma 4:3: marcada en el menu (%1) y en la barrita (%2)").arg(checkedShape(), sizeText()));
+    frame.setAspectChoice(QStringLiteral("free"), QSize());
+    check(checkedShape() == QLatin1String("free") && !sizeText().contains(QLatin1Char(':')),
+          QStringLiteral("forma libre: marcada en el menu (%1), sin forma en la barrita (%2)").arg(checkedShape(), sizeText()));
     before = frame.region();
     drag(bottom(), QPoint(0, 33));
     got = frame.region();
@@ -2592,6 +2767,264 @@ int runWindowKeysProbe()
     return failures ? 1 : 0;
 }
 
+// Espera a que la ventana tome una paleta: el cambio se junta 30 ms (MainWindow::schedulePaletteRebuild).
+void waitPalette(QWidget &root)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < 150) {
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+    settle(root);
+}
+
+QPushButton *paletteButton(MainWindow &w)
+{
+    for (QPushButton *button : w.findChildren<QPushButton *>()) {
+        if (button->property("lgaControl").toString() == QLatin1String("palette")) {
+            return button;
+        }
+    }
+    return nullptr;
+}
+
+void sendKey(QWidget *target, int key)
+{
+    if (!target) {
+        return;
+    }
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QApplication::sendEvent(target, &press);
+    QApplication::sendEvent(target, &release);
+}
+
+// --ui-probe palette-live [<carpeta>]: las seis paletas de Colors en vivo, en varias paginas (y una captura de
+// cada una en la carpeta, si se pasa); el menu de Colors con las flechas (muestran en vivo), Escape (vuelve a la
+// de antes) y Enter (la elige, la pide guardar y la ventana se rearma); la rueda no la cambia; los nombres
+// entran enteros en el desplegable, que mide lo mismo que el de idioma. Con --lang es, en castellano.
+int runPaletteProbe(const QStringList &args)
+{
+    int failures = 0;
+    int checks = 0;
+    const auto check = [&failures, &checks](bool ok, const QString &what) {
+        ++checks;
+        fprintf(stdout, "%s %s\n", ok ? "ok  " : "FAIL", qPrintable(what));
+        if (!ok) {
+            ++failures;
+        }
+    };
+    const QString outDir = args.value(args.indexOf(QStringLiteral("palette-live")) + 1);
+    const bool shots = !outDir.startsWith(QLatin1String("--")) && !outDir.isEmpty() && QFileInfo(outDir).isDir();
+    MemorySettingsStore store;
+    HostOptions options;
+    options.captureMode = true;
+    ModuleHost host(ModuleRegistry::all(), &store, options);
+    // Las herramientas como en el canvas (la ventana «window»).
+    if (!canvasFixture(host, QString())) {
+        return 1;
+    }
+    MainWindow w(&host, MainWindow::Mode::Capture, nullptr);
+    w.setAttribute(Qt::WA_DontShowOnScreen, true);
+    int rebuilt = 0;
+    QStringList requested;
+    const auto wire = [&w, &requested]() {
+        if (GeneralPage *general = w.generalPage()) {
+            // Como AppController: guarda (aca, anota) y pide el rearmado.
+            QObject::connect(general, &GeneralPage::paletteChangeRequested, &w, [&w, &requested](const QString &id) {
+                requested << id;
+                if (id != Palette::currentPreset()) {
+                    Palette::applyPreset(id);
+                }
+                w.schedulePaletteRebuild();
+            });
+        }
+    };
+    QObject::connect(&w, &MainWindow::rebuilt, [&rebuilt, &wire]() {
+        ++rebuilt;
+        wire();
+    });
+    wire();
+    w.show();
+    settle(w);
+
+    // 1. Cada paleta en vivo, en varias paginas.
+    const QStringList views = {QStringLiteral("general"), QStringLiteral("diskSpace"), QStringLiteral("nukeShortcuts"),
+                               QStringLiteral("openInNukeX"), QStringLiteral("windowLayouts")};
+    for (const QString &id : Palette::presetIds()) {
+        const int before = rebuilt;
+        check(Palette::applyPreset(id), QStringLiteral("%1: se carga").arg(id));
+        waitPalette(w);
+        check(rebuilt == before + 1, QStringLiteral("%1: la ventana se rearmo una vez (%2)").arg(id).arg(rebuilt - before));
+        const QString sheet = qApp->styleSheet();
+        const QString desk = Theme::hex(Theme::kDesk);
+        check(sheet.contains(QStringLiteral("QWidget#central { background-color: %1; }").arg(desk)),
+              QStringLiteral("%1: la mesa de la hoja global es %2").arg(id, desk));
+        check(sheet.contains(QStringLiteral("QLabel#sideLabel { color: %1;").arg(Palette::base(QStringLiteral("section")).name().toUpper())),
+              QStringLiteral("%1: rotulos del indice en el color de su grupo").arg(id));
+        check(qApp->palette().color(QPalette::Window) == Theme::color(Theme::kWindow),
+              QStringLiteral("%1: la paleta de Qt sigue a la hoja").arg(id));
+        for (const QString &view : views) {
+            w.selectPage(view);
+            settle(w);
+            const QPixmap pm = w.grab();
+            check(!pm.isNull() && w.currentPage() == view, QStringLiteral("%1: %2 se pinta").arg(id, view));
+            if (shots) {
+                pm.save(QDir(outDir).filePath(QStringLiteral("%1_%2.png").arg(id, view)));
+            }
+        }
+    }
+
+    // 2. El desplegable de Colors.
+    Palette::applyPreset(Palette::defaultPreset());
+    waitPalette(w);
+    w.selectPage(QStringLiteral("general"));
+    settle(w);
+    QPushButton *button = paletteButton(w);
+    check(button != nullptr, QStringLiteral("hay desplegable de Colors"));
+    if (!button) {
+        fprintf(stdout, "palette-live: %d/%d comprobaciones, %d fallas\npalette-live FALLO\n", checks - failures, checks, failures);
+        return 1;
+    }
+    check(button->text() == Palette::presetName(Palette::defaultPreset()),
+          QStringLiteral("muestra la de fabrica (%1)").arg(button->text()));
+    QPushButton *language = nullptr;
+    for (QPushButton *b : w.findChildren<QPushButton *>()) {
+        if (b != button && b->objectName() == QLatin1String("fieldButton") && b->parentWidget() == button->parentWidget()) {
+            language = b;
+        }
+    }
+    check(language && language->width() == button->width(),
+          QStringLiteral("mide lo mismo que el de idioma (%1 y %2)").arg(button->width()).arg(language ? language->width() : -1));
+    const QString keep = button->text();
+    for (const QString &id : Palette::presetIds()) {
+        button->setText(Palette::presetName(id));
+        check(button->sizeHint().width() <= button->width(),
+              QStringLiteral("«%1» entra entero (%2 de %3)").arg(Palette::presetName(id)).arg(button->sizeHint().width()).arg(button->width()));
+    }
+    button->setText(keep);
+    if (shots) {
+        w.grab().save(QDir(outDir).filePath(QStringLiteral("menu_general.png")));
+    }
+
+    // Flechas abajo, abajo y Escape: muestran la segunda y la tercera, y vuelve a la de antes.
+    const QStringList ids = Palette::presetIds();
+    QStringList seen;
+    const QString menuShot = shots ? QDir(outDir).filePath(QStringLiteral("menu_abierto.png")) : QString();
+    QTimer::singleShot(60, [&seen, &menuShot]() {
+        // El menu recien abierto, con la paleta de fabrica (antes de las flechas, que previsualizan otra).
+        if (QWidget *popup = QApplication::activePopupWidget(); popup && !menuShot.isEmpty()) {
+            popup->grab().save(QFileInfo(menuShot).dir().filePath(QStringLiteral("menu_inicial.png")));
+            // Y con una fila resaltada (la tercera), como cuando el mouse pasa por encima.
+            if (auto *menu = qobject_cast<QMenu *>(popup); menu && menu->actions().size() > 2) {
+                QAction *before = menu->activeAction();
+                menu->setActiveAction(menu->actions().at(2));
+                popup->grab().save(QFileInfo(menuShot).dir().filePath(QStringLiteral("menu_inicial_resaltada.png")));
+                menu->setActiveAction(before); // las flechas de abajo parten de donde estaban
+            }
+        }
+        sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+        QTimer::singleShot(80, [&seen, &menuShot]() {
+            seen << Palette::currentPreset();
+            sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+            QTimer::singleShot(80, [&seen, &menuShot]() {
+                seen << Palette::currentPreset();
+                if (QWidget *popup = QApplication::activePopupWidget(); popup && !menuShot.isEmpty()) {
+                    popup->grab().save(menuShot);
+                }
+                sendKey(QApplication::activePopupWidget(), Qt::Key_Escape);
+            });
+        });
+    });
+    const int requestsBefore = requested.size();
+    button->click();
+    waitPalette(w);
+    check(seen.value(0) == ids.value(1), QStringLiteral("flecha abajo: %1 en vivo (%2)").arg(ids.value(1), seen.value(0)));
+    check(seen.value(1) == ids.value(2), QStringLiteral("otra flecha: %1 en vivo (%2)").arg(ids.value(2), seen.value(1)));
+    check(Palette::currentPreset() == ids.value(0), QStringLiteral("Escape vuelve a %1 (%2)").arg(ids.value(0), Palette::currentPreset()));
+    check(requested.size() == requestsBefore + 1 && requested.last() == ids.value(0),
+          QStringLiteral("Escape pide rearmar con la de antes"));
+
+    // Flecha abajo y Enter: la elige.
+    button = paletteButton(w);
+    check(button != nullptr, QStringLiteral("hay desplegable despues de rearmar"));
+    if (button) {
+        QTimer::singleShot(60, []() {
+            sendKey(QApplication::activePopupWidget(), Qt::Key_Down);
+            QTimer::singleShot(80, []() { sendKey(QApplication::activePopupWidget(), Qt::Key_Return); });
+        });
+        const int rebuiltBefore = rebuilt;
+        button->click();
+        waitPalette(w);
+        check(Palette::currentPreset() == ids.value(1), QStringLiteral("Enter elige %1 (%2)").arg(ids.value(1), Palette::currentPreset()));
+        check(!requested.isEmpty() && requested.last() == ids.value(1), QStringLiteral("Enter pide guardar %1").arg(ids.value(1)));
+        check(rebuilt > rebuiltBefore, QStringLiteral("la ventana se rearmo con la elegida"));
+        button = paletteButton(w);
+        check(button && button->text() == Palette::presetName(ids.value(1)),
+              QStringLiteral("el desplegable nuevo dice %1").arg(Palette::presetName(ids.value(1))));
+    }
+
+    // La rueda no la cambia.
+    if (button) {
+        const QString current = Palette::currentPreset();
+        const QPointF at(button->width() / 2.0, button->height() / 2.0);
+        for (const int delta : {-120, 120}) {
+            QWheelEvent wheel(at, button->mapToGlobal(at), QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                              Qt::NoScrollPhase, false);
+            QApplication::sendEvent(button, &wheel);
+        }
+        waitPalette(w);
+        check(Palette::currentPreset() == current && !QApplication::activePopupWidget(), QStringLiteral("la rueda no cambia la paleta"));
+    }
+
+    // Con los colores del codigo la hoja vuelve a ser la escrita (Theme.h), sin traducir nada.
+    Palette::apply(Palette::factory());
+    waitPalette(w);
+    check(Palette::isFactory() && qApp->styleSheet().contains(QStringLiteral("QWidget#central { background-color: #0D0D0F; }")),
+          QStringLiteral("con los colores del codigo la mesa vuelve a #0D0D0F"));
+    fprintf(stdout, "palette-live: %d/%d comprobaciones, %d fallas\n%s\n", checks - failures, checks, failures,
+            failures ? "palette-live FALLO" : "palette-live ok");
+    return failures ? 1 : 0;
+}
+
+// --ui-probe palette-editor <carpeta>: el editor de desarrollo y su aviso de ejemplo, con la paleta de fabrica y
+// con Magenta, capturados en la carpeta. Lee y escribe solo adentro de <carpeta>/paletas.
+int runPaletteEditorProbe(const QStringList &args)
+{
+    const QString outDir = args.value(args.indexOf(QStringLiteral("palette-editor")) + 1);
+    if (outDir.isEmpty() || !QFileInfo(outDir).isDir()) {
+        fprintf(stderr, "uso: --ui-probe palette-editor <carpeta existente>\n");
+        return 2;
+    }
+    int failures = 0;
+    const QString folder = QDir(outDir).filePath(QStringLiteral("paletas"));
+    PaletteEditor editor(folder);
+    editor.setAttribute(Qt::WA_DontShowOnScreen, true);
+    editor.show();
+    settle(editor);
+    for (const QString &id : {Palette::defaultPreset(), QStringLiteral("default-2")}) {
+        Palette::applyPreset(id);
+        Theme::refresh(*qApp);
+        settle(editor);
+        if (!editor.grab().save(QDir(outDir).filePath(QStringLiteral("editor_%1.png").arg(id)))) {
+            ++failures;
+        }
+        editor.showSampleNotice();
+        QWidget *notice = editor.sampleNotice();
+        if (notice) {
+            settle(*notice);
+        }
+        if (!notice || !notice->grab().save(QDir(outDir).filePath(QStringLiteral("aviso_%1.png").arg(id)))) {
+            ++failures;
+        }
+    }
+    const bool folderMade = QFileInfo(folder).isDir();
+    fprintf(stdout, "palette-editor: capturas %s, carpeta %s\n%s\n", failures ? "con fallas" : "ok", folderMade ? "ok" : "falta",
+            failures || !folderMade ? "palette-editor FALLO" : "palette-editor ok");
+    return failures || !folderMade ? 1 : 0;
+}
+
 int runUiProbe(const QStringList &args)
 {
     if (QGuiApplication::platformName() != QLatin1String("offscreen")) {
@@ -2614,6 +3047,9 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("page-fit")) {
         return runPageFitProbe();
+    }
+    if (probe == QLatin1String("window-release")) {
+        return runWindowReleaseProbe();
     }
     if (probe == QLatin1String("disk-reminder")) {
         return runDiskReminderProbe();
@@ -2644,6 +3080,12 @@ int runUiProbe(const QStringList &args)
     }
     if (probe == QLatin1String("titlebar-drag")) {
         return runTitleBarDragProbe();
+    }
+    if (probe == QLatin1String("palette-live")) {
+        return runPaletteProbe(args);
+    }
+    if (probe == QLatin1String("palette-editor")) {
+        return runPaletteEditorProbe(args);
     }
     if (probe == QLatin1String("window-keys")) {
         return runWindowKeysProbe();

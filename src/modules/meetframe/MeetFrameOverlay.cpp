@@ -6,6 +6,7 @@
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
+#include <QActionGroup>
 #include <QCoreApplication>
 #include <QDebug>
 #include <QEnterEvent>
@@ -25,39 +26,38 @@ namespace {
 
 constexpr int kBand = 12;    // franja alrededor de la region: de ahi se estira el marco
 constexpr int kCorner = 28;  // cerca de una esquina (a lo largo de la franja) se estira en diagonal
-constexpr int kSlack = 320;  // lienzo: holgura alrededor del marco (asi casi ningun paso cambia el tamaño del lienzo)
 constexpr int kLine = 2;     // el borde que se ve, pegado a la region por fuera
 constexpr int kBarH = 30;    // la barrita de arriba
 constexpr int kBarRadius = 6;
 
-// mac: Qt 6.5 no implementa startSystemResize y startSystemMove depende de NSApp.currentEvent, que con el click
-// diferido de Qt a veces ya no es el mouseDown: el marco se mueve y se estira a mano, siguiendo al mouse.
-//
-// Lienzo (mac): la ventana del marco es mas grande que el marco (kSlack de holgura, dentro de la pantalla) y el
-// marco se dibuja adentro. Mover o estirar solo redibuja las franjas que cambian; cambiar el tamaño de una
-// ventana translucida obliga a Qt a crear una superficie nueva y redibujarla entera en cada paso (se veia como un
-// arrastre pesado y atrasado). El lienzo cambia solo cuando el marco se le sale. No es la pantalla entera para no
-// gastar memoria de mas (cada superficie de una pantalla 5K son ~60 MB). El mouse lo reparte
-// MeetFrameSystem::trackFrameMouse: afuera del borde y la barrita, la ventana lo deja pasar.
+// El marco se mueve y se estira a mano, siguiendo al mouse, sobre un lienzo: la ventana del marco es mas grande
+// que el marco y el marco se dibuja adentro. Mover o estirar solo redibuja las franjas que cambian. El lienzo
+// cambia solo cuando el marco se le sale o pasa a otra pantalla.
+//  - mac: Qt 6.5 no implementa startSystemResize y startSystemMove depende de NSApp.currentEvent, que con el
+//    click diferido de Qt a veces ya no es el mouseDown. Cambiar el tamaño de una ventana translucida obliga a Qt
+//    a crear una superficie nueva y redibujarla entera en cada paso (arrastre pesado y atrasado). El lienzo es el
+//    marco con 320 de holgura, no la pantalla entera, para no gastar memoria de mas (cada superficie de una
+//    pantalla 5K son ~60 MB). El mouse lo reparte MeetFrameSystem::trackFrameMouse con la mascara.
+//  - Windows: estirar la ventana translucida (y cambiarle la mascara) en cada paso hacia titilar los bordes que
+//    se movian: la ventana cambiaba de tamaño antes de tener su dibujo nuevo. El lienzo es la pantalla (sin la
+//    barra de tareas) y no lleva mascara: los pixeles con alfa 0 ya dejan pasar el mouse.
 #ifdef Q_OS_MACOS
-constexpr bool kManualDrag = true;
-constexpr bool kCanvas = true;
+constexpr int kSlack = 320;
 #else
-constexpr bool kManualDrag = false;
-constexpr bool kCanvas = false;
+constexpr int kSlack = 1 << 20; // tanta holgura que el lienzo es siempre la pantalla
 #endif
 
 // Tooltip con el atajo en la linea de abajo (formato comun de los tooltips de LGA).
 QString withKeys(const QString &text, const QString &keys)
 {
     if (keys.isEmpty()) return text.toHtmlEscaped();
-    return text.toHtmlEscaped() + QStringLiteral("<div align='center'><span style='color:#E8E8E8'><b>%1</b></span></div>").arg(keys.toHtmlEscaped());
+    return text.toHtmlEscaped() + QStringLiteral("<div align='center'><span style='color:#E8E8E8; font-weight:600'>%1</span></div>").arg(keys.toHtmlEscaped());
 }
 
 } // namespace
 
 MeetFrameOverlay::MeetFrameOverlay(bool capture, QWidget *parent)
-    : QWidget(parent), m_capture(capture), m_canvas(kCanvas && !capture)
+    : QWidget(parent), m_capture(capture), m_canvas(!capture)
 {
     setObjectName(QStringLiteral("meetFrameOverlay"));
     if (!capture) {
@@ -95,8 +95,32 @@ MeetFrameOverlay::MeetFrameOverlay(bool capture, QWidget *parent)
     m_close->setAccessibleName(I18n::tr("Hide the frame"));
     row->addWidget(m_close, 0, Qt::AlignVCenter);
     for (QPushButton *button : {m_pause, m_sizeButton, m_close}) button->setFocusPolicy(Qt::NoFocus);
+    // Otra paleta con el marco abierto: los iconos se arman con su color.
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, m_bar, [this]() {
+        Ui::setDropdownArrow(m_sizeButton);
+        Ui::setIcon(m_close, Icon::X, Theme::color(Theme::kIcon), 12);
+    });
 
     m_sizeMenu = new QMenu(this);
+    // La forma: libre o fija al estirar. Elegir una ya acomoda la region (MeetFrameModule::setAspect).
+    auto *shapes = new QActionGroup(m_sizeMenu);
+    const QList<QPair<QString, QString>> shapeItems = {
+        {QStringLiteral("free"), I18n::tr("Free shape")},
+        {QStringLiteral("16:9"), I18n::tr("Lock to %1").arg(QStringLiteral("16:9"))},
+        {QStringLiteral("4:3"), I18n::tr("Lock to %1").arg(QStringLiteral("4:3"))},
+        {QStringLiteral("1:1"), I18n::tr("Lock to %1").arg(QStringLiteral("1:1"))},
+        {QStringLiteral("current"), I18n::tr("Lock to this shape")},
+    };
+    for (const auto &item : shapeItems) {
+        QAction *action = m_sizeMenu->addAction(item.second);
+        action->setCheckable(true);
+        action->setData(item.first);
+        shapes->addAction(action);
+        m_shapeActions << action;
+        const QString id = item.first;
+        connect(action, &QAction::triggered, this, [this, id]() { emit aspectRequested(id); });
+    }
+    m_sizeMenu->addSeparator();
     const QList<QSize> sizes = {QSize(1280, 720), QSize(1600, 900), QSize(1920, 1080)};
     for (const QSize &size : sizes) {
         QAction *action = m_sizeMenu->addAction(QStringLiteral("%1 × %2").arg(size.width()).arg(size.height()));
@@ -152,6 +176,20 @@ void MeetFrameOverlay::setAspectRatio(const QSize &ratio)
     m_aspect = ratio.isValid() && !ratio.isEmpty() ? ratio : QSize();
 }
 
+void MeetFrameOverlay::setAspectChoice(const QString &aspect, const QSize &ratio)
+{
+    setAspectRatio(ratio);
+    for (QAction *action : std::as_const(m_shapeActions)) action->setChecked(action->data().toString() == aspect);
+    // En la barrita, junto al tamaño: la forma fija, para que se sepa por que el marco no estira libre.
+    const QString shape = !m_aspect.isValid() ? QString()
+                          : aspect == QLatin1String("current") ? I18n::tr("locked")
+                                                               : aspect;
+    if (shape == m_shapeText) return;
+    m_shapeText = shape;
+    m_stateSet = false; // rearma el texto del tamaño
+    setState(m_paused, m_hiddenCount, m_pixels, m_error);
+}
+
 QRegion MeetFrameOverlay::frameArea() const
 {
     // Lo que el marco ocupa: la franja (con el borde) y la barrita.
@@ -160,17 +198,30 @@ QRegion MeetFrameOverlay::frameArea() const
     return area + QRegion(m_bar->geometry());
 }
 
-void MeetFrameOverlay::setFrameGlobal(const QRect &frame)
+void MeetFrameOverlay::setFrameGlobal(const QRect &wanted)
 {
     if (!m_canvas) {
-        setGeometry(frame); // moveEvent y resizeEvent avisan
+        setGeometry(wanted); // moveEvent y resizeEvent avisan
         return;
     }
     // El lienzo va en la pantalla donde cae el centro del marco y lo contiene con holgura: solo cambia (y se
     // redimensiona) cuando el marco se le sale o pasa a otra pantalla.
-    QScreen *screen = QGuiApplication::screenAt(frame.center());
+    QScreen *screen = QGuiApplication::screenAt(wanted.center());
     if (!screen) screen = this->screen() ? this->screen() : QGuiApplication::primaryScreen();
+#ifdef Q_OS_MACOS
+    const QRect frame = wanted;
     const QRect screenArea = screen ? screen->geometry() : frame;
+#else
+    // Sin la barra de tareas: una ventana que tapa el monitor entero puede pasar por una app a pantalla completa.
+    const QRect screenArea = screen ? screen->availableGeometry() : wanted;
+    // Y el marco entero queda adentro: lo que sale del lienzo no se dibuja ni se puede agarrar (la barrita podia
+    // quedar bajo la barra de tareas, sin desde donde mover el marco).
+    QRect frame(wanted.topLeft(), wanted.size().boundedTo(screenArea.size()));
+    if (frame.right() > screenArea.right()) frame.moveRight(screenArea.right());
+    if (frame.bottom() > screenArea.bottom()) frame.moveBottom(screenArea.bottom());
+    if (frame.left() < screenArea.left()) frame.moveLeft(screenArea.left());
+    if (frame.top() < screenArea.top()) frame.moveTop(screenArea.top());
+#endif
     const QRect needed = frame.intersected(screenArea).isEmpty() ? frame : frame.intersected(screenArea);
     QRect canvas = geometry();
     if (!screenArea.contains(canvas) || !canvas.contains(needed)) {
@@ -216,7 +267,9 @@ void MeetFrameOverlay::setState(bool paused, int hiddenWindows, const QSize &pix
     m_paused = paused;
     m_error = error;
     m_dot->setTone(!error.isEmpty() ? QStringLiteral("err") : paused ? QStringLiteral("warn") : QStringLiteral("ok"));
-    m_size->setText(pixels.isValid() ? QStringLiteral("%1 × %2").arg(pixels.width()).arg(pixels.height()) : QString());
+    QString sizeText = pixels.isValid() ? QStringLiteral("%1 × %2").arg(pixels.width()).arg(pixels.height()) : QString();
+    if (!sizeText.isEmpty() && !m_shapeText.isEmpty()) sizeText += QStringLiteral(" · ") + m_shapeText;
+    m_size->setText(sizeText);
     m_hidden->setText(hiddenWindows > 0 ? (hiddenWindows == 1 ? I18n::tr("1 hidden") : I18n::tr("%1 hidden").arg(hiddenWindows)) : QString());
     m_hidden->setVisible(hiddenWindows > 0);
     m_pause->setText(paused ? I18n::tr("Resume") : I18n::tr("Pause"));
@@ -336,10 +389,6 @@ void MeetFrameOverlay::mousePressEvent(QMouseEvent *event)
     const bool onBar = m_bar->geometry().contains(pos);
     const Qt::Edges edges = onBar ? Qt::Edges() : edgesAt(pos);
     if (!onBar && !edges) return;
-    // Con una forma fija, Windows estira a mano (el sistema no sabe mantenerla).
-    if (!kManualDrag && (onBar || !m_aspect.isValid()) && (onBar ? windowHandle()->startSystemMove() : windowHandle()->startSystemResize(edges))) {
-        return;
-    }
     m_dragging = true;
     m_dragClock.start();
     m_dragGapClock.invalidate(); // la espera entre el click y el primer movimiento es del usuario: no cuenta
@@ -432,6 +481,17 @@ void MeetFrameOverlay::dragTo(const QPoint &global, bool measureGap)
     if (m_dragEdges & Qt::RightEdge) next.setRight(std::max(next.right() + delta.x(), next.left() + least.width() - 1));
     if (m_dragEdges & Qt::TopEdge) next.setTop(std::min(next.top() + delta.y(), next.bottom() + 1 - least.height()));
     if (m_dragEdges & Qt::BottomEdge) next.setBottom(std::max(next.bottom() + delta.y(), next.top() + least.height() - 1));
+#ifndef Q_OS_MACOS
+    // Windows: el borde que se tira frena en el borde del area libre de la pantalla (el lienzo no pasa de ahi y,
+    // si no, setFrameGlobal correria el marco entero).
+    if (QScreen *screen = QGuiApplication::screenAt(m_pressGeometry.center())) {
+        const QRect area = screen->availableGeometry();
+        if (m_dragEdges & Qt::LeftEdge) next.setLeft(std::max(next.left(), area.left()));
+        if (m_dragEdges & Qt::RightEdge) next.setRight(std::min(next.right(), area.right()));
+        if (m_dragEdges & Qt::TopEdge) next.setTop(std::max(next.top(), area.top()));
+        if (m_dragEdges & Qt::BottomEdge) next.setBottom(std::min(next.bottom(), area.bottom()));
+    }
+#endif
     if (m_aspect.isValid()) next = keepAspect(next);
     setFrameGlobal(next);
 }
@@ -555,6 +615,11 @@ void MeetFrameOverlay::updateMask()
 {
     // Solo la franja del borde y la barrita reciben el mouse: adentro y al costado de la barrita, los clicks
     // pasan a las ventanas de abajo.
+#ifndef Q_OS_MACOS
+    // Windows: la ventana es translucida por pixel y donde el alfa es 0 el mouse ya pasa. Cambiar la mascara
+    // (SetWindowRgn) en cada paso del arrastre hacia titilar lo que se movia.
+    if (m_canvas) return;
+#endif
     setMask(frameArea());
 }
 
@@ -584,7 +649,7 @@ void MeetFrameOverlay::paintEvent(QPaintEvent *)
     painter.fillRect(frame, QColor(0, 0, 0, 1));
     painter.restore();
     // El borde, por fuera de la region para que nunca salga en lo compartido.
-    const QColor line(!m_error.isEmpty() ? Theme::kError : m_paused ? Theme::kWarn : Theme::kOk);
+    const QColor line = Theme::color(!m_error.isEmpty() ? Theme::kError : m_paused ? Theme::kWarn : Theme::kOk);
     painter.setPen(Qt::NoPen);
     painter.setBrush(line);
     QRegion ring = QRegion(inner.adjusted(-kLine, -kLine, kLine, kLine)).subtracted(QRegion(inner));
@@ -593,7 +658,7 @@ void MeetFrameOverlay::paintEvent(QPaintEvent *)
     painter.setClipping(false);
     // La barrita: tarjeta de la app con el color del borde a la izquierda.
     const QRectF bar = QRectF(m_bar->geometry()).adjusted(0.5, 0.5, -0.5, -0.5);
-    painter.setPen(QPen(QColor(Theme::kCardBorder), 1));
-    painter.setBrush(QColor(Theme::kCard));
+    painter.setPen(QPen(Theme::color(Theme::kCardBorder), 1));
+    painter.setBrush(Theme::color(Theme::kCard));
     painter.drawRoundedRect(bar, kBarRadius, kBarRadius);
 }

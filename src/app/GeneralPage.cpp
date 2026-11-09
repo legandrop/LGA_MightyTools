@@ -6,6 +6,7 @@
 #include "core/UiScale.h"
 #include "platform/AutoStart.h"
 #include "ui/CustomTooltip.h"
+#include "ui/Palette.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -13,6 +14,8 @@
 #include <QGuiApplication>
 #include <QScreen>
 #include <QHBoxLayout>
+#include <QKeyEvent>
+#include <QTimer>
 #include <QLabel>
 #include <QMenu>
 #include <QPushButton>
@@ -32,6 +35,70 @@ QHBoxLayout *addHead(QVBoxLayout *layout, const QString &title, QWidget *parent)
     layout->addLayout(head);
     layout->addSpacing(8);
     return head;
+}
+
+// Un desplegable de la tarjeta App (`.pick`): caja de campo, texto a la izquierda y la flecha.
+void styleDropdown(QPushButton *button)
+{
+    button->setObjectName(QStringLiteral("fieldButton"));
+    button->setStyleSheet(QStringLiteral("text-align: left;"));
+    Ui::setDropdownArrow(button);
+}
+
+// El ancho que pide el desplegable para mostrar entero el mas largo de los textos.
+int fittingWidth(QPushButton *button, const QStringList &texts)
+{
+    const QString keep = button->text();
+    button->ensurePolished();
+    int width = 0;
+    for (const QString &text : texts) {
+        button->setText(text);
+        width = qMax(width, button->sizeHint().width());
+    }
+    button->setText(keep);
+    return width;
+}
+
+// Las flechas del menu de Colors muestran la paleta marcada en vivo (GeneralPage::openPaletteMenu).
+class PaletteMenuPreview : public QObject
+{
+public:
+    explicit PaletteMenuPreview(QMenu *menu)
+        : QObject(menu)
+        , m_menu(menu)
+    {
+    }
+    bool previewed() const { return m_previewed; }
+
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == m_menu && event->type() == QEvent::KeyPress) {
+            const int key = static_cast<QKeyEvent *>(event)->key();
+            if (key == Qt::Key_Up || key == Qt::Key_Down) {
+                // Despues de que el menu mueva la marca.
+                QTimer::singleShot(0, m_menu, [this]() {
+                    const QAction *active = m_menu->activeAction();
+                    const QString id = active ? active->data().toString() : QString();
+                    if (!id.isEmpty() && id != Palette::currentPreset() && Palette::applyPreset(id)) {
+                        m_previewed = true;
+                    }
+                });
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    QMenu *m_menu;
+    bool m_previewed = false;
+};
+
+// La paleta que muestra el desplegable: la ultima elegida (la de fabrica si el editor de desarrollo puso otra).
+QString currentPalette()
+{
+    const QString id = Palette::currentPreset();
+    return id.isEmpty() ? Palette::defaultPreset() : id;
 }
 
 QString countWord(int count)
@@ -138,7 +205,7 @@ QFrame *GeneralPage::buildAppCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
     addHead(layout, QStringLiteral("App"), card);
 
@@ -175,15 +242,19 @@ QFrame *GeneralPage::buildAppCard()
     // Idioma y tamano de la interfaz: el mismo desplegable que "Remind me every" de Disk Space, en una
     // grilla para que los dos desplegables arranquen en la misma columna. Cada idioma con su nombre en
     // su idioma. Elegir no cambia nada aca: lo aplica quien arma la ventana.
+    // Como GateBouncer: 12 de aire arriba y abajo del divisor (addDivider da 8).
+    layout->addSpacing(4);
     Ui::addDivider(layout, card);
+    layout->addSpacing(4);
     auto *optionsBox = new QWidget(card);
     auto *options = new QGridLayout(optionsBox);
     options->setContentsMargins(0, 0, 0, 0);
-    options->setHorizontalSpacing(8);
-    options->setVerticalSpacing(4);
+    options->setHorizontalSpacing(12);
+    options->setVerticalSpacing(8);
     options->setColumnStretch(2, 1);
-    options->setRowMinimumHeight(0, 26);
-    options->setRowMinimumHeight(1, 26);
+    options->setRowMinimumHeight(0, 28);
+    options->setRowMinimumHeight(1, 28);
+    options->setRowMinimumHeight(2, 30);
     options->addWidget(Ui::label(I18n::tr("Language"), "optionLabel", optionsBox), 0, 0, Qt::AlignVCenter);
     m_languageButton = Ui::button(I18n::nativeName(I18n::language()), QString(), QString(), optionsBox);
     m_languageButton->setObjectName(QStringLiteral("fieldButton"));
@@ -191,6 +262,25 @@ QFrame *GeneralPage::buildAppCard()
     // AlignAbsolute: el desplegable va en RightToLeft (la flecha a la derecha) y un AlignLeft comun lo
     // daria vuelta, pegandolo al borde derecho de la columna.
     options->addWidget(m_languageButton, 0, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
+    // Colores (ui/Palette.h): las paletas de LGA GateBouncer, en vivo, sin reiniciar. El mismo desplegable,
+    // con el mismo ancho que el de idioma: el de los dos que mas pide, para que ningun nombre se corte.
+    options->addWidget(Ui::label(I18n::tr("Colors"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
+    m_paletteButton = Ui::button(Palette::presetName(currentPalette()), QString(), QString(), optionsBox);
+    // La QA lo encuentra por esta propiedad: el objectName es el del estilo de los desplegables.
+    m_paletteButton->setProperty("lgaControl", QStringLiteral("palette"));
+    styleDropdown(m_paletteButton);
+    styleDropdown(m_languageButton);
+    QStringList widest;
+    for (const I18n::Language option : {I18n::Language::English, I18n::Language::Spanish}) {
+        widest << I18n::nativeName(option);
+    }
+    for (const QString &id : Palette::presetIds()) {
+        widest << Palette::presetName(id);
+    }
+    const int dropdownWidth = qMax(fittingWidth(m_languageButton, widest), fittingWidth(m_paletteButton, widest));
+    m_languageButton->setFixedWidth(dropdownWidth);
+    m_paletteButton->setFixedWidth(dropdownWidth);
+    options->addWidget(m_paletteButton, 1, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
     // Zoom (core/UiScale.h): cada nivel multiplica toda la interfaz y se muestra como porcentaje (100, 110 y
     // 120 %) en un switch segmentado. Se sigue guardando el nivel (0, 1, 2). Muestra el de esta sesion.
     const auto percent = [](int level) { return I18n::tr("%1%").arg(qRound(UiScale::factor(level) * 100)); };
@@ -202,11 +292,11 @@ QFrame *GeneralPage::buildAppCard()
     if (!UiScale::supported()) {
         // macOS (D-45): sin tamano de interfaz. El switch existe (lo usan las senales) pero no se muestra.
         m_uiSizeSwitch->hide();
-        options->setRowMinimumHeight(1, 0);
+        options->setRowMinimumHeight(2, 0);
         layout->addWidget(optionsBox);
     } else {
-        options->addWidget(Ui::label(I18n::tr("Zoom"), "optionLabel", optionsBox), 1, 0, Qt::AlignVCenter);
-        options->addWidget(m_uiSizeSwitch, 1, 1, Qt::AlignVCenter | Qt::AlignLeft);
+        options->addWidget(Ui::label(I18n::tr("Zoom"), "optionLabel", optionsBox), 2, 0, Qt::AlignVCenter);
+        options->addWidget(m_uiSizeSwitch, 2, 1, Qt::AlignVCenter | Qt::AlignLeft);
         layout->addWidget(optionsBox);
         // Limite por pantalla (D-35): lo que no entra en la pantalla principal queda apagado. Qt da el area en
         // pixeles logicos de esta sesion; por el factor vuelve a la escala del sistema, la misma que usa main.
@@ -225,13 +315,16 @@ QFrame *GeneralPage::buildAppCard()
         }
         QLabel *uiSizeCaption = Ui::caption(
             I18n::tr("%1 is the default. Changing it restarts the app.").arg(percent(UiScale::kDefaultLevel)), card);
-        uiSizeCaption->setContentsMargins(0, 3, 0, 0);
+        uiSizeCaption->setContentsMargins(0, 6, 0, 0);
+        Ui::setStyleProperty(uiSizeCaption, "note", QStringLiteral("true"));
         layout->addWidget(uiSizeCaption);
         // Una linea aparte y corta, solo cuando la pantalla limita: dice hasta cual entra.
         if (maxLevel < UiScale::kMaxLevel) {
             const QString limit = maxLevel == 0 ? I18n::tr("Only %1 fits on this screen.").arg(percent(0))
                                                 : I18n::tr("Up to %1 fits on this screen.").arg(percent(maxLevel));
-            layout->addWidget(Ui::caption(limit, card));
+            QLabel *limitCaption = Ui::caption(limit, card);
+            Ui::setStyleProperty(limitCaption, "note", QStringLiteral("true"));
+            layout->addWidget(limitCaption);
         }
     }
 #ifdef Q_OS_MACOS
@@ -267,6 +360,7 @@ QFrame *GeneralPage::buildAppCard()
             emit languageChangeRequested(chosen->data().toString());
         }
     });
+    connect(m_paletteButton, &QPushButton::clicked, this, &GeneralPage::openPaletteMenu);
     return card;
 }
 
@@ -321,7 +415,7 @@ QFrame *GeneralPage::buildToolsCard()
 {
     QFrame *card = Ui::card(this);
     auto *layout = new QVBoxLayout(card);
-    layout->setContentsMargins(14, 12, 14, 12);
+    layout->setContentsMargins(18, 15, 18, 16);
     layout->setSpacing(0);
     QHBoxLayout *head = addHead(layout, QStringLiteral("Tools"), card);
     m_toolsChip = new Chip(card);
@@ -442,4 +536,45 @@ void GeneralPage::setAutoStart(bool enabled, bool installedCopy)
 void GeneralPage::setCheckUpdatesAtStartup(bool check)
 {
     m_checkUpdates->setChecked(check);
+}
+
+void GeneralPage::openPaletteMenu()
+{
+    // Con el menu abierto, las flechas arriba y abajo ya muestran la paleta marcada, en vivo; Enter o un click
+    // la eligen y Escape o un click afuera vuelven a la de antes. El mouse que pasa por encima no la cambia.
+    // «original» puede no ser ninguna de las seis (el editor de desarrollo aplico otra): entonces Escape vuelve a
+    // esa misma y elegir cualquiera, tambien la que el desplegable muestra, la aplica.
+    const QString original = Palette::currentPreset();
+    const Palette::Data before = Palette::current();
+    QMenu menu(this);
+    QAction *marked = nullptr;
+    for (const QString &id : Palette::presetIds()) {
+        QAction *action = menu.addAction(Palette::presetName(id));
+        action->setData(id);
+        // Sin tilde, como el desplegable de GateBouncer: la fila de la paleta actual arranca resaltada.
+        if (id == original) {
+            marked = action;
+        }
+    }
+    auto *preview = new PaletteMenuPreview(&menu);
+    menu.installEventFilter(preview);
+    // Las flechas arrancan desde la elegida (abierto el menu: antes, Qt la borra al mostrarlo).
+    QTimer::singleShot(0, &menu, [&menu, marked]() {
+        if (marked) {
+            menu.setActiveAction(marked);
+        }
+    });
+    QAction *chosen = menu.exec(m_paletteButton->mapToGlobal(QPoint(0, m_paletteButton->height() + 2)));
+    if (!chosen && original.isEmpty()) {
+        // Vuelta a la paleta del editor (no es una de las seis): se aplica y la ventana se rearma sola.
+        if (preview->previewed()) {
+            Palette::apply(before);
+        }
+        return;
+    }
+    const QString picked = chosen ? chosen->data().toString() : original;
+    if (picked != original || preview->previewed()) {
+        // La ventana se rearma con la paleta final (fuera de esta senal: este boton es parte de lo que se borra).
+        emit paletteChangeRequested(picked);
+    }
 }

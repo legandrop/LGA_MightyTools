@@ -65,7 +65,7 @@ QWidget *AppTogglePanel::createListPage()
     column->addWidget(m_statusCard);
     auto *saved = Ui::card(page);
     auto *savedColumn = new QVBoxLayout(saved);
-    savedColumn->setContentsMargins(14, 12, 14, 12);
+    savedColumn->setContentsMargins(18, 15, 18, 16);
     savedColumn->setSpacing(8);
     savedColumn->addWidget(Ui::label(I18n::tr("Saved apps"), "cardTitle", saved));
     m_rows = new QWidget(saved);
@@ -83,7 +83,7 @@ QWidget *AppTogglePanel::createListPage()
     column->addWidget(saved);
     auto *addCard = Ui::card(page);
     auto *addRow = new QHBoxLayout(addCard);
-    addRow->setContentsMargins(14, 12, 14, 12);
+    addRow->setContentsMargins(18, 15, 18, 16);
     auto *texts = new QVBoxLayout();
     texts->addWidget(Ui::label(I18n::tr("Create an app shortcut"), "cardTitle", addCard));
     auto *caption = Ui::caption(I18n::tr("Choose a program and record its shortcut."), addCard);
@@ -106,7 +106,7 @@ QWidget *AppTogglePanel::createEditorPage()
     column->setSpacing(6);
     auto *card = Ui::card(page);
     auto *form = new QVBoxLayout(card);
-    form->setContentsMargins(14, 12, 14, 12);
+    form->setContentsMargins(18, 15, 18, 16);
     form->setSpacing(6);
     form->addWidget(Ui::label(I18n::tr("App shortcut"), "cardTitle", card));
     form->addWidget(Ui::caption(I18n::tr("Name"), card));
@@ -428,4 +428,10 @@ void AppTogglePanel::showEditorForCapture(int id, const QString &error, const QS
         m_editorError->show();
     }
     if (!recording.isEmpty()) m_shortcut->showRecordingFixture(recording);
+}
+
+bool AppTogglePanel::hasUnsavedWork() const
+{
+    // El editor abierto: lo elegido y escrito se guarda solo con Save o Enter.
+    return m_pages && m_pages->currentWidget() == m_editorPage;
 }

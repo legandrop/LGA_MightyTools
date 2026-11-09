@@ -85,7 +85,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     // ---------- Tarjeta 2: atajos ----------
     QFrame *shortcutsCard = Ui::card(this);
     auto *shortcuts = new QVBoxLayout(shortcutsCard);
-    shortcuts->setContentsMargins(14, 12, 14, 12);
+    shortcuts->setContentsMargins(18, 15, 18, 16);
     shortcuts->setSpacing(0);
     QLabel *shortcutsTitle = Ui::label(I18n::tr("Shortcuts"), "cardTitle", shortcutsCard);
     shortcutsTitle->setMinimumHeight(22);
@@ -103,7 +103,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     // ---------- Tarjeta 3: plugin de Nuke ----------
     QFrame *pluginCard = Ui::card(this);
     auto *plugin = new QVBoxLayout(pluginCard);
-    plugin->setContentsMargins(14, 12, 14, 12);
+    plugin->setContentsMargins(18, 15, 18, 16);
     plugin->setSpacing(8);
     auto *pluginHead = new QHBoxLayout();
     pluginHead->setSpacing(6);
@@ -145,7 +145,7 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
     QFrame *spotCard = Ui::card(this);
     m_spotCard = spotCard;
     auto *spot = new QVBoxLayout(spotCard);
-    spot->setContentsMargins(14, 12, 14, 12);
+    spot->setContentsMargins(18, 15, 18, 16);
     spot->setSpacing(8);
     auto *spotHead = new QHBoxLayout();
     spotHead->setSpacing(6);
@@ -182,7 +182,10 @@ NukeShortcutsPanel::NukeShortcutsPanel(NukeShortcutsState *state, bool interacti
         connect(m_calibrateButton, &QPushButton::clicked, this, &NukeShortcutsPanel::calibrateRequested);
         connect(m_pluginBrowseButton, &QPushButton::clicked, this, &NukeShortcutsPanel::onBrowseNukeDirClicked);
         connect(m_pluginInstallButton, &QPushButton::clicked, this,
-                [this]() { emit installPluginRequested(m_nukeDir); });
+                [this]() {
+                    m_nukeDirPicked = false;
+                    emit installPluginRequested(m_nukeDir);
+                });
         // Si la ventana pierde el frente mientras una fila graba, la grabacion se corta: si no, la
         // siguiente combinacion que el usuario apriete en OTRA app terminaria guardada como atajo.
         if (QWidget *top = window()) {
@@ -272,6 +275,7 @@ void NukeShortcutsPanel::onBrowseNukeDirClicked()
     dialog.setOption(QFileDialog::ShowDirsOnly, false); // la .nuke es oculta en mac
     if (dialog.exec() == QDialog::Accepted && !dialog.selectedFiles().isEmpty()) {
         setNukeDirectory(QDir::cleanPath(dialog.selectedFiles().first()));
+        m_nukeDirPicked = true;
     }
 }
 
@@ -417,7 +421,15 @@ void NukeShortcutsPanel::onStatusButtonClicked()
         emit accessibilityRequested();
         break;
     case Status::NeedsPlugin:
+        m_nukeDirPicked = false;
         emit installPluginRequested(m_nukeDir);
         break;
     }
+}
+
+bool NukeShortcutsPanel::hasUnsavedWork() const
+{
+    // Una carpeta .nuke elegida con Browse, distinta de la que el panel nuevo mostraria, y todavia sin Install.
+    return m_nukeDirPicked
+        && QDir::cleanPath(m_nukeDir) != QDir::cleanPath(NukePlugin::currentNukeDirectory());
 }

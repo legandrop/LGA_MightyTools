@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_MOUSEBUTTONSPANEL_H
 #define MIGHTYTOOLS_MOUSEBUTTONSPANEL_H
 
+#include "app/PanelState.h"
 #include "modules/mousebuttons/MouseButtonsState.h"
 
 #include <QHash>
@@ -20,9 +21,11 @@ class SwitchRow;
 
 // La forma y los materiales de App Toggle y Window Layouts: tarjeta de estado, lista con el icono de cada
 // app, su boton, lo que mantiene, el lapiz y su interruptor, y el editor en su propia pagina.
-class MouseButtonsPanel : public QWidget
+class MouseButtonsPanel : public QWidget, public PanelState
 {
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     MouseButtonsPanel(MouseButtonsModule *module, bool interactive, QWidget *parent = nullptr);
     void refresh();
     // Captura de QA: el editor de una regla nueva (0) o de la regla `id`, con el desplegable de boton abierto.

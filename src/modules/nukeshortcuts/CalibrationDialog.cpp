@@ -28,7 +28,7 @@ QLabel *label(const QString &text, const char *name, QWidget *parent)
 
 QString strong(const QString &text)
 {
-    return QStringLiteral("<span style=\"color:%1;\">%2</span>").arg(QLatin1String(Theme::kTextBright), text);
+    return QStringLiteral("<span style=\"color:%1;\">%2</span>").arg(Theme::hex(Theme::kTextBright), text);
 }
 
 // La captura con su borde de 1 px, dibujada a la escala real de la pantalla.

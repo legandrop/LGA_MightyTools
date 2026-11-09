@@ -8,6 +8,8 @@
 #include <QStringList>
 #include <QWidget>
 
+#include <memory>
+
 class QBoxLayout;
 class QHBoxLayout;
 class QMouseEvent;
@@ -116,6 +118,7 @@ class RichLineLabel : public QLabel
     Q_OBJECT
 public:
     RichLineLabel(const QString &html, int lineHeight, QWidget *parent = nullptr);
+    ~RichLineLabel() override;
     QSize sizeHint() const override;
     QSize minimumSizeHint() const override;
     bool hasHeightForWidth() const override { return true; }
@@ -123,8 +126,13 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
 private:
-    void layoutDocument(QTextDocument &document, int width) const;
+    QTextDocument &document(int width) const;
     int m_lineHeight = 18;
+    mutable std::unique_ptr<QTextDocument> m_document;
+    mutable QString m_documentKey;
+    mutable int m_documentWidth = -1;
+    mutable QString m_idealKey;
+    mutable int m_idealWidth = -1;
 };
 
 // Chip de estado: tono (ok, err, src, key o neutro) + texto.
@@ -265,6 +273,10 @@ protected:
 private:
     void paintIcon(QPainter &painter, const QRect &target) const;
     QIcon m_icon;
+    // El cuadro ya achicado a los pixeles de la pantalla: se arma una vez, no en cada pintada.
+    mutable QPixmap m_scaled;
+    mutable qreal m_scaledDpr = 0;
+    mutable int m_scaledDevice = 0;
 };
 
 // Tarjeta de estado con punto, titulo, texto y boton (`.card.status` del canvas): la de Nuke

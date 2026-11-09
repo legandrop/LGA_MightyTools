@@ -348,7 +348,8 @@ void RecentFoldersPopup::paintEvent(QPaintEvent *)
                                           {QStringLiteral("\u2013"), false}, {last, true}}
             : QList<QPair<QString, bool>>{{press, false}, {QStringLiteral("1"), true}};
         const QFont plain = Theme::uiFont(11.5);
-        const QFont strong = Theme::uiFont(11.5, QFont::Bold);
+        // 600 y no Bold: la app trae Inter SemiBold; un 700 hace que Qt cargue todas las fuentes del sistema.
+        const QFont strong = Theme::uiFont(11.5, QFont::DemiBold);
         int width = 0;
         for (const auto &part : parts) {
             width += QFontMetrics(part.second ? strong : plain).horizontalAdvance(part.first);

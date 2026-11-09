@@ -8,6 +8,8 @@
 #include <QPointer>
 #include <QString>
 
+class QTimer;
+
 class HowItWorksStrip;
 class ModuleHeader;
 class ModuleHost;
@@ -61,8 +63,26 @@ public:
     // herramientas se borran en el acto y se piden de nuevo al verse. La pagina General es otra:
     // quien la escuchaba se reconecta con rebuilt().
     void rebuildUi();
+    // Otra paleta de colores: lo que ya esta armado toma los colores en el acto (Theme::refresh) y la ventana se
+    // rearma, porque hay textos y glifos que se arman con su color. Junta los cambios seguidos (las flechas del
+    // menu, el selector del editor) y con un menu abierto solo repinta: el rearmado espera a que se cierre.
+    void schedulePaletteRebuild();
     // Captura: estado de prueba del aviso de apagado de una herramienta (offNotice del descriptor).
     void setOffNoticeCaptureState(const QString &id, const QString &state);
+
+    // Lo que se ve y que no esta en settings, para que la ventana que se rearma tras soltarse en la bandeja (D-77)
+    // vuelva igual: la pagina, el scroll de cada pagina ya vista y la ayuda abierta.
+    struct ViewState
+    {
+        QString page;
+        QHash<QString, int> scroll;
+        bool helpOpen = false;
+    };
+    ViewState viewState() const;
+    // Despues de construirla y antes de mostrarla.
+    void restoreViewState(const ViewState &state);
+    // Algun panel con algo a medio hacer (PanelState): la ventana no se suelta.
+    bool hasUnsavedWork() const;
 
 signals:
     // El usuario prendio o apago una herramienta (fila, encabezado, "Turn on" o la bienvenida).
@@ -80,6 +100,11 @@ protected:
     bool nativeEvent(const QByteArray &eventType, void *message, qintptr *result) override;
 
 private:
+    void applyPaletteChange();
+    void rebuildWhenNoPopup();
+    QTimer *m_paletteTimer = nullptr;
+    bool m_paletteRebuildWaiting = false;
+    int m_rebuildSerial = 0;
     struct ToolPage
     {
         QScrollArea *scroll = nullptr;
@@ -93,7 +118,11 @@ private:
     };
 
     void buildUi();
-    QScrollArea *makePage(QWidget **content, QVBoxLayout **layout);
+    QScrollArea *makePage(const QString &id, QWidget **content, QVBoxLayout **layout);
+    // La pagina de una herramienta se arma la primera vez que se elige (encabezado, ayuda y lugar del panel).
+    ToolPage *ensurePage(const QString &id);
+    QScrollArea *scrollFor(const QString &id) const;
+    void applyPendingScroll(const QString &id);
     void onModuleToggled(const QString &id, bool running);
     void refreshItem(const QString &id);
     void refreshGeneralItem();
@@ -128,6 +157,7 @@ private:
     UpdateRowState m_updateState;
     QString m_current;
     QHash<QString, QString> m_offNoticeStates;
+    QHash<QString, int> m_pendingScroll; ///< scroll a reponer de cada pagina (restoreViewState), hasta salir de ella
 };
 
 #endif // MIGHTYTOOLS_MAINWINDOW_H

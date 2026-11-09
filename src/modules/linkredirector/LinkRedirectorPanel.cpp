@@ -55,7 +55,7 @@ public:
         m_value->setText(text);
         // canvas .combo .v: color @textStrong (no @textCaption, mas atenuado, del campo de solo
         // lectura del que sale este widget); "-" cae al gris de placeholder, como el resto de la app.
-        m_value->setStyleSheet(QStringLiteral("color:%1;")
+        Theme::sheet(m_value, QStringLiteral("color:%1;")
                                     .arg(empty ? QLatin1String(Theme::kTextPlaceholder) : QLatin1String(Theme::kTextStrong)));
     }
 
@@ -160,6 +160,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
             m_sources.requestSetAsDefault();
         }
         m_makeDefaultRequested = true;
+        m_makeDefaultClock.start();
         refreshStatus();
         // El cambio puede requerir una eleccion manual (Windows) o ser asincrono (mac): dos
         // reintentos, como el origen.
@@ -170,7 +171,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // ---- Tarjeta "Browsers": dos combos lado a lado.
     QFrame *browsersCard = Ui::card(this);
     auto *browsersLayout = new QVBoxLayout(browsersCard);
-    browsersLayout->setContentsMargins(14, 12, 14, 12);
+    browsersLayout->setContentsMargins(18, 15, 18, 16);
     browsersLayout->setSpacing(0);
     QLabel *browsersTitle = Ui::label(I18n::tr("Browsers"), "cardTitle", browsersCard);
     browsersTitle->setMinimumHeight(22); // canvas .head: min-height 22px
@@ -207,7 +208,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // ---- Tarjeta "Match words": autoguardado, una palabra por linea.
     QFrame *wordsCard = Ui::card(this);
     auto *wordsLayout = new QVBoxLayout(wordsCard);
-    wordsLayout->setContentsMargins(14, 12, 14, 12);
+    wordsLayout->setContentsMargins(18, 15, 18, 16);
     wordsLayout->setSpacing(0);
     auto *wordsHead = new QHBoxLayout();
     wordsHead->setContentsMargins(0, 0, 0, 0);
@@ -241,7 +242,7 @@ LinkRedirectorPanel::LinkRedirectorPanel(ModuleContext &context, LinkRedirectorP
     // canvas. A proposito SIN "color:" aca: la paleta de la app ya distingue texto (kText) de
     // placeholder (kTextPlaceholder, mas apagado); fijar "color" por QSS pisa esa distincion y el
     // placeholder se ve igual de brillante que una palabra real.
-    m_matchWords->setStyleSheet(QStringLiteral(
+    Theme::sheet(m_matchWords, QStringLiteral(
                                     "QTextEdit#linkRedirectorMatchWords { background-color:%1; "
                                     "border:1px solid %2; border-radius:6px; padding:6px 8px; "
                                     "selection-background-color:%5; selection-color:%3; } "
@@ -466,3 +467,11 @@ QWidget *LinkRedirectorPanel::buildDropdownPreview(const QList<ComboItem> &items
 }
 
 #include "LinkRedirectorPanel.moc"
+
+bool LinkRedirectorPanel::hasUnsavedWork() const
+{
+    // «Make Default» pedido y Windows todavia sin confirmarlo: el panel es el que, al ver que ya es el navegador
+    // del sistema, pone el que estaba como «Default browser» de la herramienta.
+    // Vence a los 15 minutos: quien cerro Ajustes sin elegir no deja la ventana armada para siempre.
+    return m_makeDefaultRequested && m_makeDefaultClock.isValid() && m_makeDefaultClock.elapsed() < 15 * 60 * 1000;
+}

@@ -1,6 +1,7 @@
 #ifndef MIGHTYTOOLS_OPENINNUKEX_PANEL_H
 #define MIGHTYTOOLS_OPENINNUKEX_PANEL_H
 
+#include "app/PanelState.h"
 #include "modules/openinnukex/NukeBridge.h"
 #include "modules/openinnukex/NukeScanner.h"
 
@@ -26,11 +27,13 @@ class StatusCard;
 // que le da applyCaptureState(). Con la app de verdad, arranca su propio escaneo al construirse
 // (no al prender el modulo: "el escaneo arranca al construir el panel", punto 2 del encargo) y
 // lee el sistema en el acto.
-class OpenInNukeXPanel : public QWidget
+class OpenInNukeXPanel : public QWidget, public PanelState
 {
     Q_OBJECT
 
 public:
+    // PanelState: algo a medio hacer que se perderia si la ventana se suelta (D-77).
+    bool hasUnsavedWork() const override;
     explicit OpenInNukeXPanel(ModuleContext &context, QWidget *parent = nullptr);
     ~OpenInNukeXPanel() override;
 
@@ -108,6 +111,7 @@ private:
     QLabel *m_scanChooseLabel = nullptr; ///< "Choose one of the found versions or browse your own:"
     QWidget *m_versionButtonsRow = nullptr;
     QLineEdit *m_pathField = nullptr;
+    QString m_pathShown; ///< lo que el panel puso en m_pathField (guardado o detectado): distinto = elegido sin Save
     QPushButton *m_browseButton = nullptr;
     QPushButton *m_saveButton = nullptr;
     SwitchRow *m_showNoticeCheck = nullptr;
@@ -115,6 +119,7 @@ private:
     // "Nuke Bridge"
     Chip *m_bridgeChip = nullptr;
     QLineEdit *m_nukeDirField = nullptr;
+    QString m_nukeDirShown; ///< lo que el panel puso en m_nukeDirField: distinto = elegido sin Install
     QPushButton *m_bridgeBrowseButton = nullptr;
     QPushButton *m_installButton = nullptr;
     QLabel *m_bridgeHint = nullptr;

@@ -2,6 +2,7 @@
 
 #include "app/ModuleHost.h"
 #include "app/ModuleRegistry.h"
+#include "app/PanelState.h"
 #include "app/SettingsStore.h"
 #include "app/WindowParts.h"
 #include "core/I18n.h"
@@ -25,10 +26,12 @@
 #include <QPlainTextEdit>
 #include <QScreen>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QShortcut>
 #include <QShowEvent>
 #include <QStackedWidget>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -68,6 +71,12 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
     WindowFrame::prepare(this); // mac: translucida, para las esquinas redondeadas
     buildUi();
     setFixedSize(kWidth, kHeight);
+
+    m_paletteTimer = new QTimer(this);
+    m_paletteTimer->setSingleShot(true);
+    m_paletteTimer->setInterval(30);
+    connect(m_paletteTimer, &QTimer::timeout, this, &MainWindow::applyPaletteChange);
+    connect(Palette::Notifier::instance(), &Palette::Notifier::changed, this, &MainWindow::schedulePaletteRebuild);
 
     connect(m_host, &ModuleHost::moduleToggled, this, &MainWindow::onModuleToggled);
     connect(m_host, &ModuleHost::moduleStatusChanged, this, &MainWindow::refreshItem);
@@ -114,12 +123,20 @@ MainWindow::MainWindow(ModuleHost *host, Mode mode, SettingsStore *appStore, QWi
 
 MainWindow::~MainWindow()
 {
+    // Primero se corta lo que llega del host: los paneles se borran despues (con los hijos) y alguno guarda en su
+    // destructor (Match words de Link Redirector), lo que avisa al host, que llamaria a esta ventana a medio
+    // destruir (m_pages ya no existe). Pasaba al cerrar la app con un autoguardado pendiente, y la ventana ahora
+    // tambien se suelta en la bandeja (AppController::releaseWindowIfIdle).
+    if (m_host) {
+        disconnect(m_host, nullptr, this, nullptr);
+    }
+    disconnect(Palette::Notifier::instance(), nullptr, this, nullptr);
     if (isVisible()) {
         savePosition();
     }
 }
 
-QScrollArea *MainWindow::makePage(QWidget **content, QVBoxLayout **layout)
+QScrollArea *MainWindow::makePage(const QString &id, QWidget **content, QVBoxLayout **layout)
 {
     // `.pg` del Pliego: 24 arriba y abajo, 28 a los lados, 12 entre bloques; scroll vertical si no entra.
     auto *scroll = new QScrollArea(m_stack);
@@ -135,6 +152,10 @@ QScrollArea *MainWindow::makePage(QWidget **content, QVBoxLayout **layout)
     column->setSpacing(12);
     scroll->setWidget(inner);
     m_stack->addWidget(scroll);
+    // El scroll que se repone tras rearmar la ventana (restoreViewState) espera a que la pagina tenga su alto; en
+    // cuanto el usuario la mueve (rueda, barra, teclado) deja de esperar y no salta despues.
+    connect(scroll->verticalScrollBar(), &QScrollBar::rangeChanged, this, [this, id]() { applyPendingScroll(id); });
+    connect(scroll->verticalScrollBar(), &QScrollBar::actionTriggered, this, [this, id]() { m_pendingScroll.remove(id); });
     *content = inner;
     *layout = column;
     return scroll;
@@ -195,13 +216,14 @@ void MainWindow::buildUi()
     {
         QWidget *content = nullptr;
         QVBoxLayout *column = nullptr;
-        m_generalScroll = makePage(&content, &column);
+        m_generalScroll = makePage(kGeneral, &content, &column);
         m_general = new GeneralPage(m_host, content);
         column->addWidget(m_general, 1);
         connect(m_general, &GeneralPage::toolToggleRequested, this, &MainWindow::toggleRequested);
     }
 
-    // ---------- Una fila y una pagina por herramienta (el registro ya viene en orden alfabetico).
+    // ---------- Una fila por herramienta (el registro ya viene en orden alfabetico). Su pagina se arma recien al
+    // elegirla (ensurePage): abrir la ventana no arma once paginas que quiza no se miran.
     for (const ModuleDescriptor &d : m_host->descriptors()) {
         auto *item = new SidebarItem(d.id, d.title, d.paintIcon, true, sidebar);
         side->addWidget(item);
@@ -212,31 +234,6 @@ void MainWindow::buildUi()
             selectPage(id);
             emit toggleRequested(id, on);
         });
-
-        ToolPage page;
-        QWidget *content = nullptr;
-        QVBoxLayout *column = nullptr;
-        page.scroll = makePage(&content, &column);
-        page.header = new ModuleHeader(d.title, platformsText(d.platforms), d.description, true, content);
-        column->addWidget(page.header);
-        const QString id = d.id;
-        connect(page.header, &ModuleHeader::toggleRequested, this, [this, id](bool on) { emit toggleRequested(id, on); });
-        // `.how`: 14 debajo del encabezado (12 del layout + 2).
-        column->addSpacing(2);
-        page.help = new HowItWorksStrip(content);
-        column->addWidget(page.help);
-        connect(page.help, &HowItWorksStrip::toggledByUser, this, [this]() {
-            refreshHelpButton();
-            relayoutCurrentPage();
-        });
-        page.body = new QWidget(content);
-        page.body->setObjectName(QStringLiteral("moduleBody"));
-        page.bodyLayout = new QVBoxLayout(page.body);
-        page.bodyLayout->setContentsMargins(0, 0, 0, 0);
-        page.bodyLayout->setSpacing(12);
-        column->addWidget(page.body);
-        column->addStretch(1);
-        m_pages.insert(d.id, page);
         refreshItem(d.id);
     }
     side->addStretch(1);
@@ -247,8 +244,116 @@ void MainWindow::buildUi()
     setCentralWidget(central);
 }
 
+MainWindow::ToolPage *MainWindow::ensurePage(const QString &id)
+{
+    auto it = m_pages.find(id);
+    if (it != m_pages.end()) {
+        return &it.value();
+    }
+    const ModuleDescriptor *d = m_host->descriptor(id);
+    if (!d) {
+        return nullptr;
+    }
+    ToolPage page;
+    QWidget *content = nullptr;
+    QVBoxLayout *column = nullptr;
+    page.scroll = makePage(id, &content, &column);
+    page.header = new ModuleHeader(d->title, platformsText(d->platforms), d->description, true, content);
+    column->addWidget(page.header);
+    connect(page.header, &ModuleHeader::toggleRequested, this, [this, id](bool on) { emit toggleRequested(id, on); });
+    // `.how`: 14 debajo del encabezado (12 del layout + 2).
+    column->addSpacing(2);
+    page.help = new HowItWorksStrip(content);
+    column->addWidget(page.help);
+    connect(page.help, &HowItWorksStrip::toggledByUser, this, [this]() {
+        refreshHelpButton();
+        relayoutCurrentPage();
+    });
+    page.body = new QWidget(content);
+    page.body->setObjectName(QStringLiteral("moduleBody"));
+    page.bodyLayout = new QVBoxLayout(page.body);
+    page.bodyLayout->setContentsMargins(0, 0, 0, 0);
+    page.bodyLayout->setSpacing(12);
+    column->addWidget(page.body);
+    column->addStretch(1);
+    return &m_pages.insert(id, page).value();
+}
+
+QScrollArea *MainWindow::scrollFor(const QString &id) const
+{
+    if (id == kGeneral) {
+        return m_generalScroll;
+    }
+    const auto it = m_pages.constFind(id);
+    return it != m_pages.constEnd() ? it->scroll : nullptr;
+}
+
+void MainWindow::applyPendingScroll(const QString &id)
+{
+    // Solo la pagina que se ve, y mientras se ve: si el alto todavia no alcanza se pone lo que se pueda y se sigue
+    // esperando; al salir de la pagina se descarta (un cambio posterior del contenido no hace saltar el scroll).
+    const auto pending = m_pendingScroll.constFind(id);
+    QScrollArea *scroll = scrollFor(id);
+    if (pending == m_pendingScroll.constEnd() || id != m_current || !scroll) {
+        return;
+    }
+    QScrollBar *bar = scroll->verticalScrollBar();
+    bar->setValue(qMin(*pending, bar->maximum()));
+    if (bar->maximum() >= *pending) {
+        m_pendingScroll.remove(id);
+    }
+}
+
+MainWindow::ViewState MainWindow::viewState() const
+{
+    ViewState state;
+    state.page = m_current;
+    state.helpOpen = helpOpen();
+    QStringList ids{kGeneral};
+    ids << m_pages.keys();
+    for (const QString &id : ids) {
+        // Lo que todavia esperaba reponerse (la ventana se solto antes de volver a esa pagina) vale lo guardado;
+        // si no, lo que se ve.
+        int value = 0;
+        if (m_pendingScroll.contains(id)) {
+            value = m_pendingScroll.value(id);
+        } else if (QScrollArea *scroll = scrollFor(id)) {
+            value = scroll->verticalScrollBar()->value();
+        }
+        if (value > 0) {
+            state.scroll.insert(id, value);
+        }
+    }
+    return state;
+}
+
+void MainWindow::restoreViewState(const ViewState &state)
+{
+    if (!state.page.isEmpty()) {
+        selectPage(state.page);
+    }
+    // Despues de elegirla: salir de General (la que eligio el constructor) le borraria lo suyo.
+    m_pendingScroll = state.scroll;
+    applyPendingScroll(m_current);
+    // Despues de elegirla: entrar a una pagina cierra su ayuda.
+    if (state.helpOpen) {
+        setHelpOpen(true);
+    }
+}
+
+bool MainWindow::hasUnsavedWork() const
+{
+    for (auto it = m_pages.constBegin(); it != m_pages.constEnd(); ++it) {
+        if (const auto *state = dynamic_cast<const PanelState *>(it->panel.data()); state && state->hasUnsavedWork()) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void MainWindow::rebuildUi()
 {
+    ++m_rebuildSerial;
     const QString current = m_current.isEmpty() ? kGeneral : m_current;
     const bool firstRun = m_general && m_general->firstRun();
     // Rearmar no es entrar a la pagina: la ayuda queda como estaba.
@@ -279,10 +384,17 @@ void MainWindow::rebuildUi()
 
 void MainWindow::selectPage(const QString &id)
 {
-    const QString target = (id == kGeneral || m_pages.contains(id)) ? id : kGeneral;
+    const QString target = (id == kGeneral || m_items.contains(id)) ? id : kGeneral;
     // Volver a elegir la pagina que ya se ve (un click en su fila, su switch del indice) no es entrar.
     const bool entering = target != m_current;
+    if (entering) {
+        // El scroll que esperaba reponerse en la pagina que se deja ya no se repone (applyPendingScroll).
+        m_pendingScroll.remove(m_current);
+    }
     m_current = target;
+    if (target != kGeneral) {
+        ensurePage(target);
+    }
     m_generalItem->setSelected(target == kGeneral);
     for (auto it = m_items.constBegin(); it != m_items.constEnd(); ++it) {
         it.value()->setSelected(it.key() == target);
@@ -292,6 +404,7 @@ void MainWindow::selectPage(const QString &id)
         m_stack->setCurrentWidget(m_generalScroll);
         refreshHelpButton();
         relayoutCurrentPage();
+        applyPendingScroll(target);
         return;
     }
     syncBody(target);
@@ -301,6 +414,7 @@ void MainWindow::selectPage(const QString &id)
     m_stack->setCurrentWidget(m_pages.value(target).scroll);
     refreshHelpButton();
     relayoutCurrentPage();
+    applyPendingScroll(target);
 }
 
 void MainWindow::refreshHelpText(const QString &id)
@@ -378,13 +492,15 @@ void MainWindow::relayoutCurrentPage()
     if (!scroll || !scroll->widget()) {
         return;
     }
+    if (m_shell) {
+        m_shell->update();
+    }
+    // Siempre entero: saltearlo cuando la pagina "no cambio" ahorraba menos de 1 ms por cambio de pagina (medido,
+    // D-77) y un cambio adentro de un panel oculto no siempre se puede ver desde aca.
     for (QLayout *layout : scroll->widget()->findChildren<QLayout *>()) {
         layout->invalidate();
     }
     QCoreApplication::postEvent(scroll, new QEvent(QEvent::LayoutRequest));
-    if (m_shell) {
-        m_shell->update();
-    }
 }
 
 void MainWindow::syncBody(const QString &id)
@@ -591,7 +707,7 @@ void MainWindow::showEvent(QShowEvent *event)
         refreshOffNotices();
     }
     QMainWindow::showEvent(event);
-    // La pagina pudo armarse con la ventana oculta en la bandeja.
+    // La pagina pudo armarse o cambiar con la ventana oculta en la bandeja.
     relayoutCurrentPage();
 }
 
@@ -639,7 +755,7 @@ void MainWindow::stepPage(int direction)
 {
     QStringList order{kGeneral};
     for (const ModuleDescriptor &d : m_host->descriptors()) {
-        if (m_pages.contains(d.id)) {
+        if (m_items.contains(d.id)) {
             order << d.id;
         }
     }
@@ -653,4 +769,36 @@ bool MainWindow::nativeEvent(const QByteArray &eventType, void *message, qintptr
         return true;
     }
     return QMainWindow::nativeEvent(eventType, message, result);
+}
+
+void MainWindow::schedulePaletteRebuild()
+{
+    m_paletteTimer->start();
+}
+
+void MainWindow::applyPaletteChange()
+{
+    Theme::refresh(*qApp);
+    rebuildWhenNoPopup();
+}
+
+void MainWindow::rebuildWhenNoPopup()
+{
+    // Un menu abierto (el de Colors con las flechas, o cualquier otro) puede ser hijo de lo que se rearma: el
+    // rearmado espera a que se cierre. El de Colors lo vuelve a pedir al cerrarse; este reintento cubre los demas
+    // (un cambio del editor de desarrollo con un menu abierto).
+    if (QApplication::activePopupWidget()) {
+        if (!m_paletteRebuildWaiting) {
+            m_paletteRebuildWaiting = true;
+            QTimer::singleShot(250, this, [this, serial = m_rebuildSerial]() {
+                m_paletteRebuildWaiting = false;
+                // Si mientras tanto alguien ya la rearmo (el menu de Colors al cerrarse), no hace falta otra vez.
+                if (serial == m_rebuildSerial) {
+                    rebuildWhenNoPopup();
+                }
+            });
+        }
+        return;
+    }
+    rebuildUi();
 }

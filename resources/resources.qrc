@@ -10,6 +10,12 @@
         <file>icons/tray/tray_40.png</file>
         <file>icons/tray/tray_48.png</file>
         <file>icons/check_link.png</file>
+        <file>palettes/default-1.json</file>
+        <file>palettes/alto-contraste.json</file>
+        <file>palettes/grafito-ambar.json</file>
+        <file>palettes/niebla.json</file>
+        <file>palettes/pizarra-turquesa.json</file>
+        <file>palettes/default-2.json</file>
         <file>images/DopeSheetPos.png</file>
         <file>translations/qtbase_es.qm</file>
         <file>fonts/Inter-Regular.ttf</file>

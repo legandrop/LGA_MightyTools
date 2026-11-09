@@ -18,6 +18,10 @@ int cycles(const QStringList &arguments);
 // minuto.
 int idle(const QStringList &arguments);
 
+// --measure-pages [rondas] [on|off]: lo que tarda cambiar de pagina en la ventana real (offscreen), la
+// primera visita aparte de las siguientes. «on» (por defecto) prende todas las herramientas antes.
+int pages(const QStringList &arguments);
+
 // --measure-fonts: el ancho que le da Qt a textos del canvas (QFontMetricsF::horizontalAdvance con
 // la fuente de la hoja de estilo), al lado del ancho que midio Chrome en el canvas. Sin ventanas.
 // Sirve para comparar la plataforma de Windows contra offscreen.

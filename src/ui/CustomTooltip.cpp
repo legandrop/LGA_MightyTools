@@ -683,6 +683,16 @@ void CustomTooltip::showToolTip(const QString& text, QWidget* parent, const QPoi
     displayText.replace(kReShift, "Shift+");
 #endif
 
+    // La paleta elegida (ui/Palette.h), tambien si cambio con el tooltip ya armado: el fondo, el texto y
+    // los <span style="color:..."> del texto (escritos con valores de fabrica).
+    if (auto *bubble = dynamic_cast<TooltipWidget *>(m_tooltipWidget)) {
+        m_backgroundColor = Theme::color(Theme::kTooltipBg);
+        bubble->setBackgroundColor(m_backgroundColor);
+        QPalette colors = bubble->palette();
+        colors.setColor(QPalette::WindowText, Theme::color(Theme::kText));
+        bubble->setPalette(colors);
+    }
+    displayText = Palette::remapSheet(displayText);
     m_textLabel->setText(displayText);
     QFontMetrics fm(m_textLabel->font());
 

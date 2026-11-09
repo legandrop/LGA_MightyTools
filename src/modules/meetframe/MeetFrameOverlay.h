@@ -16,7 +16,7 @@ class StatusDot;
 // El marco de Meet Frame: un borde fino alrededor de la region y una barrita arriba (estado, tamaño, Pause,
 // Size y cerrar). Siempre arriba, no toma foco y no sale en ninguna captura (MeetFrameSystem::prepareFrame).
 // Adentro del borde es transparente al mouse: se sigue trabajando en lo que se comparte. Se mueve tomando la
-// barrita y se estira desde el borde (Windows: con el sistema; mac: a mano, Qt no estira ventanas en mac), con
+// barrita y se estira desde el borde, a mano y sobre un lienzo (MeetFrameOverlay.cpp explica por que), con
 // la proporcion fija si se eligio una.
 class MeetFrameOverlay : public QWidget
 {
@@ -32,11 +32,14 @@ public:
     // La region en coordenadas logicas globales de Qt (sin los margenes).
     QRect region() const;
     void setRegion(const QRect &region);
-    // El marco (region con sus margenes) en coordenadas de la ventana: en mac la ventana es un lienzo del tamaño
-    // de la pantalla y el marco va adentro; en Windows son lo mismo.
+    // El marco (region con sus margenes) en coordenadas de la ventana: la ventana es un lienzo mas grande que el
+    // marco y el marco va adentro (en la captura de QA, sin lienzo, son lo mismo).
     QRect frameRect() const;
     // Al estirar se mantiene esta proporcion de la region (16:9, 4:3...); invalida, libre.
     void setAspectRatio(const QSize &ratio);
+    // La forma elegida ("free", "16:9", "4:3", "1:1", "current") y su proporcion (invalida si es libre): la
+    // marca en el menu Size y la muestra junto al tamaño.
+    void setAspectChoice(const QString &aspect, const QSize &ratio);
 
     void setState(bool paused, int hiddenWindows, const QSize &pixels, const QString &error);
     void setShortcuts(const QString &toggle, const QString &pause);
@@ -53,6 +56,8 @@ signals:
     void closeClicked();
     // Tamaño pedido en pixeles reales, o un tamaño invalido para centrar la region en su pantalla.
     void sizeRequested(const QSize &pixels);
+    // Se eligio una forma en el menu Size ("free", "16:9", "4:3", "1:1" o "current").
+    void aspectRequested(const QString &aspect);
     // La region se movio o cambio de tamaño (durante el arrastre).
     void regionChanged();
     // Termino el arrastre: se guarda.
@@ -104,6 +109,8 @@ private:
     QPushButton *m_sizeButton = nullptr;
     QPushButton *m_close = nullptr;
     QMenu *m_sizeMenu = nullptr;
+    QList<QAction *> m_shapeActions;
+    QString m_shapeText; // la forma fija junto al tamaño; vacio si es libre
     QString m_toggleKeys;
     QString m_pauseKeys;
     QTimer m_settle;

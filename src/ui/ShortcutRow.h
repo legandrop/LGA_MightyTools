@@ -36,7 +36,11 @@ public:
     // Cajas con textos propios en lugar de un atajo (Mouse Buttons: el boton del mouse que dispara la regla).
     void setKeyLabels(const QStringList &labels);
     // Teclas para mantener apretadas (Mouse Buttons): acepta una tecla sin modificadores y tambien Espacio.
-    void setHoldKeys(bool hold) { m_holdKeys = hold; }
+    void setHoldKeys(bool hold)
+    {
+        m_holdKeys = hold;
+        syncWindowsNote();
+    }
     void setValidator(Validator validator) { m_validator = std::move(validator); }
     void setEditHandler(std::function<void()> handler) { m_editHandler = std::move(handler); }
     void setTrailingWidget(QWidget *widget);
@@ -88,6 +92,7 @@ private:
     ShortcutCatcher *m_catcher = nullptr;
 
     QLabel *m_name = nullptr;
+    QHBoxLayout *m_topRow = nullptr;
     Chip *m_extraChip = nullptr;
     QWidget *m_keys = nullptr;
     QHBoxLayout *m_keysLayout = nullptr;
@@ -98,6 +103,8 @@ private:
     QHBoxLayout *m_captionRow = nullptr;
     QLabel *m_windowsNote = nullptr;
     bool m_windowsNoteEnabled = false;
+    void ensureRecorder();
+    void syncWindowsNote();
 };
 
 #endif // MIGHTYTOOLS_SHORTCUTROW_H

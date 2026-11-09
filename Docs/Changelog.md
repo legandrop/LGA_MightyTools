@@ -2,6 +2,37 @@
 
 v1.53:
 
+Rendimiento, segunda vuelta (Lega: «sin perder nada de UX, incluso en PCs malas»): soltar la ventana en la bandeja perdía trabajo (un editor abierto, una ruta elegida sin Save, «Make Default» esperando a Windows), el scroll y la ayuda abierta; abrirla costaba ~240 ms, 105 de ellos la primera ventana nativa del proceso; y soltada quedaba en 28 MB, no en 12,5 como se anotó antes. Ahora no se suelta si un panel tiene algo sin guardar (`PanelState`), vuelve igual (página, scroll, ayuda), cada página se arma al elegirla, la primera ventana nativa se prepara 4 s después del arranque y al soltarse se vacía la caché de fuentes. Abrir: 240 → 70 ms; soltada: 28 → 24 MB. Sonda nueva `window-release`; `--measure-pages` suma `--probe-native` y `--cpu-cap`.
+
+[ Rendimiento - La ventana abre en 70 ms y al soltarse no pierde nada sin guardar ]
+
+Rendimiento (Lega, 08/11: «cambiar de tab tarda; tiene que ser súper liviana»): la primera visita a una página tardaba hasta 240 ms y, después de usarla, la app quedaba en 52 MB. Causas: un `<b>` o `QFont::Bold` pedía Inter 700, que la app no trae, y Qt cargaba todas las fuentes del sistema; App Toggle pedía al shell 12 tamaños por ícono; `RichLineLabel` rearmaba su HTML en cada medida; cada fila de atajo creaba seis widgets ocultos; y la ventana se armaba al arrancar y no se soltaba nunca. Ahora la negrita va a 600, la monoespaciada es la del sistema, los íconos salen en los tamaños de pantalla, el documento se guarda, lo oculto se crea a pedido y la ventana se arma al abrirla y se suelta a los 5 minutos escondida (D-77). Todas las páginas: 540 → 250 ms; en la bandeja, 37–52 → 12,5 MB. Arreglado de paso un crash al destruir la ventana con un autoguardado pendiente. Medición nueva `--measure-pages`.
+
+[ Rendimiento - Paginas mas rapidas y la ventana se suelta en la bandeja: de 52 a 12,5 MB en reposo ]
+
+Igualar General con GateBouncer (Lega, 08/11, «todas menos la fila resaltada», y luego espacios y esquinas): quedaban diferencias de borde, letra, menú y medidas. Ahora el foco de los campos usa el borde del botón principal y el borde con el mouse encima es `#44444E`; las etiquetas de opción pasan a `#E3E1DA`, 14 px medio, y las notas a `#9C9BA2`, 12,5 px; el menú usa fondo de tarjeta, borde común, letra de 13 px y el de Colors va sin tilde; el chip «ok» usa `#57CDEF` y el botón principal cambia también el borde al pasar el mouse. Medidas: las tarjetas de todas las páginas pasan a margen 18/15, las filas de General a 12 de columna y 8 de fila, 12 de aire en el divisor, y el selector segmentado a 30 px con radios 7 y 5. 84 de 84 pares de tonos iguales; `nav-fit` queda en las 8 fallas viejas de Meet Frame.
+
+[ Paletas - General con el foco, el menu, los espacios y las esquinas de GateBouncer ]
+
+Paletas iguales a las de GateBouncer (Lega, 08/11): Violeta y Magenta se veían distintos a los de GateBouncer (fondo y borde del elegido, texto sobre violeta, link) y el desplegable resaltaba con el violeta pleno del botón principal. Causa: los dos usan los mismos JSON, pero los tonos de fábrica de acá son magenta y, rotados por HSL, no dan la luz ni la saturación de los tonos violeta de allá. Ahora los grupos del acento y de «elegido» traen la tabla «tono de acá → tono de GateBouncer» (`Palette::Role::gbTones`) y `mapIn` deriva desde el de allá, igual que allá; las seis paletas dan los mismos colores (66 de 66 pares iguales, medido con los dos `Palette.cpp` reales). El menú resalta la fila con el color de «fila elegida» en vez del primario. La sonda `palette-live` captura el menú recién abierto y con una fila resaltada.
+
+[ Paletas - Los tonos del acento y del elegido salen de los de GateBouncer y el menú resalta suave ]
+
+Paletas de color (pedido de Lega, 08/11): los colores estaban fijos en `Theme.h` y en la hoja de estilo, y LGA GateBouncer ya ofrece seis paletas. Ahora `src/ui/Palette.*` agrupa cada color en 18 grupos (los de GateBouncer) y deriva sus tonos en HSL desde el color base de cada grupo; `Theme::color`, `Theme::hex`, `Theme::sheet` y la hoja global traducen, los tooltips también, y la ventana se rearma en vivo. General → App suma Colors entre Language y Zoom, con las seis paletas de GateBouncer (`resources/palettes/`, Violet de fábrica, guardada en `app/palette`); con el menú abierto, las flechas las muestran en vivo. Editor solo de desarrollo (`MIGHTYTOOLS_PALETTE_EDITOR=1`) con el selector de color LGA. Con `--palette code`, 163 de 170 capturas quedan idénticas a la v1.52 (las otras son General). Sondas nuevas `palette-live` (80/80, en y es) y `palette-editor`. D-76.
+
+[ Paletas - Colors en General con las seis paletas de GateBouncer, en vivo, y editor de desarrollo ]
+
+Updates (pedido de Lega, 08/11): el cartel «Update Available» no mostraba qué traía la versión nueva, y las novedades del `WhatsNew.md` estaban solo en castellano. Ahora, antes del cartel, `UpdateNotes` baja el `whats_new.json` del release con `LgaWhatsNew` de `libs/lgaupdate` (copia idéntica de la rev 5 de la Base: verificado por SHA-256, con los reintentos de LGA) y el cartel lo muestra en una caja con scroll, en el idioma de la interfaz: el inglés de cada ítem (`text_en`) o el castellano. Si no hay notas o fallan, el cartel sale como antes. `Docs/WhatsNew.md` pasa a ser bilingüe (`languages: [es, en]`, desde la 1.53). Captura nueva `--ui-shot update-dialog-notes`; `--self-test`, `--ui-probe net-retry` y `check_i18n` en verde.
+
+[ Updates - El cartel de update muestra las novedades en el idioma de la app ]
+
+Meet Frame en Windows (Lega, 07/11): al estirar el marco titilaban los bordes que se movían. Con la forma fija (16:9 de fábrica) el marco se estiraba cambiando el tamaño y la máscara de la ventana translúcida en cada paso, y la ventana cambiaba antes de tener su dibujo nuevo. Ahora Windows usa el lienzo de mac: la ventana es la pantalla, el marco se dibuja adentro y mover o estirar solo redibuja lo que cambia, sin máscara (el alfa 0 deja pasar el mouse); el marco no sale del área libre de la pantalla y lo compartido lo sigue mientras se arrastra. Además la forma ya no viene fija: libre de fábrica, con «Lock the frame shape» en 16:9, 4:3, 1:1 o la forma actual, también desde el menú Size del marco. Atajos de fábrica en Windows: Alt+Shift+Win+M y la pausa Alt+Shift+Win+P. Sonda `meetframe-drag` 49/49.
+
+[ Meet Frame - En Windows el marco ya no titila al estirarlo, la forma viene libre y se puede fijar, y atajos Alt+Shift+Win+M/P ]
+
+Tema (pedido de Lega, 07/11): la mesa y los fondos de campo se veían demasiado oscuros. Lega los eligió en vivo con dos selectores de color: la mesa (`kDesk`: ventana, barra de título e índice) pasa de `#0B0B0D` a `#0D0D0F`, y el fondo de campo (`kField`, `kCheckOffBg` y `kModIconBg`: campos de texto, casillas sin tildar y miniaturas de pantalla) de `#111114` a `#15151A`. Solo cambian esos cuatro valores de `Theme.h`; todo lo demás sale de los tokens.
+
+[ Tema - La mesa pasa a #0D0D0F y el fondo de campo a #15151A, un poco menos oscuros ]
 Dictation en mac (Lega, 07/11): el atajo de fábrica era `⌃⌥H` y Lega usa `⌘⌥⇧H`; pidió que venga ese. `kDefaultShortcut` pasa a `Ctrl+Alt+Shift+H` en mac (en Qt/mac Ctrl es ⌘); Windows sigue con Win+H. Quien ya tenía uno guardado lo conserva. Self-test, D-75, roadmap y WhatsNew al día.
 
 [ Dictation - En mac el atajo de fabrica pasa a Cmd+Option+Shift+H ]
