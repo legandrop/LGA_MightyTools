@@ -18,10 +18,10 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
     herramienta que la escondió (el calibrador), el Apply de Open in NukeX, ni un panel que dice tener trabajo
     sin guardar (`PanelState`: un editor abierto, una ruta o carpeta elegida sin Save/Install, un reemplazo o
     un nombre a medio escribir, «Make Default» esperando a Windows hasta 15 minutos).
-  - **Primera ventana nativa por adelantado** (`kWarmupDelayMs`, 4 s después del arranque): la primera ventana
-    del proceso le cuesta a Windows ~105 ms una sola vez y se pagaba al abrir desde la bandeja. Ahora se crea y
-    se destruye una sin mostrar; cuesta ~4 MB que igual quedaban al abrir la ventana por primera vez. Si Lega
-    prefiere esos 4 MB a los 105 ms, se saca el bloque del constructor.
+  - **Primera ventana nativa por adelantado** (`kWarmupDelayMs`, 4 s después del arranque; **confirmado por
+    Lega el 2026-11-09**: «Dejarlo»): la primera ventana del proceso le cuesta a Windows ~105 ms una sola vez y
+    se pagaba al abrir desde la bandeja. Ahora se crea y se destruye una sin mostrar; cuesta ~4 MB que igual
+    quedaban al abrir la ventana por primera vez.
   - **Al soltarse se vacía la caché de fuentes de Qt** (4,4 MB; reabrir tarda ~12 ms más).
   - **La negrita del texto con formato va a 600** (SemiBold, la que trae la app), no a 700: pedir un peso o una
     familia que la app no trae («JetBrains Mono») hacía que Qt cargara todas las fuentes del sistema la
