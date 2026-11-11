@@ -8,11 +8,11 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 - **D-78 · WhatsApp Chat: un teléfono copiado abre su chat** (2026-11-11, Lega: «si copio un número
   telefónico, abro Mighty Tools en cualquier lado y hago paste, que me lo abra en WhatsApp»; auditada la idea,
   «sí, con tus recomendaciones»). Herramienta nueva para Windows y macOS, apagada de fábrica (D-06):
-  - **Dos caminos:** Ctrl+V / ⌘V en la ventana, en cualquier página, sin un campo de texto con el foco
-    (`Module::handleWindowPaste`; apagada no hace nada), y un atajo global que lee el portapapeles desde
-    cualquier app: `⌘⌥⇧W` en mac y `Alt+Shift+Win+W` en Windows, como los demás de fábrica de Lega. Abre el
-    chat (nuevo o ya existente) y cierra la ventana; primero abre y después cierra, porque escondida antes
-    Windows le saca a la app el permiso de pasar lo que abre al frente.
+  - **Un solo camino** (Lega, 2026-11-11: «no debería tener un shortcut esta tool»): se copia el número, se
+    abre Mighty Tools y se pega con Ctrl+V / ⌘V en cualquier página, sin un campo de texto con el foco
+    (`Module::handleWindowPaste`; apagada no hace nada). El botón «Open copied number» de su página hace lo
+    mismo. Sin atajo global. Abre el chat (nuevo o ya existente) y cierra la ventana; primero abre y después
+    cierra, porque escondida antes Windows le saca a la app el permiso de pasar lo que abre al frente.
   - **Destino en «Automático»:** el que está abierto (la app antes que la app web), después la app de
     WhatsApp (`whatsapp://send?phone=`), WhatsApp Web instalado como app de Chrome, Brave o Edge
     (`<navegador> --app-id=<id> --app-launch-url-for-shortcuts-menu-item=https://web.whatsapp.com/send?phone=`) y
@@ -24,12 +24,10 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
     puede caer en dos lugares a la vez. Con + o 00 se respeta. No se toma como teléfono: CUIT/CUIL, DNI con
     puntos, fechas, IPs, 16 dígitos, números pegados a letras o dentro de una URL. Si un tramo no da un
     número, se prueban sus pedazos («1) 11 4567-8901»). Dos números distintos no eligen. Sin libphonenumber (pesada; choca con «liviana» y «autocontenida»).
-  - **Si no hay un número claro:** nota amarilla con la hora en la página (pegar lleva a la página; el
-    atajo además avisa con una notificación). Nada se guarda; el log lleva solo el largo y el país.
+  - **Si no hay un número claro:** nota amarilla con la hora en la página (pegar lleva a la página). Nada se guarda; el log lleva solo el largo y el país.
   - **Nombre** «WhatsApp Chat» (el primero, «Phone to WhatsApp», no entraba en la barra lateral) e ícono
     propio, no el logo de WhatsApp.
-  - **Supuestos de la sesión, reversibles:** los 11 países de la lista; el atajo siempre activo con la
-    herramienta prendida (se puede cambiar, no quitar); la app web de Safari se detecta por el nombre
+  - **Supuestos de la sesión, reversibles:** los 11 países de la lista; la app web de Safari se detecta por el nombre
     (no había una para mirar).
   - **Sin probar:** qué hace la app web de Chromium cuando ya está abierta (si reusa la ventana o abre otra
     que recarga WhatsApp Web): se prueba en la PC de Windows de Lega antes de seguir con esa parte.

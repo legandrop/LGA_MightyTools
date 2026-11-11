@@ -16,7 +16,7 @@ shortcuts, no system hooks.
 | **Meet Frame** | Share just part of your screen in Teams, Meet or Zoom. Press a shortcut (Alt+Shift+Win+M by default, ⌘⌥⇧M on macOS), place and size the frame (free or locked to 16:9, 4:3 or 1:1) and share the window named Meet Frame; notifications, the desktop, WhatsApp, Telegram and any app you choose are covered for the others, and Pause freezes the picture. | Windows, macOS |
 | **Mouse Buttons** | Hold a mouse button to hold keys and the left button, only in the apps you choose. For example, the middle button pans in Photoshop like Space + drag. | Windows |
 | **Dictation** | Press a shortcut (Win+H by default) in any text field and speak: you see the text while you talk, and it's typed when you finish. It runs on your computer; the speech model is downloaded once from the tool's page. | Windows |
-| **WhatsApp Chat** | Copy a phone number anywhere, open the window and paste it (or press a shortcut from any app): its WhatsApp chat opens in the WhatsApp app, in WhatsApp Web installed as an app, or in the browser. Local numbers are completed with your default country. | Windows, macOS |
+| **WhatsApp Chat** | Copy a phone number anywhere, open the window and paste it on any page: its WhatsApp chat opens in the WhatsApp app, in WhatsApp Web installed as an app, or in the browser. Local numbers are completed with your default country. | Windows, macOS |
 | **Desktop Icons** | Saves where your desktop icons are, once a day and whenever you want, and puts them back when Windows mixes them up, with undo. | Windows |
 
 Nothing is on after you install it. Open the window from the tray icon (the menu bar on macOS), pick

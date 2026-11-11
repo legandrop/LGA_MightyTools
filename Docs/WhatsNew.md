@@ -13,8 +13,8 @@ en_from: "1.53"
 ## Unreleased
 
 ## v1.54
-- [new] WhatsApp Chat abre el chat de WhatsApp de un teléfono que copiaste: abrís Mighty Tools y pegás en cualquier página, o apretás su atajo desde cualquier app, y el chat se abre en la app de WhatsApp, en WhatsApp Web instalado como app o en el navegador; los números locales se completan con tu país.
-  en: WhatsApp Chat opens the WhatsApp chat of a phone number you copied: open Mighty Tools and paste on any page, or press its shortcut from any app, and the chat opens in the WhatsApp app, in WhatsApp Web installed as an app, or in the browser; local numbers are completed with your country.
+- [new] WhatsApp Chat abre el chat de WhatsApp de un teléfono que copiaste: abrís Mighty Tools, pegás en cualquier página y el chat se abre en la app de WhatsApp, en WhatsApp Web instalado como app o en el navegador; los números locales se completan con tu país.
+  en: WhatsApp Chat opens the WhatsApp chat of a phone number you copied: open Mighty Tools, paste on any page and the chat opens in the WhatsApp app, in WhatsApp Web installed as an app, or in the browser; local numbers are completed with your country.
 - [fixed][mac] El primer tooltip después de abrir Mighty Tools ya no aparece encima del puntero tapando el botón: sale debajo, como los siguientes.
   en: The first tooltip after opening Mighty Tools no longer appears over the pointer covering the button: it shows below, like the following ones.
 - [new][mac] Dictation escribe lo que decís en cualquier campo de texto: tocás ⌘⌥⇧H (o lo mantenés mientras hablás), ves el texto en una ventanita mientras hablás y se escribe al terminar sin pasar por el portapapeles; la primera vez macOS te pide permiso para el micrófono y para Accesibilidad, y el modelo se descarga una sola vez con «Download» desde su página.

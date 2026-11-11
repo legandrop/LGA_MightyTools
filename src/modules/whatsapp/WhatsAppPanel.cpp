@@ -2,7 +2,6 @@
 
 #include "core/I18n.h"
 #include "modules/whatsapp/WhatsAppModule.h"
-#include "ui/ShortcutRow.h"
 #include "ui/Theme.h"
 #include "ui/UiWidgets.h"
 
@@ -57,7 +56,6 @@ WhatsAppPanel::WhatsAppPanel(WhatsAppModule *module, bool interactive, QWidget *
     m_status = new StatusCard(this);
     m_status->setLive(true); // sube al encabezado de la hoja (D-73)
     column->addWidget(m_status);
-    column->addWidget(buildShortcutCard());
     column->addWidget(buildNumbersCard());
     column->addWidget(buildOpenCard());
     column->addStretch();
@@ -65,23 +63,6 @@ WhatsAppPanel::WhatsAppPanel(WhatsAppModule *module, bool interactive, QWidget *
         connect(m_status->button(), &QPushButton::clicked, this, [this]() { runLater(this, [this]() { statusAction(); }); });
     }
     refresh();
-}
-
-QWidget *WhatsAppPanel::buildShortcutCard()
-{
-    QVBoxLayout *column = nullptr;
-    QFrame *card = titledCard(this, I18n::tr("Shortcut"), &column);
-    m_shortcut = new ShortcutRow(I18n::tr("Open the copied number"), I18n::tr("Works from any app, without opening this window."), card);
-    m_shortcut->editButton()->setAccessibleName(I18n::tr("Record the shortcut to open the copied number"));
-    column->addWidget(m_shortcut);
-    if (m_interactive) {
-        m_shortcut->setValidator([this](const Shortcut &keys) { return m_module->validateShortcut(keys); });
-        connect(m_shortcut, &ShortcutRow::shortcutRecorded, this, [this](const Shortcut &keys) {
-            QString error;
-            if (!m_module->setShortcut(keys, &error)) m_shortcut->setError(error);
-        });
-    }
-    return card;
 }
 
 QWidget *WhatsAppPanel::buildNumbersCard()
@@ -159,23 +140,17 @@ void WhatsAppPanel::refresh()
     const QString variant = note.isEmpty() ? QStringLiteral("primary") : QString();
     QString unavailable;
     const bool available = !m_module->targetsKnown() || WhatsAppModule::choose(m_module->targets(), m_module->openIn(), nullptr, &unavailable);
-    if (!m_module->shortcutError().isEmpty()) {
-        m_status->set(QStringLiteral("error"), I18n::tr("WhatsApp Chat needs attention"),
-                      m_module->shortcutError() + QLatin1Char(' ') + I18n::tr("Choose another shortcut below. Pasting in this window still works."),
-                      button, variant, QStringLiteral("err"), sm);
-    } else if (!available) {
+    if (!available) {
         m_status->set(QStringLiteral("warn"), I18n::tr("Chats can't open where you chose"),
                       unavailable + QLatin1Char(' ') + I18n::tr("Choose Automatic or another place below."), button, variant,
                       QStringLiteral("warn"), sm);
     } else {
         m_status->set(QStringLiteral("on"), I18n::tr("Ready"),
-                      I18n::tr("Copy a phone number, open this window and press %1 on any page. From any other app, press %2.")
-                          .arg(QKeySequence(QKeySequence::Paste).toString(QKeySequence::NativeText), m_module->shortcut().displayText()),
+                      I18n::tr("Copy a phone number, open this window and press %1 on any page.")
+                          .arg(QKeySequence(QKeySequence::Paste).toString(QKeySequence::NativeText)),
                       button, variant, QString(), sm);
     }
     m_status->setNote(note);
-
-    m_shortcut->setShortcut(m_module->shortcut());
 
     const QString country = m_module->countryId();
     m_country->setText(WhatsAppModule::countryName(country));

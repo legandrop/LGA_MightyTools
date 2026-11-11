@@ -32,8 +32,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       probaron). Pendientes posibles: «ver a través» de lo tapado en lugar del gris liso; motor de
       miniaturas de DWM si P1 sale bien (más liviano); atajo para encajar la ventana activa en el marco.
    6. **WhatsApp Chat** (Windows y macOS, D-78): hecha en la v1.54. Falta la prueba real de Lega: en la
-      Mac, pegar con ⌘V un número en la ventana y con ⌘⌥⇧W desde otra app (la app de WhatsApp abierta y
-      cerrada); en Windows, con la app web de WhatsApp (Brave o Chrome) abierta y cerrada: **si abre otra
+      Mac, pegar con ⌘V un número en la ventana (la app de WhatsApp abierta y cerrada); en Windows, con la app web de WhatsApp (Brave o Chrome) abierta y cerrada: **si abre otra
       ventana que recarga WhatsApp Web, decidir** entre aceptarlo o pasar a la app de la Store. El código de
       Windows lo compila el CI, sin prueba local. Pendientes posibles: con dos números, botones para elegir
       uno en vez de la nota; la app web de Safari (detectada por el nombre, sin probar); que Link Redirector

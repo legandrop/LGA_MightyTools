@@ -27,7 +27,7 @@ publicó y su repo es privado (D-11).
 
 Herramientas que se sumaron después, cada una con su decisión: App Toggle (D-67), Mouse Buttons (D-68),
 Desktop Icons (D-66), Dictation (D-72, D-75), Meet Frame (D-74) y WhatsApp Chat (D-78: un teléfono copiado
-abre su chat de WhatsApp, pegándolo en la ventana o con un atajo).
+abre su chat de WhatsApp al pegarlo en la ventana).
 
 Window Layouts empieza apagado y sin disposiciones. Cada destino de posición se guarda como fracción del área útil,
 se resuelve sobre el monitor de la ventana activa al pulsar el atajo y excluye las barras visibles del

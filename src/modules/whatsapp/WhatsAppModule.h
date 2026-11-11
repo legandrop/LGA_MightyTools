@@ -9,14 +9,11 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 
-class ModuleHotkeys;
-
-// WhatsApp Chat (D-78): un telefono copiado abre su chat de WhatsApp. Dos caminos:
-//  - Ctrl+V / ⌘V en la ventana de Mighty Tools, en cualquier pagina (Module::handleWindowPaste);
-//  - un atajo global que lee el portapapeles desde cualquier app.
+// WhatsApp Chat (D-78): un telefono copiado abre su chat de WhatsApp. Se copia el numero, se abre Mighty Tools y
+// se pega con Ctrl+V / ⌘V en cualquier pagina (Module::handleWindowPaste), o se usa el boton del panel. Sin atajo
+// global: lo pidio asi Lega (2026-11-11).
 // Lee el numero (PhoneNumber), elige donde abrirlo (la app, la app web o el navegador; WhatsAppSystem),
-// lo abre y cierra la ventana. Si no hay un numero claro, deja una nota amarilla con la hora (y, desde el
-// atajo, un aviso del sistema). No guarda ningun numero; en el log va solo el largo y el pais.
+// lo abre y cierra la ventana. Si no hay un numero claro, deja una nota amarilla con la hora. No guarda ningun numero; en el log va solo el largo y el pais.
 //
 // Sin timers ni nada de fondo: la deteccion se hace al abrir un chat y al mostrar el panel.
 class WhatsAppModule : public Module
@@ -24,8 +21,7 @@ class WhatsAppModule : public Module
     Q_OBJECT
 
 public:
-    enum { OpenShortcut = 1 };
-    enum class Source { Paste, Shortcut, Button };
+    enum class Source { Paste, Button };
 
     explicit WhatsAppModule(ModuleContext &context);
     ~WhatsAppModule() override;
@@ -43,11 +39,6 @@ public:
     void setCountry(const QString &id);
     QString openIn() const; ///< «auto», «app», «webapp», «browser»
     void setOpenIn(const QString &mode);
-    static Shortcut defaultShortcut();
-    Shortcut shortcut() const;
-    QString validateShortcut(const Shortcut &keys) const;
-    bool setShortcut(const Shortcut &keys, QString *error);
-    QString shortcutError() const { return m_shortcutError; }
 
     // ---- Destinos: lo detectado la ultima vez (refreshTargets() vuelve a mirar; en captura, los de prueba).
     const QList<WhatsAppSystem::Target> &targets() const { return m_targets; }
@@ -74,13 +65,9 @@ signals:
     void changed();
 
 private:
-    void registerShortcut();
-    void unregisterShortcut();
     void setAttempt(const QString &note);
 
     bool m_started = false;
-    ModuleHotkeys *m_hotkeys = nullptr;
-    QString m_shortcutError;
     QList<WhatsAppSystem::Target> m_targets;
     bool m_targetsKnown = false;
     QElapsedTimer m_targetsAge;

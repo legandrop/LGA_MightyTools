@@ -20,7 +20,6 @@ namespace {
 
 const char *kCountryKey = "country";
 const char *kOpenInKey = "openIn";
-const char *kShortcutKey = "shortcut";
 // La deteccion se reusa unos segundos (abrir el panel y pegar enseguida no mira dos veces).
 constexpr qint64 kTargetsFreshMs = 3000;
 
@@ -68,22 +67,15 @@ QString pasteKeys()
 class FakeHotkeys : public ModuleHotkeys
 {
 public:
-    QSet<int> registered;
-    Shortcut takenByOther;
-    bool registerHotkey(int id, const Shortcut &) override { registered.insert(id); return true; }
-    void unregisterHotkey(int id) override { registered.remove(id); }
-    void unregisterAll() override { registered.clear(); }
-    bool isRegistered(int id) const override { return registered.contains(id); }
+    int registered = 0;
+    bool registerHotkey(int, const Shortcut &) override { ++registered; return true; }
+    void unregisterHotkey(int) override {}
+    void unregisterAll() override {}
+    bool isRegistered(int) const override { return false; }
     bool probe(const Shortcut &) override { return true; }
     void passThrough(const Shortcut &) override {}
-    QString declare(int, const Shortcut &shortcut) override
-    {
-        return shortcut.isValid() && shortcut == takenByOther ? QStringLiteral("Meet Frame") : QString();
-    }
-    QString declaredByOtherModule(const Shortcut &shortcut) const override
-    {
-        return shortcut.isValid() && shortcut == takenByOther ? QStringLiteral("Meet Frame") : QString();
-    }
+    QString declare(int, const Shortcut &) override { return {}; }
+    QString declaredByOtherModule(const Shortcut &) const override { return {}; }
 };
 
 class FakeContext : public ModuleContext
@@ -240,8 +232,6 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
     {
         WhatsAppModule module(context);
         module.start();
-        check(context.fake.registered.contains(WhatsAppModule::OpenShortcut) && module.shortcut() == WhatsAppModule::defaultShortcut(),
-              QStringLiteral("modulo: prendido registra el atajo de fabrica"));
         check(module.handleWindowPaste(QStringLiteral("011 15-4567-8901")) && module.attemptNote().isEmpty()
                   && !module.lastOpened().isEmpty() && context.notices == 0,
               QStringLiteral("modulo: pegar un numero lo «abre» (solo loguea) sin nota"));
@@ -250,21 +240,14 @@ void selfTest(const std::function<void(bool, const QString &)> &check)
               QStringLiteral("modulo: pegar algo sin numero deja la nota, muestra el panel y no pasa a rojo"));
         module.dismissAttempt();
         check(module.attemptNote().isEmpty(), QStringLiteral("modulo: Dismiss borra la nota"));
-        check(!module.openText(QStringLiteral("x"), WhatsAppModule::Source::Shortcut) && context.notices == 1,
-              QStringLiteral("modulo: desde el atajo, sin numero avisa con una notificacion"));
-        context.fake.takenByOther = Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+F9"));
-        QString error;
-        check(!module.setShortcut(context.fake.takenByOther, &error) && error.contains(QStringLiteral("Meet Frame"))
-                  && module.shortcut() == WhatsAppModule::defaultShortcut(),
-              QStringLiteral("modulo: un atajo de otra herramienta se rechaza y queda el anterior"));
-        const Shortcut keys = Shortcut::fromPortableString(QStringLiteral("Ctrl+Shift+F8"));
-        check(module.setShortcut(keys, &error) && module.shortcut() == keys, QStringLiteral("modulo: un atajo libre se guarda"));
+        check(!module.openText(QStringLiteral("x"), WhatsAppModule::Source::Button) && context.panels == 1 && context.notices == 0,
+              QStringLiteral("modulo: el boton sin numero deja la nota sin notificacion ni cambio de pagina"));
         module.setCountry(QStringLiteral("ZZ"));
         check(module.countryId() == PhoneNumber::defaultCountry(), QStringLiteral("modulo: un pais desconocido no se guarda"));
         module.setOpenIn(QStringLiteral("cualquiera"));
         check(module.openIn() == QLatin1String("auto"), QStringLiteral("modulo: un destino desconocido queda en automatico"));
         module.stop();
-        check(context.fake.registered.isEmpty(), QStringLiteral("modulo: apagado no deja atajos"));
+        check(context.fake.registered == 0, QStringLiteral("modulo: no registra ningun atajo (solo pegar en la ventana)"));
     }
 }
 
@@ -323,7 +306,6 @@ void WhatsAppModule::start()
         return;
     }
     m_started = true;
-    registerShortcut();
 }
 
 void WhatsAppModule::stop()
@@ -331,7 +313,6 @@ void WhatsAppModule::stop()
     if (!m_started) {
         return;
     }
-    unregisterShortcut();
     m_started = false;
 }
 
@@ -364,86 +345,6 @@ void WhatsAppModule::setOpenIn(const QString &mode)
     context().setValue(QLatin1String(kOpenInKey), mode);
     emit statusChanged();
     emit changed();
-}
-
-Shortcut WhatsAppModule::defaultShortcut()
-{
-    // Como los demas de fabrica de Lega: ⌘⌥⇧ + letra en mac (en Qt/mac Ctrl es ⌘), Alt+Shift+Win + letra en Windows.
-#ifdef Q_OS_MACOS
-    return Shortcut::fromPortableString(QStringLiteral("Ctrl+Alt+Shift+W"));
-#else
-    return Shortcut::fromPortableString(QStringLiteral("Alt+Shift+Meta+W"));
-#endif
-}
-
-Shortcut WhatsAppModule::shortcut() const
-{
-    const Shortcut keys = Shortcut::fromPortableString(
-        context().value(QLatin1String(kShortcutKey), defaultShortcut().toPortableString()).toString());
-    return keys.isValid() ? keys : defaultShortcut();
-}
-
-QString WhatsAppModule::validateShortcut(const Shortcut &keys) const
-{
-    if (!keys.isValid()) {
-        return I18n::tr("Choose a shortcut.");
-    }
-    ModuleHotkeys *hotkeys = m_hotkeys ? m_hotkeys : (context().captureMode() ? nullptr : context().hotkeys());
-    const QString takenBy = hotkeys ? hotkeys->declaredByOtherModule(keys) : QString();
-    return takenBy.isEmpty() ? QString() : I18n::tr("Already used by %1.").arg(takenBy);
-}
-
-bool WhatsAppModule::setShortcut(const Shortcut &keys, QString *error)
-{
-    const QString invalid = validateShortcut(keys);
-    if (!invalid.isEmpty()) {
-        if (error) *error = invalid;
-        return false;
-    }
-    const Shortcut previous = shortcut();
-    context().setValue(QLatin1String(kShortcutKey), keys.toPortableString());
-    registerShortcut();
-    if (!m_shortcutError.isEmpty()) {
-        if (error) *error = m_shortcutError;
-        context().setValue(QLatin1String(kShortcutKey), previous.toPortableString());
-        registerShortcut();
-        return false;
-    }
-    return true;
-}
-
-void WhatsAppModule::registerShortcut()
-{
-    if (!m_started || context().captureMode()) return;
-    if (!m_hotkeys) {
-        m_hotkeys = context().hotkeys();
-        if (!m_hotkeys) return;
-        connect(m_hotkeys, &ModuleHotkeys::activated, this, [this](int id) {
-            if (id == OpenShortcut) openClipboard(Source::Shortcut);
-        });
-    }
-    m_shortcutError.clear();
-    m_hotkeys->unregisterHotkey(OpenShortcut);
-    m_hotkeys->declare(OpenShortcut, Shortcut());
-    const Shortcut keys = shortcut();
-    const QString takenBy = m_hotkeys->declare(OpenShortcut, keys);
-    if (!takenBy.isEmpty()) {
-        m_shortcutError = I18n::tr("%1 is already used by %2.").arg(keys.displayText(), takenBy);
-    } else if (!m_hotkeys->registerHotkey(OpenShortcut, keys)) {
-        m_shortcutError = I18n::tr("Another app is using %1.").arg(keys.displayText());
-    }
-    if (!m_shortcutError.isEmpty()) qWarning().noquote() << "[whatsApp]" << m_shortcutError;
-    emit statusChanged();
-    emit changed();
-}
-
-void WhatsAppModule::unregisterShortcut()
-{
-    if (!m_hotkeys) return;
-    disconnect(m_hotkeys, nullptr, this, nullptr);
-    m_hotkeys->unregisterAll();
-    m_hotkeys->declare(OpenShortcut, Shortcut());
-    m_hotkeys = nullptr;
 }
 
 // ------------------------------------------------------------------ Destinos
@@ -548,11 +449,7 @@ bool WhatsAppModule::openText(const QString &text, Source source)
         const QString problem = resultProblem(result);
         qInfo().noquote() << "[whatsApp] Sin numero claro en lo copiado:" << int(result.status) << result.problem;
         setAttempt(problem);
-        if (source == Source::Shortcut) {
-            context().notify(QStringLiteral("WhatsApp Chat"), problem, ModuleContext::NoticeIcon::Warning, 6000);
-        } else if (source == Source::Paste) {
-            context().showPanel();
-        }
+        if (source == Source::Paste) context().showPanel();
         return false;
     }
     refreshTargets(true);
@@ -560,11 +457,7 @@ bool WhatsAppModule::openText(const QString &text, Source source)
     QString problem;
     if (!choose(m_targets, openIn(), &target, &problem)) {
         setAttempt(problem);
-        if (source == Source::Shortcut) {
-            context().notify(QStringLiteral("WhatsApp Chat"), problem, ModuleContext::NoticeIcon::Warning, 6000);
-        } else if (source == Source::Paste) {
-            context().showPanel();
-        }
+        if (source == Source::Paste) context().showPanel();
         return false;
     }
     m_lastOpened = WhatsAppSystem::describe(target);
@@ -577,9 +470,7 @@ bool WhatsAppModule::openText(const QString &text, Source source)
     QString error;
     if (!WhatsAppSystem::open(target, result.digits, &error)) {
         setAttempt(error.isEmpty() ? I18n::tr("WhatsApp could not be opened.") : error);
-        if (source == Source::Shortcut) {
-            context().notify(QStringLiteral("WhatsApp Chat"), m_attemptNote, ModuleContext::NoticeIcon::Warning, 6000);
-        }
+        if (source == Source::Paste) context().showPanel();
         return false;
     }
     setAttempt(QString());
@@ -618,9 +509,6 @@ void WhatsAppModule::dismissAttempt()
 
 ModuleStatus WhatsAppModule::status() const
 {
-    if (!m_shortcutError.isEmpty()) {
-        return {ModuleTone::Error, I18n::tr("Needs attention")};
-    }
     // El lugar elegido no esta (se desinstalo la app): ambar con lo ultimo detectado, sin mirar el sistema aca.
     if (m_targetsKnown && !choose(m_targets, openIn(), nullptr, nullptr)) {
         return {ModuleTone::Attention, I18n::tr("Needs attention")};
@@ -638,7 +526,7 @@ QWidget *WhatsAppModule::createPanel(QWidget *parent)
 QStringList WhatsAppModule::captureStates() const
 {
     return {QStringLiteral("ready"), QStringLiteral("web-app"), QStringLiteral("browser-only"), QStringLiteral("attempt"),
-            QStringLiteral("several"), QStringLiteral("forced-missing"), QStringLiteral("shortcut-error")};
+            QStringLiteral("several"), QStringLiteral("forced-missing")};
 }
 
 bool WhatsAppModule::applyCaptureState(const QString &state)
@@ -658,7 +546,6 @@ bool WhatsAppModule::applyCaptureState(const QString &state)
     m_targets.clear();
     m_targetsKnown = true;
     m_attemptNote.clear();
-    m_shortcutError.clear();
     const QDateTime when(QDate(2026, 11, 11), QTime(14, 32));
     if (state == QLatin1String("ready") || state == QLatin1String("attempt") || state == QLatin1String("several")) {
         m_targets = {app, web};
@@ -675,9 +562,6 @@ bool WhatsAppModule::applyCaptureState(const QString &state)
     } else if (state == QLatin1String("several")) {
         m_attemptNote = resultProblem(PhoneNumber::parse(QStringLiteral("11 4567 8901 / 0351 15 123 4567"), QStringLiteral("AR")));
         m_attemptTime = when;
-    } else if (state == QLatin1String("shortcut-error")) {
-        m_targets = {app};
-        m_shortcutError = I18n::tr("Another app is using %1.").arg(shortcut().displayText());
     }
     return true;
 }
@@ -689,30 +573,23 @@ ModuleDescriptor whatsAppDescriptor()
     d.title = QStringLiteral("WhatsApp Chat");
     d.description = I18n::tr("Paste a copied phone number and its WhatsApp chat opens.");
     d.offBullets = {I18n::tr("Paste a phone number in this window, on any page, to open its chat"),
-                    I18n::tr("A shortcut opens the copied number from any app"),
                     I18n::tr("Uses the WhatsApp app, WhatsApp Web installed as an app, or the browser")};
     d.platforms = PlatformWindows | PlatformMac;
     d.paintIcon = &paintIcon;
     d.create = [](ModuleContext &context) -> std::unique_ptr<Module> {
         return std::make_unique<WhatsAppModule>(context);
     };
-    d.configuredShortcuts = [](const SettingsReader &read) {
-        const Shortcut keys = Shortcut::fromPortableString(read(QLatin1String(kShortcutKey), {}).toString());
-        return QList<Shortcut>{keys.isValid() ? keys : WhatsAppModule::defaultShortcut()};
-    };
     d.selfTest = &selfTest;
     d.simulateAction = &simulateAction;
     return d;
 }
 
-HelpSection whatsAppHelp(const SettingsReader &read)
+HelpSection whatsAppHelp(const SettingsReader &)
 {
-    const Shortcut saved = Shortcut::fromPortableString(read(QLatin1String(kShortcutKey), {}).toString());
-    const Shortcut keys = saved.isValid() ? saved : WhatsAppModule::defaultShortcut();
     HelpSection help;
     help.title = QStringLiteral("WhatsApp Chat");
     help.steps = {I18n::tr("Copy a phone number from anywhere: a web page, a mail, a chat."),
-                  I18n::tr("Open this window and press %1 on any page, or press %2 from any app.").arg(pasteKeys(), keys.displayText()),
+                  I18n::tr("Open this window and press %1 on any page.").arg(pasteKeys()),
                   I18n::tr("The chat opens in WhatsApp, new or existing, and this window closes.")};
     help.note = I18n::tr("Numbers without + are read with the default country. Nothing is saved: the number only goes to WhatsApp.");
     return help;
