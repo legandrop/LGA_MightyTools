@@ -25,6 +25,10 @@ publicó y su repo es privado (D-11).
 | Link Redirector | Se registra como navegador y abre cada link en el navegador que corresponde según palabras clave | Windows, macOS | `C:\Portable\LGA_LinkRedirector` (v0.173) |
 | Window Layouts | Mueve la ventana activa a un área guardada o la minimiza con un atajo; combina mitades, tercios y cuartos en ambos ejes o copia un área dibujada o una ventana | Windows, macOS | Nuevo módulo de Mighty Tools; selección inspirada en FrameRev |
 
+Herramientas que se sumaron después, cada una con su decisión: App Toggle (D-67), Mouse Buttons (D-68),
+Desktop Icons (D-66), Dictation (D-72, D-75), Meet Frame (D-74) y WhatsApp Chat (D-78: un teléfono copiado
+abre su chat de WhatsApp, pegándolo en la ventana o con un atajo).
+
 Window Layouts empieza apagado y sin disposiciones. Cada destino de posición se guarda como fracción del área útil,
 se resuelve sobre el monitor de la ventana activa al pulsar el atajo y excluye las barras visibles del
 sistema. El detalle de interacción y límites de plataforma está en D-52.

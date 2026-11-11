@@ -5,6 +5,7 @@
 #include "modules/windowlayouts/WindowLayoutsModule.h"
 #include "modules/apptoggle/AppToggleModule.h"
 #include "modules/meetframe/MeetFrameModule.h"
+#include "modules/whatsapp/WhatsAppModule.h"
 
 #include "modules/openinnukex/OpenInNukeXDescriptor.h"
 
@@ -42,6 +43,7 @@ QList<ModuleDescriptor> all()
     list << windowLayoutsDescriptor();
     list << appToggleDescriptor();
     list << meetFrameDescriptor();
+    list << whatsAppDescriptor();
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     list << dictationDescriptor();
 #endif
@@ -83,6 +85,7 @@ QHash<QString, HelpProvider> helpProviders()
     providers.insert(QStringLiteral("windowLayouts"), &windowLayoutsHelp);
     providers.insert(QStringLiteral("appToggle"), &appToggleHelp);
     providers.insert(QStringLiteral("meetFrame"), &meetFrameHelp);
+    providers.insert(QStringLiteral("whatsApp"), &whatsAppHelp);
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
     providers.insert(QStringLiteral("dictation"), &dictationHelp);
 #endif

@@ -2,6 +2,10 @@
 
 v1.54:
 
+WhatsApp Chat, herramienta nueva (D-78, Lega 11/11): copiar un teléfono de cualquier lado y abrir su chat sin pasar por wa.me. Con la herramienta prendida, Ctrl+V / ⌘V en la ventana (cualquier página, sin un campo con foco: `Module::handleWindowPaste`, `ModuleHost::dispatchWindowPaste`) o un atajo global (`⌘⌥⇧W` / `Alt+Shift+Win+W`) leen el portapapeles. `PhoneNumber` busca el número (descarta CUIT, DNI, fechas, IPs, tarjetas, números dentro de URLs), lo normaliza con el país por defecto (Argentina: sin 0, sin 15, con 9, sin tabla de áreas) y acepta links `wa.me`/`api.whatsapp.com`. `WhatsAppSystem` elige dónde abrirlo: la app (`whatsapp://send`), WhatsApp Web instalado como app de Chromium (`--app-id` + `--app-launch-url-for-shortcuts-menu-item`) o el navegador; abre y recién después cierra la ventana. Sin número claro, nota amarilla con la hora. El log no lleva el número. Auditoría independiente: se corrigieron una factura «0001-…» tomada como número internacional, tramos con texto pegado («11 4567 8901 24hs», «1) …», un DNI delante: ahora se prueban sus pedazos), el `(0)` de «+44 (0) 20…», el CUIT sin guiones descartado también en otros países, los links de WhatsApp (se respetan tal cual: un Business de un fijo va sin 9), el escritorio de Windows recorrido con todas sus carpetas en cada pegado (ahora solo arriba), los carteles de Windows al abrir (`SEE_MASK_FLAG_NO_UI`) y el perfil de la app web en mac. Self-test con 83 casos, `--simulate-action whatsApp:parse|targets` y 7 estados de captura.
+
+[ WhatsApp Chat - Herramienta nueva: pegar un telefono abre su chat de WhatsApp ]
+
 Dictation en mac pasa a main (Lega, 09/11: «mergeá todo a main»): la rama `dictado-mac` (el dictado de macOS, el atajo `⌘⌥⇧H`, el primer tooltip de mac y los scripts de la Base) se mergea a main después de publicar la v1.53 de Mac, que salió del tag sin el dictado de mac. Como la v1.53 ya está publicada, sus entradas de acá y del WhatsNew pasan a la v1.54. Sin cambios de código en el merge: solo el changelog y el WhatsNew.
 
 [ Dictation - El dictado de Mac pasa a main ]

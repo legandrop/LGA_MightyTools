@@ -174,6 +174,11 @@ set(SOURCES
     src/modules/meetframe/MeetFrameOverlay.cpp
     src/modules/meetframe/MeetFramePanel.cpp
     src/modules/meetframe/MeetFrameRules.cpp
+    # WhatsApp Chat (D-78): la lectura del numero, el modulo y el panel son comunes; donde abrir, de cada plataforma.
+    src/modules/whatsapp/PhoneNumber.cpp
+    src/modules/whatsapp/WhatsAppModule.cpp
+    src/modules/whatsapp/WhatsAppPanel.cpp
+    src/platform/WhatsAppSystemCommon.cpp
     src/platform/AutoStartCommon.cpp
     src/platform/InputInjectorCommon.cpp
     src/platform/LocalDrivesCommon.cpp
@@ -291,6 +296,10 @@ set(HEADERS
     src/modules/meetframe/MeetFrameOverlay.h
     src/modules/meetframe/MeetFramePanel.h
     src/modules/meetframe/MeetFrameRules.h
+    src/modules/whatsapp/PhoneNumber.h
+    src/modules/whatsapp/WhatsAppModule.h
+    src/modules/whatsapp/WhatsAppPanel.h
+    src/platform/WhatsAppSystem.h
     src/platform/MeetFrameSystem.h
     src/platform/AutoStart.h
     src/platform/ComApartment.h
@@ -346,6 +355,7 @@ if(WIN32)
         # Ayudante elevado de Window Layouts para ventanas de administrador.
         src/platform/win/AdminWindowHelperWin.cpp
         src/platform/win/AppToggleSystemWin.cpp
+        src/platform/win/WhatsAppSystemWin.cpp
         src/platform/win/MeetFrameSystemWin.cpp
         src/platform/win/AutoStartWin.cpp
         src/platform/win/ComApartmentWin.cpp
@@ -451,6 +461,7 @@ elseif(APPLE)
         src/modules/folderswitch/mac/FolderSwitchMacModule.cpp
         src/modules/folderswitch/mac/MacFileDialogs.mm
         src/platform/mac/AppToggleSystemMac.mm
+        src/platform/mac/WhatsAppSystemMac.mm
         src/platform/mac/MeetFrameSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ComApartmentMac.cpp
@@ -562,6 +573,8 @@ if(WIN32)
         # Meet Frame: captura del monitor con DXGI Desktop Duplication.
         d3d11
         dxgi
+        # WhatsApp Chat: quien atiende whatsapp: (AssocQueryString).
+        shlwapi
     )
 elseif(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
@@ -587,6 +600,7 @@ elseif(APPLE)
     set_source_files_properties(
         src/modules/linkredirector/mac/BrowserRegistrationMac.mm
         src/platform/mac/AppToggleSystemMac.mm
+        src/platform/mac/WhatsAppSystemMac.mm
         src/platform/mac/MeetFrameSystemMac.mm
         src/platform/mac/AutoStartMac.mm
         src/platform/mac/ForegroundWatcherMac.mm
