@@ -45,6 +45,11 @@ bool finalEchoesContext(const QString &hypothesis, const QStringList &vocabulary
 // Tiene alguna letra o algun digito: un final que es solo "." o "¡!" no se escribe.
 bool hasWords(const QString &text);
 
+// Whisper a veces devuelve en ingles (traducido) lo que se dijo en castellano, aunque se le pida "es". True si
+// el texto tiene al menos 3 palabras funcionales inglesas ("the", "and", "you"...) y mas del doble que
+// castellanas ("de", "que", "la"...). Los terminos tecnicos ("Nuke Studio", "comp") no cuentan.
+bool looksEnglish(const QString &text);
+
 // Tabla de reemplazos (pares "si escribe X, poner Y"), en orden, sobre palabras o frases completas y sin
 // distinguir mayusculas: {"Jairo", "Hiero"} cambia "jairo" pero no "Jairos". Y se pone tal cual.
 using Replacements = QList<QPair<QString, QString>>;

@@ -59,6 +59,34 @@ bool hasWords(const QString &text)
     return false;
 }
 
+bool looksEnglish(const QString &text)
+{
+    static const QSet<QString> english = {
+        QStringLiteral("the"), QStringLiteral("and"), QStringLiteral("to"), QStringLiteral("of"), QStringLiteral("is"),
+        QStringLiteral("that"), QStringLiteral("it"), QStringLiteral("you"), QStringLiteral("this"), QStringLiteral("with"),
+        QStringLiteral("for"), QStringLiteral("was"), QStringLiteral("are"), QStringLiteral("have"), QStringLiteral("be"),
+        QStringLiteral("what"), QStringLiteral("but"), QStringLiteral("on"), QStringLiteral("i"), QStringLiteral("we"),
+        QStringLiteral("they"), QStringLiteral("my"), QStringLiteral("just"), QStringLiteral("can"), QStringLiteral("will"),
+        QStringLiteral("if"), QStringLiteral("there"), QStringLiteral("when"), QStringLiteral("because"), QStringLiteral("dont"),
+        QStringLiteral("its"), QStringLiteral("im"), QStringLiteral("not"), QStringLiteral("so")};
+    static const QSet<QString> spanish = {
+        QStringLiteral("de"), QStringLiteral("que"), QStringLiteral("la"), QStringLiteral("el"), QStringLiteral("en"),
+        QStringLiteral("y"), QStringLiteral("los"), QStringLiteral("las"), QStringLiteral("del"), QStringLiteral("se"),
+        QStringLiteral("por"), QStringLiteral("un"), QStringLiteral("una"), QStringLiteral("para"), QStringLiteral("es"),
+        QStringLiteral("con"), QStringLiteral("no"), QStringLiteral("lo"), QStringLiteral("pero"), QStringLiteral("como"),
+        QStringLiteral("esto"), QStringLiteral("eso"), QStringLiteral("ya"), QStringLiteral("si"), QStringLiteral("porque"),
+        QStringLiteral("hay"), QStringLiteral("cuando"), QStringLiteral("está"), QStringLiteral("están"), QStringLiteral("también"),
+        QStringLiteral("al"), QStringLiteral("me"), QStringLiteral("le"), QStringLiteral("muy")};
+    int en = 0;
+    int es = 0;
+    for (const QString &word : words(text)) {
+        const QString w = normalizedWord(word);
+        en += english.contains(w);
+        es += spanish.contains(w);
+    }
+    return en >= 3 && en > 2 * es;
+}
+
 bool echoesContext(const QString &hypothesis, const QStringList &vocabulary, const QString &prompt)
 {
     QSet<QString> context = {QStringLiteral("glossary")};

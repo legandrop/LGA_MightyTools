@@ -281,6 +281,15 @@ void testVoiceGate(const Check &check)
               && hasWords(QStringLiteral("Ok.")) && hasWords(QStringLiteral("3")) && hasWords(QStringLiteral("¿Qué?")),
           QStringLiteral("voz: un final sin letras ni digitos (\".\") no cuenta como texto"));
 
+    using DictationText::looksEnglish;
+    check(looksEnglish(QStringLiteral("I think the comp is fine, but you should check the roto with the new plate."))
+              && looksEnglish(QStringLiteral("It's not working and I don't know why."))
+              && !looksEnglish(QStringLiteral("Che, revisá el comp en Nuke Studio y fijate si el roto anda bien."))
+              && !looksEnglish(QStringLiteral("Abrí el Dope Sheet, el Roto Paint y el Node Graph de Nuke Studio."))
+              && !looksEnglish(QStringLiteral("Le pasé el render a Juan, pero el plate no tiene el tracking y eso no anda."))
+              && !looksEnglish(QStringLiteral("Ok.")) && !looksEnglish(QString()),
+          QStringLiteral("voz: un final traducido al ingles se reconoce; castellano con terminos en ingles, no"));
+
     // La pasada final con un doble del motor: que contesta con y sin la frase de contexto, y cuantas veces corrio.
     using DictationWorker::Attempt;
     struct Double

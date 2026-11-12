@@ -2,6 +2,10 @@
 
 v1.54:
 
+Dictation: el preview se veía bien en castellano y al terminar se pegaba un texto en inglés. Causa: la pasada final usaba los reintentos de Whisper a temperaturas más altas (la del preview no), y a temperatura alta Whisper puede devolver traducido al inglés lo dicho en castellano. Ahora la final también va en un solo intento a temperatura 0, como el preview. Red de seguridad: con el idioma en castellano, si el final parece inglés (`DictationText::looksEnglish`, por palabras funcionales), se hace otra pasada con reintentos y se usa solo si sale en castellano; el log lo anota sin el texto. Self-test del detector con castellano lleno de términos en inglés.
+
+[ Dictation - El texto final ya no sale traducido al ingles ]
+
 WhatsApp Chat sin atajo global (Lega, 11/11: «no debería tener un shortcut esta tool»): el uso es copiar el número, abrir Mighty Tools y pegar en cualquier página. Se sacan el atajo `⌘⌥⇧W` / `Alt+Shift+Win+W`, su tarjeta en la página, su aviso del sistema y el estado rojo por un atajo ocupado; la herramienta no registra ningún atajo (lo prueba el self-test). Queda el botón «Open copied number» de la página, que hace lo mismo que pegar. D-78, roadmap, README y WhatsNew al día. El CI de Windows (run 43113911494) compiló y pasó el self-test del commit anterior.
 
 [ WhatsApp Chat - Sin atajo global: solo pegar en la ventana ]

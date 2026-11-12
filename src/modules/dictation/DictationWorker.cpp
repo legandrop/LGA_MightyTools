@@ -135,10 +135,11 @@ class Engine
 {
 public:
     bool load(const QString &engineDir, const QString &modelPath, QString *error);
-    // live: pasada en vivo, sin los reintentos de Whisper a otra temperatura (con audio que todavia no
-    // dice nada multiplicaban el tiempo de la pasada); la final los conserva. Mas de 29 s van en pedazos
+    // greedy: un solo intento a temperatura 0, sin los reintentos de Whisper a temperaturas mas altas. Lo
+    // usan la pasada en vivo (con audio que todavia no dice nada multiplicaban el tiempo) y la final (a
+    // temperatura alta Whisper puede devolver en ingles lo dicho en castellano). Mas de 29 s van en pedazos
     // (DictationProtocol::pieces), cada uno con el vocabulario y la frase.
-    Pass run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool live = false);
+    Pass run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool greedy);
     void close();
     QString device() const { return m_device; }
 
@@ -156,7 +157,7 @@ private:
     QString status(int code) const { return QString::fromUtf8(m_statusString(code)); }
     QString readDevice() const;
     void dropSilentChunks(Pass *pass) const;
-    Pass runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool live);
+    Pass runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool greedy);
 
     decltype(&transcribe_status_string) m_statusString = nullptr;
     decltype(&transcribe_version) m_version = nullptr;
@@ -309,7 +310,7 @@ QString Engine::readDevice() const
     return QStringLiteral("%1 (%2)").arg(QString::fromUtf8(name), QString::fromUtf8(info.kind ? info.kind : "?"));
 }
 
-Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool live)
+Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomic<bool> *abortFlag, bool greedy)
 {
     if (pcm.empty()) {
         Pass pass;
@@ -318,7 +319,7 @@ Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomi
     }
     const auto list = DictationProtocol::pieces(pcm.data(), pcm.size());
     if (list.size() == 1) {
-        return runPiece(pcm.data(), pcm.size(), params, abortFlag, live);
+        return runPiece(pcm.data(), pcm.size(), params, abortFlag, greedy);
     }
     Pass total;
     QStringList texts;
@@ -328,7 +329,7 @@ Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomi
         if (!voice.enough()) {
             continue;
         }
-        const Pass pass = runPiece(pcm.data() + piece.first, piece.second - piece.first, params, abortFlag, live);
+        const Pass pass = runPiece(pcm.data() + piece.first, piece.second - piece.first, params, abortFlag, greedy);
         total.ms += pass.ms;
         if (!pass.ok) {
             total.aborted = pass.aborted;
@@ -350,7 +351,7 @@ Pass Engine::run(const std::vector<float> &pcm, const Params &params, std::atomi
     return total;
 }
 
-Pass Engine::runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool live)
+Pass Engine::runPiece(const float *pcm, size_t count, const Params &params, std::atomic<bool> *abortFlag, bool greedy)
 {
     Pass pass;
     // El motor copia los textos antes de volver: alcanza con que vivan durante la llamada.
@@ -376,7 +377,7 @@ Pass Engine::runPiece(const float *pcm, size_t count, const Params &params, std:
     }
     run.prompt = prompt.isEmpty() ? nullptr : prompt.constData();
     transcribe_whisper_run_ext whisper;
-    if (live && m_whisper) {
+    if (greedy && m_whisper) {
         m_whisperExtInit(&whisper);
         whisper.temperature_inc = 0.0f; // un solo intento, el de temperatura 0
         run.family = &whisper.ext;
@@ -686,7 +687,21 @@ int run(int argc, char *argv[])
                 pass = finalText(voice.frames, job.params.vocabulary, job.params.prompt, [&](bool withPrompt) {
                     Params params = job.params;
                     if (!withPrompt) params.prompt.clear();
-                    const Pass done = engine.run(audio, params, &g_abortFinal);
+                    Pass done = engine.run(audio, params, &g_abortFinal, true);
+                    // Pedido en castellano y devuelto en ingles: otra pasada, ahora con los reintentos de
+                    // temperatura de Whisper. Si esa tampoco sale en castellano, queda la primera.
+                    if (done.ok && !done.aborted && params.language == QLatin1String("es") && DictationText::looksEnglish(done.text)) {
+                        const Pass retry = engine.run(audio, params, &g_abortFinal, false);
+                        const bool better = retry.ok && !retry.aborted && DictationText::hasWords(retry.text) && !DictationText::looksEnglish(retry.text);
+                        note(QStringLiteral("Final en ingles con el idioma en castellano; otra pasada con reintentos: %1")
+                                 .arg(better ? QStringLiteral("salio en castellano, se usa esa") : QStringLiteral("tampoco, queda la primera")));
+                        if (retry.aborted) {
+                            done.aborted = true;
+                        } else if (better) {
+                            done.text = retry.text;
+                        }
+                        done.ms += retry.ms;
+                    }
                     if (done.dropped > 0) {
                         note(QStringLiteral("Final: %1 tramo(s) sin voz descartados (probabilidad %2)").arg(done.dropped).arg(double(done.noSpeech), 0, 'f', 2));
                     }
