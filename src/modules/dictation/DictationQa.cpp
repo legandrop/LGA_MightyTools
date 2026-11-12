@@ -428,6 +428,8 @@ void testText(const Check &check)
     check(applyReplacements(QStringLiteral("x"), {{QStringLiteral("x"), QStringLiteral("\\1 $1 \\")}, {QString(), QStringLiteral("no")}})
               == QStringLiteral("\\1 $1 \\"),
           QStringLiteral("reemplazos: el reemplazo va tal cual y un origen vacio no hace nada"));
+    check(DictationText::stripOpeningMarks(QString::fromUtf8("\xC2\xBFVamos? \xC2\xA1S\xC3\xAD!")) == QString::fromUtf8("Vamos? S\xC3\xAD!"),
+          QStringLiteral("signos: sin los de apertura quedan solo ? y !"));
 }
 
 // ---------------------------------------------------------------- Descarga y verificacion

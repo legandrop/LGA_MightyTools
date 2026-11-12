@@ -83,9 +83,6 @@ public:
     bool allPausedOrOff() const;
     QStringList trayTooltipLines() const;
     QStringList runningIds() const;
-    // Ctrl+V / ⌘V en la ventana sin un campo con el foco: se lo ofrece a las prendidas en orden (Module::
-    // handleWindowPaste). True si alguna se lo quedo.
-    bool dispatchWindowPaste(const QString &text);
 
     // Lectura de la seccion [<id>] sin construir el modulo.
     SettingsReader reader(const QString &id) const;

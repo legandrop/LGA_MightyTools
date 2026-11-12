@@ -195,9 +195,10 @@ void DictationFlow::partial(const QString &text)
     if (m_phase != Phase::Recording || DictationText::echoesContext(text, m_vocabulary, m_prompt)) {
         return;
     }
-    const DictationText::Split split = DictationText::stabilize(m_confirmed, m_previous, text);
+    const QString shown = m_closingMarksOnly ? DictationText::stripOpeningMarks(text) : text;
+    const DictationText::Split split = DictationText::stabilize(m_confirmed, m_previous, shown);
     m_confirmed = split.confirmed;
-    m_previous = text;
+    m_previous = shown;
     m_live = split.display();
     m_io.overlayText(split.confirmed, split.provisional);
 }
@@ -207,7 +208,9 @@ void DictationFlow::final(const QString &text)
     if (m_phase != Phase::Transcribing) {
         return;
     }
-    const QString result = DictationText::applyReplacements(text.trimmed(), m_replacements).trimmed();
+    QString cleaned = text.trimmed();
+    if (m_closingMarksOnly) cleaned = DictationText::stripOpeningMarks(cleaned);
+    const QString result = DictationText::applyReplacements(cleaned, m_replacements).trimmed();
     if (!DictationText::hasWords(result)) {
         // No se entendio nada (silencio, ruido) o es solo puntuacion ("."): no se escribe nada.
         qInfo().noquote() << "[Dictado] Final sin palabras:" << (result.isEmpty() ? QStringLiteral("(vacio)") : result)

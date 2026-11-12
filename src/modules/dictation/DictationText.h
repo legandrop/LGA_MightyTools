@@ -55,6 +55,9 @@ bool looksEnglish(const QString &text);
 using Replacements = QList<QPair<QString, QString>>;
 QString applyReplacements(const QString &text, const Replacements &replacements);
 
+// Saca los signos de apertura ¿ y ¡ (opcion «Only closing marks»): quedan solo los de cierre ? y !.
+QString stripOpeningMarks(const QString &text);
+
 } // namespace DictationText
 
 #endif // MIGHTYTOOLS_DICTATIONTEXT_H

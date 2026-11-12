@@ -5,6 +5,10 @@ abiertas siguen con la opción reversible indicada hasta que Lega diga otra cosa
 
 ## Tomadas
 
+- **D-79 · WhatsApp Chat se saca entera** (2026-11-12, Lega: «sacar por completo del código toda la
+  funcionalidad de WhatsApp»). Se borran el módulo, su sistema por plataforma y el pegado en la ventana
+  (`handleWindowPaste`); nunca llegó a publicarse. D-78 queda como historia. Las reglas de Meet Frame que
+  tapan WhatsApp siguen: son de otra herramienta.
 - **D-78 · WhatsApp Chat: un teléfono copiado abre su chat** (2026-11-11, Lega: «si copio un número
   telefónico, abro Mighty Tools en cualquier lado y hago paste, que me lo abra en WhatsApp»; auditada la idea,
   «sí, con tus recomendaciones»). Herramienta nueva para Windows y macOS, apagada de fábrica (D-06):

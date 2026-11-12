@@ -15,8 +15,8 @@ en_from: "1.53"
 ## v1.54
 - [fixed] Dictation ya no escribe en inglés lo que dictaste en castellano cuando la ventanita lo mostraba bien.
   en: Dictation no longer types in English what you dictated in Spanish when the small window showed it correctly.
-- [new] WhatsApp Chat abre el chat de WhatsApp de un teléfono que copiaste: abrís Mighty Tools, pegás en cualquier página y el chat se abre en la app de WhatsApp, en WhatsApp Web instalado como app o en el navegador; los números locales se completan con tu país.
-  en: WhatsApp Chat opens the WhatsApp chat of a phone number you copied: open Mighty Tools, paste on any page and the chat opens in the WhatsApp app, in WhatsApp Web installed as an app, or in the browser; local numbers are completed with your country.
+- [new] Dictation tiene la opción «Only closing marks» en Voice: con ella prendida, las preguntas y exclamaciones se escriben sin los ¿ y ¡ de apertura.
+  en: Dictation has the «Only closing marks» option under Voice: when it is on, questions and exclamations are typed without the opening ¿ and ¡.
 - [fixed][mac] El primer tooltip después de abrir Mighty Tools ya no aparece encima del puntero tapando el botón: sale debajo, como los siguientes.
   en: The first tooltip after opening Mighty Tools no longer appears over the pointer covering the button: it shows below, like the following ones.
 - [new][mac] Dictation escribe lo que decís en cualquier campo de texto: tocás ⌘⌥⇧H (o lo mantenés mientras hablás), ves el texto en una ventanita mientras hablás y se escribe al terminar sin pasar por el portapapeles; la primera vez macOS te pide permiso para el micrófono y para Accesibilidad, y el modelo se descarga una sola vez con «Download» desde su página.

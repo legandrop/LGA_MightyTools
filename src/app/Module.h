@@ -182,11 +182,6 @@ public:
     // Misma semantica que ModuleDescriptor::runExternal.
     virtual ExternalResult handleExternal(const ExternalRequest &request) { Q_UNUSED(request); return ExternalResult::NotMine; }
 
-    // Ctrl+V / ⌘V en la ventana, en cualquier pagina, sin un campo de texto con el foco (WhatsApp Chat,
-    // D-78). `text` es el texto del portapapeles. True si la herramienta se lo quedo: las demas no lo reciben.
-    // Solo lo reciben las prendidas; apagada, la combinacion no hace nada.
-    virtual bool handleWindowPaste(const QString &text) { Q_UNUSED(text); return false; }
-
     // El boton de un aviso con desplegable (ModuleContext::notifyWithChoice): `action` y `key` son los
     // del aviso, `choice` el id elegido (vacio si no llego ninguno). Solo con la herramienta prendida.
     virtual void noticeAction(const QString &action, const QString &key, const QString &choice)

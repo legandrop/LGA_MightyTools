@@ -261,6 +261,7 @@ void DictationModule::applyFlowSettings()
     const QString code = language();
     m_flow.setContext(vocabularyFrom(customWords()), contextPhrase(code));
     m_flow.setReplacements(replacements());
+    m_flow.setClosingMarksOnly(closingMarksOnly());
     m_flow.setMaxDurationMs(DictationEngine::kMaxSeconds * 1000);
 }
 
@@ -509,6 +510,18 @@ DictationText::Replacements DictationModule::replacements() const
 void DictationModule::setReplacements(const DictationText::Replacements &list)
 {
     context().setValue(QStringLiteral("replacements"), replacementsToJson(list));
+    applyFlowSettings();
+    emit changed();
+}
+
+bool DictationModule::closingMarksOnly() const
+{
+    return context().value(QStringLiteral("closingMarksOnly"), false).toBool();
+}
+
+void DictationModule::setClosingMarksOnly(bool on)
+{
+    context().setValue(QStringLiteral("closingMarksOnly"), on);
     applyFlowSettings();
     emit changed();
 }

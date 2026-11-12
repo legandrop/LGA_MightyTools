@@ -20,6 +20,7 @@ class QStackedLayout;
 class QVBoxLayout;
 class ShortcutRow;
 class StatusCard;
+class SwitchRow;
 class UsageBar;
 
 // La página de Dictation, con los materiales de App Toggle y Mouse Buttons: tarjeta de estado, el atajo, idioma
@@ -71,6 +72,7 @@ private:
     ShortcutRow *m_shortcut = nullptr;
     QPushButton *m_language = nullptr;
     QPushButton *m_microphone = nullptr;
+    SwitchRow *m_closingMarks = nullptr;
     QPlainTextEdit *m_words = nullptr;
     QWidget *m_replacementRows = nullptr;
     QLineEdit *m_from = nullptr;

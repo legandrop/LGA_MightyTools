@@ -69,6 +69,9 @@ public:
     void setCustomWords(const QString &words);
     DictationText::Replacements replacements() const;
     void setReplacements(const DictationText::Replacements &replacements);
+    // Sin ¿ ni ¡ de apertura: solo los signos de cierre.
+    bool closingMarksOnly() const;
+    void setClosingMarksOnly(bool on);
     QString modelsRoot() const; ///< la carpeta elegida, o la de por defecto
     void setModelsRoot(const QString &root); ///< solo una ruta completa (fullPath); si no, no cambia nada
     static bool fullPath(const QString &path); ///< unidad + barra, o UNC

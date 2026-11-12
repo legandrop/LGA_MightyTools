@@ -26,8 +26,8 @@ publicó y su repo es privado (D-11).
 | Window Layouts | Mueve la ventana activa a un área guardada o la minimiza con un atajo; combina mitades, tercios y cuartos en ambos ejes o copia un área dibujada o una ventana | Windows, macOS | Nuevo módulo de Mighty Tools; selección inspirada en FrameRev |
 
 Herramientas que se sumaron después, cada una con su decisión: App Toggle (D-67), Mouse Buttons (D-68),
-Desktop Icons (D-66), Dictation (D-72, D-75), Meet Frame (D-74) y WhatsApp Chat (D-78: un teléfono copiado
-abre su chat de WhatsApp al pegarlo en la ventana).
+Desktop Icons (D-66), Dictation (D-72, D-75), Meet Frame (D-74). WhatsApp Chat (D-78) se sacó antes de
+publicarse (D-79).
 
 Window Layouts empieza apagado y sin disposiciones. Cada destino de posición se guarda como fracción del área útil,
 se resuelve sobre el monitor de la ventana activa al pulsar el atajo y excluye las barras visibles del

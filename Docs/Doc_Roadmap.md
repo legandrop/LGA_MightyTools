@@ -31,13 +31,7 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       Mac (el CI la compila; el permiso de Grabación de pantalla y el filtro de ScreenCaptureKit no se
       probaron). Pendientes posibles: «ver a través» de lo tapado en lugar del gris liso; motor de
       miniaturas de DWM si P1 sale bien (más liviano); atajo para encajar la ventana activa en el marco.
-   6. **WhatsApp Chat** (Windows y macOS, D-78): hecha en la v1.54. Falta la prueba real de Lega: en la
-      Mac, pegar con ⌘V un número en la ventana (la app de WhatsApp abierta y cerrada); en Windows, con la app web de WhatsApp (Brave o Chrome) abierta y cerrada: **si abre otra
-      ventana que recarga WhatsApp Web, decidir** entre aceptarlo o pasar a la app de la Store. El código de
-      Windows lo compila el CI, sin prueba local. Pendientes posibles: con dos números, botones para elegir
-      uno en vez de la nota; la app web de Safari (detectada por el nombre, sin probar); que Link Redirector
-      mande los links `wa.me` y `api.whatsapp.com` directo al WhatsApp que corresponda, sin la página
-      intermedia.
+   6. **WhatsApp Chat** (D-78): se sacó entera antes de publicarse (D-79).
 2. **Limpieza de Disk Space, lo que sigue:** lo que pide administrador (restos de Windows Update, volcado de
    memoria) con elevación (D-27); probar de verdad los instaladores huérfanos (D-69: el UAC, el paso
    elevado y la Papelera; en la PC de Lega hoy no aparece ninguno porque las 6 copias sueltas son de

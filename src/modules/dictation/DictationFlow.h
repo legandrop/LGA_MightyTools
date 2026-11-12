@@ -73,6 +73,7 @@ public:
     // El contexto que recibe el motor: sirve para descartar las pasadas en vivo que solo lo repiten.
     void setContext(const QStringList &vocabulary, const QString &prompt);
     void setReplacements(const DictationText::Replacements &replacements) { m_replacements = replacements; }
+    void setClosingMarksOnly(bool on) { m_closingMarksOnly = on; }
     void setMaxDurationMs(int ms) { m_trigger.setMaxDurationMs(ms); }
 
     Phase phase() const { return m_phase; }
@@ -117,6 +118,7 @@ private:
     QStringList m_vocabulary;
     QString m_prompt;
     DictationText::Replacements m_replacements;
+    bool m_closingMarksOnly = false;
     QString m_confirmed; // lo confirmado en vivo
     QString m_previous;  // la última pasada en vivo
     QString m_live;      // lo que muestra la ventanita (para «Recent» si se cancela)

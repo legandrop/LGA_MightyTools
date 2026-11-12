@@ -14,7 +14,6 @@
 
 #include <QAbstractSpinBox>
 #include <QApplication>
-#include <QClipboard>
 #include <QCloseEvent>
 #include <QDebug>
 #include <QEvent>
@@ -748,18 +747,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         }
         event->accept();
         return;
-    }
-    // Pegar en la ventana, en cualquier pagina (WhatsApp Chat, D-78): con un campo de texto con el foco el
-    // pegado es del campo y no llega aca; sin foco, se le ofrece a las herramientas prendidas.
-    if (event->matches(QKeySequence::Paste) && !event->isAutoRepeat()) {
-        QWidget *focus = QApplication::focusWidget();
-        const bool editing = focus && isAncestorOf(focus)
-                             && (qobject_cast<QLineEdit *>(focus) || qobject_cast<QTextEdit *>(focus)
-                                 || qobject_cast<QPlainTextEdit *>(focus) || qobject_cast<QAbstractSpinBox *>(focus));
-        if (!editing && m_host && m_host->dispatchWindowPaste(QGuiApplication::clipboard()->text())) {
-            event->accept();
-            return;
-        }
     }
     QMainWindow::keyPressEvent(event);
 }

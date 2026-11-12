@@ -192,6 +192,13 @@ Split stabilize(const QString &confirmed, const QString &previous, const QString
     return split;
 }
 
+QString stripOpeningMarks(const QString &text)
+{
+    QString out = text;
+    out.remove(QChar(0x00BF)).remove(QChar(0x00A1));
+    return out;
+}
+
 QString applyReplacements(const QString &text, const Replacements &replacements)
 {
     QString out = text;

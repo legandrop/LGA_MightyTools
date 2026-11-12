@@ -252,7 +252,11 @@ QWidget *DictationPanel::buildSpeechCard()
     m_microphone->setAccessibleName(I18n::tr("Microphone"));
     grid->addWidget(m_microphone, 1, 1, Qt::AlignVCenter | Qt::AlignLeft | Qt::AlignAbsolute);
     column->addWidget(box);
+    m_closingMarks = new SwitchRow(I18n::tr("Only closing marks"),
+                                   I18n::tr("Leaves out the opening ¿ and ¡ in questions and exclamations."), card);
+    column->addWidget(m_closingMarks);
     if (m_interactive) {
+        connect(m_closingMarks, &SwitchRow::clicked, this, [this](bool on) { m_module->setClosingMarksOnly(on); });
         connect(m_language, &QPushButton::clicked, this, [this]() {
             QList<QPair<QString, QString>> options;
             for (const QString &code : DictationModule::languageCodes()) options.append({code, DictationModule::languageName(code)});
@@ -409,6 +413,7 @@ void DictationPanel::refresh()
     }
     m_language->setText(DictationModule::languageName(m_module->language()));
     m_microphone->setText(microphoneText());
+    m_closingMarks->setChecked(m_module->closingMarksOnly());
     if (!m_words->hasFocus() && m_words->toPlainText() != m_module->customWords()) m_words->setPlainText(m_module->customWords());
     if (!m_root->hasFocus()) {
         m_root->setText(QDir::toNativeSeparators(m_module->modelsRoot()));

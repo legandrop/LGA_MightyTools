@@ -2,6 +2,14 @@
 
 v1.54:
 
+Dictation: no había forma de que el dictado escribiera solo los signos de cierre (Lega, 12/11); un reemplazo de «¿» por nada no servía porque los reemplazos van sobre palabras completas. Se agrega el switch «Only closing marks» en la tarjeta Voice (`closingMarksOnly` en la sección del dictado, apagado de fábrica): `DictationText::stripOpeningMarks` saca ¿ y ¡ del final antes de los reemplazos y también del preview de la ventanita. Self-test del recorte y entrada en español.
+
+[ Dictation - Opcion para escribir solo los signos de cierre ]
+
+WhatsApp Chat se saca entera (D-79, Lega 12/11): se borran `src/modules/whatsapp/`, `WhatsAppSystem` (común, Windows y mac), su registro en `ModuleRegistry` y en CMake, sus textos en español y el pegado en la ventana (`Module::handleWindowPaste`, `ModuleHost::dispatchWindowPaste`, el Ctrl+V de `MainWindow`), que solo usaba ella. Nunca se publicó: su ítem sale del WhatsNew. Las reglas de Meet Frame que tapan WhatsApp quedan.
+
+[ WhatsApp Chat - Se saca la herramienta ]
+
 Dictation: el preview se veía bien en castellano y al terminar se pegaba un texto en inglés. Causa: la pasada final usaba los reintentos de Whisper a temperaturas más altas (la del preview no), y a temperatura alta Whisper puede devolver traducido al inglés lo dicho en castellano. Ahora la final también va en un solo intento a temperatura 0, como el preview. Red de seguridad: con el idioma en castellano, si el final parece inglés (`DictationText::looksEnglish`, por palabras funcionales), se hace otra pasada con reintentos y se usa solo si sale en castellano; el log lo anota sin el texto. Self-test del detector con castellano lleno de términos en inglés.
 
 [ Dictation - El texto final ya no sale traducido al ingles ]

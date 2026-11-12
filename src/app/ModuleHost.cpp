@@ -270,17 +270,6 @@ QStringList ModuleHost::runningIds() const
     return ids;
 }
 
-bool ModuleHost::dispatchWindowPaste(const QString &text)
-{
-    for (const QString &id : runningIds()) {
-        Module *m = module(id);
-        if (m && m->handleWindowPaste(text)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool ModuleHost::allPausedOrOff() const
 {
     for (const QString &id : runningIds()) {
