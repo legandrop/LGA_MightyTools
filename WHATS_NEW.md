@@ -1,6 +1,13 @@
 # What's new in LGA Mighty Tools
 
-## v1.53 (2026-11-09)
+## v1.54 (2026-11-12)
+
+- **New:** Dictation has the «Only closing marks» option under Voice: when it is on, questions and exclamations are typed without the opening ¿ and ¡.
+- **New:** Dictation types what you say into any text field: press ⌘⌥⇧H (or hold it while you speak), see the text in a small window as you talk, and it is typed when you finish without going through the clipboard; the first time, macOS asks for Microphone and Accessibility permission, and the model is downloaded only once with «Download» from its page. (macOS only)
+- **Fixed:** Dictation no longer types in English what you dictated in Spanish when the small window showed it correctly.
+- **Fixed:** The first tooltip after opening Mighty Tools no longer appears over the pointer covering the button: it shows below, like the following ones. (macOS only)
+
+## v1.53
 
 - **New:** In General, Colors lets you choose one of six color palettes: Violet, High contrast, Graphite | amber, Mist, Warm teal and Magenta; they apply at once and, with the menu open, the arrow keys preview them before you choose.
 - **New:** The update window shows what's new in the new version, in the language you chose for Mighty Tools.
@@ -28,7 +35,7 @@
 - **Fixed:** Window Layouts no longer stays red with «Needs attention» when a shortcut is pressed with no window to move: it says in yellow what was in front (the desktop, a minimized window…) and when, and the note clears with «Dismiss» or with the next shortcut that works.
 - **Fixed:** Open in NukeX's Apply no longer closes the app when Windows has to ask which program should open .nk files. (Windows only)
 
-## v1.52 (2026-10-14)
+## v1.52
 
 - **Improved:** Disk Space's Clean up shows how much each group and row will actually free next to its total, and how many of its folders are held by open apps.
 - **Improved:** Disk Space's What changed groups the folders that grew by area, lists each one only once so the numbers add up, and shows how the growth splits between areas.
@@ -47,11 +54,11 @@
 
 - **Improved:** Disk Space reminders let you edit the minimum free space next to the reminder time, using the drive's GB or percentage setting, in a smaller alert with aligned buttons and a clearer "Remind me again" action.
 
-## v1.33 (2026-10-04)
+## v1.33
 
 - **Fixed:** Checking for updates works: version 1.31 could not connect, so download this version once from the download page. (macOS only)
 
-## v1.31 (2026-10-04)
+## v1.31
 
 - **Improved:** The app waits to offer or install an update while Disk Space is deleting files.
 
