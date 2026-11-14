@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Entitlements del .app firmado con Developer ID (hardened runtime). Solo lo que hace falta:
+     - apple-events: Folder Switch le pregunta al Finder la carpeta de su ventana con NSAppleScript
+       (MacFileDialogs.mm). Con hardened runtime y sin esta clave, macOS niega el envio sin preguntar.
+     - audio-input: Dictation graba el microfono. Con hardened runtime y sin esta clave, el microfono
+       entrega silencio y macOS no muestra el pedido de permiso.
+     Lo usa deploy.sh por medio de tools/macos/sign_bundle.sh. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

@@ -133,6 +133,10 @@ if [[ ! -d "$SRC_APP" ]]; then
     exit 1
 fi
 
+# Un .app que ya se ejecuto desde deploy/ tiene la firma rota: el DMG saldria con un bundle que
+# no verifica. Ver tools/macos/verify_bundle_signature.sh.
+bash "./tools/macos/verify_bundle_signature.sh" "$SRC_APP"
+
 # El fondo va VERSIONADO y no se genera en cada deploy: no cambia salvo que uno toque el
 # diseno o el nombre de la app. Lo genera tools/macos/make_dmg_background.js, que dibuja con
 # AppKit via JXA y NO necesita nada instalado. Ahi estan documentadas las restricciones de
@@ -171,7 +175,37 @@ cleanup() {
 }
 trap cleanup EXIT
 
-cat > "$WORK_ROOT/$README_NAME" << EOF
+# El README depende de si la app va notarizada (ticket abrochado por tools/macos/notarize.sh):
+# notarizada, Gatekeeper la abre sin mas y el `xattr` sobra. Sin notarizar (sin Developer ID,
+# --no-notarize, Apple la rechazo), sigue haciendo falta y se explica.
+if xcrun stapler validate -q "$SRC_APP" >/dev/null 2>&1; then
+    echo "La app va notarizada: el $README_NAME no pide xattr."
+    cat > "$WORK_ROOT/$README_NAME" << EOF
+${DISPLAY_NAME} for macOS
+=========================
+
+Installation:
+1. Drag ${APP_NAME}.app to Applications.
+2. Open the app from Applications.
+
+The app is signed and verified by Apple. The first time, macOS asks whether to open an app
+downloaded from the internet: click Open.
+
+----------------------------------------------------------------------------------------
+
+${DISPLAY_NAME} para macOS
+=========================
+
+Instalacion:
+1. Arrastrar ${APP_NAME}.app a Applications.
+2. Abrir la app desde Applications.
+
+La app esta firmada y verificada por Apple. La primera vez macOS pregunta si se quiere abrir
+una app bajada de internet: se contesta Abrir.
+EOF
+else
+    echo "AVISO: la app NO va notarizada: el $README_NAME explica el xattr."
+    cat > "$WORK_ROOT/$README_NAME" << EOF
 ${DISPLAY_NAME} for macOS
 =========================
 
@@ -208,6 +242,7 @@ Que hace este comando:
 Quita la marca de cuarentena que macOS le pone a lo descargado, solo de esa copia instalada.
 No otorga permisos, no cambia ningun dato y no desactiva Gatekeeper.
 EOF
+fi
 
 cat > "$WORK_ROOT/settings.py" << EOF
 import os

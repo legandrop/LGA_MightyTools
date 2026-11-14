@@ -1,14 +1,15 @@
 #!/bin/bash
 # Deploy de macOS de LGA Mighty Tools: compila Release UNIVERSAL (arm64 + x86_64), arma un bundle
 # AUTOCONTENIDO en deploy/, lo firma, segun los flags lo empaqueta (ZIP de actualizacion, DMG de
-# primera instalacion) y lo publica, y al final lo instala en /Applications y lo abre. Esquema de LGA_Base_QT_C_Py/deploy.sh
+# primera instalacion), lo notariza con Apple y lo publica, y al final lo instala en /Applications y lo
+# abre. Esquema de LGA_Base_QT_C_Py/deploy.sh
 # (ver su docs/Doc_Deploy_macOS.md) y de LGA_VideoDownloader/deploy.sh para el empaquetado.
 #
 # En mac la app se prueba INSTALADA, nunca desde build/: el inicio con la sesion (SMAppService), la
 # asociacion de los .nk, el navegador por defecto y los permisos de macOS (Accesibilidad) dependen de la
 # ruta y de la firma de la copia instalada.
 #
-# Uso: ./deploy.sh [--no-install] [--no-open] [--zip] [--dmg] [--publish [--dry-run] [--replace] [--yes] | --no-publish]
+# Uso: ./deploy.sh [--no-install] [--no-open] [--zip] [--dmg] [--no-notarize] [--publish [--dry-run] [--replace] [--yes] | --no-publish]
 #   (sin flags)   Con terminal mira GitHub y pregunta primero, con una tecla: publicar (o sumar macOS al
 #                 release), el bump si esa version ya esta publicada o falta, build local o cancelar;
 #                 despues compila, arma, firma, instala en /Applications y abre la app
@@ -16,6 +17,7 @@
 #   --no-open     Instala pero no abre la app al terminar
 #   --zip         Arma deploy/LGA_MightyTools_Mac_v<version>.zip (actualizacion) y lo verifica
 #   --dmg         Arma deploy/LGA_MightyTools_Mac_v<version>.dmg (primera instalacion)
+#   --no-notarize No manda a notarizar el .app ni el DMG (salen pidiendo el xattr); LGA_NOTARIZE=0 igual
 #   --install     Sin efecto: instalar y abrir es lo de siempre, tambien al empaquetar o publicar
 #   --publish     Arma el .zip y el .dmg y los publica en el release v<version> de legandrop/LGA_MightyTools
 #                 con tools/macos/publish_release.sh (pieza canonica de la Base; lo propio, en
@@ -41,9 +43,13 @@ CREATE_DMG=false
 PUBLISH=false
 NO_PUBLISH=false
 PUBLISH_ARGS=()
+# Notarizar cuando hay Developer ID y se arma un ZIP o un DMG. LGA_NOTARIZE=0 lo apaga igual que
+# --no-notarize (sirve sin red, o para no esperar a Apple en una prueba). Publicar exige notarizar.
+NOTARIZE=true
+[ "${LGA_NOTARIZE:-1}" = "0" ] && NOTARIZE=false
 
 usage() {
-    sed -n 2,26p "$0" | sed 's/^# \{0,1\}//'
+    sed -n 2,29p "$0" | sed 's/^# \{0,1\}//'
 }
 
 # Sin ningun flag y con terminal, mas abajo se pregunta si publicar.
@@ -56,6 +62,7 @@ while [[ $# -gt 0 ]]; do
         --install) EXPLICIT_INSTALL=true; shift ;;
         --zip) CREATE_ZIP=true; shift ;;
         --dmg) CREATE_DMG=true; shift ;;
+        --no-notarize) NOTARIZE=false; shift ;;
         --publish) PUBLISH=true; CREATE_ZIP=true; CREATE_DMG=true; shift ;;
         --no-publish) NO_PUBLISH=true; shift ;;
         --dry-run|--replace|--yes) PUBLISH_ARGS+=("$1"); shift ;;
@@ -81,6 +88,10 @@ if [ "$PUBLISH" = "true" ] && [ "$NO_PUBLISH" = "true" ]; then
     echo "ERROR: --publish y --no-publish se contradicen."
     exit 1
 fi
+if [ "$PUBLISH" = "true" ] && [ "$NOTARIZE" != "true" ]; then
+    echo "ERROR: --publish exige notarizar (sin --no-notarize ni LGA_NOTARIZE=0)."
+    exit 1
+fi
 if [ "$PUBLISH" != "true" ] && [ ${#PUBLISH_ARGS[@]} -gt 0 ]; then
     echo "ERROR: ${PUBLISH_ARGS[*]} solo se usa con --publish (sin el, este script compila e instala de verdad)."
     exit 1
@@ -101,9 +112,9 @@ TAG="v${APP_VERSION}"
 ZIP_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.zip"
 DMG_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.dmg"
 
-# SHA-1 del certificado «LGA Code Signing» con el que se firma lo que se PUBLICA. Esta FIJADO a proposito
+# SHA-1 del certificado Developer ID con el que sale firmado lo que se PUBLICA. Esta FIJADO a proposito
 # (ver tools/macos/release.conf, que es su unica fuente: la pieza de publicacion lo exige en el llavero y
-# este script firma con el y lo verifica en el bundle y en el ZIP). Cambiarlo es una decision de Lega.
+# este script lo verifica en el bundle y en el ZIP). Cambiarlo es una decision de Lega.
 SIGN_CERT_SHA1="$(source tools/macos/release.conf && printf '%s' "$PINNED_CERT_SHA1" | tr 'a-f' 'A-F')"
 if ! [[ "$SIGN_CERT_SHA1" =~ ^[0-9A-Fa-f]{40}$ ]]; then
     echo "ERROR: tools/macos/release.conf no define PINNED_CERT_SHA1 (el certificado fijado)."
@@ -172,21 +183,30 @@ validate_universal() {  # <ruta del .app, de una carpeta o de un Mach-O>
 }
 
 # El bundle esta firmado con el certificado FIJADO (SIGN_CERT_SHA1) y no ad-hoc ni con otro. Se mira la
-# firma del bundle (requisito designado y autoridad), no solo que la identidad exista en el llavero.
+# firma del bundle (el certificado hoja que lleva adentro), no solo que la identidad exista en el llavero.
+# Con Developer ID el requisito designado ya no nombra el certificado (lo ata al Team ID), asi que se
+# extrae el certificado hoja y se compara su SHA-1. Sin `| grep -q`: con pipefail da falso (SIGPIPE).
 verify_signature_pinned() {  # <.app>
-    local app="$1" req leaf info auth
-    req="$(codesign -d -r- "$app" 2>&1)" || { echo "ERROR: codesign no pudo leer el requisito de $app"; return 1; }
+    local app="$1" info auth tmp leaf=""
     info="$(codesign -dvvv "$app" 2>&1)" || { echo "ERROR: codesign no pudo leer la firma de $app"; return 1; }
-    if printf '%s\n' "$info" | grep -q '^Signature=adhoc'; then
+    if [[ "$info" == *"Signature=adhoc"* ]]; then
         echo "ERROR: el bundle esta firmado ad-hoc: no se publica (los usuarios perderian sus permisos de macOS)."
         return 1
     fi
-    leaf="$(printf '%s\n' "$req" | sed -n 's/.*certificate leaf = H"\([0-9A-Fa-f]*\)".*/\1/p' | head -1 | tr 'a-f' 'A-F')"
+    if [[ "$info" != *"(runtime)"* ]]; then
+        echo "ERROR: el bundle no tiene hardened runtime: Apple no lo notarizaria."
+        return 1
+    fi
     auth="$(printf '%s\n' "$info" | sed -n 's/^Authority=//p' | head -1)"
+    tmp="$(mktemp -d "${TMPDIR:-/tmp}/lga_cert_XXXXXX")" || return 1
+    if codesign -d --extract-certificates="$tmp/cert" "$app" >/dev/null 2>&1 && [ -f "$tmp/cert0" ]; then
+        leaf="$(shasum -a 1 "$tmp/cert0" | awk '{print toupper($1)}')"
+    fi
+    rm -rf "$tmp"
     if [ "$leaf" != "$SIGN_CERT_SHA1" ]; then
         echo "ERROR: el certificado del bundle no es el fijado."
         echo "       bundle: ${leaf:-ninguno} (autoridad: ${auth:-ninguna})"
-        echo "       fijado: $SIGN_CERT_SHA1 (LGA Code Signing)"
+        echo "       fijado: $SIGN_CERT_SHA1 (Developer ID)"
         return 1
     fi
     echo "Firma OK: autoridad '$auth', certificado $leaf (el fijado)."
@@ -330,32 +350,66 @@ if ! validate_universal "deploy/$APP_NAME.app"; then
     exit 1
 fi
 
-# La firma va DESPUES de copiar todo adentro: cubre el contenido. Identidad estable si existe (la misma
-# de compilar.sh), asi el permiso de Accesibilidad sobrevive a cada version; si no, ad-hoc. Para PUBLICAR
-# se firma con el certificado FIJADO (por su SHA-1) y no hay alternativa.
-if [ "$PUBLISH" = "true" ]; then
-    echo "Firmando con el certificado fijado $SIGN_CERT_SHA1 (LGA Code Signing)..."
-    codesign --force --deep --sign "$SIGN_CERT_SHA1" "deploy/$APP_NAME.app"
-else
-    CODESIGN_IDENTITY="${LGA_CODESIGN_IDENTITY:-LGA Code Signing}"
-    if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$CODESIGN_IDENTITY\""; then
-        echo "Firmando con '$CODESIGN_IDENTITY'..."
-        codesign --force --deep --sign "$CODESIGN_IDENTITY" "deploy/$APP_NAME.app"
-    else
-        echo "Firmando ad-hoc (no hay identidad '$CODESIGN_IDENTITY' en el llavero)..."
-        codesign --force --deep --sign - "deploy/$APP_NAME.app"
-    fi
-fi
-codesign --verify --deep --strict "deploy/$APP_NAME.app"
+# La firma va DESPUES de copiar todo adentro: cubre el contenido. La hace tools/macos/sign_bundle.sh
+# (pieza canonica de la Base, copia IDENTICA), que elige la identidad: Developer ID si esta en el llavero
+# (hardened runtime, sello de tiempo, de adentro hacia afuera: es lo que se puede notarizar), si no
+# «LGA Code Signing» y si no ad-hoc. Los entitlements que pide el hardened runtime (Apple Events al
+# Finder y microfono) estan en resources/macos/Entitlements.plist. Para PUBLICAR tiene que ser el
+# certificado FIJADO de tools/macos/release.conf, y no hay alternativa.
+ENTITLEMENTS_FILE="resources/macos/Entitlements.plist"
+SIGN_ARGS=()
+[ -f "$ENTITLEMENTS_FILE" ] && SIGN_ARGS+=(--entitlements "$ENTITLEMENTS_FILE")
+bash ./tools/macos/sign_bundle.sh "deploy/$APP_NAME.app" ${SIGN_ARGS[@]+"${SIGN_ARGS[@]}"}
+bash ./tools/macos/verify_bundle_signature.sh "deploy/$APP_NAME.app"
+SIGN_KIND="$(bash ./tools/macos/sign_bundle.sh --kind)"
 if [ "$PUBLISH" = "true" ]; then
     verify_signature_pinned "deploy/$APP_NAME.app" || { echo "ERROR: no se publica con esta firma."; exit 1; }
 fi
 echo "Bundle listo en deploy/$APP_NAME.app"
 
-# Antes de empaquetar o publicar: el --self-test de las DOS mitades del binario universal, sobre el
-# bundle ya firmado (lo que se distribuye). Si falla alguna, no se empaqueta ni se publica.
+# Antes de empaquetar o publicar: el --self-test de las DOS mitades del binario universal, sobre una
+# COPIA byte a byte (ditto) del bundle ya firmado: nunca se ejecuta nada adentro de deploy/, porque una
+# app que corre puede escribir en su bundle y romper la firma (Doc_Deploy_macOS.md §2). Si falla alguna
+# mitad, no se empaqueta ni se publica. La copia va en build-release/ y NO en la carpeta temporal del
+# sistema: el self-test de Disk Space prueba la guarda de esa carpeta y falla si la app corre desde adentro.
 if [ "$PACKAGING" = "true" ]; then
-    run_self_tests "deploy/$APP_NAME.app" || { echo "ERROR: el self-test fallo; no se empaqueta ni se publica."; exit 1; }
+    SELFTEST_DIR="$(mktemp -d "$PWD/build-release/selftest_app_XXXXXX")"
+    ditto "deploy/$APP_NAME.app" "$SELFTEST_DIR/$APP_NAME.app"
+    SELFTEST_RC=0
+    run_self_tests "$SELFTEST_DIR/$APP_NAME.app" || SELFTEST_RC=$?
+    rm -rf "$SELFTEST_DIR"
+    [ "$SELFTEST_RC" -eq 0 ] || { echo "ERROR: el self-test fallo; no se empaqueta ni se publica."; exit 1; }
+fi
+
+# Notarizacion (tools/macos/notarize.sh, pieza canonica): primero el .app, asi el ticket queda abrochado
+# adentro del ZIP y del DMG; despues el DMG, que es lo que baja el usuario. Sin eso Gatekeeper no deja
+# abrir la app en otra Mac sin el `xattr`. Un rechazo de Apple corta una publicacion; en un build local
+# avisa y sigue.
+NOTARIZED=false
+notarize_or_warn() {  # <ruta>; 0 = notarizado
+    local rc=0
+    bash ./tools/macos/notarize.sh "$1" || rc=$?
+    [ $rc -eq 0 ] && return 0
+    if [ "$PUBLISH" = "true" ]; then
+        echo "ERROR: no se publica un release sin notarizar (notarize.sh salio con $rc)."
+        exit 1
+    fi
+    echo "AVISO: $(basename "$1") sale SIN notarizar: en otra Mac va a pedir el 'xattr'."
+    return 1
+}
+if [ "$PACKAGING" = "true" ]; then
+    if [ "$SIGN_KIND" != "developer-id" ]; then
+        if [ "$PUBLISH" = "true" ]; then
+            echo "ERROR: no hay Developer ID en el llavero: no se publica sin notarizar."
+            exit 1
+        fi
+        echo "AVISO: firma '$SIGN_KIND' (no Developer ID): el ZIP y el DMG salen sin notarizar."
+    elif [ "$NOTARIZE" = "true" ]; then
+        notarize_or_warn "deploy/$APP_NAME.app" && NOTARIZED=true
+        bash ./tools/macos/verify_bundle_signature.sh "deploy/$APP_NAME.app"
+    else
+        echo "AVISO: --no-notarize: el ZIP y el DMG salen sin notarizar (piden el 'xattr')."
+    fi
 fi
 
 # ---- Empaquetado (--zip / --dmg / --publish): arma desde el bundle YA firmado ----
@@ -388,6 +442,12 @@ if [ "$CREATE_DMG" = "true" ]; then
     if ! bash ./create_dmg.sh --no-open; then
         echo "ERROR: no se pudo crear el .dmg. No se publica nada."
         exit 1
+    fi
+    # El DMG se firma y se notariza aparte (el ticket del .app ya va adentro): es lo primero que mira
+    # Gatekeeper en la Mac de quien lo baja.
+    if [ "$NOTARIZED" = "true" ]; then
+        bash ./tools/macos/sign_bundle.sh "deploy/$DMG_NAME"
+        notarize_or_warn "deploy/$DMG_NAME" || true
     fi
 fi
 

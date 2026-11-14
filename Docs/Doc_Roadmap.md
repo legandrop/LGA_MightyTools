@@ -93,13 +93,13 @@ Lo que falta, por importancia. Las fases están en `Docs/Plan_MightyTools.md`, s
       - Observación del runner: el `--self-test` falló una vez de ocho en la copia recién instalada
         (`[diskSpace] motor`: el escaneo de la carpeta de pruebas no terminó en los 5 s de `waitScan`,
         con el antivirus del runner encima); las siete restantes, 0 fallas.
-      - **Respaldar el certificado «LGA Code Signing»** (el `.p12` del llavero de la Mac de Lega): si se
-        pierde, la versión siguiente sale con otra identidad, el actualizador la rechaza y hay que
-        reinstalar a mano y volver a dar los permisos.
+      - **Respaldar el certificado Developer ID** (el `.p12` del llavero de la Mac de Lega; dónde y cómo,
+        en `../LGA_Base_QT_C_Py/docs/Doc_Firma_Apple.md`): desde la v1.55 lo publicado se firma con él.
       - `LGA_OpenInNukeX` puede archivarse y pasar a privado cuando Lega quiera (D-10): en mac no hay
         mudanza que esperar (D-50) y PipeSync ya ofrece Mighty Tools en las dos plataformas.
-      - La app no está notarizada: la primera apertura pide el `xattr -dr com.apple.quarantine` del
-        `README.txt` del DMG.
+      - Desde la v1.55 la app y el DMG salen firmados con Developer ID y notarizados: ya no hace falta el
+        `xattr`. Cuando se publique la v1.55 notarizada, poner `REQUIRE_NOTARIZATION=true` en
+        `tools/macos/release.conf`.
    5. **Pendientes chicos:** el ícono, las viñetas y los atajos del descriptor de Folder Switch están
       copiados entre `FolderSwitchModule.cpp` y `mac/FolderSwitchMacModule.cpp` (unificar la próxima vez
       que se compile en Windows).

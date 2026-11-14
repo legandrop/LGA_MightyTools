@@ -12,6 +12,10 @@ en_from: "1.53"
 
 ## Unreleased
 
+## v1.55
+- [improved][mac] El DMG viene firmado y verificado por Apple: la app se abre sin pasar por la Terminal. Con la firma nueva, macOS vuelve a pedir una vez los permisos que ya habías dado (Accesibilidad, micrófono y control del Finder).
+  en: The DMG is now signed and verified by Apple: the app opens without going through Terminal. With the new signature, macOS asks once more for the permissions you had already granted (Accessibility, microphone and Finder control).
+
 ## v1.54
 - [fixed] Dictation ya no escribe en inglés lo que dictaste en castellano cuando la ventanita lo mostraba bien.
   en: Dictation no longer types in English what you dictated in Spanish when the small window showed it correctly.
