@@ -2,6 +2,10 @@
 
 v1.55:
 
+Mac: `deploy_local.sh` re-copiado idéntico de la Base v0.176 (decisión de Lega, 13/11): el deploy local ya no manda la app ni el DMG a notarizar, porque cada envío a Apple son minutos de espera en cada cambio; con `--notarize` sí, para tener un DMG listo para mandarle a alguien. Se lo pasa a `deploy.sh` por `LGA_NOTARIZE`. Publicar (`./deploy.sh --publish`) sigue notarizando siempre.
+
+[ Mac - deploy_local sin notarizar salvo con --notarize ]
+
 Mac: firma Developer ID y notarización (de la Base v0.175; Lega dio de alta la cuenta de Apple el 13/11). El DMG salía firmado con «LGA Code Signing», que Apple no reconoce: en otra Mac la app no abría sin el `xattr` del `README.txt`. Ahora `deploy.sh` firma con `tools/macos/sign_bundle.sh` (hardened runtime, sello de tiempo, de adentro hacia afuera) y los entitlements de `resources/macos/Entitlements.plist` (Apple Events para el Finder de Folder Switch, micrófono para Dictation: sin ellos el hardened runtime los niega), notariza el .app antes del ZIP y del DMG, y después firma y notariza el DMG; publicar exige Developer ID y notarización. El self-test corre sobre una copia del bundle, no sobre `deploy/`. `PINNED_CERT_SHA1` pasa al certificado nuevo y la verificación compara el certificado hoja (el requisito designado ya no lo nombra). El `README.txt` del DMG deja de pedir el `xattr` si la app va notarizada. `sign_bundle.sh`, `notarize.sh` y `publish_release.sh` copiados idénticos de la Base.
 
 [ Mac - Firma Developer ID y notarización del ZIP y el DMG ]
