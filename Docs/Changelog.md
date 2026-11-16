@@ -2,6 +2,10 @@
 
 v1.55:
 
+Windows: Qt Virtual Keyboard (GPLv3) no se usa en ninguna app LGA y podía viajar en el instalador (Lega, 15/11: «si no lo uso para nada, saquémoslo de todos lados»): `windeployqt` lo copia por su cuenta (`platforminputcontexts\qtvirtualkeyboardplugin.dll` y `Qt6VirtualKeyboard.dll`) y el `.iss` empaqueta todo `deploy\`. Ahora `deploy.bat` y `compilar.bat` los borran después de `windeployqt`, el `.iss` los excluye y, al actualizar, `[InstallDelete]` saca los que haya dejado una versión anterior. Sin probar: no se compiló en Windows. En mac no hacía falta nada: `podar_bundle.py` ya deja solo los plugins de su lista y la instalada no lo trae.
+
+[ Windows - Sin Qt Virtual Keyboard en el deploy ni en el instalador ]
+
 Mac: `deploy_local.sh` re-copiado idéntico de la Base v0.176 (decisión de Lega, 13/11): el deploy local ya no manda la app ni el DMG a notarizar, porque cada envío a Apple son minutos de espera en cada cambio; con `--notarize` sí, para tener un DMG listo para mandarle a alguien. Se lo pasa a `deploy.sh` por `LGA_NOTARIZE`. Publicar (`./deploy.sh --publish`) sigue notarizando siempre.
 
 [ Mac - deploy_local sin notarizar salvo con --notarize ]

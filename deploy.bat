@@ -87,6 +87,10 @@ if exist "%WINDEPLOYQT%" (
 ) else (
     echo ADVERTENCIA: no se encontro windeployqt.exe. Se continua solo con las copias manuales.
 )
+REM Qt Virtual Keyboard (GPLv3) no se usa: windeployqt lo puede copiar por su cuenta
+REM (platforminputcontexts\qtvirtualkeyboardplugin.dll + Qt6VirtualKeyboard.dll). Se borra siempre.
+if exist "deploy\platforminputcontexts" rmdir /S /Q "deploy\platforminputcontexts"
+if exist "deploy\Qt6VirtualKeyboard.dll" del /Q "deploy\Qt6VirtualKeyboard.dll"
 
 echo Verificando dependencias criticas...
 set DEPS_MISSING=false

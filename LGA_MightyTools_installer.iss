@@ -38,7 +38,8 @@ WizardStyle=modern
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "deploy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Qt Virtual Keyboard (GPLv3) no se usa y no viaja aunque haya quedado en deploy\ (deploy.bat ya lo borra).
+Source: "deploy\*"; DestDir: "{app}"; Excludes: "platforminputcontexts\*,Qt6VirtualKeyboard*.dll"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Script de cierre por ruta (copia de LGA_Base_QT_C_Py). Viaja dos veces: `dontcopy` para que
 ; PrepareToInstall lo extraiga a {tmp} (en una actualizacion todavia no hay copia instalada), y
 ; en {app}\tools para que el desinstalador lo encuentre: al desinstalar no hay {tmp} del setup.
@@ -59,6 +60,11 @@ Source: "tools\close_by_path.ps1"; DestDir: "{app}\tools"; Flags: ignoreversion
 ; Lo que la app escribe en el REGISTRO (asociacion .nk, navegador, Run) lo borra el propio exe con
 ; --uninstall-cleanup, y la entrada de inicio con Windows ademas en Pascal: CurUninstallStepChanged,
 ; abajo.
+; Al actualizar, el Qt Virtual Keyboard (GPLv3, no se usa) que pudo dejar una version anterior.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\platforminputcontexts"
+Type: files; Name: "{app}\Qt6VirtualKeyboard.dll"
+
 [UninstallDelete]
 Type: files; Name: "{app}\debug.log"
 Type: filesandordirs; Name: "{userappdata}\LGA\LGA_MightyTools"

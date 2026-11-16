@@ -219,6 +219,10 @@ if not exist "%WINDEPLOYQT%" (
 echo Todavia faltan dependencias: probando con windeployqt...
 "%WINDEPLOYQT%" --release --compiler-runtime --no-translations --no-opengl-sw --no-system-d3d-compiler --dir %BUILD_DIR% %BUILD_DIR%\LGA_MightyTools.exe
 if errorlevel 1 echo ADVERTENCIA: windeployqt devolvio error.
+REM Qt Virtual Keyboard (GPLv3) no se usa: windeployqt lo puede copiar por su cuenta
+REM (platforminputcontexts\qtvirtualkeyboardplugin.dll + Qt6VirtualKeyboard.dll). Se borra siempre.
+if exist "%BUILD_DIR%\platforminputcontexts" rmdir /S /Q "%BUILD_DIR%\platforminputcontexts"
+if exist "%BUILD_DIR%\Qt6VirtualKeyboard.dll" del /Q "%BUILD_DIR%\Qt6VirtualKeyboard.dll"
 goto :eof
 
 :copy_dep
