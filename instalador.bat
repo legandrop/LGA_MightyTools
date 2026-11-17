@@ -231,6 +231,7 @@ set "MENU_ACTION="
 set "MENU_LABEL="
 set "MENU_STATUS="
 set "MENU_NOTE="
+set "REL_STATE="
 if /i "!GITHUB_READY!" NEQ "true" goto :PUBLISH_MENU
 REM :release_check sale con 1 tambien cuando el release ya tiene este instalador [sin --replace]:
 REM eso no es un error, es el estado "ya publicada".
@@ -293,11 +294,34 @@ if /i "!GITHUB_READY!" NEQ "true" (
     for /l %%I in (1,1,!BLOCKERS!) do echo   - !BLOCKER_%%I!
     if !BLOCKERS! EQU 0 echo   - GitHub no esta listo [ver los AVISO de arriba]
 )
+REM ---------------------------------------------------------------- lo que saldria en What's New
+REM Antes de preguntar: los items para el usuario desde la ultima version publicada [bloque de
+REM Doc_Instaladores_Inno.md, seccion 12, de LGA_Base_QT_C_Py], de la version en desarrollo [la
+REM seccion ## vX mas alta de Docs\WhatsNew.md: VERSION dice la publicada hasta el bump]. Corre
+REM tambien si algo impide publicar: es cuando se decide si el bump vale la pena; ahi solo muestra.
+REM No corre al sumar o reemplazar el instalador de un release que ya existe: eso tiene sentido
+REM aunque no traiga nada nuevo. Exit 3 = nada nuevo: si hay opcion 1, se marca como no
+REM recomendada [si igual se elige, el check de las notas pregunta S/N]. Exit 1 [sin red, archivo
+REM roto] no corta: el check de despues lo vuelve a mirar.
+set "WN_NADA_NUEVO="
+if not "!REL_STATE!"=="other" if not "!REL_STATE!"=="replace" (
+    call "%SCRIPT_DIR%whats_new_pendiente.bat"
+    if errorlevel 3 (
+        set "WN_NADA_NUEVO=true"
+        if defined MENU_ACTION set "MENU_LABEL=!MENU_LABEL! - no recomendado: nada nuevo para el usuario"
+    ) else if errorlevel 1 (
+        echo No se pudo calcular lo que saldria en What's New: ver arriba.
+    )
+)
 REM :PUBLISH_FALLBACK pone su propia linea en blanco.
 if not defined MENU_ACTION goto :PUBLISH_FALLBACK
 echo.
 echo   1. !MENU_LABEL!
-echo   2. Instalador local, sin subir a GitHub
+if defined WN_NADA_NUEVO (
+    echo   2. Instalador local, sin subir a GitHub  - recomendado
+) else (
+    echo   2. Instalador local, sin subir a GitHub
+)
 echo   3. Cancelar
 choice /C 123 /N /M "Opcion: "
 set "MENU_KEY=!errorlevel!"

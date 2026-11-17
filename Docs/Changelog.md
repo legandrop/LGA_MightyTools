@@ -2,6 +2,10 @@
 
 v1.55:
 
+El menú de publicar de `instalador.bat` no mostraba qué le iba a llegar al usuario: se decidía publicar sin ver el What's New. Ahora, antes de preguntar, `whats_new_pendiente.bat` (plantilla de la Base, con `Docs\WhatsNew.md`) lista en colores los ítems desde la última versión publicada, de la versión en desarrollo (la sección `## vX` más alta, no `VERSION`, que dice la publicada hasta el bump). Si no hay nada nuevo, el `1` dice «no recomendado» y el `2` «recomendado». Corre también si algo impide publicar; no corre al sumar o reemplazar el instalador de un release que ya existe. `tools/macos/publish_release.sh` se re-copia idéntico de la Base (lo mismo en `deploy.sh --decide`).
+
+[ Publicar - el menu muestra lo que saldria en What's New ]
+
 Scripts y `libs/lgaupdate` alineados con la Base. `compilar.bat` y `deploy.bat` salteaban en silencio una opción desconocida (`--norun` compilaba, cerraba todas las copias y lanzaba la app): ahora cortan con error y código 1 antes de cerrar o compilar nada. `deploy.bat` verifica que `deploy\` se haya borrado de verdad antes de rearmarlo. `bump_version.bat --check` fallaba corrido desde otra carpeta: el `shift` pelado corría también `%0` y `%~dp0` pasaba a ser la carpeta actual; ahora es `shift /1`. `libs/lgaupdate` se re-copia idéntica de la rev 6 de la Base (el cartel de la librería espera las notas 12 s); esta app arma su cartel con `UpdateService` propio, que ya esperaba las notas con sus reintentos.
 
 [ Scripts - Opciones desconocidas cortan, bump --check desde otra carpeta y lgaupdate rev 6 ]
