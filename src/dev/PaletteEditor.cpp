@@ -36,7 +36,7 @@ namespace {
 const char *kEditorSheet = R"(
 QWidget#paletteEditor { background: #141417; }
 QWidget#paletteEditor QLabel { color: #C9C8CE; font-size: 12px; background: transparent; }
-QLabel[r="head"] { color: #F0EEE8; font-size: 15px; font-weight: 700; }
+QLabel[r="head"] { color: #F0EEE8; font-size: 15px; font-weight: 600; }
 QLabel[r="role"] { color: #E6E4DE; font-size: 13px; }
 QLabel[r="hex"] { color: #8E8D95; font-size: 12px; font-family: 'Consolas'; }
 QLabel[r="member"] { color: #A9A8AF; font-size: 12px; font-family: 'Consolas'; }

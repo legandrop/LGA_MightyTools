@@ -12,9 +12,12 @@ set "MINGW_BIN=C:\Qt\Tools\mingw1310_64\bin"
 
 :parse_args
 if "%~1"=="" goto after_args
-if /I "%~1"=="--no-run" set "NO_RUN=true"
-shift
-goto parse_args
+if /I "%~1"=="--no-run" ( set "NO_RUN=true" & shift & goto parse_args )
+REM Una opcion desconocida corta ANTES de cerrar, compilar o borrar nada. Antes se salteaba en
+REM silencio: "--norun" mal escrito deployaba y abria la copia de deploy\.
+echo ERROR: opcion desconocida: "%~1"
+echo Opciones: --no-run
+exit /b 1
 
 :after_args
 echo Implementando LGA Mighty Tools...
@@ -38,7 +41,14 @@ if not exist "%BUILD_DIR%\LGA_MightyTools.exe" (
 )
 
 echo Limpiando carpeta de deploy anterior...
+REM El rmdir va DESPUES de compilar: si la compilacion falla, el deploy anterior queda entero.
+REM Con una copia abierta desde deploy\ (la de arriba la cierra), rmdir deja la carpeta a medio
+REM borrar sin avisar y el deploy saldria mezclado con el anterior: por eso se verifica.
 if exist deploy rmdir /S /Q deploy
+if exist deploy (
+    echo ERROR: no se pudo borrar deploy\. Hay algo abierto desde esa carpeta.
+    exit /b 1
+)
 mkdir deploy
 
 echo Copiando ejecutable...

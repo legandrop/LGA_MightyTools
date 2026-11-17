@@ -112,6 +112,7 @@ set(SOURCES
     src/core/I18n.cpp
     src/core/I18nSpanish.cpp
     src/core/LgaRegistry.cpp
+    src/core/RunMode.cpp
     src/core/NukePlugin.cpp
     src/core/Shortcut.cpp
     src/core/UiScale.cpp
@@ -225,7 +226,9 @@ set(HEADERS
     src/core/BuildTree.h
     src/core/DebugFlags.h
     src/core/LgaNetRetry.h
+    src/core/LgaHeadlessGuard.h
     src/core/LgaRegistry.h
+    src/core/RunMode.h
     src/core/NukePlugin.h
     src/core/Shortcut.h
     src/core/UiScale.h

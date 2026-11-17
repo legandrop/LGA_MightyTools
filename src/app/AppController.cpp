@@ -10,6 +10,7 @@
 #include "core/BuildTree.h"
 #include "core/AutomatedRun.h"
 #include "core/I18n.h"
+#include "core/RunMode.h"
 #include "core/UiScale.h"
 #include "platform/AutoStart.h"
 #include "platform/SystemNotifier.h"
@@ -271,7 +272,8 @@ void AppController::onFirstToolOn()
     }
     // El inicio con el sistema se activa solo con la primera herramienta que se prende (D-06), una
     // sola vez y solo en una copia instalada: si despues el usuario lo apaga, queda apagado.
-    if (m_store->value(kAutoStartDecided, false).toBool() || m_options.measurement || m_buildTree) {
+    if (m_store->value(kAutoStartDecided, false).toBool() || m_options.measurement || m_buildTree
+        || !LgaRunMode::canPersistSystemState()) {
         return;
     }
     const AutoStart::Availability availability = AutoStart::availability();
@@ -316,6 +318,12 @@ void AppController::refreshAutoStart()
 void AppController::onAutoStartToggled(bool enabled)
 {
     // El click EXPLICITO del usuario se respeta tambien desde un build (ver AutoStart.h).
+    // Pero no en una corrida de captura o sin pantalla: la clave Run es del sistema (core/RunMode.h).
+    if (!LgaRunMode::canPersistSystemState()) {
+        qInfo() << "[AppController] AutoStart: corrida sin pantalla o de captura, no se toca la clave Run";
+        refreshAutoStart();
+        return;
+    }
     const bool ok = AutoStart::setEnabled(enabled);
     qInfo() << "[AppController] AutoStart" << (enabled ? "ON" : "OFF") << "ok:" << ok << "| activo ahora:"
             << AutoStart::isEnabled() << "| valor en Run:"

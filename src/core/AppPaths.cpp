@@ -13,23 +13,6 @@ namespace {
 
 QString g_argv0;
 
-// Sube desde la carpeta del exe hasta la raiz del repo (CMakeLists.txt + src/). Solo se usa cuando
-// isBuildTree() ya dijo que es un arbol de build, asi que la raiz existe a pocos niveles.
-QString findSourceRoot(const QString &fromDir)
-{
-    QDir dir(fromDir);
-    for (int level = 0; level <= 5; ++level) {
-        if (QFileInfo::exists(dir.filePath(QStringLiteral("CMakeLists.txt")))
-            && QFileInfo(dir.filePath(QStringLiteral("src"))).isDir()) {
-            return dir.absolutePath();
-        }
-        if (dir.isRoot() || !dir.cdUp()) {
-            break;
-        }
-    }
-    return fromDir;
-}
-
 } // namespace
 
 namespace AppPaths {
@@ -64,7 +47,8 @@ QString rootDir()
 {
     const QString exe = exeDir();
     if (isBuildTree()) {
-        return findSourceRoot(exe);
+        // La raiz del repo la decide LgaBuildTree, la misma funcion que dijo que es un arbol de build.
+        return LgaBuildTree::appRootDir(exe);
     }
 #ifdef Q_OS_MACOS
     const QString support = QDir::homePath() + QStringLiteral("/Library/Application Support/LGA/LGA_MightyTools");

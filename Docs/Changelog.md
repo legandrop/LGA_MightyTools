@@ -2,6 +2,14 @@
 
 v1.55:
 
+Scripts y `libs/lgaupdate` alineados con la Base. `compilar.bat` y `deploy.bat` salteaban en silencio una opción desconocida (`--norun` compilaba, cerraba todas las copias y lanzaba la app): ahora cortan con error y código 1 antes de cerrar o compilar nada. `deploy.bat` verifica que `deploy\` se haya borrado de verdad antes de rearmarlo. `bump_version.bat --check` fallaba corrido desde otra carpeta: el `shift` pelado corría también `%0` y `%~dp0` pasaba a ser la carpeta actual; ahora es `shift /1`. `libs/lgaupdate` se re-copia idéntica de la rev 6 de la Base (el cartel de la librería espera las notas 12 s); esta app arma su cartel con `UpdateService` propio, que ya esperaba las notas con sus reintentos.
+
+[ Scripts - Opciones desconocidas cortan, bump --check desde otra carpeta y lgaupdate rev 6 ]
+
+Alineación con la Base en `main.cpp` y rutas. Con `log=true` la app podía terminar con `0xC0000005` al salir: el `static QFile` del handler de log se destruía antes de que Qt dejara de loguear; ahora vive en el heap sin destruirse. Nuevo `LgaHeadlessGuard::check()` como primera línea de `main()` (sin el plugin de plataforma pedido sale con 3 en vez de abrir el cartel modal de Qt) y `core/RunMode` de la Base: un arranque sin pantalla (`QT_QPA_PLATFORM=offscreen`) sin modo de QA ya no escribe el `settings.ini`, el registro LGA ni la clave `Run`; los modos de captura se marcan apenas se reconocen. `LgaBuildTree::appRootDir()` decide la raíz del repo en un árbol de build (antes `AppPaths` subía por su cuenta).
+
+[ Alineación - Handler de log sin crash al salir, RunMode, HeadlessGuard y appRootDir ]
+
 Mac: el DMG de primera instalacion pasa de `LGA_MightyTools_Mac_v<version>.dmg` a `LGA_MightyTools_v<version>.dmg`, sin el `_Mac`; el `.zip` sigue como `LGA_MightyTools_Mac_v<version>.zip`, porque lo busca por ese nombre el updater de las copias ya instaladas. Cambian `create_dmg.sh` y `deploy.sh` (los dos `DMG_NAME`), y `tools/macos/publish_release.sh` se re-copia identico de la v0.179 de `../LGA_Base_QT_C_Py` (reconoce tambien un release publicado con el nombre viejo). El card de LGA Updates de PipeSync y el sitio ya aceptan los dos nombres.
 
 [ Mac - El DMG pierde el _Mac en el nombre; el zip lo conserva ]

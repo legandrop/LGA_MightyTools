@@ -127,6 +127,34 @@ bool isBuildTree(const QString &appDir)
     return result;
 }
 
+QString appRootDir(const QString &appDir)
+{
+    if (appDir.trimmed().isEmpty()) {
+        return appDir;
+    }
+    const QString key = QDir::cleanPath(QDir::fromNativeSeparators(appDir));
+    if (!isBuildTree(key)) {
+        return key;
+    }
+    // La raiz del repo es el padre de la carpeta del `CMakeCache.txt`: la misma que `evaluate()` miro.
+    const QString buildRoot = findBuildRoot(key);
+    QDir root(buildRoot);
+    if (!buildRoot.isEmpty() && root.cdUp() && looksLikeSourceRoot(root)) {
+        return root.absolutePath();
+    }
+    // Override sin `CMakeCache.txt`: se sube buscando la forma de la raiz del repo, como antes.
+    QDir dir(key);
+    for (int level = 0; level <= 5; ++level) {
+        if (looksLikeSourceRoot(dir)) {
+            return dir.absolutePath();
+        }
+        if (dir.isRoot() || !dir.cdUp()) {
+            break;
+        }
+    }
+    return key;
+}
+
 void warnIfInvalidOverride()
 {
     envOverride();   // avisa por qWarning si el valor no es valido

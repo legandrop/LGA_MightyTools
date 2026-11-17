@@ -32,6 +32,16 @@ namespace LgaBuildTree {
 /// `appDir` es la carpeta del ejecutable. El resultado se cachea por ruta.
 bool isBuildTree(const QString &appDir);
 
+/**
+ * La carpeta de la que cuelgan `config/` y `debug.log`. En una instalacion, `appDir` mismo. En un
+ * arbol de build, la raiz del repo: el padre de la carpeta que tiene el `CMakeCache.txt`, que es lo
+ * que `isBuildTree()` ya comprobo (en macOS, tambien con el exe dentro del `.app`).
+ *
+ * Con `LGA_BUILD_TREE=1` y sin `CMakeCache.txt` a mano, la regla de antes de esta app: la primera
+ * carpeta hacia arriba con forma de raiz del repo, o `appDir` si no hay ninguna.
+ */
+QString appRootDir(const QString &appDir);
+
 /// Repite el aviso de un `LGA_BUILD_TREE` invalido (no cambia ninguna respuesta). main() la
 /// llama despues de instalar su handler de mensajes, para que el aviso llegue al log.
 void warnIfInvalidOverride();

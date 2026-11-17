@@ -32,14 +32,17 @@ if "%1"=="--force-clean" (
     goto parse_args
 )
 REM --sim-slow: lanza la app degradada (prioridad baja y 2 nucleos) para ver la fluidez en una
-REM maquina lenta. Ver LGA_Base_QT_C_PydocsDoc_SimSlow.md.
+REM maquina lenta. Ver LGA_Base_QT_C_Py\docs\Doc_SimSlow.md.
 if "%1"=="--sim-slow" (
     set SIM_SLOW=true
     shift
     goto parse_args
 )
-shift
-goto parse_args
+REM Una opcion desconocida corta ANTES de cerrar o compilar nada. Antes se salteaba en silencio:
+REM "--norun" mal escrito compilaba, cerraba todas las copias y lanzaba la app.
+echo ERROR: opcion desconocida: %1
+echo Opciones: --release, --no-run, --force-clean, --sim-slow
+exit /b 1
 
 :after_args
 cd /d "%APP_ROOT%"

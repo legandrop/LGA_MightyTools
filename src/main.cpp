@@ -11,7 +11,9 @@
 #include "core/BuildTree.h"
 #include "core/I18n.h"
 #include "core/DebugFlags.h"
+#include "core/LgaHeadlessGuard.h"
 #include "core/LgaRegistry.h"
+#include "core/RunMode.h"
 #include "core/UiScale.h"
 #if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
 #include "modules/dictation/DictationWorker.h"
@@ -67,12 +69,16 @@ void fileMessageHandler(QtMsgType, const QMessageLogContext &, const QString &ms
     if (!enabled) {
         return;
     }
-    static QFile logFile(AppPaths::logFile());
-    static const bool opened = logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+    // En el heap y sin destruir, a proposito: Qt sigue mandando mensajes DESPUES de que main()
+    // devuelve (la descarga de plugins, por ejemplo), cuando un `static QFile` de esta funcion ya
+    // fue destruido. Escribir sobre el objeto destruido terminaba la app con una violacion de
+    // acceso al salir (0xC0000005). El sistema cierra el archivo al terminar.
+    static QFile *const logFile = new QFile(AppPaths::logFile());
+    static const bool opened = logFile->open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
     if (!opened) {
         return;
     }
-    QTextStream out(&logFile);
+    QTextStream out(logFile);
     out << QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")) << ' ' << msg << '\n';
     out.flush();
 }
@@ -207,6 +213,13 @@ public:
 
 int main(int argc, char *argv[])
 {
+    // ANTES de cualquier QCoreApplication/QApplication: si se pidio una plataforma de Qt
+    // (QT_QPA_PLATFORM=offscreen, como en toda corrida sin pantalla) y falta su plugin, Qt abre un
+    // cartel modal desde adentro del constructor. El guard sale por stderr con un codigo; sin
+    // plataforma pedida no decide nada.
+    if (const int guard = LgaHeadlessGuard::check(argc, argv)) {
+        return guard;
+    }
     AppPaths::init(argc > 0 ? argv[0] : nullptr);
     // COM en modo apartment, una vez, antes de cualquier modulo (plan 4.4).
     const ComApartment com;
@@ -311,6 +324,8 @@ int main(int argc, char *argv[])
     const bool automated = uiShot || uiProbe || measureCycles || measureIdle || measurePages || measureFonts || notifyPreview;
     if (automated) {
         AutomatedRun::enable();
+        // Desde aca LgaRunMode::canPersistConfig() contesta "no" para toda la corrida.
+        LgaRunMode::setCaptureMode(true);
     } else {
         qInstallMessageHandler(fileMessageHandler);
     }
@@ -335,6 +350,16 @@ int main(int argc, char *argv[])
     setNames();
     UiScale::clearEnvironmentAfterApp();
     QApplication::setQuitOnLastWindowClosed(false);
+
+    // Un arranque normal sin pantalla real (QT_QPA_PLATFORM=offscreen o minimal, sin ningun modo de
+    // QA) no guarda configuracion: los settings pasan a memoria y lo que borra o abre algo del
+    // sistema queda inerte, igual que en una corrida automatizada. Sin esto, una corrida asi escribia
+    // el settings.ini real, el registro LGA y la clave Run. Ver core/RunMode.h.
+    if (!automated && !LgaRunMode::canPersistConfig()) {
+        AppSettings::useMemoryOnly();
+        AutomatedRun::enable();
+        LgaRunMode::logIfNotPersisting();
+    }
 
     // Captura y medicion: salen antes del modo corto, de la instancia unica, de la bandeja, de los
     // atajos y del updater. No tocan nada de la copia que el usuario tiene abierta.

@@ -1,6 +1,6 @@
 # lgaupdate — auto-update de las apps LGA
 
-**Pieza canónica de `LGA_Base_QT_C_Py`, rev 5 (2026-11-08).** Cada app la copia **idéntica** a su
+**Pieza canónica de `LGA_Base_QT_C_Py`, rev 6 (2026-11-17).** Cada app la copia **idéntica** a su
 `libs/lgaupdate`, este README incluido, y no la edita: un cambio se hace acá, se sube la revisión
 y se vuelve a copiar a todas. Así comparar una copia con la canónica es un `diff -r` sin
 excepciones.
@@ -176,6 +176,24 @@ declararse bilingüe (`languages: [es, en]` en la cabecera de su `WhatsNew.md`) 
 - `tests/TestLgaWhatsNewLanguage.cpp` (`lgaupdate_language_tests`): parseo y elección del idioma,
   sin red ni ventanas, con el mismo runner que el banco de reintentos.
 
+### Rev 6: el cartel espera las notas lo que duran dos reintentos (2026-11-17)
+
+Hasta la rev 5, el cartel de update esperaba las notas `whatsNewWaitMs` = 4 s, menos que una sola
+espera de reintento (5 s). Con GateBouncer frenando el primer pedido de las notas, el cartel salía
+siempre sin ellas. Ahora el default es `2 × LgaNetRetry::kDelayMs + 2000` (12 s): cubre un primer
+intento bloqueado en github.com y otro en el servidor de los archivos, a donde lleva el redirect.
+
+- Cuando las notas llegan enseguida (lo normal), el cartel sale igual que antes. Solo tarda más si
+  las notas fallan: como mucho 12 s, con el botón de la app en «Checking...».
+- Sin cambios de contrato: una app que fijaba su propio `whatsNewWaitMs` sigue con el suyo, y la
+  que no lo tocaba toma el nuevo solo re-copiando.
+- Caso `10_cartel_espera_notas_con_dos_reintentos` del banco: con la espera real de 5 s, un 503 en
+  github.com y otro en el servidor de los archivos, el cartel sale con las notas a los ~10 s. Con
+  el tope de la rev 5 el mismo caso falla (control hecho al cambiarlo).
+- El banco también se compila sin cmake con `tools/qa/build_harness.ps1` de la Base (el `.cpp`
+  del banco, las cinco fuentes de `src/`, `-MocHeaders` con `LgaUpdateService.h` y
+  `LgaWhatsNew.h`, `-Modules "Gui;Widgets;Network"`) y se corre igual, con el runner.
+
 ## Historia
 
 Antes de la rev 1 había tres copias que ya diferían: la de Theta Explorer (la más nueva), la de
@@ -197,3 +215,5 @@ red simulada, y `tests/TestLgaWhatsNew.cpp`, con los casos de ediciones y audien
 La rev 3 suma los reintentos de red de la regla de LGA y su banco de pruebas propio, en `tests/`.
 
 La rev 4 suma el idioma: la app pide inglés o castellano con `language` y la biblioteca trae su tabla en castellano. Salió de GateBouncer, que tiene la interfaz en los dos idiomas y mostraba el updater en inglés.
+
+La rev 6 sube a 12 s la espera de las notas en el cartel de update, para que un primer intento bloqueado no lo deje sin notas.

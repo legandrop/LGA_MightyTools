@@ -1,4 +1,5 @@
 #include "core/LgaRegistry.h"
+#include "core/RunMode.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
@@ -197,6 +198,10 @@ QString directory()
 
 bool registerThisApp(const QString& appName, const QString& version)
 {
+    // Una corrida de captura o sin pantalla no escribe en el registro compartido (core/RunMode.h).
+    if (!LgaRunMode::canPersistSystemState()) {
+        return false;
+    }
     const QString dirPath = directory();
     if (dirPath.isEmpty() || appName.trimmed().isEmpty()) {
         return false;
@@ -234,6 +239,9 @@ bool registerThisApp(const QString& appName, const QString& version)
 
 bool saveNukeDirectory(const QString& nukeDir)
 {
+    if (!LgaRunMode::canPersistSystemState()) {
+        return false;
+    }
     const QString dirPath = directory();
     if (dirPath.isEmpty()) {
         return false;
