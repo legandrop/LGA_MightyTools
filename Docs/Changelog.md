@@ -2,6 +2,10 @@
 
 v1.55:
 
+Mac: el cartel «Update Requires Manual Step» (la carpeta de la app no se puede escribir y el auto-update no puede reemplazarla) le pedia al usuario instalar a mano y correr `sudo xattr -cr`. Con la app firmada con Developer ID y notarizada ese paso sobra. Ahora dice «Please download the new macOS release and drag %3 to the Applications folder.» Texto de `libs/lgaupdate` de la Base v0.178.
+
+[ Mac - El aviso de update manual ya no pide xattr ]
+
 Windows: Qt Virtual Keyboard (GPLv3) no se usa en ninguna app LGA y podía viajar en el instalador (Lega, 15/11: «si no lo uso para nada, saquémoslo de todos lados»): `windeployqt` lo copia por su cuenta (`platforminputcontexts\qtvirtualkeyboardplugin.dll` y `Qt6VirtualKeyboard.dll`) y el `.iss` empaqueta todo `deploy\`. Ahora `deploy.bat` y `compilar.bat` los borran después de `windeployqt`, el `.iss` los excluye y, al actualizar, `[InstallDelete]` saca los que haya dejado una versión anterior. Sin probar: no se compiló en Windows. En mac no hacía falta nada: `podar_bundle.py` ya deja solo los plugins de su lista y la instalada no lo trae.
 
 [ Windows - Sin Qt Virtual Keyboard en el deploy ni en el instalador ]

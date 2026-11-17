@@ -114,9 +114,9 @@ const QHash<QString, QString> &spanishTable()
           "No se encontró el paquete de %1 para actualizarlo."),
         E("LgaUpdateService",
           "%1 could not update automatically because this location is not writable:\n%2\n\n"
-          "Please install the new macOS release manually and run:\nsudo xattr -cr /Applications/%3",
+          "Please download the new macOS release and drag %3 to the Applications folder.",
           "%1 no se pudo actualizar automáticamente porque no se puede escribir en esta ubicación:\n%2\n\n"
-          "Instalar a mano la versión nueva para macOS y ejecutar:\nsudo xattr -cr /Applications/%3"),
+          "Descargar la versión nueva para macOS y arrastrar %3 a la carpeta Aplicaciones."),
         E("LgaUpdateService", "Could not prepare macOS update helper script.",
           "No se pudo preparar el script de actualización de macOS."),
         E("LgaUpdateService", "Could not launch macOS update helper process.",
