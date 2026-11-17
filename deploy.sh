@@ -16,7 +16,7 @@
 #   --no-install  Deja el bundle en deploy/ sin copiarlo a /Applications
 #   --no-open     Instala pero no abre la app al terminar
 #   --zip         Arma deploy/LGA_MightyTools_Mac_v<version>.zip (actualizacion) y lo verifica
-#   --dmg         Arma deploy/LGA_MightyTools_Mac_v<version>.dmg (primera instalacion)
+#   --dmg         Arma deploy/LGA_MightyTools_v<version>.dmg (primera instalacion)
 #   --no-notarize No manda a notarizar el .app ni el DMG (salen pidiendo el xattr); LGA_NOTARIZE=0 igual
 #   --install     Sin efecto: instalar y abrir es lo de siempre, tambien al empaquetar o publicar
 #   --publish     Arma el .zip y el .dmg y los publica en el release v<version> de legandrop/LGA_MightyTools
@@ -110,7 +110,7 @@ if ! [[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
 fi
 TAG="v${APP_VERSION}"
 ZIP_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.zip"
-DMG_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.dmg"
+DMG_NAME="${ARTIFACT_NAME}_v${APP_VERSION}.dmg"
 
 # SHA-1 del certificado Developer ID con el que sale firmado lo que se PUBLICA. Esta FIJADO a proposito
 # (ver tools/macos/release.conf, que es su unica fuente: la pieza de publicacion lo exige en el llavero y
@@ -139,7 +139,7 @@ if [ "$ARG_COUNT" -eq 0 ] && [ -t 0 ]; then
             APP_VERSION="$(tr -d '\r\n' < VERSION)"
             TAG="v${APP_VERSION}"
             ZIP_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.zip"
-            DMG_NAME="${ARTIFACT_NAME}_Mac_v${APP_VERSION}.dmg"
+            DMG_NAME="${ARTIFACT_NAME}_v${APP_VERSION}.dmg"
             echo "Deploy de $APP_NAME v$APP_VERSION"
             ;;
         10) echo "Deploy local de v$APP_VERSION, sin publicar." ;;

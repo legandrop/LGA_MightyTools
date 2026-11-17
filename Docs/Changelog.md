@@ -2,6 +2,10 @@
 
 v1.55:
 
+Mac: el DMG de primera instalacion pasa de `LGA_MightyTools_Mac_v<version>.dmg` a `LGA_MightyTools_v<version>.dmg`, sin el `_Mac`; el `.zip` sigue como `LGA_MightyTools_Mac_v<version>.zip`, porque lo busca por ese nombre el updater de las copias ya instaladas. Cambian `create_dmg.sh` y `deploy.sh` (los dos `DMG_NAME`), y `tools/macos/publish_release.sh` se re-copia identico de la v0.179 de `../LGA_Base_QT_C_Py` (reconoce tambien un release publicado con el nombre viejo). El card de LGA Updates de PipeSync y el sitio ya aceptan los dos nombres.
+
+[ Mac - El DMG pierde el _Mac en el nombre; el zip lo conserva ]
+
 Mac: el cartel «Update Requires Manual Step» (la carpeta de la app no se puede escribir y el auto-update no puede reemplazarla) le pedia al usuario instalar a mano y correr `sudo xattr -cr`. Con la app firmada con Developer ID y notarizada ese paso sobra. Ahora dice «Please download the new macOS release and drag %3 to the Applications folder.» Texto de `libs/lgaupdate` de la Base v0.178.
 
 [ Mac - El aviso de update manual ya no pide xattr ]
