@@ -2,6 +2,10 @@
 
 v1.55:
 
+Nuke Shortcuts: «Add keyframe» (Ctrl+Shift+D) ponía la key pero con el valor en 0 en un knob que no estaba animado. `toggle_key` leía el valor con `getValueAt` DESPUÉS de `setAnimated()`, y en Nuke un canal recién animado tiene la curva vacía y devuelve 0. Ahora los valores de todos los canales se leen antes de animar. Probado en NukeX 17.0v4 por dev-link (knob colapsado, uno por canal y simple; el segundo toggle borra la key y conserva el valor). El plugin pasa a 1.02 para que la app lo reinstale en `.nuke`.
+
+[ Nuke Shortcuts - Add keyframe ya no pone los valores en 0 ]
+
 El menú de publicar de `instalador.bat` no mostraba qué le iba a llegar al usuario: se decidía publicar sin ver el What's New. Ahora, antes de preguntar, `whats_new_pendiente.bat` (plantilla de la Base, con `Docs\WhatsNew.md`) lista en colores los ítems desde la última versión publicada, de la versión en desarrollo (la sección `## vX` más alta, no `VERSION`, que dice la publicada hasta el bump). Si no hay nada nuevo, el `1` dice «no recomendado» y el `2` «recomendado». Corre también si algo impide publicar; no corre al sumar o reemplazar el instalador de un release que ya existe. `tools/macos/publish_release.sh` se re-copia idéntico de la Base (lo mismo en `deploy.sh --decide`).
 
 [ Publicar - el menu muestra lo que saldria en What's New ]

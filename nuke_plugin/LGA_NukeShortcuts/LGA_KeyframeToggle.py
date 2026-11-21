@@ -101,6 +101,9 @@ def toggle_key():
     channel = _channel_of(knob, widget)
     channels = [channel] if channel is not None else list(range(knob.arraySize()))
     keyed = [i for i in channels if knob.isAnimated(i) and knob.isKeyAt(frame, i)]
+    # Los valores se leen ANTES de setAnimated: un canal que no estaba animado queda con una curva
+    # vacia, y getValueAt sobre ella devuelve 0 (la key salia con el valor en cero).
+    values = [knob.getValueAt(frame, i) for i in range(knob.arraySize())]
     undo = nuke.Undo()
     undo.begin("Delete key" if keyed else "Set key")
     try:
@@ -115,15 +118,15 @@ def toggle_key():
                     knob.setValue(value, i)
         elif channel is not None:
             knob.setAnimated(channel)
-            knob.setValueAt(knob.getValueAt(frame, channel), frame, channel)
+            knob.setValueAt(values[channel], frame, channel)
         elif knob.singleValue():
             # Un solo valor para todo el knob: Nuke lo deja colapsado, como su "Set key".
             knob.setAnimated()
-            knob.setValue(knob.getValueAt(frame, 0))
+            knob.setValue(values[0])
         else:
             knob.setAnimated()
             for i in range(knob.arraySize()):
-                knob.setValueAt(knob.getValueAt(frame, i), frame, i)
+                knob.setValueAt(values[i], frame, i)
     except Exception as e:
         print("LGA_KeyframeToggle: error en %s.%s: %s" % (knob.node().fullName(), knob.name(), e))
     finally:

@@ -13,6 +13,8 @@ en_from: "1.53"
 ## Unreleased
 
 ## v1.55
+- [fixed] El atajo Add keyframe de Nuke Shortcuts ya no pone en 0 los valores del knob al crear la key.
+  en: The Nuke Shortcuts Add keyframe shortcut no longer sets the knob values to 0 when it creates the key.
 - [improved][mac] El DMG viene firmado y verificado por Apple: la app se abre sin pasar por la Terminal. Con la firma nueva, macOS vuelve a pedir una vez los permisos que ya habías dado (Accesibilidad, micrófono y control del Finder).
   en: The DMG is now signed and verified by Apple: the app opens without going through Terminal. With the new signature, macOS asks once more for the permissions you had already granted (Accessibility, microphone and Finder control).
 
